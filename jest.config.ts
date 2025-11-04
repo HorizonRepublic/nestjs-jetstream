@@ -1,10 +1,9 @@
-
 import type { Config } from 'jest';
 
 const config: Config = {
     preset: 'ts-jest',
     testEnvironment: 'node',
-    rootDir: '.',  
+    rootDir: '.',
     roots: ['<rootDir>/src'],
     testMatch: ['**/*.spec.ts', '**/*.test.ts'],
     collectCoverageFrom: [
@@ -33,6 +32,15 @@ const config: Config = {
         '^@/(.*)$': '<rootDir>/src/$1',
     },
     testTimeout: 10000,
+    
+    testPathIgnorePatterns: [
+        '<rootDir>/node_modules/(?!@nestjs)',  
+        '<rootDir>/dist/',
+        '<rootDir>/lib/',
+        '<rootDir>/coverage/',
+    ],
+    
+    modulePathIgnorePatterns: ['<rootDir>/dist/', '<rootDir>/lib/'],
     verbose: true,
 };
 
