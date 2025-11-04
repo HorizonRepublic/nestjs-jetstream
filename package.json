@@ -40,7 +40,7 @@
     "url": "https://github.com/your-username/jetstream-transport/issues"
   },
   "homepage": "https://github.com/your-username/jetstream-transport#readme",
-  "packageManager": "pnpm@10.12.1",
+  "packageManager": "pnpm@10.20.0",
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@nestjs/platform-express": "^11.1.8",
