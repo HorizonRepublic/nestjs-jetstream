@@ -1,0 +1,21 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../dist-example",
+    "rootDir": "..",
+    "noEmit": false,
+    "baseUrl": "..",
+    "paths": {
+      "@horizon-republic/nestjs-jetstream": [
+        "src/index.ts"
+      ]
+    }
+  },
+  "include": [
+    "./**/*",
+    "../src/**/*"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}
