@@ -99,10 +99,8 @@ export const consumerConfig: ConsumerConfigRecord = {
     deliver_policy: DeliverPolicy.All,
     replay_policy: ReplayPolicy.Instant,
 
-    max_batch: 10,
+    max_batch: 100,
     mem_storage: true,
-    flow_control: true,
-    idle_heartbeat: 10 * SEC,
   }),
 
   [JetStreamKind.Command]: (name, kind) => ({
@@ -114,9 +112,7 @@ export const consumerConfig: ConsumerConfigRecord = {
     deliver_policy: DeliverPolicy.All,
     replay_policy: ReplayPolicy.Instant,
 
-    max_batch: 5,
-    mem_storage: true,
-    flow_control: true,
-    idle_heartbeat: 10 * SEC,
+    max_batch: 200,
+    mem_storage: false,
   }),
 };

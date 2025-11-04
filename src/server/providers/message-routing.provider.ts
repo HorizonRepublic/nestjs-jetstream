@@ -4,13 +4,11 @@ import {
   catchError,
   EMPTY,
   from,
-  map,
   mergeMap,
   Observable,
   of,
   switchMap,
   take,
-  tap,
   timeout,
   TimeoutError,
 } from 'rxjs';
@@ -373,64 +371,67 @@ export class MessageRoutingProvider {
   }
 
   /**
-   * Handle an Event-style message (fire-and-forget).
+   * Handles event-style messages with fire-and-forget semantics.
    *
-   * This model is optimized for fan-out / side effects, not for strict state transitions.
-   * Examples:
-   * - cache invalidation
-   * - projection updates / denormalization
-   * - analytics / audit trails
-   * - notifications.
+   * @description
+   * Events are optimized for fan-out, side effects, and non-critical workflows
+   * where strict acknowledgment of completion is not required.
    *
-   * It is NOT suited for critical once-only flows
-   * like charging money, finalizing an order, etc. Those should use RPC
-   * (so the caller gets an explicit response and can retry),
-   * or a dedicated idempotent pipeline using raw JetStream/NATS.
+   * **Suitable for:**
+   * - Cache invalidation
+   * - Projection updates / denormalization
+   * - Analytics / audit trails
+   * - Notifications
    *
-   * Core idea:
-   * - We ack() as soon as we are sure the handler actually accepted the work.
-   * We define "accepted the work" as: the handler emits its first value.
-   * Even `undefined` is fine - it's just a signal of liveness/acceptance.
+   * **NOT suitable for:**
+   * - Critical once-only flows (payments, order finalization)
+   * - Operations requiring explicit success/failure response
+   * - Flows requiring strict idempotency guarantees
    *
-   * - After we ack(), we consider the event consumed. JetStream will NOT
-   * redeliver it to another consumer. At that point the handler "owns"
-   * the long-running work.
+   * For critical operations, use RPC commands (@MessagePattern) or implement
+   * dedicated idempotent pipelines with manual JetStream consumer management.
    *
-   * - If the handler fails BEFORE first emission, we nak() instead of ack().
-   * That tells JetStream "try another pod, this one couldn't even start".
+   * @remarks
+   * **Acknowledgment strategy:**
    *
-   * - If the handler fails AFTER ack, we do nothing transport-level:
-   * no nak(), no retry request. Cleanup/compensation is entirely
-   * the handler's responsibility.
+   * The message is acknowledged immediately after successful decoding,
+   * indicating that the handler has accepted the work. This prevents
+   * JetStream from redelivering the message to other consumers.
    *
-   * Handler contract:
-   * - The handler should emit at least once (even a void/undefined emission)
-   * to indicate "I have started". We take(1) from that emission.
-   * - If the handler never emits and also doesn't throw, we will never ack().
-   * JetStream will eventually see ack_wait expire and may redeliver.
+   * **Handler execution:**
    *
-   * Steps:
-   * 1. Resolve handler. If no handler - term(), because retry won't help.
-   * 2. Decode payload and build RpcContext (the same context object we reuse).
-   * 3. Convert handler result into an Observable and take(1).
-   * 4. On first next():
-   * - ack() the message
-   * - mark it as accepted, so no other pod will see it
-   * 5. On error before ack:
-   * - nak() so the broker may redeliver elsewhere
-   * 6. On error after ack:
-   * - swallow at transport level; it's now business logic's problem.
+   * The handler runs asynchronously in the background without blocking
+   * processing of subsequent messages. This maximizes throughput but
+   * means errors after acknowledgment are the handler's responsibility.
    *
-   * @param msg
+   * **Error handling:**
+   *
+   * - **Before ack:** Decode errors terminate the message (no retry)
+   * - **After ack:** Handler errors are logged but do not affect delivery
+   * - **No handler:** Message is terminated (configuration error)
+   *
+   * Handler failures after ack must implement their own compensation logic
+   * (e.g., dead letter queue, retry mechanism, alerting).
+   *
+   * @param msg JetStream message containing the event payload and metadata.
+   * @returns Observable that completes immediately without waiting for handler.
+   *
+   * @example
+   * ```typescript
+   * // Event handler - runs in background after ack
+   * \@EventPattern('user.created')
+   * async handleUserCreated(data: UserCreatedEvent) {
+   *   await this.cache.invalidate(data.userId);
+   *   await this.analytics.track('user_created', data);
+   * }
+   * ```
    */
-
   protected handleEvent(msg: JsMsg): Observable<void> {
     const handler = this.patternRegistry.getHandler(msg.subject);
 
     if (!handler) {
       msg.term(`No handler found for Event subject: ${msg.subject}`);
       this.logger.error(`No handler found for subject: ${msg.subject}`);
-
       return of(void 0);
     }
 
@@ -443,33 +444,22 @@ export class MessageRoutingProvider {
     } catch (error) {
       this.logger.error(`Failed to decode Event message for ${msg.subject}:`, error);
       msg.term('Invalid message payload');
+
+      return of(void 0);
     }
 
-    let acknowledged = false;
+    msg.ack();
 
-    const work$ = from(handler(data, ctx)).pipe(
-      switchMap((inner) =>
-        from(inner).pipe(
-          tap({
-            subscribe: () => {
-              if (!acknowledged) {
-                msg.ack();
-                acknowledged = true;
-              }
-            },
-          }),
-        ),
-      ),
-      take(1),
-    );
+    from(handler(data, ctx))
+      .pipe(
+        catchError((err) => {
+          this.logger.error(`Error in event handler for ${msg.subject}:`, err);
 
-    return work$.pipe(
-      catchError(() => {
-        if (!acknowledged) msg.nak();
+          return EMPTY;
+        }),
+      )
+      .subscribe();
 
-        return EMPTY;
-      }),
-      map(() => void 0),
-    );
+    return of(void 0);
   }
 }

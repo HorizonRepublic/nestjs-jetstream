@@ -1,7 +1,7 @@
 {
-  "name": "jetstream-transport",
+  "name": "@horizon-republic/nestjs-jetstream",
   "version": "1.0.0",
-  "description": "NestJS JetStream transport",
+  "description": "A NestJS transport for NATS JetStream with built-in support for Events and RPC Commands messaging patterns via JetStream.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -16,8 +16,8 @@
     "build": "tsc -p tsconfig.json",
     "build:watch": "tsc -p tsconfig.json --watch",
     "build:example": "tsc -p examples/tsconfig.json",
-    "start:example": "pnpm build && pnpm build:example && node dist-example/main.js",
-    "dev:example": "tsx examples/main.ts",
+    "start:example": "pnpm build && pnpm build:example && node dist-example/examples/main.js",
+    "dev:example": "tsx --tsconfig examples/tsconfig.json examples/main.ts",
     "prepublishOnly": "pnpm build",
     "lint": "eslint",
     "lint:fix": "eslint --fix",
@@ -43,6 +43,7 @@
   "packageManager": "pnpm@10.12.1",
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@nestjs/platform-express": "^11.1.8",
     "@nx/eslint-plugin": "^22.0.2",
     "@stylistic/eslint-plugin": "^5.5.0",
     "@types/eslint__js": "^9.14.0",
@@ -60,6 +61,7 @@
     "globals": "^16.5.0",
     "jsonc-eslint-parser": "^2.4.1",
     "prettier": "^3.6.2",
+    "tsconfig-paths": "^4.2.0",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.3"

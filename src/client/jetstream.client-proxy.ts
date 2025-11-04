@@ -63,7 +63,6 @@ export class JetstreamClientProxy extends ClientProxy implements OnModuleInit {
 
   public constructor(private readonly providers: IClientProviders) {
     super();
-    this.logger.debug(`JetStream client initialized (inbox: ${this.inbox})`);
   }
 
   /**
@@ -146,8 +145,6 @@ export class JetstreamClientProxy extends ClientProxy implements OnModuleInit {
     const subject = this.buildSubject(JetStreamKind.Event, packet.pattern);
     const messageId = v7();
 
-    this.logger.verbose(`Event details: ${subject} (id: ${messageId})`);
-
     const nc = await this.connect();
     const hdrs = this.createHeaders({ messageId, subject });
 
@@ -180,12 +177,9 @@ export class JetstreamClientProxy extends ClientProxy implements OnModuleInit {
 
     this.pendingMessages.set(correlationId, callback);
 
-    this.logger.verbose(`Command details: ${subject} (id: ${messageId}, cid: ${correlationId})`);
-
     void this.publishCommand(subject, packet.data, { correlationId, messageId, callback });
 
     return () => {
-      this.logger.verbose(`Cleanup requested for correlation ID: ${correlationId}`);
       this.pendingMessages.delete(correlationId);
     };
   }
@@ -219,8 +213,6 @@ export class JetstreamClientProxy extends ClientProxy implements OnModuleInit {
       });
 
       await nc.jetstream().publish(subject, this.codec.encode(data), { headers: hdrs });
-
-      this.logger.verbose(`Command successfully published: ${subject} (cid: ${ctx.correlationId})`);
     } catch (error) {
       this.logger.error(`Command publish failed: ${subject}`, error);
 
@@ -254,7 +246,6 @@ export class JetstreamClientProxy extends ClientProxy implements OnModuleInit {
           return;
         }
 
-        this.logger.verbose('← Response received in inbox');
         this.routeReply(msg);
       },
     });
@@ -294,15 +285,12 @@ export class JetstreamClientProxy extends ClientProxy implements OnModuleInit {
     try {
       const response = this.codec.decode(msg.data);
 
-      this.logger.verbose('Response payload:', response);
-
-      handler({ err: null, response });
+      handler({ err: null, response, isDisposed: true });
     } catch (error) {
       this.logger.error(`Failed to decode response (cid: ${correlationId})`, error);
-      handler({ err: (error as Error).message, response: null });
+      handler({ err: (error as Error).message, response: null, isDisposed: true });
     } finally {
       this.pendingMessages.delete(correlationId);
-      this.logger.verbose(`Pending messages count: ${this.pendingMessages.size}`);
     }
   }
 
