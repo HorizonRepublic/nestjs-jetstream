@@ -3,7 +3,7 @@
 A NestJS transport for NATS JetStream with built-in support for **Events** (fire-and-forget) and **Commands** (RPC)
 messaging patterns.
 
-[![npm version](https://img.shields.io/npm/v/jetstream-transport.svg)](https://www.npmjs.com/package/jetstream-transport)
+[![npm version](https://img.shields.io/npm/v/@horizon-republic/nestjs-jetstream.svg)](https://www.npmjs.com/package/@horizon-republic/nestjs-jetstream)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Features
