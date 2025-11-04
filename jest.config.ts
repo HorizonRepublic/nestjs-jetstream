@@ -3,8 +3,7 @@ import type { Config } from 'jest';
 const config: Config = {
     preset: 'ts-jest',
     testEnvironment: 'node',
-    rootDir: '.',
-    roots: ['<rootDir>/src'],
+    rootDir: './src',
     testMatch: ['**/__tests__/**/*.ts', '**/*.spec.ts', '**/*.test.ts'],
     collectCoverageFrom: [
         'src/**/*.ts',
@@ -32,6 +31,8 @@ const config: Config = {
         '^@/(.*)$': '<rootDir>/src/$1',
     },
     testTimeout: 10000,
+    testPathIgnorePatterns: ['/node_modules/', '/dist/', '/lib/'],
+    verbose: true,
 };
 
 export default config;
