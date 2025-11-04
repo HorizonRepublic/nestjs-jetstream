@@ -33,16 +33,16 @@
     "transport",
     "microservices"
   ],
-  "author": "",
+  "author": "Kyrylo Lytvynov <themaiby0@gmail.com>",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/your-username/jetstream-transport.git"
+    "url": "git+https://github.com/HorizonRepublic/nestjs-jetstream.git"
   },
   "bugs": {
-    "url": "https://github.com/your-username/jetstream-transport/issues"
+    "url": "https://github.com/HorizonRepublic/nestjs-jetstream/issues"
   },
-  "homepage": "https://github.com/your-username/jetstream-transport#readme",
+  "homepage": "https://github.com/HorizonRepublic/nestjs-jetstream#readme",
   "packageManager": "pnpm@10.20.0",
   "devDependencies": {
     "@eslint/js": "^9.39.1",
