@@ -68,6 +68,7 @@
     "jsonc-eslint-parser": "^2.4.1",
     "prettier": "^3.6.2",
     "ts-jest": "^29.4.5",
+    "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",

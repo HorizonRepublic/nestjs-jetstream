@@ -5,7 +5,7 @@ const config: Config = {
     testEnvironment: 'node',
     rootDir: '.',
     roots: ['<rootDir>/src'],
-    testMatch: ['**/__tests__/**/*.ts', '**/*.spec.ts', '**/*.test.ts'],
+    testMatch: ['**/*.spec.ts', '**/*.test.ts'],
     collectCoverageFrom: [
         'src/**/*.ts',
         '!src/**/*.module.ts',
@@ -14,7 +14,7 @@ const config: Config = {
         '!src/**/*.interface.ts',
         '!src/**/*.type.ts',
     ],
-    coverageDirectory: 'coverage',
+    coverageDirectory: './coverage',
     coverageReporters: ['text', 'lcov', 'html'],
     moduleFileExtensions: ['js', 'json', 'ts'],
     transform: {
@@ -32,6 +32,16 @@ const config: Config = {
         '^@/(.*)$': '<rootDir>/src/$1',
     },
     testTimeout: 10000,
+    
+    testPathIgnorePatterns: [
+        '<rootDir>/node_modules/(?!@nestjs)',  
+        '<rootDir>/dist/',
+        '<rootDir>/lib/',
+        '<rootDir>/coverage/',
+    ],
+    
+    modulePathIgnorePatterns: ['<rootDir>/dist/', '<rootDir>/lib/'],
+    verbose: true,
 };
 
 export default config;
