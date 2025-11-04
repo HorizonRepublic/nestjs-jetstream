@@ -1,0 +1,48 @@
+# Source files
+src/
+examples/
+dist-example/
+
+# Config files
+tsconfig.json
+tsconfig.tsbuildinfo
+eslint.config.mjs
+.prettierrc
+renovate.json
+
+# Examples configs
+examples/tsconfig.json
+
+# Build artifacts
+*.tsbuildinfo
+*.log
+*.log.*
+
+# Dev files
+.github/
+.git/
+.gitignore
+.editorconfig
+.vscode/
+.idea/
+
+# Docker
+docker-compose.yaml
+docker-compose.yml
+
+# Docs (якщо не потрібні в пакеті)
+CONTRIBUTION.md
+
+# Lock files
+pnpm-lock.yaml
+yarn.lock
+package-lock.json
+
+# Test files
+**/*.spec.ts
+**/*.test.ts
+**/test/
+**/__tests__/
+
+# Node modules
+node_modules/
