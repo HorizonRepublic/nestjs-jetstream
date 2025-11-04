@@ -28,6 +28,7 @@ export default [
       '**/tmp/**',
       '**/.docusaurus/**',
       '**/.nx/**',
+      'jest.config.ts',
     ],
   },
 
