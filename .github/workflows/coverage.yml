@@ -9,7 +9,7 @@ on:
 jobs:
   coverage:
     runs-on: ubuntu-latest
-    
+
     steps:
       - uses: actions/checkout@v5
 
@@ -24,8 +24,19 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Debug - List test files
+        run: |
+          echo "=== Current directory ==="
+          pwd
+          echo "=== List all .spec.ts files ==="
+          find . -name "*.spec.ts" -type f
+          echo "=== Check src directory ==="
+          ls -la src/ || echo "src/ not found"
+          echo "=== Jest config ==="
+          cat jest.config.ts
+
       - name: Run tests with coverage
-        run: pnpm test -- --coverage
+        run: pnpm test -- --coverage --verbose
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
