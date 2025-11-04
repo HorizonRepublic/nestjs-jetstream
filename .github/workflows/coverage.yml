@@ -36,7 +36,7 @@ jobs:
           cat jest.config.ts
 
       - name: Run tests with coverage
-        run: pnpm test -- --coverage --verbose
+        run: pnpm test --coverage --verbose
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
