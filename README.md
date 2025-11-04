@@ -165,7 +165,7 @@ Contributions are welcome! Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for 
 
 ## License
 
-MIT © [Your Name]
+MIT
 
 ## Links
 
