@@ -1,19 +1,20 @@
+
 import type { Config } from 'jest';
 
 const config: Config = {
     preset: 'ts-jest',
     testEnvironment: 'node',
-    rootDir: './src',
-    testMatch: ['**/__tests__/**/*.ts', '**/*.spec.ts', '**/*.test.ts'],
+    rootDir: './src',  // rootDir вказує на src
+    testMatch: ['**/__tests__/**/*.ts', '**/*.spec.ts', '**/*.test.ts'],  // шукаємо відносно src
     collectCoverageFrom: [
-        'src/**/*.ts',
-        '!src/**/*.module.ts',
-        '!src/**/*.d.ts',
-        '!src/**/index.ts',
-        '!src/**/*.interface.ts',
-        '!src/**/*.type.ts',
+        '**/*.ts',  // Змінюємо з 'src/**/*.ts' на '**/*.ts'
+        '!**/*.module.ts',
+        '!**/*.d.ts',
+        '!**/index.ts',
+        '!**/*.interface.ts',
+        '!**/*.type.ts',
     ],
-    coverageDirectory: 'coverage',
+    coverageDirectory: '../coverage',  // Виносимо coverage на рівень вище
     coverageReporters: ['text', 'lcov', 'html'],
     moduleFileExtensions: ['js', 'json', 'ts'],
     transform: {
@@ -28,7 +29,7 @@ const config: Config = {
         ],
     },
     moduleNameMapper: {
-        '^@/(.*)$': '<rootDir>/src/$1',
+        '^@/(.*)$': '<rootDir>/$1', 
     },
     testTimeout: 10000,
     testPathIgnorePatterns: ['/node_modules/', '/dist/', '/lib/'],
