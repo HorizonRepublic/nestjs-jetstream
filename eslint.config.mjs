@@ -28,7 +28,6 @@ export default [
       '**/tmp/**',
       '**/.docusaurus/**',
       '**/.nx/**',
-      'examples/**',
     ],
   },
 
@@ -108,7 +107,7 @@ export default [
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {
-        project: './tsconfig.json',
+        project: ['./tsconfig.json', './examples/tsconfig.json'],
         tsconfigRootDir: import.meta.dirname,
       },
     },
