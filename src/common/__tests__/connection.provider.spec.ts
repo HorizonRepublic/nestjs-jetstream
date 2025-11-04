@@ -58,12 +58,10 @@ describe('ConnectionProvider', () => {
   });
 
   afterEach(async () => {
-    if (provider) {
-      try {
-        provider.onModuleDestroy();
-      } catch {
-        // Ignore cleanup errors
-      }
+    try {
+      provider.onModuleDestroy();
+    } catch {
+      // Ignore cleanup errors
     }
 
     jest.resetAllMocks();
