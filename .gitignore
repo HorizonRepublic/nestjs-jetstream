@@ -131,3 +131,8 @@ dist
 .pnp.*
 dist-example/
 
+# Jest coverage
+coverage/
+.nyc_output/
+*.lcov
+
