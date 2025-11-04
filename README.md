@@ -88,8 +88,8 @@ You can use the `@EventPattern` and `@MessagePattern` decorators not only in con
 well.
 
 ```typescript
-import {EventPattern, MessagePattern, Payload} from '@nestjs/microservices';
-import {Controller} from '@nestjs/common';
+import { EventPattern, MessagePattern, Payload } from '@nestjs/microservices';
+import { Controller } from '@nestjs/common';
 
 @Controller()
 export class AppMicroserviceController {
@@ -116,7 +116,7 @@ export class AppMicroserviceController {
 Register the module in your module:
 
 ```typescript
-import {JetstreamClientModule} from '@horizon-republic/nestjs-jetstream';
+import { JetstreamClientModule } from '@horizon-republic/nestjs-jetstream';
 
 imports: [
     JetstreamClientModule.forFeature({
