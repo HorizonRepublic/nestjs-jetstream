@@ -1,0 +1,76 @@
+{
+  "name": "jetstream-transport",
+  "version": "1.0.0",
+  "description": "NestJS JetStream transport",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "build:watch": "tsc -p tsconfig.json --watch",
+    "build:example": "tsc -p examples/tsconfig.json",
+    "start:example": "pnpm build && pnpm build:example && node dist-example/main.js",
+    "dev:example": "tsx examples/main.ts",
+    "prepublishOnly": "pnpm build",
+    "lint": "eslint",
+    "lint:fix": "eslint --fix",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "nestjs",
+    "jetstream",
+    "nats",
+    "transport",
+    "microservices"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/your-username/jetstream-transport.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/jetstream-transport/issues"
+  },
+  "homepage": "https://github.com/your-username/jetstream-transport#readme",
+  "packageManager": "pnpm@10.12.1",
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@nx/eslint-plugin": "^22.0.2",
+    "@stylistic/eslint-plugin": "^5.5.0",
+    "@types/eslint__js": "^9.14.0",
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.46.3",
+    "@typescript-eslint/parser": "^8.46.3",
+    "eslint": "^9.39.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-jsdoc": "^61.1.12",
+    "eslint-plugin-prefer-arrow": "^1.2.3",
+    "eslint-plugin-prettier": "^5.5.4",
+    "eslint-plugin-sonarjs": "^3.0.5",
+    "eslint-plugin-unused-imports": "^4.3.0",
+    "globals": "^16.5.0",
+    "jsonc-eslint-parser": "^2.4.1",
+    "prettier": "^3.6.2",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.3"
+  },
+  "peerDependencies": {
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/microservices": "^11.0.0",
+    "nats": "^2.0.0",
+    "reflect-metadata": "^0.2.0",
+    "rxjs": "^7.8.0",
+    "uuid": "^11.0.0"
+  }
+}
