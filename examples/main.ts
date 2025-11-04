@@ -4,7 +4,7 @@ import { AppModule } from './app.module';
 import { Logger } from '@nestjs/common';
 import { getJetStreamTransportToken, JetstreamTransport } from '@horizon-republic/nestjs-jetstream';
 
-const bootstrap = async () => {
+const bootstrap = async (): Promise<void> => {
   const app = await NestFactory.create(AppModule);
 
   const port = process.env.PORT ?? 3000;
