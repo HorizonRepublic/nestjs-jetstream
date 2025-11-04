@@ -1,6 +1,6 @@
 {
   "name": "@horizon-republic/nestjs-jetstream",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "A NestJS transport for NATS JetStream with built-in support for Events and RPC Commands messaging patterns via JetStream.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
