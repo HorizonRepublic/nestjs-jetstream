@@ -27,7 +27,7 @@ importers:
         specifier: ^7.8.0
         version: 7.8.2
       uuid:
-        specifier: ^11.0.0
+        specifier: ^11.0.0 || ^13.0.0
         version: 11.1.0
     devDependencies:
       '@eslint/js':
