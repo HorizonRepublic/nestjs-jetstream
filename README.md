@@ -1,181 +1,155 @@
-# NestJs JetStream Transport
+# NestJS JetStream Transport
 
-A NestJS transport for NATS JetStream with built-in support for **Events** (fire-and-forget) and **Commands** (RPC)
-messaging patterns.
+A NestJS transport layer for NATS JetStream, providing native support for both Event-driven (fire-and-forget) and Command (RPC) communication patterns.
 
 [![npm version](https://img.shields.io/npm/v/@horizon-republic/nestjs-jetstream.svg)](https://www.npmjs.com/package/@horizon-republic/nestjs-jetstream)
 [![codecov](https://codecov.io/github/HorizonRepublic/nestjs-jetstream/graph/badge.svg?token=40IPSWFMT4)](https://codecov.io/github/HorizonRepublic/nestjs-jetstream)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Features
+## Overview
 
-- 🔄 **Full JetStream support**: JetStream used for persistence + Core NATS for low-latency replies in RPC
-- 🚀 **Dual messaging patterns**: Events (pub/sub) and Commands (RPC)
-- 🎯 **Type-safe**: Full TypeScript support with strict types
-- 📦 **Multiple instances**: Run multiple services in a single application
-- ⚡ **High performance**: Optimized for throughput and low latency
-- 🛡️ **Reliable**: At-least-once delivery with configurable acknowledgment strategies
+`@horizon-republic/nestjs-jetstream` is a modern, type-safe, and high-performance transport for integrating NestJS microservices with NATS JetStream.
 
-# ToDo
+It is designed to support persistent events, hybrid RPC requests, and advanced delivery guarantees without sacrificing developer experience.
+This transport bridges the gap between NestJS simplicity and JetStream reliability.
 
-- 🔧 **Configurable**: Extensive stream and consumer configuration options
+## Key Features
+
+- Full JetStream integration – persistent message delivery with fine-grained acknowledgment control.
+- Dual messaging patterns – events (pub/sub) and commands (RPC) supported out of the box.
+- Hybrid RPC mode – JetStream for guaranteed command delivery, Core NATS INBOX for fast replies.
+- Pull-based consumers – predictable message flow and controlled concurrency.
+- Multiple instances – easily register several microservices in the same application.
 
 ## Installation
 
-```bash
+```shell
 npm install @horizon-republic/nestjs-jetstream
 ```
 
-# Quick Start
+## Quick Start
 
-## Server (Consumer)
-
-Register the module in your app.module.ts:
+### Server (Consumer)
+Register the server module in your `app.module.ts`:
 
 ```typescript
-import {JetstreamServerModule} from '@horizon-republic/nestjs-jetstream'
+import { JetstreamServerModule } from '@horizon-republic/nestjs-jetstream';
 
 imports: [
-    JetstreamServerModule.forRoot({
-        name: 'my_service', // Unique name for the JetStream service. Will be registered as `my_service__microservice``
-        servers: ['localhost:4222'], // List of NATS servers to connect to.
-    }),
-],
+  JetstreamServerModule.forRoot({
+    name: 'my_service',
+    servers: ['localhost:4222'],
+  }),
+];
+
 ```
 
-Get transport instance in your main.ts:
+Initialize the transport in `main.ts`:
 
 ```typescript
-import {getJetStreamTransportToken, JetstreamTransport} from '@horizon-republic/nestjs-jetstream';
+import { getJetStreamTransportToken, JetstreamTransport } from '@horizon-republic/nestjs-jetstream';
 
-const bootstrap = async () => {
-    // ... your code here
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
 
-    const transport: JetstreamTransport = app.get(getJetStreamTransportToken('my_service'));
+  const transport: JetstreamTransport = app.get(getJetStreamTransportToken('my_service'));
 
-    app.connectMicroservice(transport, {inheritAppConfig: true});
-
-    await app.startAllMicroservices();
-
-    // ... app.listen() and etc
-};
+  app.connectMicroservice(transport, { inheritAppConfig: true });
+  await app.startAllMicroservices();
+  await app.listen(3000);
+}
 ```
 
-If everything is set up correctly, you should see the following logs in your console:
-
+Expected console output after a successful setup:
 ```shell
-[Nest] 98936  - 11/04/2025, 10:25:59 PM     LOG [StreamProvider] Ensure stream requested: my_service__microservice_ev-stream
-[Nest] 98936  - 11/04/2025, 10:25:59 PM     LOG [StreamProvider] Ensure stream requested: my_service__microservice_cmd-stream
-[Nest] 98936  - 11/04/2025, 10:25:59 PM     LOG [ConnectionProvider] NATS connection established: localhost:4222
-[Nest] 98936  - 11/04/2025, 10:25:59 PM     LOG [ConnectionProvider] NATS JetStream manager initialized
-[Nest] 98936  - 11/04/2025, 10:25:59 PM   DEBUG [StreamProvider] Checking stream existence: my_service__microservice_ev-stream
-[Nest] 98936  - 11/04/2025, 10:25:59 PM   DEBUG [StreamProvider] Checking stream existence: my_service__microservice_cmd-stream
-[Nest] 98936  - 11/04/2025, 10:25:59 PM     LOG [StreamProvider] Stream exists, updating: my_service__microservice_ev-stream (subjects: 1)
-[Nest] 98936  - 11/04/2025, 10:25:59 PM     LOG [StreamProvider] Stream exists, updating: my_service__microservice_cmd-stream (subjects: 1)
-[Nest] 98936  - 11/04/2025, 10:25:59 PM   DEBUG [ConsumerProvider] Consumer exists: my_service__microservice_cmd-consumer
-[Nest] 98936  - 11/04/2025, 10:25:59 PM   DEBUG [ConsumerProvider] Consumer exists: my_service__microservice_ev-consumer
+[StreamProvider] Stream created: my_service__microservice_ev-stream
+[StreamProvider] Stream created: my_service__microservice_cmd-stream
+[ConnectionProvider] NATS connection established: localhost:4222
+[ConnectionProvider] JetStream manager initialized
 ```
 
-Consumer register 2 message handlers and process them independently:
-
-- `my_service__microservice_ev-stream` - for events
-- `my_service__microservice_cmd-stream` - for commands
-
-**Message Handlers:**
-
-You can register message handlers for events and commands in the same way as you would do for any other NestJS
-microservice.
-You can use the `@EventPattern` and `@MessagePattern` decorators not only in controllers, but also in other classes as
-well.
+### Message Handlers
+Define handlers using the standard NestJS decorators:
 
 ```typescript
-import { EventPattern, MessagePattern, Payload } from '@nestjs/microservices';
 import { Controller } from '@nestjs/common';
+import { EventPattern, MessagePattern, Payload } from '@nestjs/microservices';
 
 @Controller()
 export class AppMicroserviceController {
-    @EventPattern('user.created')
-    public handleEvent(@Payload() payload: any) {
-        console.log('Received event:', payload);
-    }
+  @EventPattern('user.created')
+  handleUserCreated(@Payload() payload: any) {
+    console.log('Received event:', payload);
+  }
 
-    @MessagePattern('user.get')
-    public handleCommand(@Payload() payload: any) {
-        console.log('Received command:', payload);
-
-        return {
-            id: 1,
-            name: 'John Doe',
-        };
-    }
+  @MessagePattern('user.get')
+  handleUserGet(@Payload() payload: any) {
+    console.log('Received command:', payload);
+    return { id: 1, name: 'John Doe' };
+  }
 }
-
 ```
 
-## Client (Publisher)
+### Client (Publisher)
 
-Register the module in your module:
-
+Register the client module:
 ```typescript
 import { JetstreamClientModule } from '@horizon-republic/nestjs-jetstream';
 
 imports: [
-    JetstreamClientModule.forFeature({
-        name: 'my_service', // Should match the name of the server module because routing is based on the name
-        servers: ['localhost:4222'],
-    }),
-]
+  JetstreamClientModule.forFeature({
+    name: 'my_service',
+    servers: ['localhost:4222'],
+  }),
+];
 ```
 
-**Using the Client:**
-
+Use the client in your service or controller:
 ```typescript
-import { ClientProxy } from '@nestjs/microservices';
 import { Controller, Get, Inject } from '@nestjs/common';
+import { ClientProxy } from '@nestjs/microservices';
 
 @Controller()
-export class AppMicroserviceController {
-    public constructor(
-        @Inject('my_service')
-        private readonly myServiceProxy: ClientProxy,
-    ) {}
+export class AppController {
+  constructor(
+    @Inject('my_service')
+    private readonly myServiceClient: ClientProxy,
+  ) {}
 
-    @Get('send-event')
-    public sendEvent() {
-        return this.myServiceProxy.emit('user.created', { someData: 'someData' });
-    }
+  @Get('send-event')
+  async sendEvent() {
+    return this.myServiceClient.emit('user.created', { name: 'Alice' });
+  }
 
-    @Get('send-command')
-    public sendCommand() {
-        return this.myServiceProxy.send('user.get', { id: 1 });
-    }
+  @Get('send-command')
+  async sendCommand() {
+    return this.myServiceClient.send('user.get', { id: 1 });
+  }
 }
-
 ```
 
-Success connection will trigger the following log:
+## Roadmap
 
-```shell
-[Nest] 843  - 11/04/2025, 10:37:37 PM     LOG [JetstreamClientProxy] Inbox subscription established: my_service__microservice.PWL9AF1Y7EQKTZ8RSA0V0Y
-```
+### Core (Stable)
+- Integration with `Server` and `ClientProxy`
+- Pull-based consumer support
+- Hybrid RPC model (JetStream + Core INBOX)
+- Context-based acknowledgment and message metadata
+- Multi-service instance support
 
-## Contributing
+### Short Term
+- Asynchronous registration (`forRootAsync` / `forFeatureAsync`)
+- Dynamic configuration providers
+- Healthcheck integration (NestJS Terminus)
+- Prometheus/OpenTelemetry metrics (ack latency, queue depth, etc.)
+- `NatsRequestBuilder` for fluent RPC request creation
+- Extended examples and documentation
 
-Contributions are welcome! Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
+### Mid Term
+- Preset stream configurations: work-queue, broadcast, durable, ephemeral
+- Custom codecs (MessagePack, Avro, Protobuf)
+- Extended context (advanced mode for raw `JsMsg` access)
 
-## License
+### Long Term
+- Cross-service tracing (W3C/B3 header propagation)
 
-MIT
-
-## Links
-
-- [NATS JetStream Documentation](https://docs.nats.io/nats-concepts/jetstream)
-- [NestJS Microservices](https://docs.nestjs.com/microservices/basics)
-- [GitHub Repository](https://github.com/HorizonRepublic/nestjs-jetstream)
-- [npm Package](https://www.npmjs.com/package/@horizon-republic/nestjs-jetstream)
-
-## Support
-
-- 🐛 [Report bugs](https://github.com/HorizonRepublic/nestjs-jetstream/issues)
-- 💬 [Discussions](https://github.com/HorizonRepublic/nestjs-jetstream/discussions)
-- 📧 Email: [themaiby0@gmail.com](mailto:themaiby0@gmail.com)
