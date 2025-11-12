@@ -43,7 +43,7 @@
     "url": "https://github.com/HorizonRepublic/nestjs-jetstream/issues"
   },
   "homepage": "https://github.com/HorizonRepublic/nestjs-jetstream#readme",
-  "packageManager": "pnpm@10.20.0",
+  "packageManager": "pnpm@10.22.0",
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@nestjs/platform-express": "^11.1.8",
