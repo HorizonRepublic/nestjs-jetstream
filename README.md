@@ -153,3 +153,23 @@ export class AppController {
 ### Long Term
 - Cross-service tracing (W3C/B3 header propagation)
 
+## Contributing
+
+Contributions are welcome! Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
+
+## License
+
+MIT
+
+## Links
+
+- [NATS JetStream Documentation](https://docs.nats.io/nats-concepts/jetstream)
+- [NestJS Microservices](https://docs.nestjs.com/microservices/basics)
+- [GitHub Repository](https://github.com/HorizonRepublic/nestjs-jetstream)
+- [npm Package](https://www.npmjs.com/package/@horizon-republic/nestjs-jetstream)
+
+## Support
+
+- 🐛 [Report bugs](https://github.com/HorizonRepublic/nestjs-jetstream/issues)
+- 💬 [Discussions](https://github.com/HorizonRepublic/nestjs-jetstream/discussions)
+- 📧 Email: [themaiby0@gmail.com](mailto:themaiby0@gmail.com)
