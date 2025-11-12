@@ -37,7 +37,10 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/HorizonRepublic/nestjs-jetstream.git"
+    "url": "https://github.com/HorizonRepublic/nestjs-jetstream"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/"
   },
   "bugs": {
     "url": "https://github.com/HorizonRepublic/nestjs-jetstream/issues"
