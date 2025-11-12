@@ -170,6 +170,6 @@ MIT
 
 ## Support
 
-- 🐛 [Report bugs](https://github.com/HorizonRepublic/nestjs-jetstream/issues)
-- 💬 [Discussions](https://github.com/HorizonRepublic/nestjs-jetstream/discussions)
-- 📧 Email: [themaiby0@gmail.com](mailto:themaiby0@gmail.com)
+- [Report bugs](https://github.com/HorizonRepublic/nestjs-jetstream/issues)
+- [Discussions](https://github.com/HorizonRepublic/nestjs-jetstream/discussions)
+- Email: [themaiby0@gmail.com](mailto:themaiby0@gmail.com)
