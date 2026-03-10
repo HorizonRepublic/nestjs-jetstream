@@ -3,7 +3,6 @@ import preferArrowPlugin from 'eslint-plugin-prefer-arrow';
 import eslintPluginPrettier from 'eslint-plugin-prettier';
 import sonarjs from 'eslint-plugin-sonarjs';
 import unusedImports from 'eslint-plugin-unused-imports';
-import jsoncParser from 'jsonc-eslint-parser';
 import tseslint from 'typescript-eslint';
 
 export default [
@@ -30,13 +29,6 @@ export default [
       '**/.nx/**',
       'jest.config.ts',
     ],
-  },
-
-  {
-    files: ['apps/**/package.json'],
-    languageOptions: {
-      parser: jsoncParser,
-    },
   },
 
   {
