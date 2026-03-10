@@ -136,3 +136,6 @@ coverage/
 .nyc_output/
 *.lcov
 
+# Internal docs, specs and plans
+docs/
+

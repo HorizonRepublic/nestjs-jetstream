@@ -1,28 +1,24 @@
+import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 
+import { JetstreamStrategy } from '../src';
+
 import { AppModule } from './app.module';
-import { Logger } from '@nestjs/common';
-import { getJetStreamTransportToken, JetstreamTransport } from '@horizon-republic/nestjs-jetstream';
 
 const bootstrap = async (): Promise<void> => {
   const app = await NestFactory.create(AppModule);
+  const logger = new Logger('Bootstrap');
+
+  // Register JetStream as a microservice transport.
+  // The strategy is created by forRoot() and managed via DI.
+  // When consumer is disabled (consumer: false), the strategy resolves to null.
+  app.connectMicroservice({ strategy: app.get(JetstreamStrategy) }, { inheritAppConfig: true });
+  await app.startAllMicroservices();
 
   const port = process.env.PORT ?? 3000;
 
-  const logger = new Logger('bootstrap');
-
-  // Get transport instance:
-  // name should be the same as the one used in AppModule. Better to use a constant or environment variable.
-  const transport: JetstreamTransport = app.get(getJetStreamTransportToken('my_service'));
-
-  app.connectMicroservice(transport, { inheritAppConfig: true });
-
-  await app.startAllMicroservices();
-  // end of example
-
-  await app.listen(port, () => {
-    logger.log(`🚀 Application is running on: http://localhost:${port}`);
-  });
+  await app.listen(port);
+  logger.log(`Application is running on: http://localhost:${port}`);
 };
 
 void bootstrap();

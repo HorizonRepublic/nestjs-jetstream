@@ -1,19 +1,36 @@
 import { Module } from '@nestjs/common';
-import { JetstreamClientModule, JetstreamServerModule } from '@horizon-republic/nestjs-jetstream';
-import { AppMicroserviceController } from './app.microservice-controller';
+
+import { JetstreamModule, TransportEvent } from '../src';
+
 import { AppController } from './app.controller';
+import { AppMicroserviceController } from './app.microservice-controller';
 
 @Module({
   imports: [
-    JetstreamServerModule.forRoot({
-      name: 'my_service', // Unique name for the JetStream service. Will be registered as `my_service__microservice``
-      servers: ['localhost:4222'], // List of NATS servers to connect to.
+    // Global setup — creates shared NATS connection, codec, event bus,
+    // and consumer infrastructure (streams, consumers, routers).
+    JetstreamModule.forRoot({
+      name: 'my-service',
+      servers: ['localhost:4222'],
+
+      // RPC mode: 'core' (default) uses NATS request/reply,
+      // 'jetstream' persists commands in a stream.
+      rpc: { mode: 'core', timeout: 10_000 },
+
+      // Optional lifecycle hooks (falls back to NestJS Logger)
+      hooks: {
+        [TransportEvent.Connect]: (server) => {
+          console.log(`Connected to ${server}`);
+        },
+        [TransportEvent.Error]: (err, source) => {
+          console.error(`[${source}]`, err);
+        },
+      },
     }),
 
-    JetstreamClientModule.forFeature({
-      name: 'my_service', // Should match the name of the JetStream service.
-      servers: ['localhost:4222'],
-    }),
+    // Feature client — lightweight proxy targeting a specific service.
+    // Reuses the shared NATS connection from forRoot().
+    JetstreamModule.forFeature({ name: 'my-service' }),
   ],
   controllers: [AppMicroserviceController, AppController],
 })
