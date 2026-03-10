@@ -30,8 +30,9 @@ examples/tsconfig.json
 docker-compose.yaml
 docker-compose.yml
 
-# Docs (якщо не потрібні в пакеті)
-CONTRIBUTION.md
+# Docs
+docs/
+CONTRIBUTING.md
 
 # Lock files
 pnpm-lock.yaml

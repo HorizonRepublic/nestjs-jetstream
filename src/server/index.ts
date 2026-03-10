@@ -1,3 +1,7 @@
-export * from './jetstream-server.module';
+export { JetstreamStrategy } from './strategy';
 
-export * from './jetstream.transport';
+export { CoreRpcServer } from './core-rpc.server';
+
+export { ConsumerProvider, MessageProvider, StreamProvider } from './infrastructure';
+
+export { EventRouter, PatternRegistry, RpcRouter } from './routing';

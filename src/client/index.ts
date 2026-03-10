@@ -1,1 +1,3 @@
-export * from './jetstream-client.module';
+export { JetstreamClient } from './jetstream.client';
+
+export { JetstreamRecord, JetstreamRecordBuilder } from './jetstream.record';

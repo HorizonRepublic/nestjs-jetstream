@@ -3,7 +3,6 @@ import preferArrowPlugin from 'eslint-plugin-prefer-arrow';
 import eslintPluginPrettier from 'eslint-plugin-prettier';
 import sonarjs from 'eslint-plugin-sonarjs';
 import unusedImports from 'eslint-plugin-unused-imports';
-import jsoncParser from 'jsonc-eslint-parser';
 import tseslint from 'typescript-eslint';
 
 export default [
@@ -33,13 +32,6 @@ export default [
   },
 
   {
-    files: ['apps/**/package.json'],
-    languageOptions: {
-      parser: jsoncParser,
-    },
-  },
-
-  {
     files: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx'],
     plugins: {
       'prefer-arrow': preferArrowPlugin,
@@ -51,7 +43,7 @@ export default [
       'arrow-spacing': 'error',
       camelcase: ['error', {ignoreDestructuring: false, properties: 'never'}],
       'comma-dangle': ['error', 'always-multiline'],
-      complexity: ['warn', 10],
+      complexity: ['warn', 15],
       'function-call-argument-newline': ['error', 'consistent'],
       'lines-between-class-members': [
         'error',
@@ -66,7 +58,7 @@ export default [
         },
       ],
       'max-depth': ['warn', 4],
-      'max-params': ['warn', 4],
+      'max-params': ['warn', 10],
       'no-alert': 'error',
       'no-console': ['warn', {allow: ['warn', 'error']}],
       'no-debugger': 'error',
@@ -181,7 +173,7 @@ export default [
         {format: ['camelCase'], selector: 'memberLike'},
         {format: ['PascalCase'], selector: 'typeLike'},
         {format: ['PascalCase'], selector: 'enumMember'},
-        {format: ['PascalCase'], prefix: ['I'], selector: 'interface'},
+        {format: ['PascalCase'], selector: 'interface'},
         {format: ['PascalCase'], selector: 'typeAlias'},
       ],
       '@typescript-eslint/no-confusing-void-expression': 'error',
