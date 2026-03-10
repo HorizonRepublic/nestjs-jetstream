@@ -71,9 +71,6 @@ export class EventBus {
       case TransportEvent.RpcTimeout:
         this.logger.warn(`RPC timeout: ${args[0]} (cid: ${args[1]})`);
         break;
-      case TransportEvent.ConsumerLag:
-        this.logger.warn(`Consumer lag: ${args[0]} has ${args[1]} pending`);
-        break;
       case TransportEvent.MessageRouted:
         this.logger.debug(`Message routed: ${args[0]} [${args[1]}]`);
         break;

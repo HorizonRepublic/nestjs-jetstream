@@ -16,7 +16,7 @@ import { JetstreamStrategy } from '../server/strategy';
  * 5. Emit onShutdownComplete hook
  */
 export class ShutdownManager {
-  private readonly logger = new Logger(ShutdownManager.name);
+  private readonly logger = new Logger('Jetstream:Shutdown');
 
   public constructor(
     private readonly connection: ConnectionProvider,

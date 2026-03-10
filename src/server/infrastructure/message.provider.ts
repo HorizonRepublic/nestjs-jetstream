@@ -27,7 +27,7 @@ import { TransportEvent } from '../../interfaces';
  * Emits messages to kind-specific RxJS subjects for downstream routing.
  */
 export class MessageProvider {
-  private readonly logger = new Logger(MessageProvider.name);
+  private readonly logger = new Logger('Jetstream:Message');
   private readonly destroy$ = new Subject<void>();
 
   private readonly eventMessages$ = new Subject<JsMsg>();

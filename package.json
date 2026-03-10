@@ -1,7 +1,33 @@
 {
   "name": "@horizon-republic/nestjs-jetstream",
-  "version": "2.0.0",
-  "description": "A NestJS transport for NATS JetStream with built-in support for Events and RPC Commands messaging patterns via JetStream.",
+  "version": "2.1.0",
+  "description": "A NestJS transport for NATS with JetStream events, broadcast fan-out, and Core/JetStream RPC.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HorizonRepublic/nestjs-jetstream.git"
+  },
+  "homepage": "https://github.com/HorizonRepublic/nestjs-jetstream#readme",
+  "bugs": {
+    "url": "https://github.com/HorizonRepublic/nestjs-jetstream/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "nestjs",
+    "jetstream",
+    "nats",
+    "transport",
+    "microservices",
+    "rpc",
+    "events"
+  ],
+  "author": {
+    "name": "Horizon Republic",
+    "url": "https://github.com/HorizonRepublic"
+  },
+  "license": "MIT",
+  "type": "commonjs",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -10,8 +36,9 @@
     "LICENSE"
   ],
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">= 20"
   },
+  "packageManager": "pnpm@10.22.0",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "build:watch": "tsc -p tsconfig.json --watch",
@@ -26,24 +53,14 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand"
   },
-  "keywords": [
-    "nestjs",
-    "jetstream",
-    "nats",
-    "transport",
-    "microservices"
-  ],
-  "author": "Kyrylo Lytvynov <themaiby0@gmail.com>",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/HorizonRepublic/nestjs-jetstream.git"
+  "peerDependencies": {
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/microservices": "^11.0.0",
+    "nats": "^2.0.0",
+    "reflect-metadata": "^0.2.0",
+    "rxjs": "^7.8.0"
   },
-  "bugs": {
-    "url": "https://github.com/HorizonRepublic/nestjs-jetstream/issues"
-  },
-  "homepage": "https://github.com/HorizonRepublic/nestjs-jetstream#readme",
-  "packageManager": "pnpm@10.22.0",
   "devDependencies": {
     "@nestjs/platform-express": "^11.1.16",
     "@nestjs/testing": "^11.1.16",
@@ -63,13 +80,5 @@
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.57.0"
-  },
-  "peerDependencies": {
-    "@nestjs/common": "^11.0.0",
-    "@nestjs/core": "^11.0.0",
-    "@nestjs/microservices": "^11.0.0",
-    "nats": "^2.0.0",
-    "reflect-metadata": "^0.2.0",
-    "rxjs": "^7.8.0"
   }
 }

@@ -41,7 +41,7 @@ import { JetstreamRecord } from './jetstream.record';
  * Clients are lightweight — they share the NATS connection from `forRoot()`.
  */
 export class JetstreamClient extends ClientProxy {
-  private readonly logger = new Logger(JetstreamClient.name);
+  private readonly logger = new Logger('Jetstream:Client');
 
   /** Target service name this client sends messages to. */
   private readonly targetName: string;
@@ -186,7 +186,11 @@ export class JetstreamClient extends ClientProxy {
 
       const decoded = this.codec.decode(response.data);
 
-      callback({ err: null, response: decoded, isDisposed: true });
+      if (response.headers?.get(JetstreamHeader.Error)) {
+        callback({ err: decoded, response: null, isDisposed: true });
+      } else {
+        callback({ err: null, response: decoded, isDisposed: true });
+      }
     } catch (err) {
       this.logger.error(`Core RPC error (${subject}):`, err);
       this.eventBus.emit(
@@ -296,9 +300,13 @@ export class JetstreamClient extends ClientProxy {
     }
 
     try {
-      const response = this.codec.decode(msg.data);
+      const decoded = this.codec.decode(msg.data);
 
-      callback({ err: null, response, isDisposed: true });
+      if (msg.headers?.get(JetstreamHeader.Error)) {
+        callback({ err: decoded, response: null, isDisposed: true });
+      } else {
+        callback({ err: null, response: decoded, isDisposed: true });
+      }
     } catch (err) {
       callback({
         err: err instanceof Error ? err.message : 'Decode error',

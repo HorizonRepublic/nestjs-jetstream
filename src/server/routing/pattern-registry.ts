@@ -13,7 +13,7 @@ import { buildBroadcastSubject, buildSubject, internalName } from '../../jetstre
  * - Provides lists of patterns by category for stream/consumer setup
  */
 export class PatternRegistry {
-  private readonly logger = new Logger(PatternRegistry.name);
+  private readonly logger = new Logger('Jetstream:PatternRegistry');
   private readonly registry = new Map<string, RegisteredHandler>();
 
   public constructor(private readonly options: JetstreamModuleOptions) {}

@@ -25,7 +25,7 @@ const STREAM_NOT_FOUND = 10059;
  * All operations are idempotent: safe to call on every startup and reconnection.
  */
 export class StreamProvider {
-  private readonly logger = new Logger(StreamProvider.name);
+  private readonly logger = new Logger('Jetstream:Stream');
 
   public constructor(
     private readonly options: JetstreamModuleOptions,

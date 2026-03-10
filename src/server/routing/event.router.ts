@@ -33,7 +33,7 @@ import { PatternRegistry } from './pattern-registry';
  * For fire-and-forget events, use NATS Core via the standard NestJS transport.
  */
 export class EventRouter {
-  private readonly logger = new Logger(EventRouter.name);
+  private readonly logger = new Logger('Jetstream:EventRouter');
   private readonly subscriptions: Subscription[] = [];
 
   public constructor(

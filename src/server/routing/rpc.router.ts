@@ -27,7 +27,7 @@ import { PatternRegistry } from './pattern-registry';
  * Nak is never used for RPC — prevents duplicate side effects.
  */
 export class RpcRouter {
-  private readonly logger = new Logger(RpcRouter.name);
+  private readonly logger = new Logger('Jetstream:RpcRouter');
   private readonly timeout: number;
   private subscription: Subscription | null = null;
 
@@ -138,11 +138,15 @@ export class RpcRouter {
       settled = true;
       clearTimeout(timeoutId);
 
-      // Publish error response
+      // Publish error response with x-error header.
+      // NestJS exception filters transform RpcException into a plain object
+      // (via getError()), so `err` here is typically already the processed payload.
       try {
-        const errorPayload = { error: err instanceof Error ? err.message : String(err) };
+        hdrs.set(JetstreamHeader.Error, 'true');
 
-        nc.publish(replyTo, this.codec.encode(errorPayload), { headers: hdrs });
+        const payload = err instanceof Error ? { message: err.message } : err;
+
+        nc.publish(replyTo, this.codec.encode(payload), { headers: hdrs });
       } catch (encodeErr) {
         this.logger.error(`Failed to encode RPC error for ${msg.subject}`, encodeErr);
       }

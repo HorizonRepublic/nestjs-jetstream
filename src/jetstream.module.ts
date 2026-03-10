@@ -201,7 +201,7 @@ export class JetstreamModule implements OnApplicationShutdown {
         provide: JETSTREAM_EVENT_BUS,
         inject: [JETSTREAM_OPTIONS],
         useFactory: (options: JetstreamModuleOptions): EventBus => {
-          const logger = new Logger('JetstreamTransport');
+          const logger = new Logger('Jetstream:Module');
 
           return new EventBus(logger, options.hooks);
         },

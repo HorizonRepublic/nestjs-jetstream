@@ -160,6 +160,8 @@ export enum JetstreamHeader {
   RequestId = 'x-request-id',
   TraceId = 'x-trace-id',
   SpanId = 'x-span-id',
+  /** Set to 'true' on error responses so the client can distinguish success from failure. */
+  Error = 'x-error',
 }
 
 /** Set of header names that are reserved and cannot be set by users. */
