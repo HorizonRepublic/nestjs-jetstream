@@ -1,6 +1,6 @@
 import { createMock } from '@golevelup/ts-jest';
 import { faker } from '@faker-js/faker';
-import type { JsMsg } from 'nats';
+import type { DeliveryInfo, JsMsg } from 'nats';
 import { Subject } from 'rxjs';
 
 import { EventBus } from '../../hooks';
@@ -8,6 +8,7 @@ import type { Codec } from '../../interfaces';
 import { TransportEvent } from '../../interfaces';
 import { MessageProvider } from '../infrastructure/message.provider';
 
+import type { DeadLetterConfig } from './event.router';
 import { EventRouter } from './event.router';
 import { PatternRegistry } from './pattern-registry';
 
@@ -195,6 +196,151 @@ describe(EventRouter, () => {
           expect(handler).toHaveBeenCalled();
           expect(msg.ack).toHaveBeenCalled();
         });
+      });
+    });
+  });
+
+  describe('dead letter handling', () => {
+    const streamName = 'test-stream';
+    const maxDeliverByStream = new Map<string, number>([[streamName, 3]]);
+    let onDeadLetter: jest.Mock;
+    let deadLetterConfig: DeadLetterConfig;
+
+    beforeEach(() => {
+      onDeadLetter = jest.fn().mockResolvedValue(undefined);
+      deadLetterConfig = { maxDeliverByStream, onDeadLetter };
+
+      sut = new EventRouter(messageProvider, patternRegistry, codec, eventBus, deadLetterConfig);
+      sut.start();
+    });
+
+    const createDeadLetterMsg = (overrides?: Partial<DeliveryInfo>): JsMsg =>
+      createMock<JsMsg>({
+        subject: 'test.subject',
+        data: new TextEncoder().encode(JSON.stringify({ key: 'value' })),
+        info: {
+          deliveryCount: 3,
+          stream: streamName,
+          streamSequence: 42,
+          redelivered: true,
+          timestampNanos: Date.now() * 1_000_000,
+          ...overrides,
+        } as DeliveryInfo,
+      });
+
+    describe('happy path', () => {
+      it('should call onDeadLetter and term when deliveryCount reaches maxDeliver', async () => {
+        // Given: a handler that always fails
+        const handler = jest.fn().mockRejectedValue(new Error('handler error'));
+
+        patternRegistry.getHandler.mockReturnValue(handler);
+
+        const msg = createDeadLetterMsg();
+
+        // When: message arrives at final delivery
+        events$.next(msg);
+        await new Promise(process.nextTick);
+
+        // Then: onDeadLetter called with correct info, message terminated
+        expect(onDeadLetter).toHaveBeenCalledWith(
+          expect.objectContaining({
+            subject: 'test.subject',
+            data: { key: 'value' },
+            error: expect.any(Error),
+            deliveryCount: 3,
+            stream: streamName,
+            streamSequence: 42,
+          }),
+        );
+        expect(msg.term).toHaveBeenCalled();
+        expect(msg.nak).not.toHaveBeenCalled();
+      });
+
+      it('should emit TransportEvent.DeadLetter for observability', async () => {
+        // Given: a handler that always fails
+        const handler = jest.fn().mockRejectedValue(new Error('handler error'));
+
+        patternRegistry.getHandler.mockReturnValue(handler);
+
+        const msg = createDeadLetterMsg();
+
+        // When: dead letter detected
+        events$.next(msg);
+        await new Promise(process.nextTick);
+
+        // Then: event emitted
+        expect(eventBus.emit).toHaveBeenCalledWith(
+          TransportEvent.DeadLetter,
+          expect.objectContaining({ subject: 'test.subject' }),
+        );
+      });
+    });
+
+    describe('edge cases', () => {
+      it('should nak normally when deliveryCount has not reached maxDeliver', async () => {
+        // Given: a handler that fails, but not at max delivery
+        const handler = jest.fn().mockRejectedValue(new Error('handler error'));
+
+        patternRegistry.getHandler.mockReturnValue(handler);
+
+        const msg = createDeadLetterMsg({ deliveryCount: 1, redelivered: false });
+
+        // When: message arrives at first delivery
+        events$.next(msg);
+        await new Promise(process.nextTick);
+
+        // Then: regular nak, no dead letter
+        expect(onDeadLetter).not.toHaveBeenCalled();
+        expect(msg.nak).toHaveBeenCalled();
+        expect(msg.term).not.toHaveBeenCalled();
+      });
+
+      it('should nak normally when stream is not in maxDeliverByStream map', async () => {
+        // Given: message from an unknown stream
+        const handler = jest.fn().mockRejectedValue(new Error('handler error'));
+
+        patternRegistry.getHandler.mockReturnValue(handler);
+
+        const msg = createMock<JsMsg>({
+          subject: 'unknown.subject',
+          data: new TextEncoder().encode(JSON.stringify({})),
+          info: {
+            deliveryCount: 99,
+            stream: 'unknown-stream',
+            streamSequence: 1,
+            redelivered: true,
+            timestampNanos: Date.now() * 1_000_000,
+          } as DeliveryInfo,
+        });
+
+        // When: message arrives
+        events$.next(msg);
+        await new Promise(process.nextTick);
+
+        // Then: regular nak, no dead letter
+        expect(onDeadLetter).not.toHaveBeenCalled();
+        expect(msg.nak).toHaveBeenCalled();
+      });
+    });
+
+    describe('error paths', () => {
+      it('should nak the message if onDeadLetter throws', async () => {
+        // Given: dead letter hook that fails
+        onDeadLetter.mockRejectedValue(new Error('DLQ persistence failed'));
+
+        const handler = jest.fn().mockRejectedValue(new Error('handler error'));
+
+        patternRegistry.getHandler.mockReturnValue(handler);
+
+        const msg = createDeadLetterMsg();
+
+        // When: dead letter detected, hook fails
+        events$.next(msg);
+        await new Promise(process.nextTick);
+
+        // Then: nak for retry instead of term
+        expect(msg.nak).toHaveBeenCalled();
+        expect(msg.term).not.toHaveBeenCalled();
       });
     });
   });
