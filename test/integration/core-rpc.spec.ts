@@ -92,8 +92,8 @@ describe('Core RPC Round-Trip', () => {
   it('should timeout when no handler matches', async () => {
     const record = new JetstreamRecordBuilder({}).setTimeout(500).build();
 
-    await expect(firstValueFrom(client.send('nonexistent.pattern', record))).rejects.toThrow(
-      /timeout|no responders/i,
+    await expect(firstValueFrom(client.send('nonexistent.pattern', record))).rejects.toMatch(
+      /timeout/i,
     );
   });
 });
