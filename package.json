@@ -38,7 +38,7 @@
   "engines": {
     "node": ">= 20.19.0"
   },
-  "packageManager": "pnpm@10.22.0",
+  "packageManager": "pnpm@10.32.1",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "build:watch": "tsc -p tsconfig.json --watch",
