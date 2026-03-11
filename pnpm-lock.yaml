@@ -9,13 +9,13 @@ importers:
   .:
     dependencies:
       '@nestjs/common':
-        specifier: '>=10.2.0 || ^11.0.0'
+        specifier: ^10.2.0 || ^11.0.0
         version: 11.1.8(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/core':
-        specifier: '>=10.2.0 || ^11.0.0'
+        specifier: ^10.2.0 || ^11.0.0
         version: 11.1.8(@nestjs/common@11.1.8(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/microservices@11.1.8)(@nestjs/platform-express@11.1.16)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/microservices':
-        specifier: '>=10.2.0 || ^11.0.0'
+        specifier: ^10.2.0 || ^11.0.0
         version: 11.1.8(@nestjs/common@11.1.8(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.8)(nats@2.29.3)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       nats:
         specifier: ^2.0.0
