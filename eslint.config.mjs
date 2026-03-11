@@ -26,6 +26,7 @@ export default [
       '**/dist-example/**',
       '**/tmp/**',
       'jest.config.ts',
+      'jest.integration.config.ts',
     ],
   },
 
@@ -98,7 +99,7 @@ export default [
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {
-        project: ['./tsconfig.json', './examples/tsconfig.json'],
+        project: ['./tsconfig.json', './examples/tsconfig.json', './test/tsconfig.json'],
         tsconfigRootDir: import.meta.dirname,
       },
     },
@@ -209,10 +210,12 @@ export default [
   },
 
   {
-    files: ['**/*.spec.ts', '**/*.test.ts'],
+    files: ['**/*.spec.ts', '**/*.test.ts', 'test/**/*.ts'],
     rules: {
       '@typescript-eslint/no-non-null-assertion': 'off',
       '@typescript-eslint/naming-convention': 'off',
+      '@typescript-eslint/explicit-member-accessibility': 'off',
+      'sonarjs/pseudo-random': 'off',
     },
   },
 

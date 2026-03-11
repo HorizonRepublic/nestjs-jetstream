@@ -11,8 +11,7 @@ const NATS_URL = 'nats://localhost:4222';
 /**
  * Create a unique service name per test to avoid stream/consumer collisions.
  */
-export const uniqueServiceName = (): string =>
-  `test-${Math.random().toString(36).slice(2, 10)}`;
+export const uniqueServiceName = (): string => `test-${Math.random().toString(36).slice(2, 10)}`;
 
 /**
  * Create a standalone NATS connection for test assertions.
@@ -33,9 +32,7 @@ export const createTestApp = async (
   controllers: Type[] = [],
   clientTargets: string[] = [],
 ): Promise<{ app: INestApplication; module: TestingModule }> => {
-  const featureImports = clientTargets.map((name) =>
-    JetstreamModule.forFeature({ name }),
-  );
+  const featureImports = clientTargets.map((name) => JetstreamModule.forFeature({ name }));
 
   const module = await Test.createTestingModule({
     imports: [
@@ -61,10 +58,7 @@ export const createTestApp = async (
 /**
  * Clean up streams and consumers created during test.
  */
-export const cleanupStreams = async (
-  nc: NatsConnection,
-  serviceName: string,
-): Promise<void> => {
+export const cleanupStreams = async (nc: NatsConnection, serviceName: string): Promise<void> => {
   const jsm = await nc.jetstreamManager();
   const internalName = `${serviceName}__microservice`;
 

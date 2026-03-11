@@ -5,12 +5,7 @@ import { NatsConnection } from 'nats';
 import { JETSTREAM_CONNECTION } from '../../src';
 import { ConnectionProvider } from '../../src/connection';
 
-import {
-  cleanupStreams,
-  createNatsConnection,
-  createTestApp,
-  uniqueServiceName,
-} from './helpers';
+import { cleanupStreams, createNatsConnection, createTestApp, uniqueServiceName } from './helpers';
 
 // ---------------------------------------------------------------------------
 // Test Controllers
@@ -47,10 +42,7 @@ describe('Graceful Shutdown', () => {
 
   it('should drain NATS connection on app.close()', async () => {
     const serviceName = uniqueServiceName();
-    const { app, module } = await createTestApp(
-      { name: serviceName },
-      [ShutdownEventController],
-    );
+    const { app, module } = await createTestApp({ name: serviceName }, [ShutdownEventController]);
 
     const connection = module.get<ConnectionProvider>(JETSTREAM_CONNECTION);
 
@@ -76,14 +68,10 @@ describe('Graceful Shutdown', () => {
     const internalName = `${serviceName}__microservice`;
 
     // No event stream should exist
-    await expect(
-      jsm.streams.info(`${internalName}_ev-stream`),
-    ).rejects.toThrow();
+    await expect(jsm.streams.info(`${internalName}_ev-stream`)).rejects.toThrow();
 
     // No command stream should exist
-    await expect(
-      jsm.streams.info(`${internalName}_cmd-stream`),
-    ).rejects.toThrow();
+    await expect(jsm.streams.info(`${internalName}_cmd-stream`)).rejects.toThrow();
 
     await app.close();
     await cleanupStreams(nc, serviceName);
@@ -91,10 +79,10 @@ describe('Graceful Shutdown', () => {
 
   it('should close cleanly with both event and RPC handlers', async () => {
     const serviceName = uniqueServiceName();
-    const { app, module } = await createTestApp(
-      { name: serviceName },
-      [ShutdownEventController, ShutdownRpcController],
-    );
+    const { app, module } = await createTestApp({ name: serviceName }, [
+      ShutdownEventController,
+      ShutdownRpcController,
+    ]);
 
     const connection = module.get<ConnectionProvider>(JETSTREAM_CONNECTION);
 

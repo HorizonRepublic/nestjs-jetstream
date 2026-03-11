@@ -6,12 +6,7 @@ import { firstValueFrom } from 'rxjs';
 
 import { getClientToken, JetstreamRecordBuilder, RpcContext } from '../../src';
 
-import {
-  cleanupStreams,
-  createNatsConnection,
-  createTestApp,
-  uniqueServiceName,
-} from './helpers';
+import { cleanupStreams, createNatsConnection, createTestApp, uniqueServiceName } from './helpers';
 
 // ---------------------------------------------------------------------------
 // Test Controllers
@@ -75,39 +70,29 @@ describe('JetStream RPC Round-Trip', () => {
   });
 
   it('should send JetStream RPC request and receive response via inbox', async () => {
-    const result = await firstValueFrom(
-      client.send('user.get', { id: 7 }),
-    );
+    const result = await firstValueFrom(client.send('user.get', { id: 7 }));
 
     expect(result).toEqual({ id: 7, name: 'JS User' });
   });
 
   it('should receive RpcException error via inbox', async () => {
-    await expect(
-      firstValueFrom(client.send('user.fail', {})),
-    ).rejects.toMatchObject({ message: 'Not found' });
+    await expect(firstValueFrom(client.send('user.fail', {}))).rejects.toMatchObject({
+      message: 'Not found',
+    });
   });
 
   it('should pass custom headers through JetStream message', async () => {
-    const record = new JetstreamRecordBuilder({ id: 3 })
-      .setHeader('x-tenant', 'beta')
-      .build();
+    const record = new JetstreamRecordBuilder({ id: 3 }).setHeader('x-tenant', 'beta').build();
 
-    const result = await firstValueFrom(
-      client.send('user.ctx', record),
-    );
+    const result = await firstValueFrom(client.send('user.ctx', record));
 
     expect(result).toEqual({ id: 3, tenant: 'beta' });
   });
 
   it('should timeout when handler takes too long', async () => {
-    const record = new JetstreamRecordBuilder({})
-      .setTimeout(500)
-      .build();
+    const record = new JetstreamRecordBuilder({}).setTimeout(500).build();
 
-    await expect(
-      firstValueFrom(client.send('nonexistent.pattern', record)),
-    ).rejects.toBeDefined();
+    await expect(firstValueFrom(client.send('nonexistent.pattern', record))).rejects.toBeDefined();
   });
 
   it('should create command stream and consumer', async () => {

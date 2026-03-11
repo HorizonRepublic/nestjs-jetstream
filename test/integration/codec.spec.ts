@@ -24,12 +24,14 @@ class Base64JsonCodec implements Codec {
   encode(data: unknown): Uint8Array {
     const json = JSON.stringify(data);
     const base64 = Buffer.from(json).toString('base64');
+
     return new TextEncoder().encode(base64);
   }
 
   decode(data: Uint8Array): unknown {
     const base64 = new TextDecoder().decode(data);
     const json = Buffer.from(base64, 'base64').toString('utf-8');
+
     return JSON.parse(json);
   }
 }

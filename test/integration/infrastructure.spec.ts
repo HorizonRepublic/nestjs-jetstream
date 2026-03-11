@@ -38,10 +38,7 @@ describe('Stream & Consumer Lifecycle', () => {
     it('should create event stream with workqueue retention', async () => {
       const serviceName = uniqueServiceName();
 
-      const { app } = await createTestApp(
-        { name: serviceName },
-        [InfraEventController],
-      );
+      const { app } = await createTestApp({ name: serviceName }, [InfraEventController]);
 
       try {
         const jsm = await nc.jetstreamManager();
@@ -60,10 +57,7 @@ describe('Stream & Consumer Lifecycle', () => {
     it('should create broadcast stream with limits retention', async () => {
       const serviceName = uniqueServiceName();
 
-      const { app } = await createTestApp(
-        { name: serviceName },
-        [InfraEventController],
-      );
+      const { app } = await createTestApp({ name: serviceName }, [InfraEventController]);
 
       try {
         const jsm = await nc.jetstreamManager();
@@ -80,10 +74,9 @@ describe('Stream & Consumer Lifecycle', () => {
     it('should create command stream only in jetstream RPC mode', async () => {
       const serviceName = uniqueServiceName();
 
-      const { app } = await createTestApp(
-        { name: serviceName, rpc: { mode: 'jetstream' } },
-        [InfraRpcController],
-      );
+      const { app } = await createTestApp({ name: serviceName, rpc: { mode: 'jetstream' } }, [
+        InfraRpcController,
+      ]);
 
       try {
         const jsm = await nc.jetstreamManager();
@@ -101,18 +94,13 @@ describe('Stream & Consumer Lifecycle', () => {
     it('should NOT create command stream in core RPC mode', async () => {
       const serviceName = uniqueServiceName();
 
-      const { app } = await createTestApp(
-        { name: serviceName },
-        [InfraRpcController],
-      );
+      const { app } = await createTestApp({ name: serviceName }, [InfraRpcController]);
 
       try {
         const jsm = await nc.jetstreamManager();
         const internalName = `${serviceName}__microservice`;
 
-        await expect(
-          jsm.streams.info(`${internalName}_cmd-stream`),
-        ).rejects.toThrow();
+        await expect(jsm.streams.info(`${internalName}_cmd-stream`)).rejects.toThrow();
       } finally {
         await app.close();
         await cleanupStreams(nc, serviceName);
@@ -148,10 +136,7 @@ describe('Stream & Consumer Lifecycle', () => {
     it('should create durable event consumer', async () => {
       const serviceName = uniqueServiceName();
 
-      const { app } = await createTestApp(
-        { name: serviceName },
-        [InfraEventController],
-      );
+      const { app } = await createTestApp({ name: serviceName }, [InfraEventController]);
 
       try {
         const jsm = await nc.jetstreamManager();
@@ -171,10 +156,7 @@ describe('Stream & Consumer Lifecycle', () => {
     it('should create broadcast consumer with filter_subjects', async () => {
       const serviceName = uniqueServiceName();
 
-      const { app } = await createTestApp(
-        { name: serviceName },
-        [InfraEventController],
-      );
+      const { app } = await createTestApp({ name: serviceName }, [InfraEventController]);
 
       try {
         const jsm = await nc.jetstreamManager();
@@ -186,9 +168,9 @@ describe('Stream & Consumer Lifecycle', () => {
 
         expect(info.config.durable_name).toBe(`${internalName}_broadcast-consumer`);
         // Should filter to only the registered broadcast pattern
-        const hasFilter =
-          info.config.filter_subject?.includes('broadcast.') ||
-          (info.config.filter_subjects?.length ?? 0) > 0;
+        const hasFilterSubject = info.config.filter_subject?.includes('broadcast.') === true;
+        const hasFilterSubjects = (info.config.filter_subjects?.length ?? 0) > 0;
+        const hasFilter = hasFilterSubject || hasFilterSubjects;
 
         expect(hasFilter).toBe(true);
       } finally {
@@ -227,18 +209,12 @@ describe('Stream & Consumer Lifecycle', () => {
       const serviceName = uniqueServiceName();
 
       // First bootstrap
-      const { app: app1 } = await createTestApp(
-        { name: serviceName },
-        [InfraEventController],
-      );
+      const { app: app1 } = await createTestApp({ name: serviceName }, [InfraEventController]);
 
       await app1.close();
 
       // Second bootstrap — same service name
-      const { app: app2 } = await createTestApp(
-        { name: serviceName },
-        [InfraEventController],
-      );
+      const { app: app2 } = await createTestApp({ name: serviceName }, [InfraEventController]);
 
       try {
         const jsm = await nc.jetstreamManager();

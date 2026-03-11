@@ -109,9 +109,7 @@ describe('Broadcast Event Delivery', () => {
 
     it('should deliver multiple broadcast events to both services', async () => {
       for (let i = 0; i < 3; i++) {
-        await firstValueFrom(
-          clientA.emit('broadcast:config.updated', { seq: i }),
-        );
+        await firstValueFrom(clientA.emit('broadcast:config.updated', { seq: i }));
       }
 
       await waitForCondition(

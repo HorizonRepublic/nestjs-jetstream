@@ -6,12 +6,7 @@ import { firstValueFrom } from 'rxjs';
 
 import { getClientToken, JetstreamRecordBuilder, RpcContext } from '../../src';
 
-import {
-  cleanupStreams,
-  createNatsConnection,
-  createTestApp,
-  uniqueServiceName,
-} from './helpers';
+import { cleanupStreams, createNatsConnection, createTestApp, uniqueServiceName } from './helpers';
 
 // ---------------------------------------------------------------------------
 // Test Controllers
@@ -75,38 +70,28 @@ describe('Core RPC Round-Trip', () => {
   });
 
   it('should send RPC request and receive response', async () => {
-    const result = await firstValueFrom(
-      client.send('user.get', { id: 42 }),
-    );
+    const result = await firstValueFrom(client.send('user.get', { id: 42 }));
 
     expect(result).toEqual({ id: 42, name: 'Test User' });
   });
 
   it('should receive RpcException error from handler', async () => {
-    await expect(
-      firstValueFrom(client.send('user.fail', {})),
-    ).rejects.toMatchObject({ message: 'User not found' });
+    await expect(firstValueFrom(client.send('user.fail', {}))).rejects.toMatchObject({
+      message: 'User not found',
+    });
   });
 
   it('should pass custom headers to handler via RpcContext', async () => {
-    const record = new JetstreamRecordBuilder({ id: 1 })
-      .setHeader('x-tenant', 'acme')
-      .build();
+    const record = new JetstreamRecordBuilder({ id: 1 }).setHeader('x-tenant', 'acme').build();
 
-    const result = await firstValueFrom(
-      client.send('user.get-with-ctx', record),
-    );
+    const result = await firstValueFrom(client.send('user.get-with-ctx', record));
 
     expect(result).toEqual({ id: 1, tenant: 'acme' });
   });
 
   it('should timeout when no handler matches', async () => {
-    const record = new JetstreamRecordBuilder({})
-      .setTimeout(500)
-      .build();
+    const record = new JetstreamRecordBuilder({}).setTimeout(500).build();
 
-    await expect(
-      firstValueFrom(client.send('nonexistent.pattern', record)),
-    ).rejects.toBeDefined();
+    await expect(firstValueFrom(client.send('nonexistent.pattern', record))).rejects.toBeDefined();
   });
 });

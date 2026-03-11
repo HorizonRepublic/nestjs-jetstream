@@ -14,13 +14,7 @@ const config: Config = {
     '^.+\\.ts$': [
       'ts-jest',
       {
-        tsconfig: {
-          rootDir: '.',
-          esModuleInterop: true,
-          allowSyntheticDefaultImports: true,
-          emitDecoratorMetadata: true,
-          experimentalDecorators: true,
-        },
+        tsconfig: 'test/tsconfig.json',
       },
     ],
   },

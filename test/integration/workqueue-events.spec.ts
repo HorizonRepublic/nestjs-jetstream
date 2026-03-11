@@ -100,9 +100,7 @@ describe('Workqueue Event Delivery', () => {
 
       await waitForCondition(() => controller.received.length === 5, 10_000);
 
-      expect(controller.received).toEqual(
-        [0, 1, 2, 3, 4].map((i) => ({ orderId: i })),
-      );
+      expect(controller.received).toEqual([0, 1, 2, 3, 4].map((i) => ({ orderId: i })));
     });
   });
 
