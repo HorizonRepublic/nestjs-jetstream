@@ -7,7 +7,7 @@ import { EventBus } from '../hooks';
 import { TransportEvent } from '../interfaces';
 import type { Codec, JetstreamModuleOptions } from '../interfaces';
 import { internalName, JetstreamHeader } from '../jetstream.constants';
-import { unwrapResult } from '../utils';
+import { serializeError, unwrapResult } from '../utils';
 
 import { PatternRegistry } from './routing/pattern-registry';
 
@@ -96,22 +96,13 @@ export class CoreRpcServer {
     }
   }
 
-  /**
-   * Send an error response back to the caller with x-error header.
-   *
-   * The error payload is preserved as-is for RpcException support.
-   * NestJS exception filters transform RpcException into a plain object
-   * (via getError()), so `error` here is typically already the processed payload.
-   */
+  /** Send an error response back to the caller with x-error header. */
   private respondWithError(msg: Msg, error: unknown): void {
     try {
       const hdrs = natsHeaders();
 
       hdrs.set(JetstreamHeader.Error, 'true');
-
-      const payload = error instanceof Error ? { message: error.message } : error;
-
-      msg.respond(this.codec.encode(payload), { headers: hdrs });
+      msg.respond(this.codec.encode(serializeError(error)), { headers: hdrs });
     } catch {
       this.logger.error('Failed to encode error response');
     }

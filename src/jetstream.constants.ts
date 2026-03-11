@@ -169,6 +169,7 @@ export const RESERVED_HEADERS = new Set<string>([
   JetstreamHeader.CorrelationId,
   JetstreamHeader.ReplyTo,
   JetstreamHeader.MessageId,
+  JetstreamHeader.Error,
 ]);
 
 // ---------------------------------------------------------------------------

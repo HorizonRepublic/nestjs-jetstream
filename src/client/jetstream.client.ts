@@ -21,6 +21,7 @@ import type {
 import {
   buildBroadcastSubject,
   buildSubject,
+  DEFAULT_JETSTREAM_RPC_TIMEOUT,
   DEFAULT_RPC_TIMEOUT,
   internalName,
   JetstreamHeader,
@@ -383,6 +384,11 @@ export class JetstreamClient extends ClientProxy {
 
   private getRpcTimeout(): number {
     if (!this.rootOptions.rpc) return DEFAULT_RPC_TIMEOUT;
-    return this.rootOptions.rpc.timeout ?? DEFAULT_RPC_TIMEOUT;
+
+    const defaultTimeout = this.isJetStreamRpcMode()
+      ? DEFAULT_JETSTREAM_RPC_TIMEOUT
+      : DEFAULT_RPC_TIMEOUT;
+
+    return this.rootOptions.rpc.timeout ?? defaultTimeout;
   }
 }

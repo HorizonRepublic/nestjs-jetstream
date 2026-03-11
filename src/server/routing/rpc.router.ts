@@ -9,7 +9,7 @@ import { EventBus } from '../../hooks';
 import { TransportEvent } from '../../interfaces';
 import type { Codec } from '../../interfaces';
 import { DEFAULT_JETSTREAM_RPC_TIMEOUT, JetstreamHeader } from '../../jetstream.constants';
-import { unwrapResult } from '../../utils';
+import { serializeError, unwrapResult } from '../../utils';
 
 import { MessageProvider } from '../infrastructure/message.provider';
 import { PatternRegistry } from './pattern-registry';
@@ -138,15 +138,10 @@ export class RpcRouter {
       settled = true;
       clearTimeout(timeoutId);
 
-      // Publish error response with x-error header.
-      // NestJS exception filters transform RpcException into a plain object
-      // (via getError()), so `err` here is typically already the processed payload.
+      // Publish error response with x-error header
       try {
         hdrs.set(JetstreamHeader.Error, 'true');
-
-        const payload = err instanceof Error ? { message: err.message } : err;
-
-        nc.publish(replyTo, this.codec.encode(payload), { headers: hdrs });
+        nc.publish(replyTo, this.codec.encode(serializeError(err)), { headers: hdrs });
       } catch (encodeErr) {
         this.logger.error(`Failed to encode RPC error for ${msg.subject}`, encodeErr);
       }
