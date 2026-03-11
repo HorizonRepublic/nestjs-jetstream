@@ -133,6 +133,7 @@ dist-example/
 
 # Jest coverage
 coverage/
+coverage-integration/
 .nyc_output/
 *.lcov
 

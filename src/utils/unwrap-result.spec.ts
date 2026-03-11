@@ -93,6 +93,34 @@ describe(unwrapResult.name, () => {
     });
   });
 
+  describe('NestJS handler wrapping (Promise<Observable>)', () => {
+    describe('when result is Promise<Observable> (success)', () => {
+      it('should await the Promise then unwrap the Observable', async () => {
+        // Given: a Promise that resolves to an Observable (NestJS handler pattern)
+        const value = faker.number.int();
+        const result = Promise.resolve(of(value));
+
+        // When: unwrapped
+        const actual = await unwrapResult(result);
+
+        // Then: first emitted value returned
+        expect(actual).toBe(value);
+      });
+    });
+
+    describe('when result is Promise<throwError> (error from exception filter)', () => {
+      it('should reject with the error', async () => {
+        // Given: a Promise that resolves to an error Observable
+        // This is what NestJS exception filters return: throwError(() => errorObj)
+        const errorObj = { status: 'error', message: 'User not found' };
+        const result = Promise.resolve(throwError(() => errorObj));
+
+        // When/Then: unwrap rejects with the error object
+        await expect(unwrapResult(result)).rejects.toEqual(errorObj);
+      });
+    });
+  });
+
   describe('error paths', () => {
     describe('when Observable errors', () => {
       it('should reject with the error', async () => {
