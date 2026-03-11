@@ -44,17 +44,19 @@ describe('Graceful Shutdown', () => {
     const serviceName = uniqueServiceName();
     const { app, module } = await createTestApp({ name: serviceName }, [ShutdownEventController]);
 
-    const connection = module.get<ConnectionProvider>(JETSTREAM_CONNECTION);
+    try {
+      const connection = module.get<ConnectionProvider>(JETSTREAM_CONNECTION);
 
-    // Connection should be active before close
-    expect(connection.unwrap).not.toBeNull();
+      // Connection should be active before close
+      expect(connection.unwrap).not.toBeNull();
 
-    await app.close();
+      await app.close();
 
-    // After close, connection should be cleaned up
-    expect(connection.unwrap).toBeNull();
-
-    await cleanupStreams(nc, serviceName);
+      // After close, connection should be cleaned up
+      expect(connection.unwrap).toBeNull();
+    } finally {
+      await cleanupStreams(nc, serviceName);
+    }
   });
 
   it('should not create streams when no handlers registered', async () => {
@@ -64,17 +66,19 @@ describe('Graceful Shutdown', () => {
       [], // no controllers
     );
 
-    const jsm = await nc.jetstreamManager();
-    const internalName = `${serviceName}__microservice`;
+    try {
+      const jsm = await nc.jetstreamManager();
+      const internalName = `${serviceName}__microservice`;
 
-    // No event stream should exist
-    await expect(jsm.streams.info(`${internalName}_ev-stream`)).rejects.toThrow();
+      // No event stream should exist
+      await expect(jsm.streams.info(`${internalName}_ev-stream`)).rejects.toThrow();
 
-    // No command stream should exist
-    await expect(jsm.streams.info(`${internalName}_cmd-stream`)).rejects.toThrow();
-
-    await app.close();
-    await cleanupStreams(nc, serviceName);
+      // No command stream should exist
+      await expect(jsm.streams.info(`${internalName}_cmd-stream`)).rejects.toThrow();
+    } finally {
+      await app.close();
+      await cleanupStreams(nc, serviceName);
+    }
   });
 
   it('should close cleanly with both event and RPC handlers', async () => {
@@ -84,17 +88,19 @@ describe('Graceful Shutdown', () => {
       ShutdownRpcController,
     ]);
 
-    const connection = module.get<ConnectionProvider>(JETSTREAM_CONNECTION);
+    try {
+      const connection = module.get<ConnectionProvider>(JETSTREAM_CONNECTION);
 
-    // Should be connected
-    expect(connection.unwrap).not.toBeNull();
+      // Should be connected
+      expect(connection.unwrap).not.toBeNull();
 
-    // Close should not throw
-    await expect(app.close()).resolves.toBeUndefined();
+      // Close should not throw
+      await expect(app.close()).resolves.toBeUndefined();
 
-    // Connection drained
-    expect(connection.unwrap).toBeNull();
-
-    await cleanupStreams(nc, serviceName);
+      // Connection drained
+      expect(connection.unwrap).toBeNull();
+    } finally {
+      await cleanupStreams(nc, serviceName);
+    }
   });
 });

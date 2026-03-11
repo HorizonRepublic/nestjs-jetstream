@@ -92,15 +92,26 @@ describe('JetStream RPC Round-Trip', () => {
   it('should timeout when handler takes too long', async () => {
     const record = new JetstreamRecordBuilder({}).setTimeout(500).build();
 
-    await expect(firstValueFrom(client.send('nonexistent.pattern', record))).rejects.toBeDefined();
+    await expect(firstValueFrom(client.send('nonexistent.pattern', record))).rejects.toThrow(
+      /timeout/i,
+    );
   });
 
   it('should create command stream and consumer', async () => {
     const jsm = await nc.jetstreamManager();
     const internalName = `${serviceName}__microservice`;
+
     const streamInfo = await jsm.streams.info(`${internalName}_cmd-stream`);
 
     expect(streamInfo.config.name).toBe(`${internalName}_cmd-stream`);
     expect(streamInfo.config.subjects).toEqual([`${internalName}.cmd.>`]);
+
+    const consumerInfo = await jsm.consumers.info(
+      `${internalName}_cmd-stream`,
+      `${internalName}_cmd-consumer`,
+    );
+
+    expect(consumerInfo.config.durable_name).toBe(`${internalName}_cmd-consumer`);
+    expect(consumerInfo.config.filter_subject).toBe(`${internalName}.cmd.>`);
   });
 });

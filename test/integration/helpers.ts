@@ -5,6 +5,7 @@ import { connect, NatsConnection } from 'nats';
 
 import { JetstreamModule, JetstreamStrategy } from '../../src';
 import type { JetstreamModuleOptions } from '../../src/interfaces';
+import { streamName } from '../../src/jetstream.constants';
 
 const NATS_URL = 'nats://localhost:4222';
 
@@ -56,25 +57,34 @@ export const createTestApp = async (
 };
 
 /**
+ * Silently delete a stream if it exists. Only suppresses "stream not found"
+ * errors — auth/connection failures will propagate.
+ */
+const deleteStreamIfExists = async (
+  jsm: Awaited<ReturnType<NatsConnection['jetstreamManager']>>,
+  name: string,
+): Promise<void> => {
+  try {
+    await jsm.streams.delete(name);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : '';
+
+    if (!msg.includes('stream not found')) throw err;
+  }
+};
+
+/**
  * Clean up streams and consumers created during test.
+ * Uses the same naming helpers as production code to stay in sync.
  */
 export const cleanupStreams = async (nc: NatsConnection, serviceName: string): Promise<void> => {
   const jsm = await nc.jetstreamManager();
-  const internalName = `${serviceName}__microservice`;
 
-  for (const suffix of ['ev-stream', 'cmd-stream']) {
-    try {
-      await jsm.streams.delete(`${internalName}_${suffix}`);
-    } catch {
-      /* stream may not exist */
-    }
+  for (const kind of ['ev', 'cmd'] as const) {
+    await deleteStreamIfExists(jsm, streamName(serviceName, kind));
   }
 
-  try {
-    await jsm.streams.delete('broadcast-stream');
-  } catch {
-    /* stream may not exist */
-  }
+  await deleteStreamIfExists(jsm, streamName(serviceName, 'broadcast'));
 };
 
 /**

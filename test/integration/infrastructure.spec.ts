@@ -167,12 +167,9 @@ describe('Stream & Consumer Lifecycle', () => {
         );
 
         expect(info.config.durable_name).toBe(`${internalName}_broadcast-consumer`);
-        // Should filter to only the registered broadcast pattern
-        const hasFilterSubject = info.config.filter_subject?.includes('broadcast.') === true;
-        const hasFilterSubjects = (info.config.filter_subjects?.length ?? 0) > 0;
-        const hasFilter = hasFilterSubject || hasFilterSubjects;
-
-        expect(hasFilter).toBe(true);
+        // Single broadcast pattern → filter_subject (not filter_subjects)
+        expect(info.config.filter_subject).toBe('broadcast.config.updated');
+        expect(info.config.filter_subjects ?? []).toHaveLength(0);
       } finally {
         await app.close();
         await cleanupStreams(nc, serviceName);
