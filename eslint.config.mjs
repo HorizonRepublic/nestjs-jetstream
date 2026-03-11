@@ -208,4 +208,12 @@ export default [
     },
   },
 
+  {
+    files: ['**/*.spec.ts', '**/*.test.ts'],
+    rules: {
+      '@typescript-eslint/no-non-null-assertion': 'off',
+      '@typescript-eslint/naming-convention': 'off',
+    },
+  },
+
 ];

@@ -487,6 +487,7 @@ this.client.emit('user.created', record);
 | `x-correlation-id` | RPC request/response matching |
 | `x-reply-to`       | JetStream RPC response inbox  |
 | `x-message-id`     | Deduplication                 |
+| `x-error`          | RPC error response flag       |
 
 Attempting to set a reserved header throws an error at build time.
 
@@ -610,7 +611,7 @@ JetstreamModule.forRoot({
 
 ## Health Checks
 
-`JetstreamHealthIndicator` is automatically registered and exported by `forRoot()`. It checks NATS connection status and measures round-trip latency.
+`JetstreamHealthIndicator` is automatically registered and exported by `forRoot()`. It checks NATS connection status and measures round-trip latency. `@nestjs/terminus` is **not required** — the indicator follows the Terminus API convention so it works seamlessly when Terminus is present, but can also be used standalone.
 
 **With [@nestjs/terminus](https://docs.nestjs.com/recipes/terminus) (zero boilerplate):**
 

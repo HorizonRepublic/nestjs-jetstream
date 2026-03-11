@@ -144,9 +144,14 @@ export class JetstreamClient extends ClientProxy {
       this.publishCoreRpc(subject, data, hdrs, timeout, callback).catch(onUnhandled);
     } else {
       jetStreamCorrelationId = crypto.randomUUID();
-      this.publishJetStreamRpc(subject, data, hdrs, callback, jetStreamCorrelationId).catch(
-        onUnhandled,
-      );
+      this.publishJetStreamRpc(
+        subject,
+        data,
+        hdrs,
+        timeout,
+        callback,
+        jetStreamCorrelationId,
+      ).catch(onUnhandled);
     }
 
     return () => {
@@ -212,20 +217,22 @@ export class JetstreamClient extends ClientProxy {
     subject: string,
     data: unknown,
     customHeaders: Map<string, string> | null,
+    timeout: number | undefined,
     callback: (p: WritePacket) => void,
     correlationId: string = crypto.randomUUID(),
   ): Promise<void> {
     const messageId = crypto.randomUUID();
+    const effectiveTimeout = timeout ?? this.getRpcTimeout();
 
     this.pendingMessages.set(correlationId, callback);
 
     const timeoutId = setTimeout(() => {
       this.pendingTimeouts.delete(correlationId);
       this.pendingMessages.delete(correlationId);
-      this.logger.error(`JetStream RPC timeout (${this.getRpcTimeout()}ms): ${subject}`);
+      this.logger.error(`JetStream RPC timeout (${effectiveTimeout}ms): ${subject}`);
       this.eventBus.emit(TransportEvent.RpcTimeout, subject, correlationId);
       callback({ err: 'RPC timeout', response: null, isDisposed: true });
-    }, this.getRpcTimeout());
+    }, effectiveTimeout);
 
     this.pendingTimeouts.set(correlationId, timeoutId);
 
