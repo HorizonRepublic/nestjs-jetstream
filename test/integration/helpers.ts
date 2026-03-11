@@ -23,17 +23,27 @@ export const createNatsConnection = async (): Promise<NatsConnection> =>
 /**
  * Bootstrap a full NestJS app with JetStream microservice transport.
  * Returns the app (with strategy started) and the compiled module.
+ *
+ * @param options Module options (name is required).
+ * @param controllers Controllers to register with the module.
+ * @param clientTargets Service names to register as forFeature clients.
  */
 export const createTestApp = async (
   options: Partial<JetstreamModuleOptions> & { name: string },
   controllers: Type[] = [],
+  clientTargets: string[] = [],
 ): Promise<{ app: INestApplication; module: TestingModule }> => {
+  const featureImports = clientTargets.map((name) =>
+    JetstreamModule.forFeature({ name }),
+  );
+
   const module = await Test.createTestingModule({
     imports: [
       JetstreamModule.forRoot({
         servers: [NATS_URL],
         ...options,
       }),
+      ...featureImports,
     ],
     controllers,
   }).compile();
