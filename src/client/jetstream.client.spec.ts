@@ -8,8 +8,9 @@ import type {
   PubAck,
   Subscription,
 } from 'nats';
-import { headers as natsHeaders } from 'nats';
-import { firstValueFrom } from 'rxjs';
+import { Events, headers as natsHeaders } from 'nats';
+import type { Status } from 'nats';
+import { firstValueFrom, Subject } from 'rxjs';
 
 import { ConnectionProvider } from '../connection';
 import { EventBus } from '../hooks';
@@ -35,8 +36,10 @@ describe(JetstreamClient, () => {
 
   let options: JetstreamModuleOptions;
   let targetName: string;
+  let statusSubject: Subject<Status>;
 
   beforeEach(() => {
+    statusSubject = new Subject<Status>();
     targetName = faker.lorem.word();
     options = {
       name: faker.lorem.word(),
@@ -56,6 +59,7 @@ describe(JetstreamClient, () => {
     connection = createMock<ConnectionProvider>({
       getConnection: jest.fn().mockResolvedValue(mockNc),
       unwrap: mockNc,
+      status$: statusSubject.asObservable(),
     });
 
     codec = createMock<Codec>({
@@ -353,12 +357,20 @@ describe(JetstreamClient, () => {
     });
 
     describe('error paths', () => {
-      it('should emit error when nc.request() throws', async () => {
+      it('should reject with Error instance when nc.request() throws', async () => {
         // Given: request fails
         mockNc.request.mockRejectedValue(new Error('request timeout'));
 
-        // When/Then: observable emits error
-        await expect(firstValueFrom(sut.send('test', {}))).rejects.toBeTruthy();
+        // When/Then: observable rejects with Error instance
+        await expect(firstValueFrom(sut.send('test', {}))).rejects.toThrow('request timeout');
+      });
+
+      it('should reject with Error instance for non-Error throw', async () => {
+        // Given: request fails with non-Error
+        mockNc.request.mockRejectedValue('some string error');
+
+        // When/Then: wrapped in Error
+        await expect(firstValueFrom(sut.send('test', {}))).rejects.toThrow('Unknown error');
       });
 
       it('should emit TransportEvent.Error on request failure', async () => {
@@ -501,7 +513,7 @@ describe(JetstreamClient, () => {
     });
 
     describe('when handler times out', () => {
-      it('should emit RpcTimeout and error after timeout expires', async () => {
+      it('should reject with Error instance on timeout', async () => {
         // When: RPC sent (no reply will come)
         const resultPromise = firstValueFrom(sut.send('slow.handler', {}));
 
@@ -510,8 +522,8 @@ describe(JetstreamClient, () => {
         // Advance past the timeout
         jest.advanceTimersByTime(DEFAULT_JETSTREAM_RPC_TIMEOUT);
 
-        // Then: timeout error
-        await expect(resultPromise).rejects.toBeTruthy();
+        // Then: timeout error as Error instance
+        await expect(resultPromise).rejects.toThrow('RPC timeout');
         expect(eventBus.emit).toHaveBeenCalledWith(
           TransportEvent.RpcTimeout,
           expect.stringContaining('cmd.slow.handler'),
@@ -582,7 +594,7 @@ describe(JetstreamClient, () => {
         // Then: no crash (error logged)
       });
 
-      it('should handle decode failure in inbox reply', async () => {
+      it('should reject with Error instance on decode failure in inbox reply', async () => {
         // Given: pending RPC
         const resultPromise = firstValueFrom(sut.send('test', {}));
 
@@ -610,17 +622,17 @@ describe(JetstreamClient, () => {
           }),
         );
 
-        // Then: error propagated
-        await expect(resultPromise).rejects.toBeTruthy();
+        // Then: error propagated as Error instance
+        await expect(resultPromise).rejects.toThrow('invalid payload');
       });
     });
 
     describe('error paths', () => {
-      it('should error when js.publish() fails', async () => {
+      it('should reject with Error instance when js.publish() fails', async () => {
         // Given: publish will fail
         mockJs.publish.mockRejectedValue(new Error('stream not found'));
 
-        // When/Then: error propagated to subscriber
+        // When/Then: error propagated as Error instance
         const errorPromise = new Promise<unknown>((resolve) => {
           sut.send('test', {}).subscribe({ error: resolve });
         });
@@ -629,7 +641,8 @@ describe(JetstreamClient, () => {
 
         const err = await errorPromise;
 
-        expect(err).toBeTruthy();
+        expect(err).toBeInstanceOf(Error);
+        expect((err as Error).message).toBe('stream not found');
       });
     });
   });
@@ -688,6 +701,77 @@ describe(JetstreamClient, () => {
       }
 
       jest.useRealTimers();
+    });
+  });
+
+  describe('disconnect handling (JetStream RPC mode)', () => {
+    beforeEach(async () => {
+      jest.useFakeTimers();
+
+      options.rpc = { mode: 'jetstream' };
+      sut = new JetstreamClient(options, targetName, connection, codec, eventBus);
+      await sut.connect();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('should reject all pending callbacks with Error on disconnect', async () => {
+      // Given: two pending RPCs
+      const result1 = firstValueFrom(sut.send('rpc.one', {}));
+      const result2 = firstValueFrom(sut.send('rpc.two', {}));
+
+      await jest.advanceTimersByTimeAsync(0);
+
+      // When: disconnect event fires
+      statusSubject.next({ type: Events.Disconnect, data: '' });
+
+      // Then: both reject with Error('Connection lost')
+      await expect(result1).rejects.toThrow('Connection lost');
+      await expect(result2).rejects.toThrow('Connection lost');
+    });
+
+    it('should clear pending maps on disconnect', async () => {
+      // Given: pending RPC
+      firstValueFrom(sut.send('rpc.one', {})).catch(() => {});
+      await jest.advanceTimersByTimeAsync(0);
+
+      // When: disconnect
+      statusSubject.next({ type: Events.Disconnect, data: '' });
+
+      // Then: advancing past timeout should NOT trigger RpcTimeout (already cleaned up)
+      jest.advanceTimersByTime(DEFAULT_JETSTREAM_RPC_TIMEOUT);
+      expect(eventBus.emit).not.toHaveBeenCalledWith(
+        TransportEvent.RpcTimeout,
+        expect.anything(),
+        expect.anything(),
+      );
+    });
+
+    it('should reset inbox subscription on disconnect', async () => {
+      // Given: inbox was set up
+      expect(mockNc.subscribe).toHaveBeenCalledTimes(1);
+
+      // When: disconnect
+      statusSubject.next({ type: Events.Disconnect, data: '' });
+
+      // Then: next connect() should set up inbox again
+      await sut.connect();
+      expect(mockNc.subscribe).toHaveBeenCalledTimes(2);
+    });
+
+    it('should not affect core RPC mode on disconnect', async () => {
+      // Given: core mode client
+      options.rpc = undefined;
+      const coreClient = new JetstreamClient(options, targetName, connection, codec, eventBus);
+
+      await coreClient.connect();
+
+      // When: disconnect fires — no crash
+      statusSubject.next({ type: Events.Disconnect, data: '' });
+
+      await coreClient.close();
     });
   });
 });
