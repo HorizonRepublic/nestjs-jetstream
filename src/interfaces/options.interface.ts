@@ -2,6 +2,7 @@ import { FactoryProvider, ModuleMetadata, Type } from '@nestjs/common';
 import { ConnectionOptions, ConsumerConfig, StreamConfig } from 'nats';
 
 import { Codec } from './codec.interface';
+import type { DeadLetterInfo } from './hooks.interface';
 import { TransportHooks } from './hooks.interface';
 
 /**
@@ -79,6 +80,30 @@ export interface JetstreamModuleOptions {
    * Unset hooks fall back to NestJS Logger.
    */
   hooks?: Partial<TransportHooks>;
+
+  /**
+   * Async callback invoked when an event message exhausts all delivery attempts.
+   * Called before msg.term(). If it throws, the message is nak'd for retry.
+   *
+   * Use this to persist dead letters to an external store (DB, S3, another queue).
+   * The NATS connection is available via `JETSTREAM_CONNECTION` token in forRootAsync.
+   *
+   * @example
+   * ```typescript
+   * JetstreamModule.forRootAsync({
+   *   name: 'my-service',
+   *   imports: [DlqModule],
+   *   inject: [DlqService, JETSTREAM_CONNECTION],
+   *   useFactory: (dlqService, connection) => ({
+   *     servers: ['nats://localhost:4222'],
+   *     onDeadLetter: async (info) => {
+   *       await dlqService.persist(info);
+   *     },
+   *   }),
+   * })
+   * ```
+   */
+  onDeadLetter?: (info: DeadLetterInfo) => Promise<void>;
 
   /**
    * Graceful shutdown timeout in ms.
