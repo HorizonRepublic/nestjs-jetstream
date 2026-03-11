@@ -96,15 +96,22 @@ export class JetstreamClient extends ClientProxy {
   public async close(): Promise<void> {
     this.statusSubscription?.unsubscribe();
     this.statusSubscription = null;
-    this.inboxSubscription?.unsubscribe();
-    this.inboxSubscription = null;
+
+    // Reject all pending JetStream RPC callbacks before clearing
+    const error = new Error('Client closed');
+
+    for (const callback of this.pendingMessages.values()) {
+      callback({ err: error, response: null, isDisposed: true });
+    }
 
     for (const timeoutId of this.pendingTimeouts.values()) {
       clearTimeout(timeoutId);
     }
 
-    this.pendingTimeouts.clear();
     this.pendingMessages.clear();
+    this.pendingTimeouts.clear();
+    this.inboxSubscription?.unsubscribe();
+    this.inboxSubscription = null;
   }
 
   /** Direct access to the raw NATS connection. */
@@ -235,6 +242,8 @@ export class JetstreamClient extends ClientProxy {
     this.pendingMessages.set(correlationId, callback);
 
     const timeoutId = setTimeout(() => {
+      if (!this.pendingMessages.has(correlationId)) return;
+
       this.pendingTimeouts.delete(correlationId);
       this.pendingMessages.delete(correlationId);
       this.logger.error(`JetStream RPC timeout (${effectiveTimeout}ms): ${subject}`);
@@ -264,11 +273,14 @@ export class JetstreamClient extends ClientProxy {
     } catch (err) {
       clearTimeout(timeoutId);
       this.pendingTimeouts.delete(correlationId);
+
+      if (!this.pendingMessages.has(correlationId)) return;
+
+      this.pendingMessages.delete(correlationId);
       const error = err instanceof Error ? err : new Error('Unknown error');
 
       this.logger.error(`JetStream RPC publish error (${subject}):`, err);
       callback({ err: error, response: null, isDisposed: true });
-      this.pendingMessages.delete(correlationId);
     }
   }
 
