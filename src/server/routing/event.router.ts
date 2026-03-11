@@ -27,7 +27,7 @@ export interface DeadLetterConfig {
    */
   maxDeliverByStream: Map<string, number>;
   /** Async callback invoked when a message exhausts all deliveries. */
-  onDeadLetter: (info: DeadLetterInfo) => Promise<void>;
+  onDeadLetter(info: DeadLetterInfo): Promise<void>;
 }
 
 /**
@@ -147,6 +147,7 @@ export class EventRouter {
     if (!this.deadLetterConfig) return false;
 
     const maxDeliver = this.deadLetterConfig.maxDeliverByStream.get(msg.info.stream);
+
     if (maxDeliver === undefined) return false;
 
     return msg.info.deliveryCount >= maxDeliver;
@@ -167,8 +168,10 @@ export class EventRouter {
 
     this.eventBus.emit(TransportEvent.DeadLetter, info);
 
+    if (!this.deadLetterConfig) return;
+
     try {
-      await this.deadLetterConfig!.onDeadLetter(info);
+      await this.deadLetterConfig.onDeadLetter(info);
       msg.term('Dead letter processed');
     } catch (hookErr) {
       this.logger.error(`onDeadLetter callback failed for ${msg.subject}, nak for retry:`, hookErr);

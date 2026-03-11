@@ -103,7 +103,7 @@ export interface JetstreamModuleOptions {
    * })
    * ```
    */
-  onDeadLetter?: (info: DeadLetterInfo) => Promise<void>;
+  onDeadLetter?(info: DeadLetterInfo): Promise<void>;
 
   /**
    * Graceful shutdown timeout in ms.

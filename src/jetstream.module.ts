@@ -195,17 +195,20 @@ export class JetstreamModule implements OnApplicationShutdown {
    * Each stream kind (ev, broadcast) has its own consumer config with potentially
    * different max_deliver values.
    */
-  // eslint-disable-next-line @typescript-eslint/naming-convention -- NATS API uses snake_case
   private static buildMaxDeliverMap(options: JetstreamModuleOptions): Map<string, number> {
     const map = new Map<string, number>();
+    const defaultEventMax = DEFAULT_EVENT_CONSUMER_CONFIG.max_deliver ?? 3;
+    const defaultBroadcastMax = DEFAULT_BROADCAST_CONSUMER_CONFIG.max_deliver ?? 3;
 
-    const eventMaxDeliver =
-      options.events?.consumer?.max_deliver ?? DEFAULT_EVENT_CONSUMER_CONFIG.max_deliver!;
-    map.set(streamName(options.name, 'ev'), eventMaxDeliver);
+    map.set(
+      streamName(options.name, 'ev'),
+      options.events?.consumer?.max_deliver ?? defaultEventMax,
+    );
 
-    const broadcastMaxDeliver =
-      options.broadcast?.consumer?.max_deliver ?? DEFAULT_BROADCAST_CONSUMER_CONFIG.max_deliver!;
-    map.set(streamName(options.name, 'broadcast'), broadcastMaxDeliver);
+    map.set(
+      streamName(options.name, 'broadcast'),
+      options.broadcast?.consumer?.max_deliver ?? defaultBroadcastMax,
+    );
 
     return map;
   }
@@ -365,7 +368,13 @@ export class JetstreamModule implements OnApplicationShutdown {
               }
             : undefined;
 
-          return new EventRouter(messageProvider, patternRegistry, codec, eventBus, deadLetterConfig);
+          return new EventRouter(
+            messageProvider,
+            patternRegistry,
+            codec,
+            eventBus,
+            deadLetterConfig,
+          );
         },
       },
 
