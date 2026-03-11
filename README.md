@@ -25,6 +25,7 @@ A production-grade NestJS transport for NATS JetStream with built-in support for
 - [Custom Codec](#custom-codec)
 - [RpcContext](#rpccontext)
 - [Lifecycle Hooks](#lifecycle-hooks)
+- [Health Checks](#health-checks)
 - [Graceful Shutdown](#graceful-shutdown)
 - [Edge Cases & Important Notes](#edge-cases--important-notes)
 - [NATS Naming Conventions](#nats-naming-conventions)
@@ -606,6 +607,46 @@ JetstreamModule.forRoot({
 | `messageRouted`    | `(subject: string, kind: 'rpc' \| 'event')` | `Logger.debug`    |
 | `shutdownStart`    | `()`                                        | `Logger.log`      |
 | `shutdownComplete` | `()`                                        | `Logger.log`      |
+
+## Health Checks
+
+`JetstreamHealthIndicator` is automatically registered and exported by `forRoot()`. It checks NATS connection status and measures round-trip latency.
+
+**With [@nestjs/terminus](https://docs.nestjs.com/recipes/terminus) (zero boilerplate):**
+
+```typescript
+import { Controller, Get } from '@nestjs/common';
+import { HealthCheck, HealthCheckService } from '@nestjs/terminus';
+import { JetstreamHealthIndicator } from '@horizon-republic/nestjs-jetstream';
+
+@Controller('health')
+export class HealthController {
+  constructor(
+    private health: HealthCheckService,
+    private jetstream: JetstreamHealthIndicator,
+  ) {}
+
+  @Get()
+  @HealthCheck()
+  check() {
+    return this.health.check([
+      () => this.jetstream.isHealthy(),
+    ]);
+  }
+}
+```
+
+**Standalone (without Terminus):**
+
+```typescript
+const status = await this.jetstream.check();
+// { connected: true, server: 'nats://localhost:4222', latency: 2 }
+```
+
+| Method | Returns | Throws |
+|--------|---------|--------|
+| `check()` | `JetstreamHealthStatus` | Never |
+| `isHealthy(key?)` | `{ [key]: { status: 'up', ... } }` | On unhealthy (Terminus convention) |
 
 ## Graceful Shutdown
 
