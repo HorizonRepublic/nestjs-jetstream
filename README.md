@@ -441,6 +441,8 @@ handleConfigUpdated(@Payload() data: ConfigDto) {
 
 Every service with this handler receives the message independently.
 
+**Delivery guarantees:** Each service has its own durable consumer on the broadcast stream. Delivery tracking is fully isolated — if service A fails to process a message, only service A retries it (`nak`). Services B, C, D are not affected. This means broadcast provides **at-least-once delivery per consumer**, not at-most-once.
+
 **Custom broadcast configuration:**
 
 ```typescript
@@ -717,6 +719,8 @@ JetstreamModule.forRoot({
 ### Broadcast stream is shared
 
 All services share a single `broadcast-stream`. Each service creates its own durable consumer with `filter_subjects` matching only its registered broadcast patterns. Stream-level configuration (`broadcast.stream`) affects all services.
+
+Broadcast consumers use the same ack/nak semantics as workqueue consumers. Because each service has an **isolated durable consumer**, a `nak` (retry) from one service only causes redelivery to that specific service — other consumers are unaffected. This gives broadcast **at-least-once delivery per consumer** with independent retry.
 
 ### Connection failure behavior
 
