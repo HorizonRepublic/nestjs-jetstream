@@ -46,7 +46,7 @@ export const createTestApp = async (
     controllers,
   }).compile();
 
-  const app = module.createNestApplication();
+  const app = module.createNestApplication({ logger: false });
   const strategy = module.get(JetstreamStrategy);
 
   app.connectMicroservice<MicroserviceOptions>({ strategy } as MicroserviceOptions);
