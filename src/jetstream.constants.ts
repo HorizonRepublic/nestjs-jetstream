@@ -154,7 +154,6 @@ export const DEFAULT_SHUTDOWN_TIMEOUT = 10_000; // 10s
 export enum JetstreamHeader {
   CorrelationId = 'x-correlation-id',
   ReplyTo = 'x-reply-to',
-  MessageId = 'x-message-id',
   Subject = 'x-subject',
   CallerName = 'x-caller-name',
   RequestId = 'x-request-id',
@@ -168,7 +167,6 @@ export enum JetstreamHeader {
 export const RESERVED_HEADERS = new Set<string>([
   JetstreamHeader.CorrelationId,
   JetstreamHeader.ReplyTo,
-  JetstreamHeader.MessageId,
   JetstreamHeader.Error,
 ]);
 

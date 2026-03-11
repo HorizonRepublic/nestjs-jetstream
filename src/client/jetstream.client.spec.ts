@@ -219,14 +219,13 @@ describe(JetstreamClient, () => {
     });
 
     describe('transport headers', () => {
-      it('should set message-id, subject, and caller-name headers', async () => {
+      it('should set subject and caller-name headers', async () => {
         // When: event emitted
         await firstValueFrom(sut.emit('user.created', { test: true }));
 
         // Then: transport headers present
         const publishedHeaders: MsgHdrs = mockJs.publish.mock.calls[0]![2]!.headers!;
 
-        expect(publishedHeaders.get(JetstreamHeader.MessageId)).toBeTruthy();
         expect(publishedHeaders.get(JetstreamHeader.Subject)).toBeTruthy();
         expect(publishedHeaders.get(JetstreamHeader.CallerName)).toBe(
           `${options.name}__microservice`,

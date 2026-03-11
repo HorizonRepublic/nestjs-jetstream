@@ -24,8 +24,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Run tests with coverage
-        run: pnpm test --coverage --verbose
+      - name: Run unit tests with coverage
+        run: pnpm test --coverage
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -62,7 +62,7 @@ jobs:
         run: pnpm install
 
       - name: Run integration tests
-        run: pnpm test:integration
+        run: pnpm test:integration --coverage
 
       - name: Upload integration coverage to Codecov
         uses: codecov/codecov-action@v5

@@ -1,47 +1,52 @@
 import type { Config } from 'jest';
 
+const shared: Partial<Config> = {
+  testEnvironment: 'node',
+  moduleFileExtensions: ['js', 'json', 'ts'],
+  modulePathIgnorePatterns: ['<rootDir>/dist/', '<rootDir>/lib/'],
+  verbose: true,
+};
+
 const config: Config = {
-    preset: 'ts-jest',
-    testEnvironment: 'node',
-    rootDir: '.',
-    roots: ['<rootDir>/src'],
-    testMatch: ['**/*.spec.ts', '**/*.test.ts'],
-    collectCoverageFrom: [
+  projects: [
+    {
+      ...shared,
+      displayName: 'unit',
+      roots: ['<rootDir>/src'],
+      testMatch: ['**/*.spec.ts', '**/*.test.ts'],
+      transform: {
+        '^.+\\.ts$': [
+          'ts-jest',
+          { tsconfig: 'tsconfig.json' },
+        ],
+      },
+      collectCoverageFrom: [
         'src/**/*.ts',
         '!src/**/*.module.ts',
         '!src/**/*.d.ts',
         '!src/**/index.ts',
         '!src/**/*.interface.ts',
         '!src/**/*.type.ts',
-    ],
-    coverageDirectory: './coverage',
-    coverageReporters: ['text', 'lcov', 'html'],
-    moduleFileExtensions: ['js', 'json', 'ts'],
-    transform: {
+      ],
+      coverageDirectory: '<rootDir>/coverage',
+      testTimeout: 10_000,
+    },
+    {
+      ...shared,
+      displayName: 'integration',
+      roots: ['<rootDir>/test'],
+      testMatch: ['<rootDir>/test/integration/**/*.spec.ts'],
+      transform: {
         '^.+\\.ts$': [
-            'ts-jest',
-            {
-                tsconfig: {
-                    esModuleInterop: true,
-                    allowSyntheticDefaultImports: true,
-                },
-            },
+          'ts-jest',
+          { tsconfig: 'test/tsconfig.json' },
         ],
+      },
+      coverageDirectory: '<rootDir>/coverage-integration',
+      testTimeout: 30_000,
+      forceExit: true,
     },
-    moduleNameMapper: {
-        '^@/(.*)$': '<rootDir>/src/$1',
-    },
-    testTimeout: 10000,
-    
-    testPathIgnorePatterns: [
-        '<rootDir>/node_modules/(?!@nestjs)',  
-        '<rootDir>/dist/',
-        '<rootDir>/lib/',
-        '<rootDir>/coverage/',
-    ],
-    
-    modulePathIgnorePatterns: ['<rootDir>/dist/', '<rootDir>/lib/'],
-    verbose: true,
+  ],
 };
 
 export default config;

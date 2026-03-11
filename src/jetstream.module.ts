@@ -31,11 +31,17 @@ import {
   JETSTREAM_OPTIONS,
   streamName,
 } from './jetstream.constants';
-import { CoreRpcServer } from './server/core-rpc.server';
-import { ConsumerProvider, MessageProvider, StreamProvider } from './server/infrastructure';
-import type { DeadLetterConfig } from './server/routing';
-import { EventRouter, PatternRegistry, RpcRouter } from './server/routing';
-import { JetstreamStrategy } from './server/strategy';
+import {
+  CoreRpcServer,
+  ConsumerProvider,
+  EventRouter,
+  JetstreamStrategy,
+  MessageProvider,
+  PatternRegistry,
+  RpcRouter,
+  StreamProvider,
+} from './server';
+import type { DeadLetterConfig } from './server';
 import { ShutdownManager } from './shutdown';
 
 /**

@@ -27,32 +27,46 @@
     "url": "https://github.com/HorizonRepublic"
   },
   "license": "MIT",
-  "type": "commonjs",
-  "main": "dist/index.js",
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
     "dist",
     "README.md",
     "LICENSE"
   ],
   "engines": {
-    "node": ">= 20.19.0"
+    "node": ">= 22.0.0"
   },
   "packageManager": "pnpm@10.22.0",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "build:watch": "tsc -p tsconfig.json --watch",
+    "build": "tsup",
+    "build:watch": "tsup --watch",
     "build:example": "tsc -p examples/tsconfig.json",
     "start:example": "pnpm build && pnpm build:example && node dist-example/examples/main.js",
     "dev:example": "tsx --tsconfig examples/tsconfig.json examples/main.ts",
     "prepublishOnly": "pnpm build",
     "lint": "eslint",
     "lint:fix": "eslint --fix",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:cov": "jest --coverage",
-    "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:integration": "jest --config jest.integration.config.ts --runInBand"
+    "test": "jest --selectProjects unit",
+    "test:integration": "jest --selectProjects integration --runInBand",
+    "test:all": "jest --runInBand",
+    "test:watch": "jest --selectProjects unit --watch",
+    "test:cov": "jest --selectProjects unit --coverage"
   },
   "peerDependencies": {
     "@nestjs/common": "^10.2.0 || ^11.0.0",
@@ -80,6 +94,7 @@
     "ts-jest": "^29.4.6",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
+    "tsup": "^8.5.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.57.0"
