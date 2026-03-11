@@ -9,7 +9,7 @@ import { EventBus } from '../../hooks';
 import { TransportEvent } from '../../interfaces';
 import type { Codec } from '../../interfaces';
 import { DEFAULT_JETSTREAM_RPC_TIMEOUT, JetstreamHeader } from '../../jetstream.constants';
-import { unwrapResult } from '../../utils';
+import { serializeError, unwrapResult } from '../../utils';
 
 import { MessageProvider } from '../infrastructure/message.provider';
 import { PatternRegistry } from './pattern-registry';
@@ -27,7 +27,7 @@ import { PatternRegistry } from './pattern-registry';
  * Nak is never used for RPC — prevents duplicate side effects.
  */
 export class RpcRouter {
-  private readonly logger = new Logger(RpcRouter.name);
+  private readonly logger = new Logger('Jetstream:RpcRouter');
   private readonly timeout: number;
   private subscription: Subscription | null = null;
 
@@ -138,11 +138,10 @@ export class RpcRouter {
       settled = true;
       clearTimeout(timeoutId);
 
-      // Publish error response
+      // Publish error response with x-error header
       try {
-        const errorPayload = { error: err instanceof Error ? err.message : String(err) };
-
-        nc.publish(replyTo, this.codec.encode(errorPayload), { headers: hdrs });
+        hdrs.set(JetstreamHeader.Error, 'true');
+        nc.publish(replyTo, this.codec.encode(serializeError(err)), { headers: hdrs });
       } catch (encodeErr) {
         this.logger.error(`Failed to encode RPC error for ${msg.subject}`, encodeErr);
       }

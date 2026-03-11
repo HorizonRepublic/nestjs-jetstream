@@ -4,7 +4,6 @@ export enum TransportEvent {
   Reconnect = 'reconnect',
   Error = 'error',
   RpcTimeout = 'rpcTimeout',
-  ConsumerLag = 'consumerLag',
   MessageRouted = 'messageRouted',
   ShutdownStart = 'shutdownStart',
   ShutdownComplete = 'shutdownComplete',
@@ -42,9 +41,6 @@ export interface TransportHooks {
 
   /** Fired when an RPC handler exceeds its timeout. */
   [TransportEvent.RpcTimeout](subject: string, correlationId: string): void;
-
-  /** Fired when a JetStream consumer has pending (lagging) messages. */
-  [TransportEvent.ConsumerLag](consumer: string, pending: number): void;
 
   /** Fired after a message is successfully routed to its handler. */
   [TransportEvent.MessageRouted](subject: string, kind: 'rpc' | 'event'): void;

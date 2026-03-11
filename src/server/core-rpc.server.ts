@@ -1,13 +1,13 @@
 import { Logger } from '@nestjs/common';
-import { Msg, Subscription } from 'nats';
+import { headers as natsHeaders, Msg, Subscription } from 'nats';
 
 import { ConnectionProvider } from '../connection';
 import { RpcContext } from '../context';
 import { EventBus } from '../hooks';
 import { TransportEvent } from '../interfaces';
 import type { Codec, JetstreamModuleOptions } from '../interfaces';
-import { internalName } from '../jetstream.constants';
-import { unwrapResult } from '../utils';
+import { internalName, JetstreamHeader } from '../jetstream.constants';
+import { serializeError, unwrapResult } from '../utils';
 
 import { PatternRegistry } from './routing/pattern-registry';
 
@@ -20,7 +20,7 @@ import { PatternRegistry } from './routing/pattern-registry';
  * This is the default RPC mode — lowest latency, no persistence overhead.
  */
 export class CoreRpcServer {
-  private readonly logger = new Logger(CoreRpcServer.name);
+  private readonly logger = new Logger('Jetstream:CoreRpc');
   private subscription: Subscription | null = null;
 
   public constructor(
@@ -69,7 +69,6 @@ export class CoreRpcServer {
 
     if (!handler) {
       this.logger.warn(`No handler for Core RPC: ${msg.subject}`);
-      // No handler — don't respond, let client timeout
       return;
     }
 
@@ -97,12 +96,13 @@ export class CoreRpcServer {
     }
   }
 
-  /** Send an error response back to the caller. */
+  /** Send an error response back to the caller with x-error header. */
   private respondWithError(msg: Msg, error: unknown): void {
     try {
-      msg.respond(
-        this.codec.encode({ error: error instanceof Error ? error.message : String(error) }),
-      );
+      const hdrs = natsHeaders();
+
+      hdrs.set(JetstreamHeader.Error, 'true');
+      msg.respond(this.codec.encode(serializeError(error)), { headers: hdrs });
     } catch {
       this.logger.error('Failed to encode error response');
     }

@@ -13,6 +13,7 @@ import { JetstreamClient } from './client';
 import { JsonCodec } from './codec';
 import { ConnectionProvider } from './connection';
 import { EventBus } from './hooks';
+import { JetstreamHealthIndicator } from './health';
 import type {
   Codec,
   JetstreamFeatureOptions,
@@ -103,6 +104,7 @@ export class JetstreamModule implements OnApplicationShutdown {
         JETSTREAM_OPTIONS,
         ShutdownManager,
         JetstreamStrategy,
+        JetstreamHealthIndicator,
       ],
     };
   }
@@ -136,6 +138,7 @@ export class JetstreamModule implements OnApplicationShutdown {
         JETSTREAM_OPTIONS,
         ShutdownManager,
         JetstreamStrategy,
+        JetstreamHealthIndicator,
       ],
     };
   }
@@ -201,7 +204,7 @@ export class JetstreamModule implements OnApplicationShutdown {
         provide: JETSTREAM_EVENT_BUS,
         inject: [JETSTREAM_OPTIONS],
         useFactory: (options: JetstreamModuleOptions): EventBus => {
-          const logger = new Logger('JetstreamTransport');
+          const logger = new Logger('Jetstream:Module');
 
           return new EventBus(logger, options.hooks);
         },
@@ -222,6 +225,15 @@ export class JetstreamModule implements OnApplicationShutdown {
         inject: [JETSTREAM_OPTIONS, JETSTREAM_EVENT_BUS],
         useFactory: (options: JetstreamModuleOptions, eventBus: EventBus): ConnectionProvider => {
           return new ConnectionProvider(options, eventBus);
+        },
+      },
+
+      // JetstreamHealthIndicator — health check for NATS connection
+      {
+        provide: JetstreamHealthIndicator,
+        inject: [JETSTREAM_CONNECTION],
+        useFactory: (connection: ConnectionProvider): JetstreamHealthIndicator => {
+          return new JetstreamHealthIndicator(connection);
         },
       },
 

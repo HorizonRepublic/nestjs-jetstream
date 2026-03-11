@@ -25,6 +25,11 @@ export { JsonCodec } from './codec';
 // Context
 export { RpcContext } from './context';
 
+// Health
+export { JetstreamHealthIndicator } from './health';
+
+export type { JetstreamHealthStatus } from './health';
+
 // Constants (selective — only what users need)
 export {
   getClientToken,

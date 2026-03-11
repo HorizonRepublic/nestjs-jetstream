@@ -29,11 +29,14 @@ import { PatternRegistry } from './pattern-registry';
  * - Decode error -> term (no retry for malformed payloads)
  * - No handler found -> term (configuration error)
  *
+ * Both workqueue and broadcast use the same ack/nak semantics.
+ * Each durable consumer tracks delivery independently, so a nak from
+ * one broadcast consumer does not affect others.
+ *
  * Handlers must be idempotent — NATS may redeliver on failure or timeout.
- * For fire-and-forget events, use NATS Core via the standard NestJS transport.
  */
 export class EventRouter {
-  private readonly logger = new Logger(EventRouter.name);
+  private readonly logger = new Logger('Jetstream:EventRouter');
   private readonly subscriptions: Subscription[] = [];
 
   public constructor(

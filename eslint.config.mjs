@@ -25,8 +25,6 @@ export default [
       '**/dist/**',
       '**/dist-example/**',
       '**/tmp/**',
-      '**/.docusaurus/**',
-      '**/.nx/**',
       'jest.config.ts',
     ],
   },
@@ -211,10 +209,11 @@ export default [
   },
 
   {
-    files: ['jest.config.*'],
+    files: ['**/*.spec.ts', '**/*.test.ts'],
     rules: {
+      '@typescript-eslint/no-non-null-assertion': 'off',
       '@typescript-eslint/naming-convention': 'off',
-      camelcase: 'off',
     },
   },
+
 ];

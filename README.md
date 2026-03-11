@@ -25,6 +25,7 @@ A production-grade NestJS transport for NATS JetStream with built-in support for
 - [Custom Codec](#custom-codec)
 - [RpcContext](#rpccontext)
 - [Lifecycle Hooks](#lifecycle-hooks)
+- [Health Checks](#health-checks)
 - [Graceful Shutdown](#graceful-shutdown)
 - [Edge Cases & Important Notes](#edge-cases--important-notes)
 - [NATS Naming Conventions](#nats-naming-conventions)
@@ -262,14 +263,41 @@ interface JetstreamModuleOptions {
 }
 ```
 
+#### Connection Options
+
+Pass raw NATS `ConnectionOptions` for TLS, authentication, and reconnection:
+
+```typescript
+JetstreamModule.forRoot({
+  name: 'orders',
+  servers: ['nats://nats.prod.internal:4222'],
+  connectionOptions: {
+    // TLS
+    tls: {
+      certFile: '/certs/client.crt',
+      keyFile: '/certs/client.key',
+      caFile: '/certs/ca.crt',
+    },
+    // Token auth
+    token: process.env.NATS_TOKEN,
+    // Or user/pass
+    user: process.env.NATS_USER,
+    pass: process.env.NATS_PASS,
+    // Reconnection
+    maxReconnectAttempts: -1, // unlimited
+    reconnectTimeWait: 2000, // 2s between attempts
+  },
+})
+```
+
 #### RpcConfig
 
 Discriminated union on `mode`:
 
-| Mode | Timeout Default | Persistence | Use Case |
-|------|----------------|-------------|----------|
-| `'core'` | 30s | None | Low-latency, simple RPC |
-| `'jetstream'` | 3 min | JetStream stream | Commands must survive handler downtime |
+| Mode          | Timeout Default | Persistence      | Use Case                               |
+|---------------|-----------------|------------------|----------------------------------------|
+| `'core'`      | 30s             | None             | Low-latency, simple RPC                |
+| `'jetstream'` | 3 min           | JetStream stream | Commands must survive handler downtime |
 
 ```typescript
 // Core mode (default)
@@ -336,13 +364,13 @@ JetstreamModule.forRoot({
 
 **Error behavior:**
 
-| Scenario | JetStream Action | Client Result |
-|----------|-----------------|---------------|
-| Handler success | `ack` | Response returned |
-| Handler throws | `term` (no redelivery) | Error response |
-| Handler timeout | `term` | Client times out |
-| Decode error | `term` | No response |
-| No handler | `term` | No response |
+| Scenario        | JetStream Action       | Client Result     |
+|-----------------|------------------------|-------------------|
+| Handler success | `ack`                  | Response returned |
+| Handler throws  | `term` (no redelivery) | Error response    |
+| Handler timeout | `term`                 | Client times out  |
+| Decode error    | `term`                 | No response       |
+| No handler      | `term`                 | No response       |
 
 > **Why `term` instead of `nak` for RPC errors?** Redelivering a failed command could cause duplicate side effects. The caller is responsible for retrying.
 
@@ -366,14 +394,35 @@ handleOrderCreated(@Payload() data: OrderCreatedDto) {
 
 **Delivery semantics (at-least-once):**
 
-| Scenario | Action | Redelivery? |
-|----------|--------|-------------|
-| Handler success | `ack` | No |
-| Handler throws | `nak` | Yes, up to `max_deliver` (default: 3) |
-| Decode error | `term` | No (malformed payload) |
-| No handler found | `term` | No (configuration error) |
+| Scenario         | Action | Redelivery?                           |
+|------------------|--------|---------------------------------------|
+| Handler success  | `ack`  | No                                    |
+| Handler throws   | `nak`  | Yes, up to `max_deliver` (default: 3) |
+| Decode error     | `term` | No (malformed payload)                |
+| No handler found | `term` | No (configuration error)              |
 
 > Handlers **must be idempotent** — NATS may redeliver on failure or timeout.
+
+**Custom stream/consumer configuration:**
+
+```typescript
+import { nanos } from '@horizon-republic/nestjs-jetstream';
+
+JetstreamModule.forRoot({
+  name: 'orders',
+  servers: ['nats://localhost:4222'],
+  events: {
+    stream: {
+      max_age: nanos(3 * 24 * 60 * 60 * 1000), // 3 days instead of default 7
+      max_bytes: 1024 * 1024 * 512,              // 512 MB instead of default 5 GB
+    },
+    consumer: {
+      max_deliver: 5,          // retry up to 5 times instead of default 3
+      ack_wait: nanos(30_000), // 30s ack timeout instead of default 10s
+    },
+  },
+})
+```
 
 ### Broadcast Events
 
@@ -391,6 +440,29 @@ handleConfigUpdated(@Payload() data: ConfigDto) {
 ```
 
 Every service with this handler receives the message independently.
+
+**Delivery guarantees:** Each service has its own durable consumer on the broadcast stream. Delivery tracking is fully isolated — if service A fails to process a message, only service A retries it (`nak`). Services B, C, D are not affected. This means broadcast provides **at-least-once delivery per consumer**, not at-most-once.
+
+**Custom broadcast configuration:**
+
+```typescript
+import { nanos } from '@horizon-republic/nestjs-jetstream';
+
+JetstreamModule.forRoot({
+  name: 'orders',
+  servers: ['nats://localhost:4222'],
+  broadcast: {
+    stream: {
+      max_age: nanos(7 * 24 * 60 * 60 * 1000), // keep messages for 7 days
+    },
+    consumer: {
+      max_deliver: 5,
+    },
+  },
+})
+```
+
+> **Note:** The broadcast stream is shared across all services — stream-level settings (e.g., `max_age`, `max_bytes`) affect everyone. Consumer-level settings are per-service.
 
 ## JetstreamRecord Builder
 
@@ -412,23 +484,24 @@ this.client.emit('user.created', record);
 
 **Reserved headers** (set automatically by the transport, cannot be overridden):
 
-| Header | Purpose |
-|--------|---------|
+| Header             | Purpose                       |
+|--------------------|-------------------------------|
 | `x-correlation-id` | RPC request/response matching |
-| `x-reply-to` | JetStream RPC response inbox |
-| `x-message-id` | Deduplication |
+| `x-reply-to`       | JetStream RPC response inbox  |
+| `x-message-id`     | Deduplication                 |
+| `x-error`          | RPC error response flag       |
 
 Attempting to set a reserved header throws an error at build time.
 
 **Additional transport headers** (set automatically, available in handlers):
 
-| Header | Purpose |
-|--------|---------|
-| `x-subject` | Original NATS subject |
-| `x-caller-name` | Sending service name |
-| `x-request-id` | Available for user-defined request tracking |
-| `x-trace-id` | Available for distributed tracing |
-| `x-span-id` | Available for distributed tracing |
+| Header          | Purpose                                     |
+|-----------------|---------------------------------------------|
+| `x-subject`     | Original NATS subject                       |
+| `x-caller-name` | Sending service name                        |
+| `x-request-id`  | Available for user-defined request tracking |
+| `x-trace-id`    | Available for distributed tracing           |
+| `x-span-id`     | Available for distributed tracing           |
 
 ## Custom Codec
 
@@ -468,7 +541,7 @@ JetstreamModule.forFeature({
 
 ## RpcContext
 
-Access the raw NATS message in handlers for advanced use cases:
+Execution context available in all handlers via `@Ctx()`:
 
 ```typescript
 import { Ctx, Payload, MessagePattern } from '@nestjs/microservices';
@@ -476,14 +549,25 @@ import { RpcContext } from '@horizon-republic/nestjs-jetstream';
 
 @MessagePattern('user.get')
 getUser(@Payload() data: GetUserDto, @Ctx() ctx: RpcContext) {
-  const msg = ctx.getMessage();    // JsMsg | Msg
-  const subject = ctx.getSubject(); // Full NATS subject
-
-  const traceId = msg.headers?.get('x-trace-id');
+  const subject = ctx.getSubject();            // Full NATS subject
+  const traceId = ctx.getHeader('x-trace-id'); // Single header value
+  const headers = ctx.getHeaders();            // All headers (MsgHdrs)
+  const isJs = ctx.isJetStream();              // true for JetStream messages
+  const msg = ctx.getMessage();                // Raw JsMsg | Msg (escape hatch)
 
   return this.userService.findOne(data.id);
 }
 ```
+
+**Available methods:**
+
+| Method           | Returns                | Description                               |
+|------------------|------------------------|-------------------------------------------|
+| `getSubject()`   | `string`               | NATS subject the message was published to |
+| `getHeader(key)` | `string \| undefined`  | Single header value by key                |
+| `getHeaders()`   | `MsgHdrs \| undefined` | All NATS message headers                  |
+| `isJetStream()`  | `boolean`              | Whether the message supports ack/nak/term |
+| `getMessage()`   | `JsMsg \| Msg`         | Raw NATS message (escape hatch)           |
 
 Available on both `@EventPattern` and `@MessagePattern` handlers.
 
@@ -516,17 +600,56 @@ JetstreamModule.forRoot({
 
 **Available events:**
 
-| Event | Arguments | Default (no hook) |
-|-------|-----------|-------------------|
-| `connect` | `(server: string)` | `Logger.log` |
-| `disconnect` | `()` | `Logger.warn` |
-| `reconnect` | `(server: string)` | `Logger.log` |
-| `error` | `(error: Error, context?: string)` | `Logger.error` |
-| `rpcTimeout` | `(subject: string, correlationId: string)` | `Logger.warn` |
-| `consumerLag` | `(consumer: string, pending: number)` | `Logger.warn` |
-| `messageRouted` | `(subject: string, kind: 'rpc' \| 'event')` | `Logger.debug` |
-| `shutdownStart` | `()` | `Logger.log` |
-| `shutdownComplete` | `()` | `Logger.log` |
+| Event              | Arguments                                   | Default (no hook) |
+|--------------------|---------------------------------------------|-------------------|
+| `connect`          | `(server: string)`                          | `Logger.log`      |
+| `disconnect`       | `()`                                        | `Logger.warn`     |
+| `reconnect`        | `(server: string)`                          | `Logger.log`      |
+| `error`            | `(error: Error, context?: string)`          | `Logger.error`    |
+| `rpcTimeout`       | `(subject: string, correlationId: string)`  | `Logger.warn`     |
+| `messageRouted`    | `(subject: string, kind: 'rpc' \| 'event')` | `Logger.debug`    |
+| `shutdownStart`    | `()`                                        | `Logger.log`      |
+| `shutdownComplete` | `()`                                        | `Logger.log`      |
+
+## Health Checks
+
+`JetstreamHealthIndicator` is automatically registered and exported by `forRoot()`. It checks NATS connection status and measures round-trip latency. `@nestjs/terminus` is **not required** — the indicator follows the Terminus API convention so it works seamlessly when Terminus is present, but can also be used standalone.
+
+**With [@nestjs/terminus](https://docs.nestjs.com/recipes/terminus) (zero boilerplate):**
+
+```typescript
+import { Controller, Get } from '@nestjs/common';
+import { HealthCheck, HealthCheckService } from '@nestjs/terminus';
+import { JetstreamHealthIndicator } from '@horizon-republic/nestjs-jetstream';
+
+@Controller('health')
+export class HealthController {
+  constructor(
+    private health: HealthCheckService,
+    private jetstream: JetstreamHealthIndicator,
+  ) {}
+
+  @Get()
+  @HealthCheck()
+  check() {
+    return this.health.check([
+      () => this.jetstream.isHealthy(),
+    ]);
+  }
+}
+```
+
+**Standalone (without Terminus):**
+
+```typescript
+const status = await this.jetstream.check();
+// { connected: true, server: 'nats://localhost:4222', latency: 2 }
+```
+
+| Method | Returns | Throws |
+|--------|---------|--------|
+| `check()` | `JetstreamHealthStatus` | Never |
+| `isHealthy(key?)` | `{ [key]: { status: 'up', ... } }` | On unhealthy (Terminus convention) |
 
 ## Graceful Shutdown
 
@@ -552,9 +675,30 @@ No manual shutdown code needed.
 
 Events use at-least-once delivery. If your handler throws, the message is `nak`'d and NATS redelivers it (up to `max_deliver` times, default 3). Design handlers to be safe for repeated execution.
 
-### RPC errors are not retried (JetStream mode)
+### RPC error handling
 
-When a JetStream RPC handler fails, the message is `term`'d (not `nak`'d). This prevents duplicate side effects. The caller is responsible for implementing retry logic.
+The transport fully supports NestJS `RpcException` and custom exception filters. Throw `RpcException` with any payload — it will be delivered to the caller as-is:
+
+```typescript
+import { RpcException } from '@nestjs/microservices';
+
+@MessagePattern('user.update')
+updateUser(@Payload() data: UpdateUserDto) {
+  throw new RpcException({
+    statusCode: 400,
+    errors: [{ field: 'email', message: 'Already taken' }],
+  });
+}
+
+// Caller receives the full error object:
+this.client.send('user.update', data).subscribe({
+  error: (err) => {
+    // err = { statusCode: 400, errors: [{ field: 'email', message: 'Already taken' }] }
+  },
+});
+```
+
+In JetStream mode, failed RPC messages are `term`'d (not `nak`'d) to prevent duplicate side effects. The caller is responsible for implementing retry logic.
 
 ### Fire-and-forget events
 
@@ -575,6 +719,8 @@ JetstreamModule.forRoot({
 ### Broadcast stream is shared
 
 All services share a single `broadcast-stream`. Each service creates its own durable consumer with `filter_subjects` matching only its registered broadcast patterns. Stream-level configuration (`broadcast.stream`) affects all services.
+
+Broadcast consumers use the same ack/nak semantics as workqueue consumers. Because each service has an **isolated durable consumer**, a `nak` (retry) from one service only causes redelivery to that specific service — other consumers are unaffected. This gives broadcast **at-least-once delivery per consumer** with independent retry.
 
 ### Connection failure behavior
 
@@ -608,17 +754,17 @@ Custom headers are transmitted as NATS message headers. NATS has a default heade
 
 The transport generates NATS subjects, streams, and consumers based on the service `name`:
 
-| Resource | Format | Example (`name: 'orders'`) |
-|----------|--------|----------------------------|
-| Internal name | `{name}__microservice` | `orders__microservice` |
-| RPC subject | `{internal}.cmd.{pattern}` | `orders__microservice.cmd.get.order` |
-| Event subject | `{internal}.ev.{pattern}` | `orders__microservice.ev.order.created` |
-| Broadcast subject | `broadcast.{pattern}` | `broadcast.config.updated` |
-| Event stream | `{internal}_ev-stream` | `orders__microservice_ev-stream` |
-| Command stream | `{internal}_cmd-stream` | `orders__microservice_cmd-stream` |
-| Broadcast stream | `broadcast-stream` | `broadcast-stream` |
-| Event consumer | `{internal}_ev-consumer` | `orders__microservice_ev-consumer` |
-| Command consumer | `{internal}_cmd-consumer` | `orders__microservice_cmd-consumer` |
+| Resource           | Format                          | Example (`name: 'orders'`)                |
+|--------------------|---------------------------------|-------------------------------------------|
+| Internal name      | `{name}__microservice`          | `orders__microservice`                    |
+| RPC subject        | `{internal}.cmd.{pattern}`      | `orders__microservice.cmd.get.order`      |
+| Event subject      | `{internal}.ev.{pattern}`       | `orders__microservice.ev.order.created`   |
+| Broadcast subject  | `broadcast.{pattern}`           | `broadcast.config.updated`                |
+| Event stream       | `{internal}_ev-stream`          | `orders__microservice_ev-stream`          |
+| Command stream     | `{internal}_cmd-stream`         | `orders__microservice_cmd-stream`         |
+| Broadcast stream   | `broadcast-stream`              | `broadcast-stream`                        |
+| Event consumer     | `{internal}_ev-consumer`        | `orders__microservice_ev-consumer`        |
+| Command consumer   | `{internal}_cmd-consumer`       | `orders__microservice_cmd-consumer`       |
 | Broadcast consumer | `{internal}_broadcast-consumer` | `orders__microservice_broadcast-consumer` |
 
 ## Default Stream & Consumer Configs
@@ -628,54 +774,54 @@ All defaults can be overridden via `events`, `broadcast`, or `rpc` options.
 <details>
 <summary><strong>Event Stream</strong></summary>
 
-| Property | Value |
-|----------|-------|
-| Retention | Workqueue |
-| Storage | File |
-| Replicas | 1 |
-| Max consumers | 100 |
-| Max message size | 10 MB |
-| Max messages/subject | 5,000,000 |
-| Max messages | 50,000,000 |
-| Max bytes | 5 GB |
-| Max age | 7 days |
-| Duplicate window | 2 minutes |
+| Property             | Value      |
+|----------------------|------------|
+| Retention            | Workqueue  |
+| Storage              | File       |
+| Replicas             | 1          |
+| Max consumers        | 100        |
+| Max message size     | 10 MB      |
+| Max messages/subject | 5,000,000  |
+| Max messages         | 50,000,000 |
+| Max bytes            | 5 GB       |
+| Max age              | 7 days     |
+| Duplicate window     | 2 minutes  |
 
 </details>
 
 <details>
 <summary><strong>Command Stream (JetStream RPC only)</strong></summary>
 
-| Property | Value |
-|----------|-------|
-| Retention | Workqueue |
-| Storage | File |
-| Replicas | 1 |
-| Max consumers | 50 |
-| Max message size | 5 MB |
-| Max messages/subject | 100,000 |
-| Max messages | 1,000,000 |
-| Max bytes | 100 MB |
-| Max age | 3 minutes |
-| Duplicate window | 30 seconds |
+| Property             | Value      |
+|----------------------|------------|
+| Retention            | Workqueue  |
+| Storage              | File       |
+| Replicas             | 1          |
+| Max consumers        | 50         |
+| Max message size     | 5 MB       |
+| Max messages/subject | 100,000    |
+| Max messages         | 1,000,000  |
+| Max bytes            | 100 MB     |
+| Max age              | 3 minutes  |
+| Duplicate window     | 30 seconds |
 
 </details>
 
 <details>
 <summary><strong>Broadcast Stream</strong></summary>
 
-| Property | Value |
-|----------|-------|
-| Retention | Limits |
-| Storage | File |
-| Replicas | 1 |
-| Max consumers | 200 |
-| Max message size | 10 MB |
-| Max messages/subject | 1,000,000 |
-| Max messages | 10,000,000 |
-| Max bytes | 2 GB |
-| Max age | 1 day |
-| Duplicate window | 2 minutes |
+| Property             | Value      |
+|----------------------|------------|
+| Retention            | Limits     |
+| Storage              | File       |
+| Replicas             | 1          |
+| Max consumers        | 200        |
+| Max message size     | 10 MB      |
+| Max messages/subject | 1,000,000  |
+| Max messages         | 10,000,000 |
+| Max bytes            | 2 GB       |
+| Max age              | 1 day      |
+| Duplicate window     | 2 minutes  |
 
 </details>
 
@@ -684,27 +830,27 @@ All defaults can be overridden via `events`, `broadcast`, or `rpc` options.
 
 **Event consumer:**
 
-| Property | Value |
-|----------|-------|
-| Ack wait | 10 seconds |
-| Max deliver | 3 |
-| Max ack pending | 100 |
+| Property        | Value      |
+|-----------------|------------|
+| Ack wait        | 10 seconds |
+| Max deliver     | 3          |
+| Max ack pending | 100        |
 
 **Command consumer (JetStream RPC):**
 
-| Property | Value |
-|----------|-------|
-| Ack wait | 5 minutes |
-| Max deliver | 1 |
-| Max ack pending | 100 |
+| Property        | Value     |
+|-----------------|-----------|
+| Ack wait        | 5 minutes |
+| Max deliver     | 1         |
+| Max ack pending | 100       |
 
 **Broadcast consumer:**
 
-| Property | Value |
-|----------|-------|
-| Ack wait | 10 seconds |
-| Max deliver | 3 |
-| Max ack pending | 100 |
+| Property        | Value      |
+|-----------------|------------|
+| Ack wait        | 10 seconds |
+| Max deliver     | 3          |
+| Max ack pending | 100        |
 
 </details>
 

@@ -21,6 +21,7 @@ import type {
 import {
   buildBroadcastSubject,
   buildSubject,
+  DEFAULT_JETSTREAM_RPC_TIMEOUT,
   DEFAULT_RPC_TIMEOUT,
   internalName,
   JetstreamHeader,
@@ -41,7 +42,7 @@ import { JetstreamRecord } from './jetstream.record';
  * Clients are lightweight — they share the NATS connection from `forRoot()`.
  */
 export class JetstreamClient extends ClientProxy {
-  private readonly logger = new Logger(JetstreamClient.name);
+  private readonly logger = new Logger('Jetstream:Client');
 
   /** Target service name this client sends messages to. */
   private readonly targetName: string;
@@ -143,9 +144,14 @@ export class JetstreamClient extends ClientProxy {
       this.publishCoreRpc(subject, data, hdrs, timeout, callback).catch(onUnhandled);
     } else {
       jetStreamCorrelationId = crypto.randomUUID();
-      this.publishJetStreamRpc(subject, data, hdrs, callback, jetStreamCorrelationId).catch(
-        onUnhandled,
-      );
+      this.publishJetStreamRpc(
+        subject,
+        data,
+        hdrs,
+        timeout,
+        callback,
+        jetStreamCorrelationId,
+      ).catch(onUnhandled);
     }
 
     return () => {
@@ -186,7 +192,11 @@ export class JetstreamClient extends ClientProxy {
 
       const decoded = this.codec.decode(response.data);
 
-      callback({ err: null, response: decoded, isDisposed: true });
+      if (response.headers?.get(JetstreamHeader.Error)) {
+        callback({ err: decoded, response: null, isDisposed: true });
+      } else {
+        callback({ err: null, response: decoded, isDisposed: true });
+      }
     } catch (err) {
       this.logger.error(`Core RPC error (${subject}):`, err);
       this.eventBus.emit(
@@ -207,20 +217,22 @@ export class JetstreamClient extends ClientProxy {
     subject: string,
     data: unknown,
     customHeaders: Map<string, string> | null,
+    timeout: number | undefined,
     callback: (p: WritePacket) => void,
     correlationId: string = crypto.randomUUID(),
   ): Promise<void> {
     const messageId = crypto.randomUUID();
+    const effectiveTimeout = timeout ?? this.getRpcTimeout();
 
     this.pendingMessages.set(correlationId, callback);
 
     const timeoutId = setTimeout(() => {
       this.pendingTimeouts.delete(correlationId);
       this.pendingMessages.delete(correlationId);
-      this.logger.error(`JetStream RPC timeout (${this.getRpcTimeout()}ms): ${subject}`);
+      this.logger.error(`JetStream RPC timeout (${effectiveTimeout}ms): ${subject}`);
       this.eventBus.emit(TransportEvent.RpcTimeout, subject, correlationId);
       callback({ err: 'RPC timeout', response: null, isDisposed: true });
-    }, this.getRpcTimeout());
+    }, effectiveTimeout);
 
     this.pendingTimeouts.set(correlationId, timeoutId);
 
@@ -296,9 +308,13 @@ export class JetstreamClient extends ClientProxy {
     }
 
     try {
-      const response = this.codec.decode(msg.data);
+      const decoded = this.codec.decode(msg.data);
 
-      callback({ err: null, response, isDisposed: true });
+      if (msg.headers?.get(JetstreamHeader.Error)) {
+        callback({ err: decoded, response: null, isDisposed: true });
+      } else {
+        callback({ err: null, response: decoded, isDisposed: true });
+      }
     } catch (err) {
       callback({
         err: err instanceof Error ? err.message : 'Decode error',
@@ -375,6 +391,11 @@ export class JetstreamClient extends ClientProxy {
 
   private getRpcTimeout(): number {
     if (!this.rootOptions.rpc) return DEFAULT_RPC_TIMEOUT;
-    return this.rootOptions.rpc.timeout ?? DEFAULT_RPC_TIMEOUT;
+
+    const defaultTimeout = this.isJetStreamRpcMode()
+      ? DEFAULT_JETSTREAM_RPC_TIMEOUT
+      : DEFAULT_RPC_TIMEOUT;
+
+    return this.rootOptions.rpc.timeout ?? defaultTimeout;
   }
 }

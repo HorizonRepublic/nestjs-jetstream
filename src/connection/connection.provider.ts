@@ -34,7 +34,7 @@ export class ConnectionProvider {
   /** Live stream of connection status events (no replay). */
   public readonly status$: Observable<Status>;
 
-  private readonly logger = new Logger(ConnectionProvider.name);
+  private readonly logger = new Logger('Jetstream:Connection');
 
   private connection: NatsConnection | null = null;
   private connectionPromise: Promise<NatsConnection> | null = null;

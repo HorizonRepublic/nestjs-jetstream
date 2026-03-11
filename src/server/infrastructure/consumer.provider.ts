@@ -24,7 +24,7 @@ const CONSUMER_NOT_FOUND = 10014;
  * Consumer configuration is merged from defaults and user overrides.
  */
 export class ConsumerProvider {
-  private readonly logger = new Logger(ConsumerProvider.name);
+  private readonly logger = new Logger('Jetstream:Consumer');
 
   public constructor(
     private readonly options: JetstreamModuleOptions,
