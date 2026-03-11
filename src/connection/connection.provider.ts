@@ -1,5 +1,4 @@
 import { Logger } from '@nestjs/common';
-import { RuntimeException } from '@nestjs/core/errors/exceptions';
 import {
   connect,
   ConnectionOptions,
@@ -58,7 +57,7 @@ export class ConnectionProvider {
   /**
    * Establish NATS connection. Idempotent — returns cached connection on subsequent calls.
    *
-   * @throws RuntimeException if connection is refused (fail fast).
+   * @throws Error if connection is refused (fail fast).
    */
   public async getConnection(): Promise<NatsConnection> {
     if (this.connection && !this.connection.isClosed()) {
@@ -137,7 +136,7 @@ export class ConnectionProvider {
       const natsErr = err as NatsError;
 
       if (natsErr.code === 'CONNECTION_REFUSED') {
-        throw new RuntimeException(`NATS connection refused: ${this.options.servers.join(', ')}`);
+        throw new Error(`NATS connection refused: ${this.options.servers.join(', ')}`);
       }
 
       throw err;

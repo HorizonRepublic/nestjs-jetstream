@@ -96,22 +96,7 @@ export class JetstreamClient extends ClientProxy {
   public async close(): Promise<void> {
     this.statusSubscription?.unsubscribe();
     this.statusSubscription = null;
-
-    // Reject all pending JetStream RPC callbacks before clearing
-    const error = new Error('Client closed');
-
-    for (const callback of this.pendingMessages.values()) {
-      callback({ err: error, response: null, isDisposed: true });
-    }
-
-    for (const timeoutId of this.pendingTimeouts.values()) {
-      clearTimeout(timeoutId);
-    }
-
-    this.pendingMessages.clear();
-    this.pendingTimeouts.clear();
-    this.inboxSubscription?.unsubscribe();
-    this.inboxSubscription = null;
+    this.rejectPendingRpcs(new Error('Client closed'));
   }
 
   /** Direct access to the raw NATS connection. */
@@ -132,12 +117,11 @@ export class JetstreamClient extends ClientProxy {
     // Determine if this is a broadcast event
     // Broadcast subjects start with 'broadcast:'
     const subject = this.buildEventSubject(packet.pattern);
-    const messageId = crypto.randomUUID();
-
-    const msgHeaders = this.buildHeaders(hdrs, { messageId, subject });
+    const msgHeaders = this.buildHeaders(hdrs, { subject });
 
     await nc.jetstream().publish(subject, this.codec.encode(data), {
       headers: msgHeaders,
+      msgID: crypto.randomUUID(),
     });
 
     return undefined as T;
@@ -202,9 +186,7 @@ export class JetstreamClient extends ClientProxy {
     try {
       const nc = await this.connect();
       const effectiveTimeout = timeout ?? this.getRpcTimeout();
-      const messageId = crypto.randomUUID();
-
-      const hdrs = this.buildHeaders(customHeaders, { messageId, subject });
+      const hdrs = this.buildHeaders(customHeaders, { subject });
 
       const response = await nc.request(subject, this.codec.encode(data), {
         timeout: effectiveTimeout,
@@ -236,7 +218,6 @@ export class JetstreamClient extends ClientProxy {
     callback: (p: WritePacket) => void,
     correlationId: string = crypto.randomUUID(),
   ): Promise<void> {
-    const messageId = crypto.randomUUID();
     const effectiveTimeout = timeout ?? this.getRpcTimeout();
 
     this.pendingMessages.set(correlationId, callback);
@@ -261,7 +242,6 @@ export class JetstreamClient extends ClientProxy {
       }
 
       const hdrs = this.buildHeaders(customHeaders, {
-        messageId,
         subject,
         correlationId,
         replyTo: this.inbox,
@@ -269,6 +249,7 @@ export class JetstreamClient extends ClientProxy {
 
       await nc.jetstream().publish(subject, this.codec.encode(data), {
         headers: hdrs,
+        msgID: crypto.randomUUID(),
       });
     } catch (err) {
       clearTimeout(timeoutId);
@@ -286,25 +267,26 @@ export class JetstreamClient extends ClientProxy {
 
   /** Fail-fast all pending JetStream RPC callbacks on connection loss. */
   private handleDisconnect(): void {
-    const error = new Error('Connection lost');
+    this.rejectPendingRpcs(new Error('Connection lost'));
 
-    // Reject all pending callbacks
+    // Reset inbox — will be recreated on next connect()
+    this.inbox = null;
+  }
+
+  /** Reject all pending RPC callbacks, clear timeouts, and tear down inbox. */
+  private rejectPendingRpcs(error: Error): void {
     for (const callback of this.pendingMessages.values()) {
       callback({ err: error, response: null, isDisposed: true });
     }
 
-    // Clear timeouts
     for (const timeoutId of this.pendingTimeouts.values()) {
       clearTimeout(timeoutId);
     }
 
     this.pendingMessages.clear();
     this.pendingTimeouts.clear();
-
-    // Reset inbox — will be recreated on next connect()
     this.inboxSubscription?.unsubscribe();
     this.inboxSubscription = null;
-    this.inbox = null;
   }
 
   /** Setup shared inbox subscription for JetStream RPC responses. */
@@ -387,7 +369,6 @@ export class JetstreamClient extends ClientProxy {
     const hdrs = natsHeaders();
 
     // Set transport headers
-    hdrs.set(JetstreamHeader.MessageId, transport.messageId);
     hdrs.set(JetstreamHeader.Subject, transport.subject);
     hdrs.set(JetstreamHeader.CallerName, internalName(this.rootOptions.name));
 

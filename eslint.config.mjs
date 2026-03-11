@@ -25,8 +25,8 @@ export default [
       '**/dist/**',
       '**/dist-example/**',
       '**/tmp/**',
-      'jest.config.ts',
-      'jest.integration.config.ts',
+      'tsup.config.ts',
+      'vitest.config.ts',
     ],
   },
 
@@ -59,7 +59,6 @@ export default [
       'max-depth': ['warn', 4],
       'max-params': ['warn', 10],
       'no-alert': 'error',
-      'no-console': ['warn', {allow: ['warn', 'error']}],
       'no-debugger': 'error',
       'no-duplicate-imports': 'error',
       'no-multiple-empty-lines': ['error', {max: 1, maxBOF: 0, maxEOF: 1}],

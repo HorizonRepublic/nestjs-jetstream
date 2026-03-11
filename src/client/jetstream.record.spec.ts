@@ -1,3 +1,4 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { faker } from '@faker-js/faker';
 
 import { JetstreamHeader, RESERVED_HEADERS } from '../jetstream.constants';
@@ -42,7 +43,7 @@ describe(JetstreamRecordBuilder, () => {
     sut = new JetstreamRecordBuilder();
   });
 
-  afterEach(jest.resetAllMocks);
+  afterEach(vi.resetAllMocks);
 
   describe('happy path', () => {
     describe('when using fluent API', () => {

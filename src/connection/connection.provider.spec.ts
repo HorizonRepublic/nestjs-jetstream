@@ -1,4 +1,14 @@
-import { createMock } from '@golevelup/ts-jest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type Mocked,
+  type MockedFunction,
+} from 'vitest';
+import { createMock } from '@golevelup/ts-vitest';
 import { faker } from '@faker-js/faker';
 import type { JetStreamManager, NatsConnection, Status } from 'nats';
 import { connect, Events } from 'nats';
@@ -9,32 +19,30 @@ import { TransportEvent } from '../interfaces';
 
 import { ConnectionProvider } from './connection.provider';
 
-jest.mock('nats', () => ({
-  ...jest.requireActual('nats'),
-  connect: jest.fn(),
+vi.mock('nats', async () => ({
+  ...(await vi.importActual('nats')),
+  connect: vi.fn(),
 }));
 
-const mockConnect = connect as jest.MockedFunction<typeof connect>;
+const mockConnect = connect as MockedFunction<typeof connect>;
 
 describe(ConnectionProvider, () => {
   let sut: ConnectionProvider;
 
-  let eventBus: jest.Mocked<EventBus>;
+  let eventBus: Mocked<EventBus>;
   let options: JetstreamModuleOptions;
-  let mockNc: jest.Mocked<NatsConnection>;
+  let mockNc: Mocked<NatsConnection>;
 
   const emptyStatusStream = (): AsyncIterable<Status> =>
     (async function* (): AsyncGenerator<Status> {})();
 
-  const createNc = (
-    overrides?: Partial<jest.Mocked<NatsConnection>>,
-  ): jest.Mocked<NatsConnection> =>
+  const createNc = (overrides?: Partial<Mocked<NatsConnection>>): Mocked<NatsConnection> =>
     createMock<NatsConnection>({
-      isClosed: jest.fn().mockReturnValue(false),
-      getServer: jest.fn().mockReturnValue('nats://localhost:4222'),
-      status: jest.fn().mockReturnValue(emptyStatusStream()),
-      drain: jest.fn().mockResolvedValue(undefined),
-      closed: jest.fn().mockResolvedValue(undefined),
+      isClosed: vi.fn().mockReturnValue(false),
+      getServer: vi.fn().mockReturnValue('nats://localhost:4222'),
+      status: vi.fn().mockReturnValue(emptyStatusStream()),
+      drain: vi.fn().mockResolvedValue(undefined),
+      closed: vi.fn().mockResolvedValue(undefined),
       ...overrides,
     });
 
@@ -51,7 +59,7 @@ describe(ConnectionProvider, () => {
     sut = new ConnectionProvider(options, eventBus);
   });
 
-  afterEach(jest.resetAllMocks);
+  afterEach(vi.resetAllMocks);
 
   describe('getConnection()', () => {
     describe('happy path', () => {
@@ -244,7 +252,7 @@ describe(ConnectionProvider, () => {
     it('should emit Disconnect event when server disconnects', async () => {
       // Given: status stream will yield Disconnect
       const nc = createNc({
-        status: jest.fn().mockReturnValue(
+        status: vi.fn().mockReturnValue(
           (async function* (): AsyncGenerator<Status> {
             yield { type: Events.Disconnect, data: '' } as Status;
           })(),
@@ -264,7 +272,7 @@ describe(ConnectionProvider, () => {
     it('should emit Reconnect event with server URL on reconnect', async () => {
       // Given: status stream will yield Reconnect
       const nc = createNc({
-        status: jest.fn().mockReturnValue(
+        status: vi.fn().mockReturnValue(
           (async function* (): AsyncGenerator<Status> {
             yield { type: Events.Reconnect, data: '' } as Status;
           })(),
@@ -284,7 +292,7 @@ describe(ConnectionProvider, () => {
     it('should emit Error event on connection error status', async () => {
       // Given: status stream will yield Error
       const nc = createNc({
-        status: jest.fn().mockReturnValue(
+        status: vi.fn().mockReturnValue(
           (async function* (): AsyncGenerator<Status> {
             yield { type: Events.Error, data: 'test error' } as Status;
           })(),

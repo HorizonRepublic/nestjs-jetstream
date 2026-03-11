@@ -11,7 +11,7 @@ import type { Codec } from '../../interfaces';
 import { DEFAULT_JETSTREAM_RPC_TIMEOUT, JetstreamHeader } from '../../jetstream.constants';
 import { serializeError, unwrapResult } from '../../utils';
 
-import { MessageProvider } from '../infrastructure/message.provider';
+import { MessageProvider } from '../infrastructure';
 import { PatternRegistry } from './pattern-registry';
 
 /**

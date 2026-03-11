@@ -1,3 +1,4 @@
+import { beforeEach, describe, expect, it } from 'vitest';
 import { faker } from '@faker-js/faker';
 
 import type { StreamKind } from './interfaces';

@@ -1,6 +1,6 @@
 {
   "name": "@horizon-republic/nestjs-jetstream",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "A NestJS transport for NATS with JetStream events, broadcast fan-out, and Core/JetStream RPC.",
   "repository": {
     "type": "git",
@@ -27,32 +27,44 @@
     "url": "https://github.com/HorizonRepublic"
   },
   "license": "MIT",
-  "type": "commonjs",
-  "main": "dist/index.js",
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
     "dist",
     "README.md",
     "LICENSE"
   ],
   "engines": {
-    "node": ">= 20.19.0"
+    "node": ">= 22.0.0"
   },
   "packageManager": "pnpm@10.32.1",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "build:watch": "tsc -p tsconfig.json --watch",
+    "build": "tsup",
+    "build:watch": "tsup --watch",
     "build:example": "tsc -p examples/tsconfig.json",
     "start:example": "pnpm build && pnpm build:example && node dist-example/examples/main.js",
     "dev:example": "tsx --tsconfig examples/tsconfig.json examples/main.ts",
     "prepublishOnly": "pnpm build",
     "lint": "eslint",
     "lint:fix": "eslint --fix",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:cov": "jest --coverage",
-    "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:integration": "jest --config jest.integration.config.ts --runInBand"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:cov": "vitest run --coverage"
   },
   "peerDependencies": {
     "@nestjs/common": "^10.2.0 || ^11.0.0",
@@ -63,25 +75,23 @@
     "rxjs": "^7.8.0"
   },
   "devDependencies": {
-    "@faker-js/faker": "^9.9.0",
-    "@golevelup/ts-jest": "^1.2.1",
+    "@faker-js/faker": "^10.3.0",
+    "@golevelup/ts-vitest": "^2.2.0",
     "@nestjs/platform-express": "^11.1.16",
     "@nestjs/testing": "^11.1.16",
-    "@types/jest": "^30.0.0",
     "@types/node": "^25.4.0",
+    "@vitest/coverage-v8": "^4.0.18",
     "eslint": "^10.0.3",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prefer-arrow": "^1.2.3",
     "eslint-plugin-prettier": "^5.5.5",
     "eslint-plugin-sonarjs": "^4.0.2",
     "eslint-plugin-unused-imports": "^4.4.1",
-    "jest": "^30.3.0",
     "prettier": "^3.8.1",
-    "ts-jest": "^29.4.6",
-    "ts-node": "^10.9.2",
-    "tsconfig-paths": "^4.2.0",
+    "tsup": "^8.5.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.57.0"
+    "typescript-eslint": "^8.57.0",
+    "vitest": "^4.0.18"
   }
 }
