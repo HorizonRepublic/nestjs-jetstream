@@ -1,3 +1,5 @@
+import type { MsgHdrs } from 'nats';
+
 export enum TransportEvent {
   Connect = 'connect',
   Disconnect = 'disconnect',
@@ -7,6 +9,7 @@ export enum TransportEvent {
   MessageRouted = 'messageRouted',
   ShutdownStart = 'shutdownStart',
   ShutdownComplete = 'shutdownComplete',
+  DeadLetter = 'deadLetter',
 }
 
 /**
@@ -50,4 +53,29 @@ export interface TransportHooks {
 
   /** Fired after graceful shutdown completes. */
   [TransportEvent.ShutdownComplete](): void;
+
+  /** Fired when a message exhausts all delivery attempts (dead letter). */
+  [TransportEvent.DeadLetter](info: DeadLetterInfo): void;
+}
+
+/**
+ * Context passed to the onDeadLetter callback when a message exhausts all delivery attempts.
+ */
+export interface DeadLetterInfo {
+  /** The NATS subject the message was published to. */
+  subject: string;
+  /** Decoded message payload. */
+  data: unknown;
+  /** Message headers (raw NATS MsgHdrs). */
+  headers: MsgHdrs | undefined;
+  /** The error that caused the last handler failure. */
+  error: unknown;
+  /** How many times this message was delivered. */
+  deliveryCount: number;
+  /** The stream this message belongs to. */
+  stream: string;
+  /** The stream sequence number. */
+  streamSequence: number;
+  /** ISO timestamp of the message (derived from msg.info.timestampNanos). */
+  timestamp: string;
 }

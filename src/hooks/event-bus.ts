@@ -80,6 +80,11 @@ export class EventBus {
       case TransportEvent.ShutdownComplete:
         this.logger.log('Graceful shutdown complete');
         break;
+      case TransportEvent.DeadLetter: {
+        const info = args[0] as { subject?: string } | undefined;
+        this.logger.warn(`Dead letter: ${info?.subject ?? 'unknown'}`);
+        break;
+      }
     }
   }
 }
