@@ -1,3 +1,4 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MessageHandler } from '@nestjs/microservices';
 import { faker } from '@faker-js/faker';
 
@@ -6,7 +7,7 @@ import type { JetstreamModuleOptions } from '../../interfaces';
 import { PatternRegistry } from './pattern-registry';
 
 const createHandler = (opts: { isEvent?: boolean; broadcast?: boolean } = {}): MessageHandler => {
-  const handler = jest.fn() as MessageHandler;
+  const handler = vi.fn() as MessageHandler;
 
   handler.isEventHandler = opts.isEvent ?? false;
 
@@ -33,7 +34,7 @@ describe(PatternRegistry, () => {
     sut = new PatternRegistry(options);
   });
 
-  afterEach(jest.resetAllMocks);
+  afterEach(vi.resetAllMocks);
 
   describe('registerHandlers()', () => {
     describe('happy path', () => {

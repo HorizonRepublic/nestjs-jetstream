@@ -1,4 +1,5 @@
-import { createMock } from '@golevelup/ts-jest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
+import { createMock } from '@golevelup/ts-vitest';
 import { faker } from '@faker-js/faker';
 import type { Msg, NatsConnection, Subscription } from 'nats';
 
@@ -13,13 +14,13 @@ import { PatternRegistry } from './routing/pattern-registry';
 describe(CoreRpcServer, () => {
   let sut: CoreRpcServer;
 
-  let connection: jest.Mocked<ConnectionProvider>;
-  let patternRegistry: jest.Mocked<PatternRegistry>;
-  let codec: jest.Mocked<Codec>;
-  let eventBus: jest.Mocked<EventBus>;
+  let connection: Mocked<ConnectionProvider>;
+  let patternRegistry: Mocked<PatternRegistry>;
+  let codec: Mocked<Codec>;
+  let eventBus: Mocked<EventBus>;
 
   let serviceName: string;
-  let mockNc: jest.Mocked<NatsConnection>;
+  let mockNc: Mocked<NatsConnection>;
 
   beforeEach(() => {
     serviceName = faker.lorem.word();
@@ -32,8 +33,8 @@ describe(CoreRpcServer, () => {
     connection = createMock<ConnectionProvider>();
     patternRegistry = createMock<PatternRegistry>();
     codec = createMock<Codec>({
-      decode: jest.fn((data: Uint8Array) => JSON.parse(new TextDecoder().decode(data))),
-      encode: jest.fn((data: unknown) => new TextEncoder().encode(JSON.stringify(data))),
+      decode: vi.fn((data: Uint8Array) => JSON.parse(new TextDecoder().decode(data))),
+      encode: vi.fn((data: unknown) => new TextEncoder().encode(JSON.stringify(data))),
     });
     eventBus = createMock<EventBus>();
 
@@ -43,7 +44,7 @@ describe(CoreRpcServer, () => {
     sut = new CoreRpcServer(options, connection, patternRegistry, codec, eventBus);
   });
 
-  afterEach(jest.resetAllMocks);
+  afterEach(vi.resetAllMocks);
 
   describe('start()', () => {
     describe('happy path', () => {
@@ -115,7 +116,7 @@ describe(CoreRpcServer, () => {
         it('should respond with encoded result', async () => {
           // Given: a handler that returns data
           const responseData = { id: faker.number.int() };
-          const handler = jest.fn().mockResolvedValue(responseData);
+          const handler = vi.fn().mockResolvedValue(responseData);
 
           patternRegistry.getHandler.mockReturnValue(handler);
 
@@ -177,7 +178,7 @@ describe(CoreRpcServer, () => {
       describe('when codec.decode() throws', () => {
         it('should respond with error and x-error header', async () => {
           // Given: decode will throw
-          const handler = jest.fn();
+          const handler = vi.fn();
 
           patternRegistry.getHandler.mockReturnValue(handler);
           codec.decode.mockImplementation(() => {
@@ -207,7 +208,7 @@ describe(CoreRpcServer, () => {
       describe('when handler throws', () => {
         it('should respond with error and x-error header', async () => {
           // Given: handler that throws
-          const handler = jest.fn().mockRejectedValue(new Error('handler failed'));
+          const handler = vi.fn().mockRejectedValue(new Error('handler failed'));
 
           patternRegistry.getHandler.mockReturnValue(handler);
 

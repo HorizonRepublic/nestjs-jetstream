@@ -25,8 +25,8 @@ export default [
       '**/dist/**',
       '**/dist-example/**',
       '**/tmp/**',
-      'jest.config.ts',
       'tsup.config.ts',
+      'vitest.config.ts',
     ],
   },
 

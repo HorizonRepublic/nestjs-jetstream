@@ -1,3 +1,4 @@
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { Controller, INestApplication } from '@nestjs/common';
 import { ClientProxy, EventPattern, Payload } from '@nestjs/microservices';
 import { TestingModule } from '@nestjs/testing';
@@ -63,9 +64,8 @@ describe('Dead Letter Queue Hook', () => {
           name: serviceName,
           events: {
             consumer: {
-              // eslint-disable-next-line @typescript-eslint/naming-convention -- NATS API
               max_deliver: 2,
-              // eslint-disable-next-line @typescript-eslint/naming-convention -- NATS API
+
               ack_wait: nanos(2_000),
             },
           },
@@ -125,9 +125,8 @@ describe('Dead Letter Queue Hook', () => {
           name: serviceName,
           events: {
             consumer: {
-              // eslint-disable-next-line @typescript-eslint/naming-convention -- NATS API
               max_deliver: 2,
-              // eslint-disable-next-line @typescript-eslint/naming-convention -- NATS API
+
               ack_wait: nanos(2_000),
             },
           },

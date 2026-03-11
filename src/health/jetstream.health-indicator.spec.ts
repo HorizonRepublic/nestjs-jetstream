@@ -1,4 +1,5 @@
-import { createMock } from '@golevelup/ts-jest';
+import { afterEach, describe, expect, it, vi, type Mocked } from 'vitest';
+import { createMock } from '@golevelup/ts-vitest';
 import { faker } from '@faker-js/faker';
 import type { NatsConnection } from 'nats';
 
@@ -9,15 +10,15 @@ import { JetstreamHealthIndicator } from './jetstream.health-indicator';
 describe(JetstreamHealthIndicator, () => {
   let sut: JetstreamHealthIndicator;
 
-  let connectionProvider: jest.Mocked<ConnectionProvider>;
+  let connectionProvider: Mocked<ConnectionProvider>;
 
   const mockServer = faker.internet.url();
 
   const setupConnected = (): void => {
     const nc = createMock<NatsConnection>({
-      isClosed: jest.fn().mockReturnValue(false),
-      rtt: jest.fn().mockResolvedValue(1),
-      getServer: jest.fn().mockReturnValue(mockServer),
+      isClosed: vi.fn().mockReturnValue(false),
+      rtt: vi.fn().mockResolvedValue(1),
+      getServer: vi.fn().mockReturnValue(mockServer),
     });
 
     connectionProvider = createMock<ConnectionProvider>({ unwrap: nc });
@@ -29,7 +30,7 @@ describe(JetstreamHealthIndicator, () => {
     sut = new JetstreamHealthIndicator(connectionProvider);
   };
 
-  afterEach(jest.resetAllMocks);
+  afterEach(vi.resetAllMocks);
 
   describe('check()', () => {
     describe('happy path', () => {
@@ -66,7 +67,7 @@ describe(JetstreamHealthIndicator, () => {
       describe('when connection is closed', () => {
         it('should return disconnected status', async () => {
           // Given: a closed connection
-          const nc = createMock<NatsConnection>({ isClosed: jest.fn().mockReturnValue(true) });
+          const nc = createMock<NatsConnection>({ isClosed: vi.fn().mockReturnValue(true) });
 
           setupDisconnected(nc);
 
@@ -84,9 +85,9 @@ describe(JetstreamHealthIndicator, () => {
         it('should return disconnected status with server info', async () => {
           // Given: rtt throws
           const nc = createMock<NatsConnection>({
-            isClosed: jest.fn().mockReturnValue(false),
-            rtt: jest.fn().mockRejectedValue(new Error('timeout')),
-            getServer: jest.fn().mockReturnValue(mockServer),
+            isClosed: vi.fn().mockReturnValue(false),
+            rtt: vi.fn().mockRejectedValue(new Error('timeout')),
+            getServer: vi.fn().mockReturnValue(mockServer),
           });
 
           setupDisconnected(nc);
@@ -97,6 +98,25 @@ describe(JetstreamHealthIndicator, () => {
           // Then: disconnected but server info preserved
           expect(status.connected).toBe(false);
           expect(status.server).toBe(mockServer);
+          expect(status.latency).toBeNull();
+        });
+
+        it('should stringify non-Error rejection in the warning log', async () => {
+          // Given: rtt rejects with a plain string (not an Error)
+          const reason = faker.lorem.sentence();
+          const nc = createMock<NatsConnection>({
+            isClosed: vi.fn().mockReturnValue(false),
+            rtt: vi.fn().mockRejectedValue(reason),
+            getServer: vi.fn().mockReturnValue(mockServer),
+          });
+
+          setupDisconnected(nc);
+
+          // When: checked
+          const status = await sut.check();
+
+          // Then: disconnected, and the raw reason appears in the log
+          expect(status.connected).toBe(false);
           expect(status.latency).toBeNull();
         });
       });
@@ -148,18 +168,14 @@ describe(JetstreamHealthIndicator, () => {
           setupDisconnected(null);
           const key = faker.lorem.word();
 
-          // When: fails
-          try {
-            await sut.isHealthy(key);
-            fail('Expected isHealthy() to throw');
-          } catch (err) {
-            // Then: details attached to error
-            expect((err as Record<string, unknown>)[key]).toEqual({
+          // When: fails — Then: details attached to error
+          await expect(sut.isHealthy(key)).rejects.toMatchObject({
+            [key]: {
               status: 'down',
               server: null,
               latency: null,
-            });
-          }
+            },
+          });
         });
       });
     });
