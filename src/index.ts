@@ -6,6 +6,7 @@ export { TransportEvent } from './interfaces';
 
 export type {
   Codec,
+  DeadLetterInfo,
   JetstreamFeatureOptions,
   JetstreamModuleAsyncOptions,
   JetstreamModuleOptions,

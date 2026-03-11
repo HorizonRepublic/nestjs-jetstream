@@ -252,6 +252,9 @@ interface JetstreamModuleOptions {
   /** Transport lifecycle hook handlers. Unset hooks fall back to NestJS Logger. */
   hooks?: Partial<TransportHooks>;
 
+  /** Async callback for dead letter handling. See Dead Letter Queue section below. */
+  onDeadLetter?: (info: DeadLetterInfo) => Promise<void>;
+
   /**
    * Graceful shutdown timeout in ms.
    * @default 10_000
@@ -610,6 +613,53 @@ JetstreamModule.forRoot({
 | `messageRouted`    | `(subject: string, kind: 'rpc' \| 'event')` | `Logger.debug`    |
 | `shutdownStart`    | `()`                                        | `Logger.log`      |
 | `shutdownComplete` | `()`                                        | `Logger.log`      |
+| `deadLetter`       | `(info: DeadLetterInfo)`                    | `Logger.warn`     |
+
+### Dead Letter Queue (DLQ)
+
+When an event handler fails on every delivery attempt (`max_deliver`), the message becomes a "dead letter." By default, NATS terminates it silently. Configure `onDeadLetter` to intercept these messages:
+
+```typescript
+JetstreamModule.forRoot({
+  name: 'my-service',
+  servers: ['nats://localhost:4222'],
+  onDeadLetter: async (info) => {
+    // Persist to your DLQ store (database, S3, another queue, etc.)
+    await dlqRepository.save({
+      subject: info.subject,
+      data: info.data,
+      error: String(info.error),
+      deliveryCount: info.deliveryCount,
+      stream: info.stream,
+      timestamp: info.timestamp,
+    });
+  },
+});
+```
+
+**Behavior:**
+- Hook is awaited before `msg.term()` — if it succeeds, the message is terminated
+- If the hook throws, the message is `nak()`'d for retry (NATS redelivers it)
+- `TransportEvent.DeadLetter` is emitted for observability regardless of the hook
+- Applies only to events (workqueue + broadcast), not RPC
+
+**With dependency injection (`forRootAsync`):**
+
+```typescript
+import { JETSTREAM_CONNECTION } from '@horizon-republic/nestjs-jetstream';
+
+JetstreamModule.forRootAsync({
+  name: 'my-service',
+  imports: [DlqModule],
+  inject: [DlqService, JETSTREAM_CONNECTION],
+  useFactory: (dlqService: DlqService, connection: ConnectionProvider) => ({
+    servers: ['nats://localhost:4222'],
+    onDeadLetter: async (info) => {
+      await dlqService.persist(info);
+    },
+  }),
+});
+```
 
 ## Health Checks
 
@@ -646,9 +696,9 @@ const status = await this.jetstream.check();
 // { connected: true, server: 'nats://localhost:4222', latency: 2 }
 ```
 
-| Method | Returns | Throws |
-|--------|---------|--------|
-| `check()` | `JetstreamHealthStatus` | Never |
+| Method            | Returns                            | Throws                             |
+|-------------------|------------------------------------|------------------------------------|
+| `check()`         | `JetstreamHealthStatus`            | Never                              |
 | `isHealthy(key?)` | `{ [key]: { status: 'up', ... } }` | On unhealthy (Terminus convention) |
 
 ## Graceful Shutdown
@@ -891,6 +941,7 @@ nanos
 
 // Types
 Codec
+DeadLetterInfo
 JetstreamModuleOptions
 JetstreamModuleAsyncOptions
 JetstreamFeatureOptions

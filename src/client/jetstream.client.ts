@@ -2,12 +2,14 @@ import { Logger } from '@nestjs/common';
 import { ClientProxy, ReadPacket, WritePacket } from '@nestjs/microservices';
 import {
   createInbox,
+  Events,
   headers as natsHeaders,
   Msg,
   MsgHdrs,
   NatsConnection,
   Subscription,
 } from 'nats';
+import { Subscription as RxSubscription } from 'rxjs';
 
 import { ConnectionProvider } from '../connection';
 import { EventBus } from '../hooks';
@@ -57,6 +59,9 @@ export class JetstreamClient extends ClientProxy {
   /** Pending JetStream-mode RPC timeouts, keyed by correlation ID. */
   private readonly pendingTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
 
+  /** Subscription to connection status events for disconnect handling. */
+  private statusSubscription: RxSubscription | null = null;
+
   public constructor(
     private readonly rootOptions: JetstreamModuleOptions,
     targetServiceName: string,
@@ -77,20 +82,36 @@ export class JetstreamClient extends ClientProxy {
       this.setupInbox(nc);
     }
 
+    // Subscribe to disconnect events (once)
+    this.statusSubscription ??= this.connection.status$.subscribe((status) => {
+      if (status.type === Events.Disconnect) {
+        this.handleDisconnect();
+      }
+    });
+
     return nc;
   }
 
   /** Clean up resources. */
   public async close(): Promise<void> {
-    this.inboxSubscription?.unsubscribe();
-    this.inboxSubscription = null;
+    this.statusSubscription?.unsubscribe();
+    this.statusSubscription = null;
+
+    // Reject all pending JetStream RPC callbacks before clearing
+    const error = new Error('Client closed');
+
+    for (const callback of this.pendingMessages.values()) {
+      callback({ err: error, response: null, isDisposed: true });
+    }
 
     for (const timeoutId of this.pendingTimeouts.values()) {
       clearTimeout(timeoutId);
     }
 
-    this.pendingTimeouts.clear();
     this.pendingMessages.clear();
+    this.pendingTimeouts.clear();
+    this.inboxSubscription?.unsubscribe();
+    this.inboxSubscription = null;
   }
 
   /** Direct access to the raw NATS connection. */
@@ -134,7 +155,7 @@ export class JetstreamClient extends ClientProxy {
 
     const onUnhandled = (err: unknown): void => {
       this.logger.error('Unhandled publish error:', err);
-      callback({ err: 'Internal transport error', response: null, isDisposed: true });
+      callback({ err: new Error('Internal transport error'), response: null, isDisposed: true });
     };
 
     // Track correlation ID for cleanup in JetStream mode
@@ -198,17 +219,11 @@ export class JetstreamClient extends ClientProxy {
         callback({ err: null, response: decoded, isDisposed: true });
       }
     } catch (err) {
+      const error = err instanceof Error ? err : new Error('Unknown error');
+
       this.logger.error(`Core RPC error (${subject}):`, err);
-      this.eventBus.emit(
-        TransportEvent.Error,
-        err instanceof Error ? err : new Error(String(err)),
-        'client-rpc',
-      );
-      callback({
-        err: err instanceof Error ? err.message : 'Unknown error',
-        response: null,
-        isDisposed: true,
-      });
+      this.eventBus.emit(TransportEvent.Error, error, 'client-rpc');
+      callback({ err: error, response: null, isDisposed: true });
     }
   }
 
@@ -227,11 +242,13 @@ export class JetstreamClient extends ClientProxy {
     this.pendingMessages.set(correlationId, callback);
 
     const timeoutId = setTimeout(() => {
+      if (!this.pendingMessages.has(correlationId)) return;
+
       this.pendingTimeouts.delete(correlationId);
       this.pendingMessages.delete(correlationId);
       this.logger.error(`JetStream RPC timeout (${effectiveTimeout}ms): ${subject}`);
       this.eventBus.emit(TransportEvent.RpcTimeout, subject, correlationId);
-      callback({ err: 'RPC timeout', response: null, isDisposed: true });
+      callback({ err: new Error('RPC timeout'), response: null, isDisposed: true });
     }, effectiveTimeout);
 
     this.pendingTimeouts.set(correlationId, timeoutId);
@@ -256,14 +273,38 @@ export class JetstreamClient extends ClientProxy {
     } catch (err) {
       clearTimeout(timeoutId);
       this.pendingTimeouts.delete(correlationId);
-      this.logger.error(`JetStream RPC publish error (${subject}):`, err);
-      callback({
-        err: err instanceof Error ? err.message : 'Unknown error',
-        response: null,
-        isDisposed: true,
-      });
+
+      if (!this.pendingMessages.has(correlationId)) return;
+
       this.pendingMessages.delete(correlationId);
+      const error = err instanceof Error ? err : new Error('Unknown error');
+
+      this.logger.error(`JetStream RPC publish error (${subject}):`, err);
+      callback({ err: error, response: null, isDisposed: true });
     }
+  }
+
+  /** Fail-fast all pending JetStream RPC callbacks on connection loss. */
+  private handleDisconnect(): void {
+    const error = new Error('Connection lost');
+
+    // Reject all pending callbacks
+    for (const callback of this.pendingMessages.values()) {
+      callback({ err: error, response: null, isDisposed: true });
+    }
+
+    // Clear timeouts
+    for (const timeoutId of this.pendingTimeouts.values()) {
+      clearTimeout(timeoutId);
+    }
+
+    this.pendingMessages.clear();
+    this.pendingTimeouts.clear();
+
+    // Reset inbox — will be recreated on next connect()
+    this.inboxSubscription?.unsubscribe();
+    this.inboxSubscription = null;
+    this.inbox = null;
   }
 
   /** Setup shared inbox subscription for JetStream RPC responses. */
@@ -317,7 +358,7 @@ export class JetstreamClient extends ClientProxy {
       }
     } catch (err) {
       callback({
-        err: err instanceof Error ? err.message : 'Decode error',
+        err: err instanceof Error ? err : new Error('Decode error'),
         response: null,
         isDisposed: true,
       });

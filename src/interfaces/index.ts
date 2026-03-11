@@ -2,7 +2,7 @@ export type { Codec } from './codec.interface';
 
 export { TransportEvent } from './hooks.interface';
 
-export type { TransportHooks } from './hooks.interface';
+export type { DeadLetterInfo, TransportHooks } from './hooks.interface';
 
 export type {
   JetstreamFeatureOptions,

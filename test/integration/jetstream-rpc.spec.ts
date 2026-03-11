@@ -92,7 +92,7 @@ describe('JetStream RPC Round-Trip', () => {
   it('should timeout when handler takes too long', async () => {
     const record = new JetstreamRecordBuilder({}).setTimeout(500).build();
 
-    await expect(firstValueFrom(client.send('nonexistent.pattern', record))).rejects.toMatch(
+    await expect(firstValueFrom(client.send('nonexistent.pattern', record))).rejects.toThrow(
       /timeout/i,
     );
   });
