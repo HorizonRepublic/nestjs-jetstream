@@ -1,4 +1,5 @@
-import { createMock } from '@golevelup/ts-jest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type Mocked } from 'vitest';
+import { createMock } from '@golevelup/ts-vitest';
 import { faker } from '@faker-js/faker';
 import type { DeliveryInfo, JsMsg } from 'nats';
 import { Subject } from 'rxjs';
@@ -15,10 +16,10 @@ import { PatternRegistry } from './pattern-registry';
 describe(EventRouter, () => {
   let sut: EventRouter;
 
-  let messageProvider: jest.Mocked<MessageProvider>;
-  let patternRegistry: jest.Mocked<PatternRegistry>;
-  let codec: jest.Mocked<Codec>;
-  let eventBus: jest.Mocked<EventBus>;
+  let messageProvider: Mocked<MessageProvider>;
+  let patternRegistry: Mocked<PatternRegistry>;
+  let codec: Mocked<Codec>;
+  let eventBus: Mocked<EventBus>;
 
   let events$: Subject<JsMsg>;
   let broadcasts$: Subject<JsMsg>;
@@ -33,14 +34,14 @@ describe(EventRouter, () => {
     });
     patternRegistry = createMock<PatternRegistry>();
     codec = createMock<Codec>({
-      decode: jest.fn((data: Uint8Array) => JSON.parse(new TextDecoder().decode(data))),
+      decode: vi.fn((data: Uint8Array) => JSON.parse(new TextDecoder().decode(data))),
     });
     eventBus = createMock<EventBus>();
 
     sut = new EventRouter(messageProvider, patternRegistry, codec, eventBus);
   });
 
-  afterEach(jest.resetAllMocks);
+  afterEach(vi.resetAllMocks);
 
   describe('start() / destroy()', () => {
     describe('happy path', () => {
@@ -80,7 +81,7 @@ describe(EventRouter, () => {
       describe('when handler succeeds', () => {
         it('should ack the message', async () => {
           // Given: a handler that resolves
-          const handler = jest.fn().mockResolvedValue(undefined);
+          const handler = vi.fn().mockResolvedValue(undefined);
 
           patternRegistry.getHandler.mockReturnValue(handler);
 
@@ -131,7 +132,7 @@ describe(EventRouter, () => {
       describe('when codec.decode() throws', () => {
         it('should term the message without calling handler', async () => {
           // Given: decode fails
-          patternRegistry.getHandler.mockReturnValue(jest.fn());
+          patternRegistry.getHandler.mockReturnValue(vi.fn());
           codec.decode.mockImplementation(() => {
             throw new Error('bad payload');
           });
@@ -154,7 +155,7 @@ describe(EventRouter, () => {
       describe('when handler throws', () => {
         it('should nak the message for redelivery', async () => {
           // Given: handler that throws
-          const handler = jest.fn().mockRejectedValue(new Error('handler error'));
+          const handler = vi.fn().mockRejectedValue(new Error('handler error'));
 
           patternRegistry.getHandler.mockReturnValue(handler);
 
@@ -179,7 +180,7 @@ describe(EventRouter, () => {
       describe('when broadcast message arrives', () => {
         it('should handle through the same pipeline', async () => {
           // Given: a handler for the broadcast subject
-          const handler = jest.fn().mockResolvedValue(undefined);
+          const handler = vi.fn().mockResolvedValue(undefined);
 
           patternRegistry.getHandler.mockReturnValue(handler);
 
@@ -203,11 +204,11 @@ describe(EventRouter, () => {
   describe('dead letter handling', () => {
     const streamName = 'test-stream';
     const maxDeliverByStream = new Map<string, number>([[streamName, 3]]);
-    let onDeadLetter: jest.Mock;
+    let onDeadLetter: Mock;
     let deadLetterConfig: DeadLetterConfig;
 
     beforeEach(() => {
-      onDeadLetter = jest.fn().mockResolvedValue(undefined);
+      onDeadLetter = vi.fn().mockResolvedValue(undefined);
       deadLetterConfig = { maxDeliverByStream, onDeadLetter };
 
       sut = new EventRouter(messageProvider, patternRegistry, codec, eventBus, deadLetterConfig);
@@ -231,7 +232,7 @@ describe(EventRouter, () => {
     describe('happy path', () => {
       it('should call onDeadLetter and term when deliveryCount reaches maxDeliver', async () => {
         // Given: a handler that always fails
-        const handler = jest.fn().mockRejectedValue(new Error('handler error'));
+        const handler = vi.fn().mockRejectedValue(new Error('handler error'));
 
         patternRegistry.getHandler.mockReturnValue(handler);
 
@@ -258,7 +259,7 @@ describe(EventRouter, () => {
 
       it('should emit TransportEvent.DeadLetter for observability', async () => {
         // Given: a handler that always fails
-        const handler = jest.fn().mockRejectedValue(new Error('handler error'));
+        const handler = vi.fn().mockRejectedValue(new Error('handler error'));
 
         patternRegistry.getHandler.mockReturnValue(handler);
 
@@ -279,7 +280,7 @@ describe(EventRouter, () => {
     describe('edge cases', () => {
       it('should nak normally when deliveryCount has not reached maxDeliver', async () => {
         // Given: a handler that fails, but not at max delivery
-        const handler = jest.fn().mockRejectedValue(new Error('handler error'));
+        const handler = vi.fn().mockRejectedValue(new Error('handler error'));
 
         patternRegistry.getHandler.mockReturnValue(handler);
 
@@ -297,7 +298,7 @@ describe(EventRouter, () => {
 
       it('should nak normally when stream is not in maxDeliverByStream map', async () => {
         // Given: message from an unknown stream
-        const handler = jest.fn().mockRejectedValue(new Error('handler error'));
+        const handler = vi.fn().mockRejectedValue(new Error('handler error'));
 
         patternRegistry.getHandler.mockReturnValue(handler);
 
@@ -328,7 +329,7 @@ describe(EventRouter, () => {
         // Given: dead letter hook that fails
         onDeadLetter.mockRejectedValue(new Error('DLQ persistence failed'));
 
-        const handler = jest.fn().mockRejectedValue(new Error('handler error'));
+        const handler = vi.fn().mockRejectedValue(new Error('handler error'));
 
         patternRegistry.getHandler.mockReturnValue(handler);
 
@@ -341,6 +342,43 @@ describe(EventRouter, () => {
         // Then: nak for retry instead of term
         expect(msg.nak).toHaveBeenCalled();
         expect(msg.term).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('error recovery', () => {
+    describe('when handle() throws an unexpected error', () => {
+      it('should catch via catchError and keep the subscription alive', async () => {
+        sut.start();
+
+        // Given: getHandler throws synchronously (unexpected)
+        patternRegistry.getHandler.mockImplementation(() => {
+          throw new Error('registry exploded');
+        });
+
+        const msg = createMock<JsMsg>({
+          subject: 'test.subject',
+          data: new TextEncoder().encode(JSON.stringify({})),
+        });
+
+        // When: message arrives
+        events$.next(msg);
+        await new Promise(process.nextTick);
+
+        // Then: subscription is still alive (can process next message)
+        const handler = vi.fn().mockResolvedValue(undefined);
+
+        patternRegistry.getHandler.mockReturnValue(handler);
+
+        const msg2 = createMock<JsMsg>({
+          subject: 'test.subject',
+          data: new TextEncoder().encode(JSON.stringify({ id: 1 })),
+        });
+
+        events$.next(msg2);
+        await new Promise(process.nextTick);
+
+        expect(handler).toHaveBeenCalled();
       });
     });
   });

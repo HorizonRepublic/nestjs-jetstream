@@ -1,3 +1,4 @@
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Controller } from '@nestjs/common';
 import { EventPattern, MessagePattern, Payload } from '@nestjs/microservices';
 import { NatsConnection } from 'nats';
@@ -95,7 +96,7 @@ describe('Graceful Shutdown', () => {
       expect(connection.unwrap).not.toBeNull();
 
       // Close should not throw
-      await expect(app.close()).resolves.toBeUndefined();
+      await app.close();
 
       // Connection drained
       expect(connection.unwrap).toBeNull();

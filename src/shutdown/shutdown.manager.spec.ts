@@ -1,4 +1,5 @@
-import { createMock } from '@golevelup/ts-jest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
+import { createMock } from '@golevelup/ts-vitest';
 import { faker } from '@faker-js/faker';
 
 import { ConnectionProvider } from '../connection';
@@ -11,20 +12,20 @@ import { ShutdownManager } from './shutdown.manager';
 describe(ShutdownManager, () => {
   let sut: ShutdownManager;
 
-  let connection: jest.Mocked<ConnectionProvider>;
-  let eventBus: jest.Mocked<EventBus>;
+  let connection: Mocked<ConnectionProvider>;
+  let eventBus: Mocked<EventBus>;
   let timeout: number;
 
   beforeEach(() => {
     connection = createMock<ConnectionProvider>({
-      shutdown: jest.fn().mockResolvedValue(undefined),
+      shutdown: vi.fn().mockResolvedValue(undefined),
     });
     eventBus = createMock<EventBus>();
     timeout = faker.number.int({ min: 1000, max: 30000 });
     sut = new ShutdownManager(connection, eventBus, timeout);
   });
 
-  afterEach(jest.resetAllMocks);
+  afterEach(vi.resetAllMocks);
 
   describe('shutdown()', () => {
     describe('happy path', () => {
@@ -70,7 +71,7 @@ describe(ShutdownManager, () => {
     describe('edge cases', () => {
       describe('when connection.shutdown() hangs past timeout', () => {
         it('should resolve after timeout via Promise.race', async () => {
-          jest.useFakeTimers();
+          vi.useFakeTimers();
 
           // Given: connection.shutdown never resolves
           connection.shutdown.mockReturnValue(new Promise(() => {}));
@@ -79,13 +80,13 @@ describe(ShutdownManager, () => {
           // When: shutdown starts, then timeout fires
           const promise = sut.shutdown();
 
-          jest.advanceTimersByTime(5000);
+          vi.advanceTimersByTime(5000);
           await promise;
 
           // Then: resolved via timeout, events emitted
           expect(eventBus.emit).toHaveBeenCalledWith(TransportEvent.ShutdownComplete);
 
-          jest.useRealTimers();
+          vi.useRealTimers();
         });
       });
     });
