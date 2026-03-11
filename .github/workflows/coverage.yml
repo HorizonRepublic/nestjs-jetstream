@@ -63,3 +63,12 @@ jobs:
 
       - name: Run integration tests
         run: pnpm test:integration
+
+      - name: Upload integration coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage-integration/lcov.info
+          flags: integration
+          name: codecov-integration
+          fail_ci_if_error: false

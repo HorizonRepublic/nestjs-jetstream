@@ -7,7 +7,8 @@ const config: Config = {
   testMatch: ['<rootDir>/test/integration/**/*.spec.ts'],
   testTimeout: 30_000,
   maxWorkers: 1, // sequential — shared NATS state
-  collectCoverage: false,
+  collectCoverage: true,
+  coverageDirectory: '<rootDir>/coverage-integration',
   forceExit: true, // NATS client keeps internal timers alive after drain
 };
 
