@@ -14,10 +14,21 @@ import {
 import { RpcContext } from '../../context';
 import { EventBus } from '../../hooks';
 import { TransportEvent } from '../../interfaces';
-import type { Codec } from '../../interfaces';
+import type { Codec, DeadLetterInfo } from '../../interfaces';
 
 import { MessageProvider } from '../infrastructure/message.provider';
 import { PatternRegistry } from './pattern-registry';
+
+/** Options for dead letter queue handling. */
+export interface DeadLetterConfig {
+  /**
+   * Map of stream name -> max_deliver value.
+   * Used to detect when a message from a given stream has exhausted all delivery attempts.
+   */
+  maxDeliverByStream: Map<string, number>;
+  /** Async callback invoked when a message exhausts all deliveries. */
+  onDeadLetter: (info: DeadLetterInfo) => Promise<void>;
+}
 
 /**
  * Routes incoming event messages (workqueue and broadcast) to NestJS handlers.
@@ -26,6 +37,7 @@ import { PatternRegistry } from './pattern-registry';
  * - Handler executes first
  * - Success -> ack (message consumed)
  * - Handler error -> nak (NATS redelivers, up to `max_deliver` times)
+ * - Dead letter (max_deliver reached) -> onDeadLetter hook -> term or nak
  * - Decode error -> term (no retry for malformed payloads)
  * - No handler found -> term (configuration error)
  *
@@ -44,6 +56,7 @@ export class EventRouter {
     private readonly patternRegistry: PatternRegistry,
     private readonly codec: Codec,
     private readonly eventBus: EventBus,
+    private readonly deadLetterConfig?: DeadLetterConfig,
   ) {}
 
   /** Start routing event and broadcast messages to handlers. */
@@ -103,7 +116,7 @@ export class EventRouter {
     return from(this.executeHandler(handler, data, ctx, msg));
   }
 
-  /** Execute handler, then ack on success or nak on failure. */
+  /** Execute handler, then ack on success or nak/dead-letter on failure. */
   private async executeHandler(
     handler: (data: unknown, ctx: RpcContext) => Promise<unknown>,
     data: unknown,
@@ -120,6 +133,45 @@ export class EventRouter {
       msg.ack();
     } catch (err) {
       this.logger.error(`Event handler error (${msg.subject}):`, err);
+
+      if (this.isDeadLetter(msg)) {
+        await this.handleDeadLetter(msg, data, err);
+      } else {
+        msg.nak();
+      }
+    }
+  }
+
+  /** Check if the message has exhausted all delivery attempts. */
+  private isDeadLetter(msg: JsMsg): boolean {
+    if (!this.deadLetterConfig) return false;
+
+    const maxDeliver = this.deadLetterConfig.maxDeliverByStream.get(msg.info.stream);
+    if (maxDeliver === undefined) return false;
+
+    return msg.info.deliveryCount >= maxDeliver;
+  }
+
+  /** Handle a dead letter: invoke callback, then term or nak based on result. */
+  private async handleDeadLetter(msg: JsMsg, data: unknown, error: unknown): Promise<void> {
+    const info: DeadLetterInfo = {
+      subject: msg.subject,
+      data,
+      headers: msg.headers,
+      error,
+      deliveryCount: msg.info.deliveryCount,
+      stream: msg.info.stream,
+      streamSequence: msg.info.streamSequence,
+      timestamp: new Date(msg.info.timestampNanos / 1_000_000).toISOString(),
+    };
+
+    this.eventBus.emit(TransportEvent.DeadLetter, info);
+
+    try {
+      await this.deadLetterConfig!.onDeadLetter(info);
+      msg.term('Dead letter processed');
+    } catch (hookErr) {
+      this.logger.error(`onDeadLetter callback failed for ${msg.subject}, nak for retry:`, hookErr);
       msg.nak();
     }
   }
