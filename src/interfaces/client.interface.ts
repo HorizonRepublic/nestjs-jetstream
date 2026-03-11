@@ -1,6 +1,5 @@
 /** Options for transport-controlled headers on outbound messages. */
 export interface TransportHeaderOptions {
-  messageId: string;
   subject: string;
   correlationId?: string;
   replyTo?: string;

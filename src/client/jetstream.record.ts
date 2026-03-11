@@ -27,7 +27,7 @@ export class JetstreamRecord<TData = unknown> {
 /**
  * Fluent builder for constructing JetstreamRecord instances.
  *
- * Protected headers (`correlation-id`, `reply-to`, `message-id`) cannot be
+ * Protected headers (`correlation-id`, `reply-to`, `error`) cannot be
  * set by the user — attempting to do so throws an error at build time.
  */
 export class JetstreamRecordBuilder<TData = unknown> {

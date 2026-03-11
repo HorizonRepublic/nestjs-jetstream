@@ -10,7 +10,7 @@ import {
   DEFAULT_EVENT_CONSUMER_CONFIG,
   internalName,
 } from '../../jetstream.constants';
-import { PatternRegistry } from '../routing/pattern-registry';
+import { PatternRegistry } from '../routing';
 
 import { StreamProvider } from './stream.provider';
 

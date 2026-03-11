@@ -1,4 +1,5 @@
-import { createMock } from '@golevelup/ts-jest';
+import { describe, expect, it, vi } from 'vitest';
+import { createMock } from '@golevelup/ts-vitest';
 import { faker } from '@faker-js/faker';
 import type { JsMsg, Msg, MsgHdrs } from 'nats';
 
@@ -39,7 +40,7 @@ describe(RpcContext, () => {
       it('should return single header value via getHeader()', () => {
         // Given: a message with a specific header
         const traceId = faker.string.uuid();
-        const headers = createMock<MsgHdrs>({ get: jest.fn().mockReturnValue(traceId) });
+        const headers = createMock<MsgHdrs>({ get: vi.fn().mockReturnValue(traceId) });
         const sut = new RpcContext([createMock<Msg>({ headers })]);
 
         // When: header is accessed
@@ -72,7 +73,7 @@ describe(RpcContext, () => {
     describe('when message is a JsMsg', () => {
       it('should return true', () => {
         // Given: a JsMsg (has ack method as own property)
-        const sut = new RpcContext([createMock<JsMsg>({ ack: jest.fn() })]);
+        const sut = new RpcContext([createMock<JsMsg>({ ack: vi.fn() })]);
 
         // Then: type guard is true
         expect(sut.isJetStream()).toBe(true);

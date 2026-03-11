@@ -16,7 +16,7 @@ import { EventBus } from '../../hooks';
 import { TransportEvent } from '../../interfaces';
 import type { Codec, DeadLetterInfo } from '../../interfaces';
 
-import { MessageProvider } from '../infrastructure/message.provider';
+import { MessageProvider } from '../infrastructure';
 import { PatternRegistry } from './pattern-registry';
 
 /** Options for dead letter queue handling. */

@@ -1,4 +1,5 @@
-import { createMock } from '@golevelup/ts-jest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
+import { createMock } from '@golevelup/ts-vitest';
 import { faker } from '@faker-js/faker';
 import type {
   JetStreamClient as NatsJsClient,
@@ -28,11 +29,11 @@ import { JetstreamRecordBuilder } from './jetstream.record';
 describe(JetstreamClient, () => {
   let sut: JetstreamClient;
 
-  let connection: jest.Mocked<ConnectionProvider>;
-  let codec: jest.Mocked<Codec>;
-  let eventBus: jest.Mocked<EventBus>;
-  let mockNc: jest.Mocked<NatsConnection>;
-  let mockJs: jest.Mocked<NatsJsClient>;
+  let connection: Mocked<ConnectionProvider>;
+  let codec: Mocked<Codec>;
+  let eventBus: Mocked<EventBus>;
+  let mockNc: Mocked<NatsConnection>;
+  let mockJs: Mocked<NatsJsClient>;
 
   let options: JetstreamModuleOptions;
   let targetName: string;
@@ -47,24 +48,24 @@ describe(JetstreamClient, () => {
     };
 
     mockJs = createMock<NatsJsClient>({
-      publish: jest.fn().mockResolvedValue(createMock<PubAck>()),
+      publish: vi.fn().mockResolvedValue(createMock<PubAck>()),
     });
 
     mockNc = createMock<NatsConnection>({
-      jetstream: jest.fn().mockReturnValue(mockJs),
-      request: jest.fn(),
-      subscribe: jest.fn().mockReturnValue(createMock<Subscription>()),
+      jetstream: vi.fn().mockReturnValue(mockJs),
+      request: vi.fn(),
+      subscribe: vi.fn().mockReturnValue(createMock<Subscription>()),
     });
 
     connection = createMock<ConnectionProvider>({
-      getConnection: jest.fn().mockResolvedValue(mockNc),
+      getConnection: vi.fn().mockResolvedValue(mockNc),
       unwrap: mockNc,
       status$: statusSubject.asObservable(),
     });
 
     codec = createMock<Codec>({
-      decode: jest.fn((data: Uint8Array) => JSON.parse(new TextDecoder().decode(data))),
-      encode: jest.fn((data: unknown) => new TextEncoder().encode(JSON.stringify(data))),
+      decode: vi.fn((data: Uint8Array) => JSON.parse(new TextDecoder().decode(data))),
+      encode: vi.fn((data: unknown) => new TextEncoder().encode(JSON.stringify(data))),
     });
 
     eventBus = createMock<EventBus>();
@@ -74,7 +75,7 @@ describe(JetstreamClient, () => {
 
   afterEach(async () => {
     await sut.close();
-    jest.resetAllMocks();
+    vi.resetAllMocks();
   });
 
   describe('connect()', () => {
@@ -219,14 +220,13 @@ describe(JetstreamClient, () => {
     });
 
     describe('transport headers', () => {
-      it('should set message-id, subject, and caller-name headers', async () => {
+      it('should set subject and caller-name headers', async () => {
         // When: event emitted
         await firstValueFrom(sut.emit('user.created', { test: true }));
 
         // Then: transport headers present
         const publishedHeaders: MsgHdrs = mockJs.publish.mock.calls[0]![2]!.headers!;
 
-        expect(publishedHeaders.get(JetstreamHeader.MessageId)).toBeTruthy();
         expect(publishedHeaders.get(JetstreamHeader.Subject)).toBeTruthy();
         expect(publishedHeaders.get(JetstreamHeader.CallerName)).toBe(
           `${options.name}__microservice`,
@@ -264,21 +264,20 @@ describe(JetstreamClient, () => {
         );
       });
 
-      it('should emit MessageRouted event on success', async () => {
+      it('should resolve without error on success', async () => {
         // Given: successful response
         mockNc.request.mockResolvedValue(
           createMock<Msg>({
-            data: codec.encode({}),
+            data: codec.encode({ ok: true }),
             headers: natsHeaders(),
           }),
         );
 
         // When: RPC sent
-        await firstValueFrom(sut.send('get.user', {}));
-        await new Promise(process.nextTick);
+        const result = await firstValueFrom(sut.send('get.user', {}));
 
-        // Note: MessageRouted is emitted by the server-side, not client-side
-        // Client-side only emits on errors
+        // Then: result decoded
+        expect(result).toEqual({ ok: true });
       });
     });
 
@@ -400,7 +399,7 @@ describe(JetstreamClient, () => {
     let inboxCallback: (err: Error | null, msg: Msg) => void;
 
     beforeEach(async () => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
 
       options.rpc = { mode: 'jetstream' };
       sut = new JetstreamClient(options, targetName, connection, codec, eventBus);
@@ -416,7 +415,7 @@ describe(JetstreamClient, () => {
     });
 
     afterEach(() => {
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
 
     describe('happy path', () => {
@@ -428,7 +427,7 @@ describe(JetstreamClient, () => {
         const resultPromise = firstValueFrom(sut.send('get.user', { userId: 1 }));
 
         // Allow publish to complete
-        await jest.advanceTimersByTimeAsync(0);
+        await vi.advanceTimersByTimeAsync(0);
 
         // Extract correlation ID from published headers
         const publishedHeaders: MsgHdrs = mockJs.publish.mock.calls[0]![2]!.headers!;
@@ -457,7 +456,7 @@ describe(JetstreamClient, () => {
         // When: RPC sent
         const resultPromise = firstValueFrom(sut.send('get.user', {}));
 
-        await jest.advanceTimersByTimeAsync(0);
+        await vi.advanceTimersByTimeAsync(0);
 
         // Then: transport headers include replyTo and correlationId
         const publishedHeaders: MsgHdrs = mockJs.publish.mock.calls[0]![2]!.headers!;
@@ -489,7 +488,7 @@ describe(JetstreamClient, () => {
         // When: RPC sent
         const resultPromise = firstValueFrom(sut.send('test', {}));
 
-        await jest.advanceTimersByTimeAsync(0);
+        await vi.advanceTimersByTimeAsync(0);
 
         // Simulate error reply
         const publishedHeaders: MsgHdrs = mockJs.publish.mock.calls[0]![2]!.headers!;
@@ -517,10 +516,10 @@ describe(JetstreamClient, () => {
         // When: RPC sent (no reply will come)
         const resultPromise = firstValueFrom(sut.send('slow.handler', {}));
 
-        await jest.advanceTimersByTimeAsync(0);
+        await vi.advanceTimersByTimeAsync(0);
 
         // Advance past the timeout
-        jest.advanceTimersByTime(DEFAULT_JETSTREAM_RPC_TIMEOUT);
+        vi.advanceTimersByTime(DEFAULT_JETSTREAM_RPC_TIMEOUT);
 
         // Then: timeout error as Error instance
         await expect(resultPromise).rejects.toThrow('RPC timeout');
@@ -540,12 +539,12 @@ describe(JetstreamClient, () => {
           error: () => {},
         });
 
-        await jest.advanceTimersByTimeAsync(0);
+        await vi.advanceTimersByTimeAsync(0);
         subscription.unsubscribe();
 
         // Then: advancing time should NOT trigger timeout callback
         // (timeout was cleared by teardown)
-        jest.advanceTimersByTime(DEFAULT_JETSTREAM_RPC_TIMEOUT);
+        vi.advanceTimersByTime(DEFAULT_JETSTREAM_RPC_TIMEOUT);
 
         // No timeout event should have been emitted
         expect(eventBus.emit).not.toHaveBeenCalledWith(
@@ -558,16 +557,16 @@ describe(JetstreamClient, () => {
 
     describe('inbox edge cases', () => {
       it('should ignore inbox reply without correlation-id', async () => {
-        // When: inbox reply arrives without correlation-id
-        inboxCallback(
-          null,
-          createMock<Msg>({
-            data: codec.encode({}),
-            headers: natsHeaders(), // no correlation-id set
-          }),
-        );
-
-        // Then: no error, just ignored (warning logged)
+        // When/Then: inbox reply arrives without correlation-id — no crash
+        expect(() => {
+          inboxCallback(
+            null,
+            createMock<Msg>({
+              data: codec.encode({}),
+              headers: natsHeaders(), // no correlation-id set
+            }),
+          );
+        }).not.toThrow();
       });
 
       it('should ignore inbox reply for unknown correlation-id', async () => {
@@ -576,29 +575,30 @@ describe(JetstreamClient, () => {
 
         replyHeaders.set(JetstreamHeader.CorrelationId, faker.string.uuid());
 
-        inboxCallback(
-          null,
-          createMock<Msg>({
-            data: codec.encode({}),
-            headers: replyHeaders,
-          }),
-        );
-
-        // Then: no error, just ignored (warning logged)
+        // Then: no crash
+        expect(() => {
+          inboxCallback(
+            null,
+            createMock<Msg>({
+              data: codec.encode({}),
+              headers: replyHeaders,
+            }),
+          );
+        }).not.toThrow();
       });
 
       it('should handle inbox subscription error without crashing', () => {
-        // When: inbox subscription emits error
-        inboxCallback(new Error('subscription error'), createMock<Msg>());
-
-        // Then: no crash (error logged)
+        // When/Then: inbox subscription emits error without crash
+        expect(() => {
+          inboxCallback(new Error('subscription error'), createMock<Msg>());
+        }).not.toThrow();
       });
 
       it('should reject with Error instance on decode failure in inbox reply', async () => {
         // Given: pending RPC
         const resultPromise = firstValueFrom(sut.send('test', {}));
 
-        await jest.advanceTimersByTimeAsync(0);
+        await vi.advanceTimersByTimeAsync(0);
 
         // Get correlationId from published message
         const publishedHeaders: MsgHdrs = mockJs.publish.mock.calls[0]![2]!.headers!;
@@ -637,7 +637,7 @@ describe(JetstreamClient, () => {
           sut.send('test', {}).subscribe({ error: resolve });
         });
 
-        await jest.advanceTimersByTimeAsync(10);
+        await vi.advanceTimersByTimeAsync(10);
 
         const err = await errorPromise;
 
@@ -666,7 +666,7 @@ describe(JetstreamClient, () => {
     });
 
     it('should use DEFAULT_JETSTREAM_RPC_TIMEOUT in jetstream mode', async () => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
 
       // Given: jetstream rpc mode without explicit timeout
       options.rpc = { mode: 'jetstream' };
@@ -676,10 +676,10 @@ describe(JetstreamClient, () => {
       // When: send an RPC (timeout will fire since no reply comes)
       const resultPromise = firstValueFrom(sut.send('test', {}));
 
-      await jest.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(0);
 
       // Advance to just before timeout — should NOT have fired yet
-      jest.advanceTimersByTime(DEFAULT_JETSTREAM_RPC_TIMEOUT - 1);
+      vi.advanceTimersByTime(DEFAULT_JETSTREAM_RPC_TIMEOUT - 1);
       expect(eventBus.emit).not.toHaveBeenCalledWith(
         TransportEvent.RpcTimeout,
         expect.anything(),
@@ -687,7 +687,7 @@ describe(JetstreamClient, () => {
       );
 
       // Advance past timeout — should fire
-      jest.advanceTimersByTime(1);
+      vi.advanceTimersByTime(1);
       expect(eventBus.emit).toHaveBeenCalledWith(
         TransportEvent.RpcTimeout,
         expect.anything(),
@@ -700,13 +700,13 @@ describe(JetstreamClient, () => {
         // expected
       }
 
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
   });
 
   describe('disconnect handling (JetStream RPC mode)', () => {
     beforeEach(async () => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
 
       options.rpc = { mode: 'jetstream' };
       sut = new JetstreamClient(options, targetName, connection, codec, eventBus);
@@ -714,7 +714,7 @@ describe(JetstreamClient, () => {
     });
 
     afterEach(() => {
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
 
     it('should reject all pending callbacks with Error on disconnect', async () => {
@@ -722,7 +722,7 @@ describe(JetstreamClient, () => {
       const result1 = firstValueFrom(sut.send('rpc.one', {}));
       const result2 = firstValueFrom(sut.send('rpc.two', {}));
 
-      await jest.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(0);
 
       // When: disconnect event fires
       statusSubject.next({ type: Events.Disconnect, data: '' });
@@ -735,13 +735,13 @@ describe(JetstreamClient, () => {
     it('should clear pending maps on disconnect', async () => {
       // Given: pending RPC
       firstValueFrom(sut.send('rpc.one', {})).catch(() => {});
-      await jest.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(0);
 
       // When: disconnect
       statusSubject.next({ type: Events.Disconnect, data: '' });
 
       // Then: advancing past timeout should NOT trigger RpcTimeout (already cleaned up)
-      jest.advanceTimersByTime(DEFAULT_JETSTREAM_RPC_TIMEOUT);
+      vi.advanceTimersByTime(DEFAULT_JETSTREAM_RPC_TIMEOUT);
       expect(eventBus.emit).not.toHaveBeenCalledWith(
         TransportEvent.RpcTimeout,
         expect.anything(),
@@ -761,6 +761,21 @@ describe(JetstreamClient, () => {
       expect(mockNc.subscribe).toHaveBeenCalledTimes(2);
     });
 
+    it('should clearTimeout for pending RPCs on disconnect', async () => {
+      // Given: a pending RPC with an active timeout
+      const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
+
+      firstValueFrom(sut.send('rpc.one', {})).catch(() => {});
+      await vi.advanceTimersByTimeAsync(0);
+
+      // When: disconnect event fires
+      statusSubject.next({ type: Events.Disconnect, data: '' });
+
+      // Then: clearTimeout was called for the pending RPC timeout
+      expect(clearTimeoutSpy).toHaveBeenCalled();
+      clearTimeoutSpy.mockRestore();
+    });
+
     it('should not affect core RPC mode on disconnect', async () => {
       // Given: core mode client
       options.rpc = undefined;
@@ -768,8 +783,10 @@ describe(JetstreamClient, () => {
 
       await coreClient.connect();
 
-      // When: disconnect fires — no crash
-      statusSubject.next({ type: Events.Disconnect, data: '' });
+      // When/Then: disconnect fires — no crash
+      expect(() => {
+        statusSubject.next({ type: Events.Disconnect, data: '' });
+      }).not.toThrow();
 
       await coreClient.close();
     });

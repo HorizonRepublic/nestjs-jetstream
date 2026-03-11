@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'vitest';
 import { RpcException } from '@nestjs/microservices';
 import { faker } from '@faker-js/faker';
 

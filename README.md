@@ -5,6 +5,7 @@ A production-grade NestJS transport for NATS JetStream with built-in support for
 [![npm version](https://img.shields.io/npm/v/@horizon-republic/nestjs-jetstream.svg)](https://www.npmjs.com/package/@horizon-republic/nestjs-jetstream)
 [![codecov](https://codecov.io/github/HorizonRepublic/nestjs-jetstream/graph/badge.svg?token=40IPSWFMT4)](https://codecov.io/github/HorizonRepublic/nestjs-jetstream)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Socket Badge](https://badge.socket.dev/npm/package/@horizon-republic/nestjs-jetstream)](https://badge.socket.dev/npm/package/@horizon-republic/nestjs-jetstream)
 
 ## Table of Contents
 
@@ -31,6 +32,7 @@ A production-grade NestJS transport for NATS JetStream with built-in support for
 - [NATS Naming Conventions](#nats-naming-conventions)
 - [Default Stream & Consumer Configs](#default-stream--consumer-configs)
 - [API Reference](#api-reference)
+- [Testing](#testing)
 - [Contributing](#contributing)
 - [License](#license)
 - [Links](#links)
@@ -491,7 +493,6 @@ this.client.emit('user.created', record);
 |--------------------|-------------------------------|
 | `x-correlation-id` | RPC request/response matching |
 | `x-reply-to`       | JetStream RPC response inbox  |
-| `x-message-id`     | Deduplication                 |
 | `x-error`          | RPC error response flag       |
 
 Attempting to set a reserved header throws an error at build time.
@@ -963,6 +964,43 @@ events: {
   consumer: { ack_wait: nanos(30_000) },                   // 30s
 }
 ```
+
+## Testing
+
+The project uses [Jest](https://jestjs.io/) with two test suites configured as [projects](https://jestjs.io/docs/configuration#projects-arraystring--projectconfig):
+
+```bash
+# Unit tests (no external dependencies)
+pnpm test
+
+# Integration tests (requires a running NATS server with JetStream)
+pnpm test:integration
+
+# Both suites sequentially
+pnpm test:all
+
+# Unit tests in watch mode
+pnpm test:watch
+
+# Unit tests with coverage report
+pnpm test:cov
+```
+
+### Running NATS locally
+
+Integration tests require a NATS server with JetStream enabled:
+
+```bash
+docker run -d --name nats -p 4222:4222 nats:latest -js
+```
+
+### Writing tests
+
+- Use `sut` (system under test) for the main instance
+- Use `createMock<T>()` from `@golevelup/ts-jest` for mocking
+- Follow Given-When-Then structure with comments
+- Order: happy path → edge cases → error cases
+- Always include `afterEach(jest.resetAllMocks)`
 
 ## Contributing
 
