@@ -84,6 +84,7 @@ export class MessageProvider {
     for (const messages of this.activeIterators) {
       messages.stop();
     }
+
     this.activeIterators.clear();
 
     this.eventMessages$.complete();
@@ -114,9 +115,7 @@ export class MessageProvider {
         delay: () => {
           const delay = Math.min(100 * Math.pow(2, consecutiveFailures), 30_000);
 
-          this.logger.warn(
-            `Consumer ${info.name} stream ended, restarting in ${delay}ms...`,
-          );
+          this.logger.warn(`Consumer ${info.name} stream ended, restarting in ${delay}ms...`);
           this.eventBus.emit(
             TransportEvent.Error,
             new Error(`Consumer ${info.name} stream ended`),

@@ -383,7 +383,8 @@ describe(EventRouter, () => {
 
       it('should not process messages more than once after an error', async () => {
         // Given: a handler that fails once then succeeds
-        const handler = vi.fn()
+        const handler = vi
+          .fn()
           .mockRejectedValueOnce(new Error('transient'))
           .mockResolvedValue(undefined);
 

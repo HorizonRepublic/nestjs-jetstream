@@ -47,8 +47,10 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     if (this.started) {
       this.logger.warn('listen() called more than once — ignoring');
       callback();
+
       return;
     }
+
     this.started = true;
 
     // 1. Register all NestJS handlers
@@ -98,6 +100,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
    * Register event listener (required by Server base class).
    * Lifecycle events are routed through EventBus, not NestJS on() callbacks.
    */
+  // eslint-disable-next-line @typescript-eslint/naming-convention -- base class contract
   public on(_event: string, _callback: (...args: unknown[]) => void): void {
     // no-op — lifecycle events are handled via EventBus
   }
