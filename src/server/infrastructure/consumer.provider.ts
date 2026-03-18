@@ -75,9 +75,7 @@ export class ConsumerProvider {
       this.logger.debug(`Consumer exists: ${name}`);
       return info;
     } catch (err) {
-      const natsErr = err as NatsError;
-
-      if (natsErr.api_error?.err_code === CONSUMER_NOT_FOUND) {
+      if (err instanceof NatsError && err.api_error?.err_code === CONSUMER_NOT_FOUND) {
         this.logger.log(`Creating consumer: ${name}`);
         return await jsm.consumers.add(stream, config);
       }

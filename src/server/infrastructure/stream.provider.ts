@@ -79,9 +79,7 @@ export class StreamProvider {
       this.logger.debug(`Stream exists, updating: ${config.name}`);
       return await jsm.streams.update(config.name, config);
     } catch (err) {
-      const natsErr = err as NatsError;
-
-      if (natsErr.api_error?.err_code === STREAM_NOT_FOUND) {
+      if (err instanceof NatsError && err.api_error?.err_code === STREAM_NOT_FOUND) {
         this.logger.log(`Creating stream: ${config.name}`);
         return await jsm.streams.add(config as StreamConfig);
       }
