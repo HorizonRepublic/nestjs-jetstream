@@ -95,6 +95,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     this.rpcRouter.destroy();
     this.coreRpcServer.stop();
     this.messageProvider.destroy();
+    this.started = false;
   }
 
   /**
