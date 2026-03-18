@@ -22,6 +22,8 @@ import { EventRouter, PatternRegistry, RpcRouter } from './routing';
 export class JetstreamStrategy extends Server implements CustomTransportStrategy {
   public readonly transportId = Symbol('jetstream-transport');
   private readonly logger = new Logger('Jetstream:Strategy');
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+  private readonly listeners = new Map<string, Function[]>();
   private started = false;
 
   public constructor(
@@ -98,11 +100,16 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
 
   /**
    * Register event listener (required by Server base class).
-   * Lifecycle events are routed through EventBus, not NestJS on() callbacks.
+   *
+   * Stores callbacks for client use. Primary lifecycle events
+   * are routed through EventBus.
    */
-  // eslint-disable-next-line @typescript-eslint/naming-convention -- base class contract
-  public on(_event: string, _callback: (...args: unknown[]) => void): void {
-    // no-op — lifecycle events are handled via EventBus
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+  public on(event: string, callback: Function): void {
+    const existing = this.listeners.get(event) ?? [];
+
+    existing.push(callback);
+    this.listeners.set(event, existing);
   }
 
   /** Unwrap the underlying NATS connection. */
