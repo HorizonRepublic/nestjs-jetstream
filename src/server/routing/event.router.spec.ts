@@ -380,6 +380,40 @@ describe(EventRouter, () => {
 
         expect(handler).toHaveBeenCalled();
       });
+
+      it('should not process messages more than once after an error', async () => {
+        // Given: a handler that fails once then succeeds
+        const handler = vi.fn()
+          .mockRejectedValueOnce(new Error('transient'))
+          .mockResolvedValue(undefined);
+
+        patternRegistry.getHandler.mockReturnValue(handler);
+        sut.start();
+
+        // When: first message causes handler error (nak path)
+        const msg1 = createMock<JsMsg>({
+          subject: 'test.subject',
+          data: new TextEncoder().encode(JSON.stringify({ n: 1 })),
+        });
+
+        events$.next(msg1);
+        await new Promise(process.nextTick);
+        expect(handler).toHaveBeenCalledTimes(1);
+
+        // When: second message arrives
+        handler.mockClear();
+
+        const msg2 = createMock<JsMsg>({
+          subject: 'test.subject',
+          data: new TextEncoder().encode(JSON.stringify({ n: 2 })),
+        });
+
+        events$.next(msg2);
+        await new Promise(process.nextTick);
+
+        // Then: handler called exactly once for msg2 (no duplicate)
+        expect(handler).toHaveBeenCalledTimes(1);
+      });
     });
   });
 });

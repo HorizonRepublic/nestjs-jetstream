@@ -2,6 +2,7 @@ import { Logger } from '@nestjs/common';
 import { JsMsg } from 'nats';
 import {
   catchError,
+  defer,
   EMPTY,
   from,
   isObservable,
@@ -78,11 +79,14 @@ export class EventRouter {
   private subscribeToStream(stream$: Observable<JsMsg>, label: string): void {
     const subscription = stream$
       .pipe(
-        mergeMap((msg) => this.handle(msg)),
-        catchError((err, caught) => {
-          this.logger.error(`Unexpected error in ${label} event router`, err);
-          return caught;
-        }),
+        mergeMap((msg) =>
+          defer(() => this.handle(msg)).pipe(
+            catchError((err) => {
+              this.logger.error(`Unexpected error in ${label} event router`, err);
+              return EMPTY;
+            }),
+          ),
+        ),
       )
       .subscribe();
 
