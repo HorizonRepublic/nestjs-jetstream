@@ -9,6 +9,7 @@ import {
   repeat,
   Subject,
   takeUntil,
+  tap,
   timer,
 } from 'rxjs';
 
@@ -93,9 +94,14 @@ export class MessageProvider {
   /** Create a self-healing consumer flow for a specific kind. */
   private createFlow(kind: StreamKind, info: ConsumerInfo): Observable<void> {
     const target$ = this.getTargetSubject(kind);
+    let consecutiveFailures = 0;
 
     return defer(() => this.consumeOnce(info, target$)).pipe(
+      tap(() => {
+        consecutiveFailures = 0;
+      }),
       catchError((err) => {
+        consecutiveFailures++;
         this.logger.error(`Consumer ${info.name} error, will restart:`, err);
         this.eventBus.emit(
           TransportEvent.Error,
@@ -106,13 +112,17 @@ export class MessageProvider {
       }),
       repeat({
         delay: () => {
-          this.logger.warn(`Consumer ${info.name} stream ended, restarting...`);
+          const delay = Math.min(100 * Math.pow(2, consecutiveFailures), 30_000);
+
+          this.logger.warn(
+            `Consumer ${info.name} stream ended, restarting in ${delay}ms...`,
+          );
           this.eventBus.emit(
             TransportEvent.Error,
             new Error(`Consumer ${info.name} stream ended`),
             'message-provider',
           );
-          return timer(100);
+          return timer(delay);
         },
       }),
       takeUntil(this.destroy$),
