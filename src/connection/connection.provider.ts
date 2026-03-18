@@ -68,7 +68,11 @@ export class ConnectionProvider {
       return this.connectionPromise;
     }
 
-    this.connectionPromise = this.establish();
+    this.connectionPromise = this.establish().catch((err) => {
+      this.connectionPromise = null;
+      throw err;
+    });
+
     return this.connectionPromise;
   }
 
