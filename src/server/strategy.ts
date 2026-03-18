@@ -1,4 +1,3 @@
-import { Logger } from '@nestjs/common';
 import { CustomTransportStrategy, Server } from '@nestjs/microservices';
 
 import { ConnectionProvider } from '../connection';
@@ -21,7 +20,6 @@ import { EventRouter, PatternRegistry, RpcRouter } from './routing';
  */
 export class JetstreamStrategy extends Server implements CustomTransportStrategy {
   public readonly transportId = Symbol('jetstream-transport');
-  private readonly logger = new Logger('Jetstream:Strategy');
   // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
   private readonly listeners = new Map<string, Function[]>();
   private started = false;
