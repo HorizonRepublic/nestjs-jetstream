@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import { Consumer, ConsumerInfo, JsMsg } from 'nats';
+import { Consumer, ConsumerInfo, ConsumerMessages, JsMsg } from 'nats';
 import {
   catchError,
   defer,
@@ -29,6 +29,7 @@ import { TransportEvent } from '../../interfaces';
 export class MessageProvider {
   private readonly logger = new Logger('Jetstream:Message');
   private readonly destroy$ = new Subject<void>();
+  private readonly activeIterators = new Set<ConsumerMessages>();
 
   private readonly eventMessages$ = new Subject<JsMsg>();
   private readonly commandMessages$ = new Subject<JsMsg>();
@@ -78,6 +79,12 @@ export class MessageProvider {
   public destroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+
+    for (const messages of this.activeIterators) {
+      messages.stop();
+    }
+    this.activeIterators.clear();
+
     this.eventMessages$.complete();
     this.commandMessages$.complete();
     this.broadcastMessages$.complete();
@@ -118,8 +125,14 @@ export class MessageProvider {
     const consumer: Consumer = await js.consumers.get(info.stream_name, info.name);
     const messages = await consumer.consume();
 
-    for await (const msg of messages) {
-      target$.next(msg);
+    this.activeIterators.add(messages);
+
+    try {
+      for await (const msg of messages) {
+        target$.next(msg);
+      }
+    } finally {
+      this.activeIterators.delete(messages);
     }
   }
 
