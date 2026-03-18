@@ -16,24 +16,25 @@ A production-grade NestJS transport for NATS JetStream with built-in support for
   - [forRoot / forRootAsync](#forroot--forrootasync)
   - [forFeature](#forfeature)
   - [Full Options Reference](#full-options-reference)
-- [RPC (Request/Reply)](#rpc-requestreply)
-  - [Core Mode (Default)](#core-mode-default)
-  - [JetStream Mode](#jetstream-mode)
-- [Events](#events)
-  - [Workqueue Events](#workqueue-events)
-  - [Broadcast Events](#broadcast-events)
-- [JetstreamRecord Builder](#jetstreamrecord-builder)
-- [Custom Codec](#custom-codec)
-- [RpcContext](#rpccontext)
-- [Lifecycle Hooks](#lifecycle-hooks)
-- [Health Checks](#health-checks)
-- [Graceful Shutdown](#graceful-shutdown)
-- [Edge Cases & Important Notes](#edge-cases--important-notes)
-- [NATS Naming Conventions](#nats-naming-conventions)
-- [Default Stream & Consumer Configs](#default-stream--consumer-configs)
-- [API Reference](#api-reference)
-- [Testing](#testing)
-- [Contributing](#contributing)
+- [Messaging Patterns](#messaging-patterns)
+  - [RPC (Request/Reply)](#rpc-requestreply)
+  - [Events](#events)
+  - [JetstreamRecord Builder](#jetstreamrecord-builder)
+- [Handler Context & Serialization](#handler-context--serialization)
+  - [RpcContext](#rpccontext)
+  - [Custom Codec](#custom-codec)
+- [Operations](#operations)
+  - [Lifecycle Hooks](#lifecycle-hooks)
+  - [Health Checks](#health-checks)
+  - [Graceful Shutdown](#graceful-shutdown)
+- [Reference](#reference)
+  - [Edge Cases & Important Notes](#edge-cases--important-notes)
+  - [NATS Naming Conventions](#nats-naming-conventions)
+  - [Default Stream & Consumer Configs](#default-stream--consumer-configs)
+  - [API Reference](#api-reference)
+- [Development](#development)
+  - [Testing](#testing)
+  - [Contributing](#contributing)
 - [License](#license)
 - [Links](#links)
 
@@ -317,9 +318,11 @@ rpc: {
 }
 ```
 
-## RPC (Request/Reply)
+## Messaging Patterns
 
-### Core Mode (Default)
+### RPC (Request/Reply)
+
+#### Core Mode (Default)
 
 Uses NATS native `request/reply` for the lowest possible latency.
 
@@ -348,7 +351,7 @@ JetstreamModule.forRoot({
 | No handler running | Client times out |
 | Decode error | Error response returned to caller |
 
-### JetStream Mode
+#### JetStream Mode
 
 Commands are persisted in a JetStream stream. Responses flow back via NATS Core inbox.
 
@@ -379,9 +382,9 @@ JetstreamModule.forRoot({
 
 > **Why `term` instead of `nak` for RPC errors?** Redelivering a failed command could cause duplicate side effects. The caller is responsible for retrying.
 
-## Events
+### Events
 
-### Workqueue Events
+#### Workqueue Events
 
 Each event is delivered to **one** handler instance (load-balanced). Messages are acked **after** the handler completes successfully.
 
@@ -429,7 +432,7 @@ JetstreamModule.forRoot({
 })
 ```
 
-### Broadcast Events
+#### Broadcast Events
 
 Broadcast events are delivered to **all** subscribing services. Each service gets its own durable consumer on a shared `broadcast-stream`.
 
@@ -469,7 +472,7 @@ JetstreamModule.forRoot({
 
 > **Note:** The broadcast stream is shared across all services — stream-level settings (e.g., `max_age`, `max_bytes`) affect everyone. Consumer-level settings are per-service.
 
-## JetstreamRecord Builder
+### JetstreamRecord Builder
 
 Attach custom headers and per-request timeouts using the builder pattern:
 
@@ -507,7 +510,41 @@ Attempting to set a reserved header throws an error at build time.
 | `x-trace-id`    | Available for distributed tracing           |
 | `x-span-id`     | Available for distributed tracing           |
 
-## Custom Codec
+## Handler Context & Serialization
+
+### RpcContext
+
+Execution context available in all handlers via `@Ctx()`:
+
+```typescript
+import { Ctx, Payload, MessagePattern } from '@nestjs/microservices';
+import { RpcContext } from '@horizon-republic/nestjs-jetstream';
+
+@MessagePattern('user.get')
+getUser(@Payload() data: GetUserDto, @Ctx() ctx: RpcContext) {
+  const subject = ctx.getSubject();            // Full NATS subject
+  const traceId = ctx.getHeader('x-trace-id'); // Single header value
+  const headers = ctx.getHeaders();            // All headers (MsgHdrs)
+  const isJs = ctx.isJetStream();              // true for JetStream messages
+  const msg = ctx.getMessage();                // Raw JsMsg | Msg (escape hatch)
+
+  return this.userService.findOne(data.id);
+}
+```
+
+**Available methods:**
+
+| Method           | Returns                | Description                               |
+|------------------|------------------------|-------------------------------------------|
+| `getSubject()`   | `string`               | NATS subject the message was published to |
+| `getHeader(key)` | `string \| undefined`  | Single header value by key                |
+| `getHeaders()`   | `MsgHdrs \| undefined` | All NATS message headers                  |
+| `isJetStream()`  | `boolean`              | Whether the message supports ack/nak/term |
+| `getMessage()`   | `JsMsg \| Msg`         | Raw NATS message (escape hatch)           |
+
+Available on both `@EventPattern` and `@MessagePattern` handlers.
+
+### Custom Codec
 
 The library uses JSON by default. Implement the `Codec` interface for any serialization format:
 
@@ -543,39 +580,9 @@ JetstreamModule.forFeature({
 
 > All services communicating with each other **must use the same codec**. A codec mismatch results in decode errors (`term`, no redelivery).
 
-## RpcContext
+## Operations
 
-Execution context available in all handlers via `@Ctx()`:
-
-```typescript
-import { Ctx, Payload, MessagePattern } from '@nestjs/microservices';
-import { RpcContext } from '@horizon-republic/nestjs-jetstream';
-
-@MessagePattern('user.get')
-getUser(@Payload() data: GetUserDto, @Ctx() ctx: RpcContext) {
-  const subject = ctx.getSubject();            // Full NATS subject
-  const traceId = ctx.getHeader('x-trace-id'); // Single header value
-  const headers = ctx.getHeaders();            // All headers (MsgHdrs)
-  const isJs = ctx.isJetStream();              // true for JetStream messages
-  const msg = ctx.getMessage();                // Raw JsMsg | Msg (escape hatch)
-
-  return this.userService.findOne(data.id);
-}
-```
-
-**Available methods:**
-
-| Method           | Returns                | Description                               |
-|------------------|------------------------|-------------------------------------------|
-| `getSubject()`   | `string`               | NATS subject the message was published to |
-| `getHeader(key)` | `string \| undefined`  | Single header value by key                |
-| `getHeaders()`   | `MsgHdrs \| undefined` | All NATS message headers                  |
-| `isJetStream()`  | `boolean`              | Whether the message supports ack/nak/term |
-| `getMessage()`   | `JsMsg \| Msg`         | Raw NATS message (escape hatch)           |
-
-Available on both `@EventPattern` and `@MessagePattern` handlers.
-
-## Lifecycle Hooks
+### Lifecycle Hooks
 
 Subscribe to transport events for monitoring, alerting, or custom logic:
 
@@ -616,7 +623,7 @@ JetstreamModule.forRoot({
 | `shutdownComplete` | `()`                                        | `Logger.log`      |
 | `deadLetter`       | `(info: DeadLetterInfo)`                    | `Logger.warn`     |
 
-### Dead Letter Queue (DLQ)
+#### Dead Letter Queue (DLQ)
 
 When an event handler fails on every delivery attempt (`max_deliver`), the message becomes a "dead letter." By default, NATS terminates it silently. Configure `onDeadLetter` to intercept these messages:
 
@@ -662,7 +669,7 @@ JetstreamModule.forRootAsync({
 });
 ```
 
-## Health Checks
+### Health Checks
 
 `JetstreamHealthIndicator` is automatically registered and exported by `forRoot()`. It checks NATS connection status and measures round-trip latency. `@nestjs/terminus` is **not required** — the indicator follows the Terminus API convention so it works seamlessly when Terminus is present, but can also be used standalone.
 
@@ -702,7 +709,7 @@ const status = await this.jetstream.check();
 | `check()`         | `JetstreamHealthStatus`            | Never                              |
 | `isHealthy(key?)` | `{ [key]: { status: 'up', ... } }` | On unhealthy (Terminus convention) |
 
-## Graceful Shutdown
+### Graceful Shutdown
 
 The transport shuts down automatically via NestJS `onApplicationShutdown()`:
 
@@ -720,13 +727,15 @@ JetstreamModule.forRoot({
 
 No manual shutdown code needed.
 
-## Edge Cases & Important Notes
+## Reference
 
-### Event handlers must be idempotent
+### Edge Cases & Important Notes
+
+#### Event handlers must be idempotent
 
 Events use at-least-once delivery. If your handler throws, the message is `nak`'d and NATS redelivers it (up to `max_deliver` times, default 3). Design handlers to be safe for repeated execution.
 
-### RPC error handling
+#### RPC error handling
 
 The transport fully supports NestJS `RpcException` and custom exception filters. Throw `RpcException` with any payload — it will be delivered to the caller as-is:
 
@@ -751,11 +760,11 @@ this.client.send('user.update', data).subscribe({
 
 In JetStream mode, failed RPC messages are `term`'d (not `nak`'d) to prevent duplicate side effects. The caller is responsible for implementing retry logic.
 
-### Fire-and-forget events
+#### Fire-and-forget events
 
 This library focuses on **reliable, persistent** event delivery via JetStream. If you need fire-and-forget (no persistence, no ack) for high-throughput scenarios, use the standard [NestJS NATS transport](https://docs.nestjs.com/microservices/nats) — it works perfectly alongside this library on the same NATS server.
 
-### Publisher-only mode
+#### Publisher-only mode
 
 For services that only send messages (e.g., API gateways), disable consumer infrastructure:
 
@@ -767,17 +776,17 @@ JetstreamModule.forRoot({
 })
 ```
 
-### Broadcast stream is shared
+#### Broadcast stream is shared
 
 All services share a single `broadcast-stream`. Each service creates its own durable consumer with `filter_subjects` matching only its registered broadcast patterns. Stream-level configuration (`broadcast.stream`) affects all services.
 
 Broadcast consumers use the same ack/nak semantics as workqueue consumers. Because each service has an **isolated durable consumer**, a `nak` (retry) from one service only causes redelivery to that specific service — other consumers are unaffected. This gives broadcast **at-least-once delivery per consumer** with independent retry.
 
-### Connection failure behavior
+#### Connection failure behavior
 
 If the initial NATS connection is refused, the module throws a `RuntimeException` immediately (fail fast). For transient disconnects after startup, NATS handles reconnection automatically and the `reconnect` hook fires.
 
-### Observable return values
+#### Observable return values
 
 Handlers can return Observables. The transport takes the **first emitted value** for RPC responses and awaits completion for events:
 
@@ -793,15 +802,15 @@ handleOrder(@Payload() data: OrderDto): Observable<void> {
 }
 ```
 
-### Consumer self-healing
+#### Consumer self-healing
 
 If a JetStream consumer's message iterator ends unexpectedly (e.g., NATS restart), the transport automatically re-establishes consumption after a 100ms delay. This is logged as a warning.
 
-### NATS header size
+#### NATS header size
 
 Custom headers are transmitted as NATS message headers. NATS has a default header size limit. If you're attaching large metadata, consider putting it in the message body instead.
 
-## NATS Naming Conventions
+### NATS Naming Conventions
 
 The transport generates NATS subjects, streams, and consumers based on the service `name`:
 
@@ -818,7 +827,7 @@ The transport generates NATS subjects, streams, and consumers based on the servi
 | Command consumer   | `{internal}_cmd-consumer`       | `orders__microservice_cmd-consumer`       |
 | Broadcast consumer | `{internal}_broadcast-consumer` | `orders__microservice_broadcast-consumer` |
 
-## Default Stream & Consumer Configs
+### Default Stream & Consumer Configs
 
 All defaults can be overridden via `events`, `broadcast`, or `rpc` options.
 
@@ -905,9 +914,9 @@ All defaults can be overridden via `events`, `broadcast`, or `rpc` options.
 
 </details>
 
-## API Reference
+### API Reference
 
-### Exports
+#### Exports
 
 ```typescript
 // Module
@@ -951,7 +960,7 @@ StreamConsumerOverrides
 TransportHooks
 ```
 
-### Helper: `nanos(ms)`
+#### Helper: `nanos(ms)`
 
 Convert milliseconds to nanoseconds (required by NATS JetStream config):
 
@@ -965,9 +974,11 @@ events: {
 }
 ```
 
-## Testing
+## Development
 
-The project uses [Jest](https://jestjs.io/) with two test suites configured as [projects](https://jestjs.io/docs/configuration#projects-arraystring--projectconfig):
+### Testing
+
+The project uses [Vitest](https://vitest.dev/) with two test suites configured as [projects](https://vitest.dev/guide/workspace):
 
 ```bash
 # Unit tests (no external dependencies)
@@ -986,7 +997,7 @@ pnpm test:watch
 pnpm test:cov
 ```
 
-### Running NATS locally
+#### Running NATS locally
 
 Integration tests require a NATS server with JetStream enabled:
 
@@ -994,15 +1005,15 @@ Integration tests require a NATS server with JetStream enabled:
 docker run -d --name nats -p 4222:4222 nats:latest -js
 ```
 
-### Writing tests
+#### Writing tests
 
 - Use `sut` (system under test) for the main instance
-- Use `createMock<T>()` from `@golevelup/ts-jest` for mocking
+- Use `createMock<T>()` from `@golevelup/ts-vitest` for mocking
 - Follow Given-When-Then structure with comments
 - Order: happy path → edge cases → error cases
-- Always include `afterEach(jest.resetAllMocks)`
+- Always include `afterEach(vi.resetAllMocks)`
 
-## Contributing
+### Contributing
 
 Contributions are welcome! Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
 

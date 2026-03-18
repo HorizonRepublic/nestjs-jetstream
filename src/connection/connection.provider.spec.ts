@@ -132,6 +132,7 @@ describe(ConnectionProvider, () => {
 
         // Then: second call should succeed (not return cached rejection)
         const result = await sut.getConnection();
+
         expect(result).toBe(mockNc);
       });
     });
