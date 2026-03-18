@@ -48,7 +48,6 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
   public async listen(callback: () => void): Promise<void> {
     if (this.started) {
       this.logger.warn('listen() called more than once — ignoring');
-      callback();
 
       return;
     }
