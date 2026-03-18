@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { CustomTransportStrategy, Server } from '@nestjs/microservices';
 
 import { ConnectionProvider } from '../connection';
@@ -20,8 +21,8 @@ import { EventRouter, PatternRegistry, RpcRouter } from './routing';
  */
 export class JetstreamStrategy extends Server implements CustomTransportStrategy {
   public readonly transportId = Symbol('jetstream-transport');
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-  private readonly listeners = new Map<string, Function[]>();
+  private readonly logger = new Logger('Jetstream:Strategy');
+  private started = false;
 
   public constructor(
     private readonly options: JetstreamModuleOptions,
@@ -43,6 +44,13 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
    * Called by NestJS when `connectMicroservice()` is used, or internally by the module.
    */
   public async listen(callback: () => void): Promise<void> {
+    if (this.started) {
+      this.logger.warn('listen() called more than once — ignoring');
+      callback();
+      return;
+    }
+    this.started = true;
+
     // 1. Register all NestJS handlers
     this.patternRegistry.registerHandlers(this.getHandlers());
 
@@ -88,16 +96,10 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
 
   /**
    * Register event listener (required by Server base class).
-   *
-   * Stores callbacks for potential use. Primary lifecycle events
-   * are routed through EventBus.
+   * Lifecycle events are routed through EventBus, not NestJS on() callbacks.
    */
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-  public on(event: string, callback: Function): void {
-    const existing = this.listeners.get(event) ?? [];
-
-    existing.push(callback);
-    this.listeners.set(event, existing);
+  public on(_event: string, _callback: (...args: unknown[]) => void): void {
+    // no-op — lifecycle events are handled via EventBus
   }
 
   /** Unwrap the underlying NATS connection. */
