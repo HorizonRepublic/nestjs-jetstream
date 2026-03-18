@@ -9,7 +9,7 @@ import { EventBus } from '../../hooks';
 import type { Codec } from '../../interfaces';
 import { TransportEvent } from '../../interfaces';
 import { DEFAULT_JETSTREAM_RPC_TIMEOUT, JetstreamHeader } from '../../jetstream.constants';
-import { MessageProvider } from '../infrastructure/message.provider';
+import { MessageProvider } from '../infrastructure';
 
 import { PatternRegistry } from './pattern-registry';
 import { RpcRouter } from './rpc.router';
@@ -160,7 +160,9 @@ describe(RpcRouter, () => {
             data: new TextEncoder().encode('{}'),
           });
 
-          patternRegistry.getHandler.mockReturnValue(vi.fn());
+          const handler = vi.fn().mockResolvedValue(undefined);
+
+          patternRegistry.getHandler.mockReturnValue(handler);
 
           // When: message arrives
           commands$.next(msg);
@@ -179,7 +181,10 @@ describe(RpcRouter, () => {
           codec.decode.mockImplementation(() => {
             throw new Error('bad payload');
           });
-          patternRegistry.getHandler.mockReturnValue(vi.fn());
+
+          const handler = vi.fn().mockResolvedValue(undefined);
+
+          patternRegistry.getHandler.mockReturnValue(handler);
 
           const msg = createRpcMsg('test.cmd', {}, 'reply', 'cid');
 
@@ -216,6 +221,28 @@ describe(RpcRouter, () => {
           );
           expect(msg.term).toHaveBeenCalled();
           expect(msg.ack).not.toHaveBeenCalled();
+        });
+      });
+
+      describe('when nc.publish() throws after handler success', () => {
+        it('should still ack the message', async () => {
+          // Given: handler succeeds but publish throws
+          const handler = vi.fn().mockResolvedValue({ ok: true });
+
+          patternRegistry.getHandler.mockReturnValue(handler);
+          mockNc.publish.mockImplementation(() => {
+            throw new Error('Connection closed');
+          });
+
+          const msg = createRpcMsg('test.cmd', {}, 'reply', 'cid');
+
+          // When: message arrives
+          commands$.next(msg);
+          await new Promise((resolve) => setTimeout(resolve, 0));
+
+          // Then: message acked despite publish failure
+          expect(msg.ack).toHaveBeenCalled();
+          expect(msg.term).not.toHaveBeenCalled();
         });
       });
 
