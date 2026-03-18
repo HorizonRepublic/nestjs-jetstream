@@ -48,7 +48,7 @@ describe(JetstreamClient, () => {
     };
 
     mockJs = createMock<NatsJsClient>({
-      publish: vi.fn().mockResolvedValue(createMock<PubAck>()),
+      publish: vi.fn().mockResolvedValue({ stream: 'test', seq: 1, duplicate: false } as PubAck),
     });
 
     mockNc = createMock<NatsConnection>({
