@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 import { createMock } from '@golevelup/ts-vitest';
 import { faker } from '@faker-js/faker';
-import type { ConsumerInfo, NatsError } from 'nats';
+import type { ConsumerInfo } from 'nats';
+import { NatsError } from 'nats';
 
 import { ConnectionProvider } from '../../connection';
 import type { JetstreamModuleOptions } from '../../interfaces';
@@ -104,7 +105,7 @@ describe(ConsumerProvider, () => {
     describe('when consumer does not exist', () => {
       it('should create it with correct config for multiple broadcast patterns', async () => {
         // Given: consumer not found, registry has multiple patterns
-        const notFoundError = new Error('consumer not found') as NatsError;
+        const notFoundError = new NatsError('consumer not found', 'UNKNOWN_ERROR');
 
         notFoundError.api_error = { err_code: 10014, code: 404, description: 'consumer not found' };
         mockJsm.consumers.info.mockRejectedValue(notFoundError);

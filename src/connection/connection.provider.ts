@@ -137,9 +137,7 @@ export class ConnectionProvider {
 
       return nc;
     } catch (err) {
-      const natsErr = err as NatsError;
-
-      if (natsErr.code === 'CONNECTION_REFUSED') {
+      if (err instanceof NatsError && err.code === 'CONNECTION_REFUSED') {
         throw new Error(`NATS connection refused: ${this.options.servers.join(', ')}`);
       }
 
