@@ -102,7 +102,13 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
 
   /** Unwrap the underlying NATS connection. */
   public unwrap<T>(): T {
-    return this.connection.unwrap as T;
+    const nc = this.connection.unwrap;
+
+    if (!nc) {
+      throw new Error('Not connected — transport has not started');
+    }
+
+    return nc as T;
   }
 
   /** Access the pattern registry (for module-level introspection). */

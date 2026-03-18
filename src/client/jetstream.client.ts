@@ -101,7 +101,13 @@ export class JetstreamClient extends ClientProxy {
 
   /** Direct access to the raw NATS connection. */
   public override unwrap<T = NatsConnection>(): T {
-    return this.connection.unwrap as T;
+    const nc = this.connection.unwrap;
+
+    if (!nc) {
+      throw new Error('Not connected — call connect() before unwrap()');
+    }
+
+    return nc as T;
   }
 
   /**
