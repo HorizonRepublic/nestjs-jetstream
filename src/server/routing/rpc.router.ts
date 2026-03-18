@@ -133,9 +133,15 @@ export class RpcRouter {
       settled = true;
       clearTimeout(timeoutId);
 
-      // Publish success response
-      nc.publish(replyTo, this.codec.encode(result), { headers: hdrs });
+      // Ack first — handler succeeded, message is processed regardless of
+      // whether we can deliver the response back to the caller.
       msg.ack();
+
+      try {
+        nc.publish(replyTo, this.codec.encode(result), { headers: hdrs });
+      } catch (publishErr) {
+        this.logger.error(`Failed to publish RPC response for ${msg.subject}`, publishErr);
+      }
     } catch (err) {
       if (settled) return;
       settled = true;
