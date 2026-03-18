@@ -122,6 +122,20 @@ describe(ConnectionProvider, () => {
         // When/Then: error propagated
         await expect(sut.getConnection()).rejects.toThrow('dns resolution failed');
       });
+
+      it('should allow retry after connection failure', async () => {
+        // Given: first connection attempt fails, second succeeds
+        mockConnect
+          .mockRejectedValueOnce(new Error('Connection refused'))
+          .mockResolvedValueOnce(mockNc);
+
+        // When: first call fails
+        await expect(sut.getConnection()).rejects.toThrow('Connection refused');
+
+        // Then: second call should succeed (not return cached rejection)
+        const result = await sut.getConnection();
+        expect(result).toBe(mockNc);
+      });
     });
   });
 
