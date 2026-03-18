@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { MessageHandler } from '@nestjs/microservices';
 import { headers, JsMsg } from 'nats';
-import { catchError, EMPTY, from, mergeMap, Observable, Subscription } from 'rxjs';
+import { catchError, defer, EMPTY, from, mergeMap, Observable, Subscription } from 'rxjs';
 
 import { ConnectionProvider } from '../../connection';
 import { RpcContext } from '../../context';
@@ -19,7 +19,7 @@ import { PatternRegistry } from './pattern-registry';
  *
  * Delivery semantics:
  * - Handler must complete within timeout (default: 3 min)
- * - Success -> publish response to ReplyTo -> ack
+ * - Success -> ack -> publish response to ReplyTo (publish failure does not affect ack)
  * - Handler error -> publish error to ReplyTo -> term (no redelivery)
  * - Timeout -> no response -> term
  * - No handler / decode error -> term immediately
@@ -46,11 +46,14 @@ export class RpcRouter {
   public start(): void {
     this.subscription = this.messageProvider.commands$
       .pipe(
-        mergeMap((msg) => this.handle(msg)),
-        catchError((err, caught) => {
-          this.logger.error('Unexpected error in RPC router', err);
-          return caught;
-        }),
+        mergeMap((msg) =>
+          defer(() => this.handle(msg)).pipe(
+            catchError((err) => {
+              this.logger.error('Unexpected error in RPC router', err);
+              return EMPTY;
+            }),
+          ),
+        ),
       )
       .subscribe();
   }
@@ -130,9 +133,15 @@ export class RpcRouter {
       settled = true;
       clearTimeout(timeoutId);
 
-      // Publish success response
-      nc.publish(replyTo, this.codec.encode(result), { headers: hdrs });
+      // Ack first — handler succeeded, message is processed regardless of
+      // whether we can deliver the response back to the caller.
       msg.ack();
+
+      try {
+        nc.publish(replyTo, this.codec.encode(result), { headers: hdrs });
+      } catch (publishErr) {
+        this.logger.error(`Failed to publish RPC response for ${msg.subject}`, publishErr);
+      }
     } catch (err) {
       if (settled) return;
       settled = true;

@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import { Consumer, ConsumerInfo, JsMsg } from 'nats';
+import { Consumer, ConsumerInfo, ConsumerMessages, JsMsg } from 'nats';
 import {
   catchError,
   defer,
@@ -9,6 +9,7 @@ import {
   repeat,
   Subject,
   takeUntil,
+  tap,
   timer,
 } from 'rxjs';
 
@@ -29,6 +30,7 @@ import { TransportEvent } from '../../interfaces';
 export class MessageProvider {
   private readonly logger = new Logger('Jetstream:Message');
   private readonly destroy$ = new Subject<void>();
+  private readonly activeIterators = new Set<ConsumerMessages>();
 
   private readonly eventMessages$ = new Subject<JsMsg>();
   private readonly commandMessages$ = new Subject<JsMsg>();
@@ -78,6 +80,13 @@ export class MessageProvider {
   public destroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+
+    for (const messages of this.activeIterators) {
+      messages.stop();
+    }
+
+    this.activeIterators.clear();
+
     this.eventMessages$.complete();
     this.commandMessages$.complete();
     this.broadcastMessages$.complete();
@@ -86,9 +95,14 @@ export class MessageProvider {
   /** Create a self-healing consumer flow for a specific kind. */
   private createFlow(kind: StreamKind, info: ConsumerInfo): Observable<void> {
     const target$ = this.getTargetSubject(kind);
+    let consecutiveFailures = 0;
 
     return defer(() => this.consumeOnce(info, target$)).pipe(
+      tap(() => {
+        consecutiveFailures = 0;
+      }),
       catchError((err) => {
+        consecutiveFailures++;
         this.logger.error(`Consumer ${info.name} error, will restart:`, err);
         this.eventBus.emit(
           TransportEvent.Error,
@@ -99,13 +113,15 @@ export class MessageProvider {
       }),
       repeat({
         delay: () => {
-          this.logger.warn(`Consumer ${info.name} stream ended, restarting...`);
+          const delay = Math.min(100 * Math.pow(2, consecutiveFailures), 30_000);
+
+          this.logger.warn(`Consumer ${info.name} stream ended, restarting in ${delay}ms...`);
           this.eventBus.emit(
             TransportEvent.Error,
             new Error(`Consumer ${info.name} stream ended`),
             'message-provider',
           );
-          return timer(100);
+          return timer(delay);
         },
       }),
       takeUntil(this.destroy$),
@@ -118,8 +134,14 @@ export class MessageProvider {
     const consumer: Consumer = await js.consumers.get(info.stream_name, info.name);
     const messages = await consumer.consume();
 
-    for await (const msg of messages) {
-      target$.next(msg);
+    this.activeIterators.add(messages);
+
+    try {
+      for await (const msg of messages) {
+        target$.next(msg);
+      }
+    } finally {
+      this.activeIterators.delete(messages);
     }
   }
 

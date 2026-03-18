@@ -48,7 +48,7 @@ describe(JetstreamClient, () => {
     };
 
     mockJs = createMock<NatsJsClient>({
-      publish: vi.fn().mockResolvedValue(createMock<PubAck>()),
+      publish: vi.fn().mockResolvedValue({ stream: 'test', seq: 1, duplicate: false } as PubAck),
     });
 
     mockNc = createMock<NatsConnection>({
@@ -160,6 +160,14 @@ describe(JetstreamClient, () => {
     it('should return the raw connection from provider', () => {
       expect(sut.unwrap()).toBe(mockNc);
     });
+
+    it('should throw when connection is not established', () => {
+      // Given: connection.unwrap returns null
+      Object.defineProperty(connection, 'unwrap', { get: () => null, configurable: true });
+
+      // When/Then
+      expect(() => sut.unwrap()).toThrow('Not connected');
+    });
   });
 
   describe('emit() / dispatchEvent()', () => {
@@ -231,6 +239,21 @@ describe(JetstreamClient, () => {
         expect(publishedHeaders.get(JetstreamHeader.CallerName)).toBe(
           `${options.name}__microservice`,
         );
+      });
+    });
+
+    describe('duplicate detection', () => {
+      it('should log warning when JetStream returns a duplicate ack', async () => {
+        // Given: publish returns duplicate: true
+        mockJs.publish.mockResolvedValue({ stream: 'test', seq: 1, duplicate: true } as PubAck);
+
+        const loggerWarnSpy = vi.spyOn(sut['logger'], 'warn');
+
+        // When
+        await firstValueFrom(sut.emit('order.created', { id: 1 }));
+
+        // Then
+        expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Duplicate'));
       });
     });
   });

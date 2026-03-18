@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { CustomTransportStrategy, Server } from '@nestjs/microservices';
 
 import { ConnectionProvider } from '../connection';
@@ -20,8 +21,10 @@ import { EventRouter, PatternRegistry, RpcRouter } from './routing';
  */
 export class JetstreamStrategy extends Server implements CustomTransportStrategy {
   public readonly transportId = Symbol('jetstream-transport');
+  private readonly logger = new Logger('Jetstream:Strategy');
   // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
   private readonly listeners = new Map<string, Function[]>();
+  private started = false;
 
   public constructor(
     private readonly options: JetstreamModuleOptions,
@@ -43,6 +46,14 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
    * Called by NestJS when `connectMicroservice()` is used, or internally by the module.
    */
   public async listen(callback: () => void): Promise<void> {
+    if (this.started) {
+      this.logger.warn('listen() called more than once — ignoring');
+
+      return;
+    }
+
+    this.started = true;
+
     // 1. Register all NestJS handlers
     this.patternRegistry.registerHandlers(this.getHandlers());
 
@@ -84,12 +95,13 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     this.rpcRouter.destroy();
     this.coreRpcServer.stop();
     this.messageProvider.destroy();
+    this.started = false;
   }
 
   /**
    * Register event listener (required by Server base class).
    *
-   * Stores callbacks for potential use. Primary lifecycle events
+   * Stores callbacks for client use. Primary lifecycle events
    * are routed through EventBus.
    */
   // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
@@ -102,7 +114,13 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
 
   /** Unwrap the underlying NATS connection. */
   public unwrap<T>(): T {
-    return this.connection.unwrap as T;
+    const nc = this.connection.unwrap;
+
+    if (!nc) {
+      throw new Error('Not connected — transport has not started');
+    }
+
+    return nc as T;
   }
 
   /** Access the pattern registry (for module-level introspection). */

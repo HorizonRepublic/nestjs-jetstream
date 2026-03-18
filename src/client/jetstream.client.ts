@@ -101,7 +101,13 @@ export class JetstreamClient extends ClientProxy {
 
   /** Direct access to the raw NATS connection. */
   public override unwrap<T = NatsConnection>(): T {
-    return this.connection.unwrap as T;
+    const nc = this.connection.unwrap;
+
+    if (!nc) {
+      throw new Error('Not connected — call connect() before unwrap()');
+    }
+
+    return nc as T;
   }
 
   /**
@@ -119,10 +125,14 @@ export class JetstreamClient extends ClientProxy {
     const subject = this.buildEventSubject(packet.pattern);
     const msgHeaders = this.buildHeaders(hdrs, { subject });
 
-    await nc.jetstream().publish(subject, this.codec.encode(data), {
+    const ack = await nc.jetstream().publish(subject, this.codec.encode(data), {
       headers: msgHeaders,
       msgID: crypto.randomUUID(),
     });
+
+    if (ack.duplicate) {
+      this.logger.warn(`Duplicate event publish detected: ${subject} (seq: ${ack.seq})`);
+    }
 
     return undefined as T;
   }

@@ -11,7 +11,7 @@ import {
 import { createMock } from '@golevelup/ts-vitest';
 import { faker } from '@faker-js/faker';
 import type { JetStreamManager, NatsConnection, Status } from 'nats';
-import { connect, Events } from 'nats';
+import { connect, Events, NatsError } from 'nats';
 
 import { EventBus } from '../hooks';
 import type { JetstreamModuleOptions } from '../interfaces';
@@ -107,9 +107,7 @@ describe(ConnectionProvider, () => {
     describe('error paths', () => {
       it('should throw RuntimeException on CONNECTION_REFUSED', async () => {
         // Given: connection refused
-        const err = Object.assign(new Error('refused'), { code: 'CONNECTION_REFUSED' });
-
-        mockConnect.mockRejectedValue(err);
+        mockConnect.mockRejectedValue(new NatsError('refused', 'CONNECTION_REFUSED'));
 
         // When/Then: throws RuntimeException with server list
         await expect(sut.getConnection()).rejects.toThrow('NATS connection refused');
@@ -121,6 +119,21 @@ describe(ConnectionProvider, () => {
 
         // When/Then: error propagated
         await expect(sut.getConnection()).rejects.toThrow('dns resolution failed');
+      });
+
+      it('should allow retry after connection failure', async () => {
+        // Given: first connection attempt fails, second succeeds
+        mockConnect
+          .mockRejectedValueOnce(new Error('Connection refused'))
+          .mockResolvedValueOnce(mockNc);
+
+        // When: first call fails
+        await expect(sut.getConnection()).rejects.toThrow('Connection refused');
+
+        // Then: second call should succeed (not return cached rejection)
+        const result = await sut.getConnection();
+
+        expect(result).toBe(mockNc);
       });
     });
   });

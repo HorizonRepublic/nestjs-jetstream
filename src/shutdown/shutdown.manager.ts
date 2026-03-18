@@ -39,10 +39,18 @@ export class ShutdownManager {
     // 2. Drain and close NATS connection.
     //    NATS drain() waits for in-flight messages and pending subscriptions,
     //    then closes the connection. We add a timeout as a safety net.
-    await Promise.race([
-      this.connection.shutdown(),
-      new Promise<void>((resolve) => setTimeout(resolve, this.timeout)),
-    ]);
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+    try {
+      await Promise.race([
+        this.connection.shutdown(),
+        new Promise<void>((resolve) => {
+          timeoutId = setTimeout(resolve, this.timeout);
+        }),
+      ]);
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     this.eventBus.emit(TransportEvent.ShutdownComplete);
     this.logger.log('Graceful shutdown complete');
