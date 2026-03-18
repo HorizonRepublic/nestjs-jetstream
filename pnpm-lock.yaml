@@ -31,8 +31,8 @@ importers:
         specifier: ^10.3.0
         version: 10.3.0
       '@golevelup/ts-vitest':
-        specifier: ^3.0.0
-        version: 3.0.0
+        specifier: ^4.0.0
+        version: 4.0.0
       '@nestjs/platform-express':
         specifier: ^11.1.16
         version: 11.1.17(@nestjs/common@11.1.17(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.17)
@@ -454,8 +454,8 @@ packages:
     resolution: {integrity: sha512-It0Sne6P3szg7JIi6CgKbvTZoMjxBZhcv91ZrqrNuaZQfB5WoqYYbzCUOq89YR+VY8juY9M1vDWmDDa2TzfXCw==}
     engines: {node: ^20.19.0 || ^22.13.0 || ^23.5.0 || >=24.0.0, npm: '>=10'}
 
-  '@golevelup/ts-vitest@3.0.0':
-    resolution: {integrity: sha512-1rhgwzsFk3PcGYpTSuMUws94iuCUY5NAmDqWryonTbgq70WrUx9PBCp/5L/NziaZvmD+79k6/bbZX7mTSghPrA==}
+  '@golevelup/ts-vitest@4.0.0':
+    resolution: {integrity: sha512-TNIhtox9zWfxlww0ql91l/k2zDthN4owg5qDieRHtjIwIvuoUlXLiwqAb/ifkRr8K+jZLRIC9QrKN/J7TBghlQ==}
 
   '@humanfs/core@0.19.1':
     resolution: {integrity: sha512-5DyQ4+1JEUzejeK1JGICcideyfUbGixgS9jNgex5nqkW+cY7WZhxBigmieN5Qnw9ZosSNVC9KQKyb+GUaGyKUA==}
@@ -2107,7 +2107,7 @@ snapshots:
 
   '@faker-js/faker@10.3.0': {}
 
-  '@golevelup/ts-vitest@3.0.0': {}
+  '@golevelup/ts-vitest@4.0.0': {}
 
   '@humanfs/core@0.19.1': {}
 

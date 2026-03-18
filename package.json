@@ -76,7 +76,7 @@
   },
   "devDependencies": {
     "@faker-js/faker": "^10.3.0",
-    "@golevelup/ts-vitest": "^3.0.0",
+    "@golevelup/ts-vitest": "^4.0.0",
     "@nestjs/platform-express": "^11.1.16",
     "@nestjs/testing": "^11.1.16",
     "@types/node": "^25.4.0",
