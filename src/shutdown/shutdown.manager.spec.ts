@@ -69,6 +69,20 @@ describe(ShutdownManager, () => {
     });
 
     describe('edge cases', () => {
+      describe('when connection.shutdown() completes before timeout', () => {
+        it('should clear the safety timeout', async () => {
+          // Given: connection.shutdown resolves immediately
+          const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
+
+          // When: shutdown
+          await sut.shutdown();
+
+          // Then: timeout should have been cleared
+          expect(clearTimeoutSpy).toHaveBeenCalled();
+          clearTimeoutSpy.mockRestore();
+        });
+      });
+
       describe('when connection.shutdown() hangs past timeout', () => {
         it('should resolve after timeout via Promise.race', async () => {
           vi.useFakeTimers();
