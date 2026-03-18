@@ -41,14 +41,16 @@ export class ShutdownManager {
     //    then closes the connection. We add a timeout as a safety net.
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
-    await Promise.race([
-      this.connection.shutdown(),
-      new Promise<void>((resolve) => {
-        timeoutId = setTimeout(resolve, this.timeout);
-      }),
-    ]);
-
-    clearTimeout(timeoutId);
+    try {
+      await Promise.race([
+        this.connection.shutdown(),
+        new Promise<void>((resolve) => {
+          timeoutId = setTimeout(resolve, this.timeout);
+        }),
+      ]);
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     this.eventBus.emit(TransportEvent.ShutdownComplete);
     this.logger.log('Graceful shutdown complete');

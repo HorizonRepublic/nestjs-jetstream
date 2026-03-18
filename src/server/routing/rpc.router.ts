@@ -19,7 +19,7 @@ import { PatternRegistry } from './pattern-registry';
  *
  * Delivery semantics:
  * - Handler must complete within timeout (default: 3 min)
- * - Success -> publish response to ReplyTo -> ack
+ * - Success -> ack -> publish response to ReplyTo (publish failure does not affect ack)
  * - Handler error -> publish error to ReplyTo -> term (no redelivery)
  * - Timeout -> no response -> term
  * - No handler / decode error -> term immediately

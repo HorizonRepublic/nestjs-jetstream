@@ -784,7 +784,7 @@ Broadcast consumers use the same ack/nak semantics as workqueue consumers. Becau
 
 #### Connection failure behavior
 
-If the initial NATS connection is refused, the module throws a `RuntimeException` immediately (fail fast). For transient disconnects after startup, NATS handles reconnection automatically and the `reconnect` hook fires.
+If the initial NATS connection is refused, the module throws an `Error` immediately (fail fast). For transient disconnects after startup, NATS handles reconnection automatically and the `reconnect` hook fires.
 
 #### Observable return values
 
@@ -804,7 +804,7 @@ handleOrder(@Payload() data: OrderDto): Observable<void> {
 
 #### Consumer self-healing
 
-If a JetStream consumer's message iterator ends unexpectedly (e.g., NATS restart), the transport automatically re-establishes consumption after a 100ms delay. This is logged as a warning.
+If a JetStream consumer's message iterator ends unexpectedly (e.g., NATS restart), the transport automatically re-establishes consumption with exponential backoff (100ms up to 30s). This is logged as a warning.
 
 #### NATS header size
 
