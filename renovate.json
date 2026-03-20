@@ -25,6 +25,12 @@
       "description": "Don't touch peer dependencies automatically",
       "matchDepTypes": ["peerDependencies"],
       "enabled": false
+    },
+    {
+      "description": "Don't bump Node.js engine constraint",
+      "matchDepTypes": ["engines"],
+      "matchPackageNames": ["node"],
+      "enabled": false
     }
   ]
 }
