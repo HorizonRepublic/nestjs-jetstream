@@ -107,6 +107,21 @@ describe(EventBus, () => {
         expect(logger.error).toHaveBeenCalledWith(expect.stringContaining(message));
       });
 
+      it('should catch async hook rejections and log them', async () => {
+        // Given: an async hook that rejects
+        const message = faker.lorem.sentence();
+        const asyncHook = vi.fn().mockRejectedValue(new Error(message));
+
+        sut = new EventBus(logger, { [TransportEvent.Connect]: asyncHook });
+
+        // When: event emitted
+        sut.emit(TransportEvent.Connect, 'server');
+        await new Promise(process.nextTick);
+
+        // Then: rejection caught and logged
+        expect(logger.error).toHaveBeenCalledWith(expect.stringContaining(message));
+      });
+
       it('should stringify non-Error thrown values in the log message', () => {
         // Given: a hook that throws a plain string (not an Error)
         const thrown = faker.lorem.word();
