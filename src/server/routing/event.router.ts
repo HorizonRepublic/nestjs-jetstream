@@ -147,7 +147,7 @@ export class EventRouter {
 
     const maxDeliver = this.deadLetterConfig.maxDeliverByStream.get(msg.info.stream);
 
-    if (maxDeliver === undefined) return false;
+    if (maxDeliver === undefined || maxDeliver <= 0) return false;
 
     return msg.info.deliveryCount >= maxDeliver;
   }
