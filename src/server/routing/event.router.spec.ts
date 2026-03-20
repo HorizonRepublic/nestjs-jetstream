@@ -281,6 +281,30 @@ describe(EventRouter, () => {
         expect(msg.nak).not.toHaveBeenCalled();
       });
     });
+
+    describe('when decode fails for ordered message', () => {
+      it('should skip without ack/nak/term', async () => {
+        // Given: handler exists but decode throws
+        patternRegistry.getHandler.mockReturnValue(vi.fn());
+        codec.decode.mockImplementation(() => {
+          throw new Error('bad payload');
+        });
+
+        const msg = createMock<JsMsg>({
+          subject: faker.lorem.word(),
+          data: new Uint8Array([0xff]),
+        });
+
+        // When: ordered message arrives
+        ordered$.next(msg);
+        await new Promise(process.nextTick);
+
+        // Then: no ack/nak/term
+        expect(msg.ack).not.toHaveBeenCalled();
+        expect(msg.nak).not.toHaveBeenCalled();
+        expect(msg.term).not.toHaveBeenCalled();
+      });
+    });
   });
 
   describe('dead letter handling', () => {
