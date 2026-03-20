@@ -26,6 +26,15 @@ const config: Config = {
       } satisfies Preset.Options,
     ],
   ],
+  themes: [
+    [
+      '@cmfcmf/docusaurus-search-local',
+      {
+        language: ['en'],
+        indexBlog: false,
+      },
+    ],
+  ],
   plugins: [
     [
       'docusaurus-plugin-typedoc',
