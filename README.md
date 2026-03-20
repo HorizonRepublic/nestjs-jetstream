@@ -305,6 +305,8 @@ Discriminated union on `mode`:
 | `'core'`      | 30s             | None             | Low-latency, simple RPC                |
 | `'jetstream'` | 3 min           | JetStream stream | Commands must survive handler downtime |
 
+> **Note:** `timeout` controls both the **client-side wait** (how long the caller waits for a response) and the **server-side handler limit** (how long the handler is allowed to run before being terminated). Both sides use the same value from their own `forRoot()` config.
+
 ```typescript
 // Core mode (default)
 rpc: { mode: 'core', timeout: 10_000 }
