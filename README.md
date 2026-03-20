@@ -5,7 +5,7 @@ A production-grade NestJS transport for NATS JetStream with built-in support for
 [![npm version](https://img.shields.io/npm/v/@horizon-republic/nestjs-jetstream.svg)](https://www.npmjs.com/package/@horizon-republic/nestjs-jetstream)
 [![codecov](https://codecov.io/github/HorizonRepublic/nestjs-jetstream/graph/badge.svg?token=40IPSWFMT4)](https://codecov.io/github/HorizonRepublic/nestjs-jetstream)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Socket Badge](https://badge.socket.dev/npm/package/@horizon-republic/nestjs-jetstream)](https://badge.socket.dev/npm/package/@horizon-republic/nestjs-jetstream)
+[![Socket Badge](https://badge.socket.dev/npm/package/@horizon-republic/nestjs-jetstream)](https://socket.dev/npm/package/@horizon-republic/nestjs-jetstream)
 
 ## Table of Contents
 
@@ -63,9 +63,9 @@ yarn add @horizon-republic/nestjs-jetstream
 **Peer dependencies:**
 
 ```
-@nestjs/common        ^11.0.0
-@nestjs/core          ^11.0.0
-@nestjs/microservices ^11.0.0
+@nestjs/common        ^10.2.0 || ^11.0.0
+@nestjs/core          ^10.2.0 || ^11.0.0
+@nestjs/microservices ^10.2.0 || ^11.0.0
 nats                  ^2.0.0
 reflect-metadata      ^0.2.0
 rxjs                  ^7.8.0
@@ -350,7 +350,8 @@ JetstreamModule.forRoot({
 |----------|--------|
 | Handler success | Response returned to caller |
 | Handler throws | Error response returned to caller |
-| No handler running | Client times out |
+| No handler registered | Error response returned to caller |
+| Server not running | Client times out |
 | Decode error | Error response returned to caller |
 
 #### JetStream Mode
@@ -673,7 +674,9 @@ JetstreamModule.forRootAsync({
 
 ### Health Checks
 
-`JetstreamHealthIndicator` is automatically registered and exported by `forRoot()`. It checks NATS connection status and measures round-trip latency. `@nestjs/terminus` is **not required** — the indicator follows the Terminus API convention so it works seamlessly when Terminus is present, but can also be used standalone.
+`JetstreamHealthIndicator` is automatically registered and exported by `forRoot()`. It checks NATS connection status and measures round-trip latency. `@nestjs/terminus` is **not required** — the indicator follows the Terminus API convention and can be used standalone.
+
+> **Note:** `isHealthy()` throws a plain `Error` with attached status details rather than Terminus's `HealthCheckError`. Terminus will report the service as unhealthy, but the structured `{ status: 'down', server, latency }` details may not appear in the response body. For full Terminus formatting, use the `check()` method in a custom wrapper.
 
 **With [@nestjs/terminus](https://docs.nestjs.com/recipes/terminus) (zero boilerplate):**
 
@@ -790,7 +793,7 @@ If the initial NATS connection is refused, the module throws an `Error` immediat
 
 #### Observable return values
 
-Handlers can return Observables. The transport takes the **first emitted value** for RPC responses and awaits completion for events:
+Handlers can return Observables. The transport resolves on the **first emitted value** (or on completion if the Observable emits nothing):
 
 ```typescript
 @MessagePattern('user.get')
@@ -800,7 +803,7 @@ getUser(@Payload() data: { id: number }): Observable<UserDto> {
 
 @EventPattern('order.created')
 handleOrder(@Payload() data: OrderDto): Observable<void> {
-  return this.pipeline.process(data); // awaits completion before ack
+  return this.pipeline.process(data); // ack after first emission or completion
 }
 ```
 
