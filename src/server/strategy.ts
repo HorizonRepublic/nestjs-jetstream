@@ -56,34 +56,52 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     // 1. Register all NestJS handlers
     this.patternRegistry.registerHandlers(this.getHandlers());
 
-    // 2. Determine which stream kinds are needed
+    // 2. Determine which streams and durable consumers are needed
     const streamKinds = this.resolveStreamKinds();
+    const durableKinds = this.resolveDurableConsumerKinds();
 
     if (streamKinds.length > 0) {
       // 3. Ensure streams exist
       await this.streamProvider.ensureStreams(streamKinds);
 
-      // 4. Ensure consumers exist
-      const consumers = await this.consumerProvider.ensureConsumers(streamKinds);
+      // 4. Ensure durable consumers exist (ordered consumers are ephemeral — skip)
+      if (durableKinds.length > 0) {
+        const consumers = await this.consumerProvider.ensureConsumers(durableKinds);
 
-      // 5. Update DLQ thresholds from actual NATS consumer configs
-      this.eventRouter.updateMaxDeliverMap(this.buildMaxDeliverMap(consumers));
+        // 5. Update DLQ thresholds from actual NATS consumer configs
+        this.eventRouter.updateMaxDeliverMap(this.buildMaxDeliverMap(consumers));
 
-      // 6. Start message consumption
-      this.messageProvider.start(consumers);
+        // 6. Start durable message consumption
+        this.messageProvider.start(consumers);
+      }
 
-      // 7. Start event router if needed
-      if (this.patternRegistry.hasEventHandlers() || this.patternRegistry.hasBroadcastHandlers()) {
+      // 7. Start ordered consumer if handlers are registered
+      if (this.patternRegistry.hasOrderedHandlers()) {
+        const orderedStreamName = this.streamProvider.getStreamName('ordered');
+
+        await this.messageProvider.startOrdered(
+          orderedStreamName,
+          this.patternRegistry.getOrderedSubjects(),
+          this.options.ordered,
+        );
+      }
+
+      // 8. Start event router if any event-type handlers exist
+      if (
+        this.patternRegistry.hasEventHandlers() ||
+        this.patternRegistry.hasBroadcastHandlers() ||
+        this.patternRegistry.hasOrderedHandlers()
+      ) {
         this.eventRouter.start();
       }
 
-      // 8. Start RPC router if JetStream mode
+      // 9. Start RPC router if JetStream mode
       if (this.isJetStreamRpcMode() && this.patternRegistry.hasRpcHandlers()) {
         this.rpcRouter.start();
       }
     }
 
-    // 9. Start Core RPC server if core mode
+    // 10. Start Core RPC server if core mode
     if (this.isCoreRpcMode() && this.patternRegistry.hasRpcHandlers()) {
       await this.coreRpcServer.start();
     }
@@ -134,8 +152,31 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     return this.patternRegistry;
   }
 
-  /** Determine which JetStream stream kinds are needed. */
+  /** Determine which JetStream streams are needed. */
   private resolveStreamKinds(): StreamKind[] {
+    const kinds: StreamKind[] = [];
+
+    if (this.patternRegistry.hasEventHandlers()) {
+      kinds.push('ev');
+    }
+
+    if (this.patternRegistry.hasOrderedHandlers()) {
+      kinds.push('ordered');
+    }
+
+    if (this.isJetStreamRpcMode() && this.patternRegistry.hasRpcHandlers()) {
+      kinds.push('cmd');
+    }
+
+    if (this.patternRegistry.hasBroadcastHandlers()) {
+      kinds.push('broadcast');
+    }
+
+    return kinds;
+  }
+
+  /** Determine which stream kinds need durable consumers (ordered consumers are ephemeral). */
+  private resolveDurableConsumerKinds(): StreamKind[] {
     const kinds: StreamKind[] = [];
 
     if (this.patternRegistry.hasEventHandlers()) {

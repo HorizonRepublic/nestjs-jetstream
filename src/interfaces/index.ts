@@ -8,6 +8,7 @@ export type {
   JetstreamFeatureOptions,
   JetstreamModuleAsyncOptions,
   JetstreamModuleOptions,
+  OrderedEventOverrides,
   RpcConfig,
   StreamConsumerOverrides,
 } from './options.interface';

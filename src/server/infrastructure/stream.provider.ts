@@ -7,6 +7,7 @@ import {
   DEFAULT_BROADCAST_STREAM_CONFIG,
   DEFAULT_COMMAND_STREAM_CONFIG,
   DEFAULT_EVENT_STREAM_CONFIG,
+  DEFAULT_ORDERED_STREAM_CONFIG,
   internalName,
   streamName,
 } from '../../jetstream.constants';
@@ -60,6 +61,8 @@ export class StreamProvider {
         return [`${name}.cmd.>`];
       case 'broadcast':
         return ['broadcast.>'];
+      case 'ordered':
+        return [`${name}.ordered.>`];
     }
   }
 
@@ -117,6 +120,8 @@ export class StreamProvider {
         return DEFAULT_COMMAND_STREAM_CONFIG;
       case 'broadcast':
         return DEFAULT_BROADCAST_STREAM_CONFIG;
+      case 'ordered':
+        return DEFAULT_ORDERED_STREAM_CONFIG;
     }
   }
 
@@ -129,6 +134,8 @@ export class StreamProvider {
         return this.options.rpc?.mode === 'jetstream' ? (this.options.rpc.stream ?? {}) : {};
       case 'broadcast':
         return this.options.broadcast?.stream ?? {};
+      case 'ordered':
+        return this.options.ordered?.stream ?? {};
     }
   }
 }

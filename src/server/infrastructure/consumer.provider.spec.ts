@@ -143,5 +143,12 @@ describe(ConsumerProvider, () => {
         );
       });
     });
+
+    describe('when ordered kind is passed', () => {
+      it('should throw because ordered consumers are ephemeral', async () => {
+        // When/Then: getDefaults('ordered') throws synchronously before any NATS call
+        await expect(sut.ensureConsumers(['ordered'])).rejects.toThrow(/ephemeral/i);
+      });
+    });
   });
 });

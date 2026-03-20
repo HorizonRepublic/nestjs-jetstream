@@ -4,8 +4,9 @@
  * - `'ev'` — Workqueue events (at-least-once delivery to one consumer).
  * - `'cmd'` — RPC commands (JetStream mode only).
  * - `'broadcast'` — Broadcast events (fan-out to all consumers).
+ * - `'ordered'` — Ordered events (strict sequential delivery, Limits retention).
  */
-export type StreamKind = 'ev' | 'cmd' | 'broadcast';
+export type StreamKind = 'ev' | 'cmd' | 'broadcast' | 'ordered';
 
 /**
  * Subset of {@link StreamKind} used for direct subject building.

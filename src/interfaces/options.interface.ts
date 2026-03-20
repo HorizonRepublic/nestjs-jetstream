@@ -1,5 +1,5 @@
 import { FactoryProvider, ModuleMetadata, Type } from '@nestjs/common';
-import { ConnectionOptions, ConsumerConfig, StreamConfig } from 'nats';
+import { ConnectionOptions, ConsumerConfig, DeliverPolicy, ReplayPolicy, StreamConfig } from 'nats';
 
 import { Codec } from './codec.interface';
 import type { DeadLetterInfo } from './hooks.interface';
@@ -35,6 +35,42 @@ export type RpcConfig =
 export interface StreamConsumerOverrides {
   stream?: Partial<StreamConfig>;
   consumer?: Partial<ConsumerConfig>;
+}
+
+/**
+ * Configuration for ordered event consumers.
+ *
+ * Ordered consumers use Limits retention and deliver messages in strict
+ * sequential order with at-most-once delivery. No ack/nak/DLQ.
+ *
+ * Only a subset of consumer options applies — ordered consumers are
+ * ephemeral and auto-managed by nats.js.
+ */
+export interface OrderedEventOverrides {
+  /** Stream overrides (e.g. `max_age`, `max_bytes`). */
+  stream?: Partial<StreamConfig>;
+
+  /**
+   * Where to start reading when the consumer is (re)created.
+   * @default DeliverPolicy.All
+   */
+  deliverPolicy?: DeliverPolicy;
+
+  /**
+   * Start sequence number. Only used when `deliverPolicy` is `StartSequence`.
+   */
+  optStartSeq?: number;
+
+  /**
+   * Start time (ISO string). Only used when `deliverPolicy` is `StartTime`.
+   */
+  optStartTime?: string;
+
+  /**
+   * Replay policy for historical messages.
+   * @default ReplayPolicy.Instant
+   */
+  replayPolicy?: ReplayPolicy;
 }
 
 /**
@@ -74,6 +110,16 @@ export interface JetstreamModuleOptions {
 
   /** Broadcast event stream/consumer overrides. */
   broadcast?: StreamConsumerOverrides;
+
+  /**
+   * Ordered event consumer configuration.
+   *
+   * Ordered events use a separate stream with Limits retention and deliver
+   * messages in strict sequential order. Use `ordered:` prefix when publishing.
+   *
+   * @see OrderedEventOverrides
+   */
+  ordered?: OrderedEventOverrides;
 
   /**
    * Transport lifecycle hook handlers.

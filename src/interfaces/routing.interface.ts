@@ -10,6 +10,8 @@ export interface RegisteredHandler {
   isEvent: boolean;
   /** `true` if this handler uses broadcast delivery (fan-out to all consumers). */
   isBroadcast: boolean;
+  /** `true` if this handler uses ordered delivery (strict sequential processing). */
+  isOrdered: boolean;
 }
 
 /** @internal Grouped pattern lists by stream kind, used for stream/consumer setup. */
@@ -20,4 +22,6 @@ export interface PatternsByKind {
   commands: string[];
   /** Broadcast event patterns. */
   broadcasts: string[];
+  /** Ordered event patterns (strict sequential delivery). */
+  ordered: string[];
 }
