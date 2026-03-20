@@ -229,6 +229,159 @@ describe('Ordered Event Delivery', () => {
     });
   });
 
+  describe('DeliverPolicy.Last', () => {
+    it('should deliver only the last message in the stream', async () => {
+      const serviceName = uniqueServiceName();
+
+      // Step 1: start app with default policy to create stream and publish messages
+      let { app, module } = await createTestApp(
+        { name: serviceName },
+        [OrderedController],
+        [serviceName],
+      );
+
+      const client = module.get<ClientProxy>(getClientToken(serviceName));
+
+      await firstValueFrom(client.emit('ordered:order.status', { status: 'first' }));
+      await firstValueFrom(client.emit('ordered:order.status', { status: 'second' }));
+      await firstValueFrom(client.emit('ordered:order.status', { status: 'third' }));
+      await app.close();
+
+      // Step 2: restart with DeliverPolicy.Last — should get only the last message
+      ({ app, module } = await createTestApp(
+        { name: serviceName, ordered: { deliverPolicy: DeliverPolicy.Last } },
+        [OrderedController],
+        [serviceName],
+      ));
+
+      const controller = module.get(OrderedController);
+
+      await waitForCondition(() => controller.received.length > 0, 5_000);
+
+      expect(controller.received[0]).toEqual({ status: 'third' });
+
+      await app.close();
+      await cleanupStreams(nc, serviceName);
+    }, 15_000);
+  });
+
+  describe('DeliverPolicy.LastPerSubject', () => {
+    it('should deliver the last message per subject', async () => {
+      const serviceName = uniqueServiceName();
+
+      // Step 1: publish messages with default policy
+      let { app, module } = await createTestApp(
+        { name: serviceName },
+        [OrderedController],
+        [serviceName],
+      );
+
+      const client = module.get<ClientProxy>(getClientToken(serviceName));
+
+      await firstValueFrom(client.emit('ordered:order.status', { status: 'old' }));
+      await firstValueFrom(client.emit('ordered:order.status', { status: 'latest' }));
+      await app.close();
+
+      // Step 2: restart with DeliverPolicy.LastPerSubject
+      ({ app, module } = await createTestApp(
+        { name: serviceName, ordered: { deliverPolicy: DeliverPolicy.LastPerSubject } },
+        [OrderedController],
+        [serviceName],
+      ));
+
+      const controller = module.get(OrderedController);
+
+      await waitForCondition(() => controller.received.length > 0, 5_000);
+
+      expect(controller.received[0]).toEqual({ status: 'latest' });
+
+      await app.close();
+      await cleanupStreams(nc, serviceName);
+    }, 15_000);
+  });
+
+  describe('DeliverPolicy.StartSequence', () => {
+    it('should deliver from specified sequence number', async () => {
+      const serviceName = uniqueServiceName();
+
+      // Step 1: publish 3 messages
+      let { app, module } = await createTestApp(
+        { name: serviceName },
+        [OrderedController],
+        [serviceName],
+      );
+
+      const client = module.get<ClientProxy>(getClientToken(serviceName));
+
+      await firstValueFrom(client.emit('ordered:order.status', { seq: 1 }));
+      await firstValueFrom(client.emit('ordered:order.status', { seq: 2 }));
+      await firstValueFrom(client.emit('ordered:order.status', { seq: 3 }));
+      await app.close();
+
+      // Step 2: restart with StartSequence from seq 2
+      ({ app, module } = await createTestApp(
+        {
+          name: serviceName,
+          ordered: { deliverPolicy: DeliverPolicy.StartSequence, optStartSeq: 2 },
+        },
+        [OrderedController],
+        [serviceName],
+      ));
+
+      const controller = module.get(OrderedController);
+
+      await waitForCondition(() => controller.received.length >= 2, 5_000);
+
+      expect(controller.received).toEqual([{ seq: 2 }, { seq: 3 }]);
+
+      await app.close();
+      await cleanupStreams(nc, serviceName);
+    }, 15_000);
+  });
+
+  describe('DeliverPolicy.StartTime', () => {
+    it('should deliver messages from specified start time', async () => {
+      const serviceName = uniqueServiceName();
+
+      // Step 1: publish a message, record time, publish another
+      let { app, module } = await createTestApp(
+        { name: serviceName },
+        [OrderedController],
+        [serviceName],
+      );
+
+      const client = module.get<ClientProxy>(getClientToken(serviceName));
+
+      await firstValueFrom(client.emit('ordered:order.status', { status: 'before' }));
+
+      // Ensure NATS timestamps differ — sub-millisecond publishes can share the same timestamp
+      await new Promise((r) => setTimeout(r, 50));
+      const startTime = new Date().toISOString();
+
+      await firstValueFrom(client.emit('ordered:order.status', { status: 'after' }));
+      await app.close();
+
+      // Step 2: restart with StartTime — should skip 'before', get 'after'
+      ({ app, module } = await createTestApp(
+        {
+          name: serviceName,
+          ordered: { deliverPolicy: DeliverPolicy.StartTime, optStartTime: startTime },
+        },
+        [OrderedController],
+        [serviceName],
+      ));
+
+      const controller = module.get(OrderedController);
+
+      await waitForCondition(() => controller.received.length > 0, 5_000);
+
+      expect(controller.received[0]).toEqual({ status: 'after' });
+
+      await app.close();
+      await cleanupStreams(nc, serviceName);
+    }, 15_000);
+  });
+
   describe('ordered handler error', () => {
     let app: INestApplication;
     let module: TestingModule;
