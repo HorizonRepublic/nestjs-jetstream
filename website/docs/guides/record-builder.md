@@ -114,7 +114,7 @@ The transport uses three headers internally for RPC correlation. These are **res
 | `x-reply-to` | Inbox subject for the RPC response |
 | `x-error` | Marks error responses so the client can distinguish success from failure |
 
-Attempting to set a reserved header throws an error at **build time**:
+Attempting to set a reserved header throws an error immediately on **`setHeader()` call**:
 
 ```typescript
 // Throws: Header "x-correlation-id" is reserved by the JetStream transport

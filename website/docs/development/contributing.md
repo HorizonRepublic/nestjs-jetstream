@@ -11,20 +11,26 @@ We welcome contributions from the community. The full contribution guidelines li
 
 1. **Fork** the repository on GitHub
 2. **Clone** your fork and install dependencies:
+
    ```bash
    git clone https://github.com/your-username/nestjs-jetstream.git
    cd nestjs-jetstream
    pnpm install
    ```
+
 3. **Create a branch** for your change:
+
    ```bash
    git checkout -b feat/your-feature-name
    ```
+
 4. **Make your changes**, write tests, and verify everything passes:
+
    ```bash
    pnpm lint
    pnpm test
    ```
+
 5. **Push** and open a Pull Request
 
 ## Prerequisites
@@ -63,7 +69,7 @@ The project uses [Conventional Commits](https://www.conventionalcommits.org/) wi
 
 **Examples:**
 
-```
+```text
 feat: add support for custom stream configuration
 fix(strategy): remove private logger that shadows Server base class
 docs: update module configuration examples

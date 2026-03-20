@@ -164,7 +164,7 @@ When `codec.decode()` throws (e.g., a MsgPack consumer receives a JSON-encoded m
 
 In both cases, the error is logged with the full subject and error details.
 
-```
+```text
 [Jetstream:EventRouter] Decode error for orders__microservice.ev.order.created: Error: ...
 [Jetstream:RpcRouter]   Decode error for RPC orders__microservice.cmd.get.order: Error: ...
 ```

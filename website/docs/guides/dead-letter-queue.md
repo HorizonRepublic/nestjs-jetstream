@@ -125,10 +125,13 @@ export class AppModule {}
 ```typescript title="src/dlq/dlq.service.ts"
 import { Injectable, Logger } from '@nestjs/common';
 import { DeadLetterInfo } from '@horizon-republic/nestjs-jetstream';
+import { DlqRepository } from './dlq.repository';
 
 @Injectable()
 export class DlqService {
   private readonly logger = new Logger(DlqService.name);
+
+  constructor(private readonly repository: DlqRepository) {}
 
   async persist(info: DeadLetterInfo): Promise<void> {
     this.logger.error(

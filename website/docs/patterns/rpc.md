@@ -37,7 +37,7 @@ sequenceDiagram
 ```typescript
 import { Inject, Injectable } from '@nestjs/common';
 import { firstValueFrom } from 'rxjs';
-import { JetstreamClient, getClientToken } from 'nestjs-jetstream';
+import { JetstreamClient, getClientToken } from '@horizon-republic/nestjs-jetstream';
 
 @Injectable()
 export class GatewayService {
@@ -229,7 +229,7 @@ JetstreamModule.forRoot({
 You can override the global timeout for a single RPC call using `JetstreamRecordBuilder`:
 
 ```typescript
-import { JetstreamRecordBuilder } from 'nestjs-jetstream';
+import { JetstreamRecordBuilder } from '@horizon-republic/nestjs-jetstream';
 
 const record = new JetstreamRecordBuilder({ id: orderId })
   .setTimeout(5_000) // 5 second timeout for this call only

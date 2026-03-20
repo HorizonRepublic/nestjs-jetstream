@@ -10,10 +10,10 @@ const config: Config = {
   baseUrl: '/nestjs-jetstream/',
   organizationName: 'HorizonRepublic',
   projectName: 'nestjs-jetstream',
-  onBrokenLinks: 'warn',
+  onBrokenLinks: 'throw',
   markdown: {
     mermaid: true,
-    hooks: { onBrokenMarkdownLinks: 'warn' },
+    hooks: { onBrokenMarkdownLinks: 'throw' },
   },
   i18n: { defaultLocale: 'en', locales: ['en'] },
   presets: [

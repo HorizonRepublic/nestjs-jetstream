@@ -98,7 +98,7 @@ Limits retention for strict sequential delivery. Ordered consumers are ephemeral
 
 | Property | Value | Notes |
 |----------|-------|-------|
-| `ack_wait` | `10 seconds` | 10,000 ms in nanos |
+| `ack_wait` | `10 seconds` | 10,000 ms (10s) |
 | `max_deliver` | `3` | Message moves to dead-letter after 3 failed attempts |
 | `max_ack_pending` | `100` | |
 | `ack_policy` | `Explicit` | |
@@ -109,7 +109,7 @@ Limits retention for strict sequential delivery. Ordered consumers are ephemeral
 
 | Property | Value | Notes |
 |----------|-------|-------|
-| `ack_wait` | `5 minutes` | 300,000 ms in nanos; allows long-running RPC handlers |
+| `ack_wait` | `5 minutes` | 300,000 ms (5min) |
 | `max_deliver` | `1` | No retries — RPC failures propagate immediately |
 | `max_ack_pending` | `100` | |
 | `ack_policy` | `Explicit` | |
@@ -120,7 +120,7 @@ Limits retention for strict sequential delivery. Ordered consumers are ephemeral
 
 | Property | Value | Notes |
 |----------|-------|-------|
-| `ack_wait` | `10 seconds` | 10,000 ms in nanos |
+| `ack_wait` | `10 seconds` | 10,000 ms (10s) |
 | `max_deliver` | `3` | |
 | `max_ack_pending` | `100` | |
 | `ack_policy` | `Explicit` | |

@@ -164,7 +164,7 @@ This gives you full control over the response shape and HTTP status code without
 
 ## Auto-registration
 
-`JetstreamHealthIndicator` is automatically provided and exported when you call `JetstreamModule.forRoot()` or `JetstreamModule.forRootAsync()`. You can inject it in any module that imports `JetstreamModule`:
+`JetstreamHealthIndicator` is automatically provided and exported by `JetstreamModule`. Since `forRoot()` registers the module globally, the indicator is available for injection in **any** module in the application — no need to import `JetstreamModule` again:
 
 ```typescript
 import { JetstreamHealthIndicator } from '@horizon-republic/nestjs-jetstream';
@@ -182,7 +182,7 @@ export class MonitoringService {
 }
 ```
 
-No need to add it to any `providers` array — it's already registered globally.
+No need to add it to any `providers` array or re-import `JetstreamModule` — it's available globally via `forRoot()`.
 
 ## What's next?
 
