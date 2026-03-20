@@ -18,8 +18,11 @@ import { RESERVED_HEADERS } from '../jetstream.constants';
  */
 export class JetstreamRecord<TData = unknown> {
   public constructor(
+    /** Message payload. */
     public readonly data: TData,
+    /** Custom headers set via {@link JetstreamRecordBuilder.setHeader}. */
     public readonly headers: ReadonlyMap<string, string>,
+    /** Per-request RPC timeout override in ms. */
     public readonly timeout?: number,
   ) {}
 }
@@ -39,7 +42,11 @@ export class JetstreamRecordBuilder<TData = unknown> {
     this.data = data;
   }
 
-  /** Set the message payload. */
+  /**
+   * Set the message payload.
+   *
+   * @param data - Payload to serialize via the configured {@link Codec}.
+   */
   public setData(data: TData): this {
     this.data = data;
     return this;
@@ -48,6 +55,8 @@ export class JetstreamRecordBuilder<TData = unknown> {
   /**
    * Set a single custom header.
    *
+   * @param key - Header name (e.g. `'x-tenant'`).
+   * @param value - Header value.
    * @throws Error if the header name is reserved by the transport.
    */
   public setHeader(key: string, value: string): this {
@@ -59,6 +68,7 @@ export class JetstreamRecordBuilder<TData = unknown> {
   /**
    * Set multiple custom headers at once.
    *
+   * @param headers - Key-value pairs to set as headers.
    * @throws Error if any header name is reserved by the transport.
    */
   public setHeaders(headers: Record<string, string>): this {
@@ -69,13 +79,21 @@ export class JetstreamRecordBuilder<TData = unknown> {
     return this;
   }
 
-  /** Set RPC request timeout in milliseconds. */
+  /**
+   * Set per-request RPC timeout.
+   *
+   * @param ms - Timeout in milliseconds. Overrides the global RPC timeout for this request only.
+   */
   public setTimeout(ms: number): this {
     this.timeout = ms;
     return this;
   }
 
-  /** Build the immutable JetstreamRecord. */
+  /**
+   * Build the immutable {@link JetstreamRecord}.
+   *
+   * @returns A frozen record ready to pass to `client.send()` or `client.emit()`.
+   */
   public build(): JetstreamRecord<TData> {
     return new JetstreamRecord(this.data as TData, new Map(this.headers), this.timeout);
   }

@@ -252,7 +252,7 @@ interface JetstreamModuleOptions {
   /** Broadcast event stream/consumer overrides. */
   broadcast?: { stream?: Partial<StreamConfig>; consumer?: Partial<ConsumerConfig> };
 
-  /** Transport lifecycle hook handlers. Unset hooks fall back to NestJS Logger. */
+  /** Transport lifecycle hook handlers. Unset hooks are silently ignored. */
   hooks?: Partial<TransportHooks>;
 
   /** Async callback for dead letter handling. See Dead Letter Queue section below. */
@@ -584,7 +584,7 @@ JetstreamModule.forFeature({
 
 ### Lifecycle Hooks
 
-Subscribe to transport events for monitoring, alerting, or custom logic:
+Subscribe to transport events for monitoring, alerting, or custom logic. Events without a registered hook are silently ignored — no default logging:
 
 ```typescript
 import { JetstreamModule, TransportEvent } from '@horizon-republic/nestjs-jetstream';
@@ -611,17 +611,17 @@ JetstreamModule.forRoot({
 
 **Available events:**
 
-| Event              | Arguments                                   | Default (no hook) |
-|--------------------|---------------------------------------------|-------------------|
-| `connect`          | `(server: string)`                          | `Logger.log`      |
-| `disconnect`       | `()`                                        | `Logger.warn`     |
-| `reconnect`        | `(server: string)`                          | `Logger.log`      |
-| `error`            | `(error: Error, context?: string)`          | `Logger.error`    |
-| `rpcTimeout`       | `(subject: string, correlationId: string)`  | `Logger.warn`     |
-| `messageRouted`    | `(subject: string, kind: 'rpc' \| 'event')` | `Logger.debug`    |
-| `shutdownStart`    | `()`                                        | `Logger.log`      |
-| `shutdownComplete` | `()`                                        | `Logger.log`      |
-| `deadLetter`       | `(info: DeadLetterInfo)`                    | `Logger.warn`     |
+| Event              | Arguments                                   |
+|--------------------|---------------------------------------------|
+| `connect`          | `(server: string)`                          |
+| `disconnect`       | `()`                                        |
+| `reconnect`        | `(server: string)`                          |
+| `error`            | `(error: Error, context?: string)`          |
+| `rpcTimeout`       | `(subject: string, correlationId: string)`  |
+| `messageRouted`    | `(subject: string, kind: 'rpc' \| 'event')` |
+| `shutdownStart`    | `()`                                        |
+| `shutdownComplete` | `()`                                        |
+| `deadLetter`       | `(info: DeadLetterInfo)`                    |
 
 #### Dead Letter Queue (DLQ)
 

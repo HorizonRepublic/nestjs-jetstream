@@ -73,7 +73,14 @@ export class JetstreamClient extends ClientProxy {
     this.targetName = targetServiceName;
   }
 
-  /** Establish connection. Called automatically by NestJS on first use. */
+  /**
+   * Establish connection. Called automatically by NestJS on first use.
+   *
+   * Sets up the JetStream RPC inbox (if in JetStream mode) and subscribes
+   * to connection status events for fail-fast disconnect handling.
+   *
+   * @returns The underlying NATS connection.
+   */
   public async connect(): Promise<NatsConnection> {
     const nc = await this.connection.getConnection();
 
@@ -92,14 +99,18 @@ export class JetstreamClient extends ClientProxy {
     return nc;
   }
 
-  /** Clean up resources. */
+  /** Clean up resources: reject pending RPCs, unsubscribe from status events. */
   public async close(): Promise<void> {
     this.statusSubscription?.unsubscribe();
     this.statusSubscription = null;
     this.rejectPendingRpcs(new Error('Client closed'));
   }
 
-  /** Direct access to the raw NATS connection. */
+  /**
+   * Direct access to the raw NATS connection.
+   *
+   * @throws Error if not connected.
+   */
   public override unwrap<T = NatsConnection>(): T {
     const nc = this.connection.unwrap;
 

@@ -24,6 +24,7 @@ export default [
       '**/node_modules/**',
       '**/dist/**',
       '**/dist-example/**',
+      '**/docs/**',
       '**/tmp/**',
       'tsup.config.ts',
       'vitest.config.ts',

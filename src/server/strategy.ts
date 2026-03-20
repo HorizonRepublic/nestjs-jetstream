@@ -87,7 +87,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     callback();
   }
 
-  /** Gracefully stop the transport. */
+  /** Stop all consumers, routers, and subscriptions. Called during shutdown. */
   public close(): void {
     this.eventRouter.destroy();
     this.rpcRouter.destroy();
@@ -110,7 +110,11 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     this.listeners.set(event, existing);
   }
 
-  /** Unwrap the underlying NATS connection. */
+  /**
+   * Unwrap the underlying NATS connection.
+   *
+   * @throws Error if the transport has not started.
+   */
   public unwrap<T>(): T {
     const nc = this.connection.unwrap;
 

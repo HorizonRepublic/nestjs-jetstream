@@ -20,27 +20,41 @@ type NatsMessage = JsMsg | Msg;
  * ```
  */
 export class RpcContext extends BaseRpcContext<[NatsMessage]> {
-  /** Get the underlying NATS message (JsMsg for JetStream, Msg for Core). */
+  /**
+   * Get the underlying NATS message.
+   *
+   * @returns `JsMsg` for JetStream handlers, `Msg` for Core RPC handlers.
+   */
   public getMessage(): NatsMessage {
     return this.args[0];
   }
 
-  /** Get the NATS subject this message was published to. */
+  /** @returns The NATS subject this message was published to. */
   public getSubject(): string {
     return this.args[0].subject;
   }
 
-  /** Get all NATS message headers, or undefined if none are present. */
+  /** @returns All NATS message headers, or `undefined` if none are present. */
   public getHeaders(): MsgHdrs | undefined {
     return this.args[0].headers;
   }
 
-  /** Get a single header value by key. Returns undefined if the header or headers object is missing. */
+  /**
+   * Get a single header value by key.
+   *
+   * @param key - Header name (e.g. `'x-trace-id'`).
+   * @returns Header value, or `undefined` if the header is missing.
+   */
   public getHeader(key: string): string | undefined {
     return this.args[0].headers?.get(key);
   }
 
-  /** Type guard: narrows getMessage() return type to JsMsg when true. */
+  /**
+   * Type guard: returns `true` when the message is a JetStream message.
+   *
+   * Narrows `getMessage()` return type to `JsMsg`, giving access to
+   * `ack()`, `nak()`, `term()`, and delivery metadata.
+   */
   public isJetStream(): this is RpcContext & { getMessage(): JsMsg } {
     return 'ack' in this.args[0];
   }

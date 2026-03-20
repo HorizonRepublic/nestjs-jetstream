@@ -77,7 +77,7 @@ export interface JetstreamModuleOptions {
 
   /**
    * Transport lifecycle hook handlers.
-   * Unset hooks fall back to NestJS Logger.
+   * Unset hooks are silently ignored — no default logging.
    */
   hooks?: Partial<TransportHooks>;
 
