@@ -493,7 +493,7 @@ Ordered events guarantee **strict sequential delivery** — messages are deliver
 #### How it works
 
 - Uses a **separate stream** with Limits retention (messages persist based on `max_age`, not on ack)
-- **One active reader** — if multiple instances are running, only one reads at a time (automatic failover if it goes down)
+- **Ephemeral consumer per instance** — each running instance creates its own ordered consumer. All instances receive all messages independently (no load balancing)
 - **No ack/nak/DLQ** — nats.js auto-acknowledges ordered consumer messages. Handler errors are logged but don't affect delivery (at-most-once semantics)
 - **Self-healing** — if the consumer disconnects, nats.js automatically recreates it at the correct position
 
@@ -548,15 +548,15 @@ JetstreamModule.forRoot({
 })
 ```
 
-#### Scaling and failover
+#### Scaling behavior
 
-Ordered consumers guarantee one active reader at a time:
+Ordered consumers are **ephemeral** — each instance creates its own independent consumer:
 
-- **Multiple instances** — all instances attempt to consume, but NATS delivers messages to only one. The others idle and wait.
-- **Failover** — if the active instance goes down, one of the waiting instances automatically picks up. No leader election or distributed locks needed.
-- **Restart behavior** — depends on `deliverPolicy`. With `All`, the new consumer replays from the beginning (within `max_age`). With `New`, it starts from where it connects — messages published during the gap are skipped.
+- **Multiple instances** — each instance receives **all** messages independently. There is no load balancing or exclusive delivery. This is by design — ordered consumers are meant for per-instance replay (e.g., building a local projection, populating a cache).
+- **Single-instance deployments** — if you need exactly one handler processing ordered events across the cluster, deploy it as a singleton service (single replica).
+- **Restart behavior** — depends on `deliverPolicy`. With `All` (default), the consumer replays from the beginning (within `max_age`). With `New`, it starts fresh — messages published while the instance was down are skipped.
 
-> **Handlers should be idempotent** regardless of consumer type — during failover, there may be a brief overlap where both the old and new consumers process the same message.
+> **Handlers must be idempotent** — multiple instances will process the same messages concurrently.
 
 #### Comparison with workqueue events
 
@@ -564,7 +564,7 @@ Ordered consumers guarantee one active reader at a time:
 |---|---|---|
 | Delivery | At-least-once | At-most-once |
 | Ordering | Not guaranteed (parallel) | Strict sequential |
-| Parallelism | Multiple instances (load-balanced) | One active reader |
+| Parallelism | Multiple instances (load-balanced) | All instances (independent replay) |
 | Retry on failure | Yes (`nak` → redeliver) | No (continues) |
 | DLQ support | Yes | No |
 | Stream retention | Workqueue (delete on ack) | Limits (delete by age/size) |

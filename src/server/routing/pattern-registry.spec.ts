@@ -124,6 +124,18 @@ describe(PatternRegistry, () => {
           expect(kinds.ordered).toEqual(['order.status']);
           expect(kinds.events).toEqual([]);
         });
+
+        it('should not count as RPC handler', () => {
+          // Given: only ordered handler
+          const handler = createHandler({ ordered: true });
+          const handlers = new Map<string, MessageHandler>([['order.status', handler]]);
+
+          // When: registered
+          sut.registerHandlers(handlers);
+
+          // Then: not RPC
+          expect(sut.hasRpcHandlers()).toBe(false);
+        });
       });
 
       describe('when registering a broadcast handler', () => {
@@ -205,6 +217,7 @@ describe(PatternRegistry, () => {
     it.each([
       ['cmd', `CMD_PLACEHOLDER.cmd.get.user`, 'get.user'],
       ['ev', `CMD_PLACEHOLDER.ev.user.created`, 'user.created'],
+      ['ordered', `CMD_PLACEHOLDER.ordered.order.status`, 'order.status'],
       ['broadcast', 'broadcast.config.updated', 'config.updated'],
     ])('should strip %s prefix', (_kind, subject, expected) => {
       const resolvedSubject = subject.replace('CMD_PLACEHOLDER', `${serviceName}__microservice`);

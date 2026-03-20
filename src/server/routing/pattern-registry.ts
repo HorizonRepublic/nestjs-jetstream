@@ -90,7 +90,9 @@ export class PatternRegistry {
 
   /** Check if any RPC (command) handlers are registered. */
   public hasRpcHandlers(): boolean {
-    return Array.from(this.registry.values()).some((r) => !r.isEvent && !r.isBroadcast);
+    return Array.from(this.registry.values()).some(
+      (r) => !r.isEvent && !r.isBroadcast && !r.isOrdered,
+    );
   }
 
   /** Check if any workqueue event handlers are registered. */
