@@ -1,0 +1,438 @@
+/* ===== Palette (dark-only) ===== */
+
+:root {
+  --ifm-color-primary: #3B82F6;
+  --ifm-color-primary-dark: #2563EB;
+  --ifm-color-primary-darker: #1D4ED8;
+  --ifm-color-primary-darkest: #1E40AF;
+  --ifm-color-primary-light: #60A5FA;
+  --ifm-color-primary-lighter: #93C5FD;
+  --ifm-color-primary-lightest: #BFDBFE;
+  --ifm-code-font-size: 95%;
+
+  /* Landing */
+  --landing-bg: #0B1120;
+  --landing-surface: #151D2E;
+  --landing-border: #1E293B;
+  --landing-text-muted: #94A3B8;
+  --landing-accent: #06B6D4;
+}
+
+/* Higher specificity to override Docusaurus defaults */
+html[data-theme='dark'] {
+  --ifm-background-color: #0B1120;
+  --ifm-background-surface-color: #151D2E;
+  --ifm-font-color-base: #E2E8F0;
+  --ifm-font-color-secondary: #94A3B8;
+  --docusaurus-highlighted-code-line-bg: rgba(59, 130, 246, 0.15);
+  --ifm-toc-border-color: #1E293B;
+  --ifm-hr-background-color: #1E293B;
+}
+
+/* Direct body override in case variables don't cascade */
+body {
+  background: #0B1120;
+}
+
+/* Main doc wrapper */
+main[class*='docMainContainer'],
+div[class*='docPage'],
+div[class*='docRoot'] {
+  background: #0B1120;
+}
+
+/* ===== Navbar ===== */
+
+.navbar {
+  background: rgba(11, 17, 32, 0.8);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--landing-border);
+  box-shadow: none;
+}
+
+.navbar__title {
+  color: #E2E8F0;
+}
+
+.navbar__link {
+  color: #94A3B8;
+  font-weight: 500;
+}
+
+.navbar__link:hover,
+.navbar__link--active {
+  color: #E2E8F0;
+}
+
+/* ===== Search — navbar button ===== */
+
+.aa-DetachedSearchButton {
+  background: rgba(21, 29, 46, 0.6) !important;
+  border: 1px solid var(--landing-border) !important;
+  border-radius: 8px !important;
+  color: #94A3B8 !important;
+  font-size: 0.85rem !important;
+  min-width: 200px !important;
+  transition: border-color 0.15s;
+}
+
+.aa-DetachedSearchButton:hover {
+  border-color: var(--landing-accent) !important;
+}
+
+.aa-DetachedSearchButtonIcon svg {
+  color: #64748B !important;
+}
+
+.aa-DetachedSearchButtonPlaceholder {
+  color: #64748B !important;
+}
+
+/* ===== Search — modal overlay ===== */
+
+.aa-DetachedOverlay {
+  background: rgba(0, 0, 0, 0.6) !important;
+  backdrop-filter: blur(4px);
+}
+
+/* ===== Search — modal container ===== */
+
+.aa-DetachedContainer--modal {
+  background: #0E1525 !important;
+  border: 1px solid var(--landing-border) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Search input form */
+.aa-Form {
+  background: var(--landing-surface) !important;
+  border: 1px solid var(--landing-border) !important;
+  border-radius: 8px !important;
+}
+
+.aa-Form:focus-within {
+  border-color: var(--landing-accent) !important;
+  box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.2) !important;
+}
+
+.aa-Input {
+  color: #E2E8F0 !important;
+  caret-color: var(--landing-accent) !important;
+}
+
+.aa-Input::placeholder {
+  color: #64748B !important;
+}
+
+.aa-SubmitButton,
+.aa-ClearButton,
+.aa-LoadingIndicator {
+  color: #64748B !important;
+}
+
+.aa-ClearButton:hover {
+  color: #94A3B8 !important;
+}
+
+/* Cancel button */
+.aa-DetachedCancelButton {
+  color: #94A3B8 !important;
+}
+
+.aa-DetachedCancelButton:hover {
+  color: #E2E8F0 !important;
+}
+
+/* Results panel */
+.aa-Panel {
+  background: #0E1525 !important;
+}
+
+.aa-Source {
+  background: transparent !important;
+}
+
+.aa-SourceNoResults {
+  color: #94A3B8 !important;
+}
+
+/* Result items */
+.aa-ItemContent {
+  color: #E2E8F0 !important;
+}
+
+.aa-ItemContentBody {
+  color: #CBD5E1 !important;
+}
+
+.aa-Item[aria-selected='true'] {
+  background: var(--landing-surface) !important;
+}
+
+/* Gradient at bottom */
+.aa-GradientBottom {
+  background: linear-gradient(transparent, #0E1525) !important;
+}
+
+/* Label styling in form */
+.aa-Label svg {
+  color: #64748B !important;
+}
+
+/* Search results page (full page) */
+[class*='searchQueryInput'] {
+  background: var(--landing-surface) !important;
+  border: 1px solid var(--landing-border) !important;
+  color: #E2E8F0 !important;
+  border-radius: 8px !important;
+}
+
+/* ===== Sidebar ===== */
+
+.menu {
+  background: transparent;
+  padding-top: 1rem;
+}
+
+/* Sidebar chevron arrows — match text color */
+.menu__caret::before,
+.menu__link--sublist-caret::after {
+  filter: invert(70%) sepia(10%) saturate(500%) hue-rotate(180deg);
+}
+
+.menu__link {
+  color: #94A3B8;
+  font-size: 0.9rem;
+  border-radius: 6px;
+  padding: 0.4rem 0.75rem;
+  transition: color 0.15s, background 0.15s;
+}
+
+.menu__link:hover {
+  color: #E2E8F0;
+  background: rgba(21, 29, 46, 0.5);
+}
+
+.menu__link--active:not(.menu__link--sublist) {
+  color: #3B82F6;
+  background: rgba(59, 130, 246, 0.1);
+  font-weight: 600;
+}
+
+.menu__list-item-collapsible .menu__link {
+  color: #E2E8F0;
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.menu__list-item-collapsible:hover {
+  background: transparent;
+}
+
+/* Sidebar border */
+aside[class*='docSidebarContainer'] {
+  border-right: 1px solid var(--landing-border) !important;
+}
+
+/* ===== Doc content ===== */
+
+.markdown h1 {
+  font-size: 2.25rem;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  color: #E2E8F0;
+}
+
+.markdown h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: #E2E8F0;
+  border-bottom: 1px solid var(--landing-border);
+  padding-bottom: 0.5rem;
+  margin-top: 2.5rem;
+}
+
+.markdown h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #E2E8F0;
+}
+
+.markdown p,
+.markdown li {
+  color: #CBD5E1;
+  line-height: 1.75;
+}
+
+.markdown a {
+  color: #60A5FA;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.markdown a:hover {
+  color: #93C5FD;
+  text-decoration: underline;
+}
+
+/* Code blocks */
+.markdown code {
+  background: rgba(21, 29, 46, 0.8);
+  border: 1px solid var(--landing-border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 0.88em;
+  color: #E2E8F0;
+}
+
+pre code {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+}
+
+div[class*='codeBlockContainer'],
+pre[class*='prism-code'] {
+  background: #0E1525 !important;
+  border: 1px solid var(--landing-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+/* Override Prism theme background + padding */
+pre[class*='language-'] {
+  background: #0E1525 !important;
+  padding: 1.25rem 1.5rem !important;
+}
+
+div[class*='codeBlockTitle'] {
+  background: rgba(21, 29, 46, 0.6) !important;
+  border-bottom: 1px solid var(--landing-border) !important;
+  color: #94A3B8 !important;
+}
+
+/* Tables */
+.markdown table {
+  border-collapse: collapse;
+}
+
+.markdown table th {
+  background: rgba(21, 29, 46, 0.5);
+  color: #E2E8F0;
+  font-weight: 600;
+  border: 1px solid var(--landing-border);
+}
+
+.markdown table td {
+  border: 1px solid var(--landing-border);
+  color: #CBD5E1;
+}
+
+.markdown table tr:nth-child(even) {
+  background: rgba(21, 29, 46, 0.3);
+}
+
+/* Admonitions */
+.admonition {
+  border-radius: 8px;
+  border-left-width: 4px;
+  background: rgba(21, 29, 46, 0.5);
+}
+
+/* Breadcrumbs */
+.breadcrumbs__link {
+  color: #94A3B8;
+}
+
+.breadcrumbs__item--active .breadcrumbs__link {
+  color: #E2E8F0;
+}
+
+/* Pagination */
+.pagination-nav__link {
+  background: var(--landing-surface);
+  border: 1px solid var(--landing-border);
+  border-radius: 8px;
+  transition: border-color 0.15s;
+}
+
+.pagination-nav__link:hover {
+  border-color: #3B82F6;
+}
+
+.pagination-nav__sublabel {
+  color: #94A3B8;
+}
+
+.pagination-nav__label {
+  color: #E2E8F0;
+}
+
+/* ===== Footer ===== */
+
+.footer {
+  background: #0A0F1A;
+  border-top: 1px solid var(--landing-border);
+}
+
+.footer__title {
+  color: #E2E8F0;
+}
+
+.footer__link-item {
+  color: #94A3B8;
+  transition: color 0.15s;
+}
+
+.footer__link-item:hover {
+  color: #E2E8F0;
+}
+
+.footer__copyright {
+  color: #64748B;
+}
+
+/* ===== TOC (right sidebar) ===== */
+
+.table-of-contents__link {
+  color: #94A3B8;
+}
+
+.table-of-contents__link--active,
+.table-of-contents__link:hover {
+  color: #E2E8F0;
+}
+
+/* ===== Scrollbar ===== */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1E293B;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+/* ===== Edit page link ===== */
+
+.theme-edit-this-page a {
+  color: #94A3B8;
+}
+
+.theme-edit-this-page a:hover {
+  color: #E2E8F0;
+}
