@@ -94,8 +94,11 @@ export class ConsumerProvider {
 
     /* eslint-disable @typescript-eslint/naming-convention -- NATS API uses snake_case */
     if (kind === 'broadcast') {
-      // Use specific broadcast patterns from the registry instead of a wildcard
       const broadcastPatterns = this.patternRegistry.getBroadcastPatterns();
+
+      if (broadcastPatterns.length === 0) {
+        throw new Error('Broadcast consumer requested but no broadcast patterns are registered');
+      }
 
       if (broadcastPatterns.length === 1) {
         return {
