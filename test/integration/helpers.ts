@@ -80,7 +80,7 @@ const deleteStreamIfExists = async (
 export const cleanupStreams = async (nc: NatsConnection, serviceName: string): Promise<void> => {
   const jsm = await nc.jetstreamManager();
 
-  for (const kind of ['ev', 'cmd'] as const) {
+  for (const kind of ['ev', 'cmd', 'ordered'] as const) {
     await deleteStreamIfExists(jsm, streamName(serviceName, kind));
   }
 

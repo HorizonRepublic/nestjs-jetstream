@@ -27,14 +27,18 @@ export class PatternRegistry {
     const serviceName = this.options.name;
 
     for (const [pattern, handler] of handlers) {
+      const extras = handler.extras as Record<string, unknown> | undefined;
       const isEvent = handler.isEventHandler ?? false;
-      const isBroadcast = !!(handler.extras as Record<string, unknown> | undefined)?.broadcast;
+      const isBroadcast = !!extras?.broadcast;
+      const isOrdered = !!extras?.ordered;
 
       // Build the full NATS subject this handler should receive
       let fullSubject: string;
 
       if (isBroadcast) {
         fullSubject = buildBroadcastSubject(pattern);
+      } else if (isOrdered) {
+        fullSubject = buildSubject(serviceName, 'ordered', pattern);
       } else if (isEvent) {
         fullSubject = buildSubject(serviceName, 'ev', pattern);
       } else {
@@ -44,14 +48,17 @@ export class PatternRegistry {
       this.registry.set(fullSubject, {
         handler,
         pattern,
-        isEvent,
+        isEvent: isEvent && !isOrdered,
         isBroadcast,
+        isOrdered,
       });
 
       let kind: string;
 
       if (isBroadcast) {
         kind = 'broadcast';
+      } else if (isOrdered) {
+        kind = 'ordered';
       } else if (isEvent) {
         kind = 'event';
       } else {
@@ -91,25 +98,41 @@ export class PatternRegistry {
     return Array.from(this.registry.values()).some((r) => r.isEvent && !r.isBroadcast);
   }
 
+  /** Check if any ordered event handlers are registered. */
+  public hasOrderedHandlers(): boolean {
+    return Array.from(this.registry.values()).some((r) => r.isOrdered);
+  }
+
+  /** Get fully-qualified NATS subjects for ordered handlers. */
+  public getOrderedSubjects(): string[] {
+    const name = internalName(this.options.name);
+
+    return Array.from(this.registry.values())
+      .filter((r) => r.isOrdered)
+      .map((r) => `${name}.ordered.${r.pattern}`);
+  }
+
   /** Get patterns grouped by kind. */
   public getPatternsByKind(): PatternsByKind {
     const events: string[] = [];
     const commands: string[] = [];
     const broadcasts: string[] = [];
+    const ordered: string[] = [];
 
     for (const entry of this.registry.values()) {
       if (entry.isBroadcast) broadcasts.push(entry.pattern);
+      else if (entry.isOrdered) ordered.push(entry.pattern);
       else if (entry.isEvent) events.push(entry.pattern);
       else commands.push(entry.pattern);
     }
 
-    return { events, commands, broadcasts };
+    return { events, commands, broadcasts, ordered };
   }
 
   /** Normalize a full NATS subject back to the user-facing pattern. */
   public normalizeSubject(subject: string): string {
     const name = internalName(this.options.name);
-    const prefixes = [`${name}.cmd.`, `${name}.ev.`, 'broadcast.'];
+    const prefixes = [`${name}.cmd.`, `${name}.ev.`, `${name}.ordered.`, 'broadcast.'];
 
     for (const prefix of prefixes) {
       if (subject.startsWith(prefix)) {
@@ -122,10 +145,18 @@ export class PatternRegistry {
 
   /** Log a summary of all registered handlers. */
   private logSummary(): void {
-    const { events, commands, broadcasts } = this.getPatternsByKind();
+    const { events, commands, broadcasts, ordered } = this.getPatternsByKind();
 
-    this.logger.log(
-      `Registered handlers: ${commands.length} RPC, ${events.length} events, ${broadcasts.length} broadcasts`,
-    );
+    const parts = [
+      `${commands.length} RPC`,
+      `${events.length} events`,
+      `${broadcasts.length} broadcasts`,
+    ];
+
+    if (ordered.length > 0) {
+      parts.push(`${ordered.length} ordered`);
+    }
+
+    this.logger.log(`Registered handlers: ${parts.join(', ')}`);
   }
 }

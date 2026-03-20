@@ -201,6 +201,88 @@ describe(EventRouter, () => {
     });
   });
 
+  describe('ordered message handling', () => {
+    let ordered$: Subject<JsMsg>;
+
+    beforeEach(() => {
+      ordered$ = new Subject<JsMsg>();
+      messageProvider = createMock<MessageProvider>({
+        events$: events$.asObservable(),
+        broadcasts$: broadcasts$.asObservable(),
+        ordered$: ordered$.asObservable(),
+      });
+      sut = new EventRouter(messageProvider, patternRegistry, codec, eventBus);
+      sut.start();
+    });
+
+    describe('when ordered handler succeeds', () => {
+      it('should NOT call ack (nats.js auto-acknowledges ordered consumers)', async () => {
+        // Given: a handler that resolves
+        const handler = vi.fn().mockResolvedValue(undefined);
+
+        patternRegistry.getHandler.mockReturnValue(handler);
+
+        const msg = createMock<JsMsg>({
+          subject: faker.lorem.word(),
+          data: new TextEncoder().encode(JSON.stringify({ test: true })),
+        });
+
+        // When: ordered message arrives
+        ordered$.next(msg);
+        await new Promise(process.nextTick);
+
+        // Then: handler called, NO ack/nak/term
+        expect(handler).toHaveBeenCalled();
+        expect(msg.ack).not.toHaveBeenCalled();
+        expect(msg.nak).not.toHaveBeenCalled();
+        expect(msg.term).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('when ordered handler throws', () => {
+      it('should log error but NOT nak or term', async () => {
+        // Given: a handler that throws
+        const handler = vi.fn().mockRejectedValue(new Error('handler failed'));
+
+        patternRegistry.getHandler.mockReturnValue(handler);
+
+        const msg = createMock<JsMsg>({
+          subject: faker.lorem.word(),
+          data: new TextEncoder().encode(JSON.stringify({ test: true })),
+        });
+
+        // When: ordered message arrives
+        ordered$.next(msg);
+        await new Promise(process.nextTick);
+
+        // Then: no ack/nak/term — ordered consumers skip retry semantics
+        expect(msg.ack).not.toHaveBeenCalled();
+        expect(msg.nak).not.toHaveBeenCalled();
+        expect(msg.term).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('when no handler is found for ordered message', () => {
+      it('should NOT call term (ordered consumers are ephemeral)', async () => {
+        // Given: no handler registered
+        patternRegistry.getHandler.mockReturnValue(null);
+
+        const msg = createMock<JsMsg>({
+          subject: 'unknown.ordered.subject',
+          data: new TextEncoder().encode(JSON.stringify({})),
+        });
+
+        // When: ordered message arrives
+        ordered$.next(msg);
+        await new Promise(process.nextTick);
+
+        // Then: no term/nak
+        expect(msg.term).not.toHaveBeenCalled();
+        expect(msg.nak).not.toHaveBeenCalled();
+      });
+    });
+  });
+
   describe('dead letter handling', () => {
     const streamName = 'test-stream';
     const maxDeliverByStream = new Map<string, number>([[streamName, 3]]);

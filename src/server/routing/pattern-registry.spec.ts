@@ -6,13 +6,17 @@ import type { JetstreamModuleOptions } from '../../interfaces';
 
 import { PatternRegistry } from './pattern-registry';
 
-const createHandler = (opts: { isEvent?: boolean; broadcast?: boolean } = {}): MessageHandler => {
+const createHandler = (
+  opts: { isEvent?: boolean; broadcast?: boolean; ordered?: boolean } = {},
+): MessageHandler => {
   const handler = vi.fn() as MessageHandler;
 
-  handler.isEventHandler = opts.isEvent ?? false;
+  handler.isEventHandler = opts.isEvent ?? opts.ordered ?? false;
 
   if (opts.broadcast) {
     handler.extras = { broadcast: true };
+  } else if (opts.ordered) {
+    handler.extras = { ordered: true };
   }
 
   return handler;
@@ -63,6 +67,62 @@ describe(PatternRegistry, () => {
 
           // Then: mapped to full ev subject
           expect(sut.getHandler(`${serviceName}__microservice.ev.user.created`)).toBe(handler);
+        });
+      });
+
+      describe('when registering an ordered handler', () => {
+        it('should map to an ev subject with isOrdered flag', () => {
+          // Given: an ordered event handler
+          const handler = createHandler({ ordered: true });
+          const handlers = new Map<string, MessageHandler>([['order.status', handler]]);
+
+          // When: registered
+          sut.registerHandlers(handlers);
+
+          // Then: mapped to ev subject (shared stream), retrievable
+          expect(sut.getHandler(`${serviceName}__microservice.ordered.order.status`)).toBe(handler);
+        });
+
+        it('should not count as a workqueue event handler', () => {
+          // Given: only ordered handler
+          const handler = createHandler({ ordered: true });
+          const handlers = new Map<string, MessageHandler>([['order.status', handler]]);
+
+          // When: registered
+          sut.registerHandlers(handlers);
+
+          // Then: ordered yes, workqueue no
+          expect(sut.hasOrderedHandlers()).toBe(true);
+          expect(sut.hasEventHandlers()).toBe(false);
+        });
+
+        it('should appear in getOrderedSubjects()', () => {
+          // Given: ordered handler
+          const handler = createHandler({ ordered: true });
+          const handlers = new Map<string, MessageHandler>([['order.status', handler]]);
+
+          // When: registered
+          sut.registerHandlers(handlers);
+
+          // Then: full NATS subject returned
+          expect(sut.getOrderedSubjects()).toEqual([
+            `${serviceName}__microservice.ordered.order.status`,
+          ]);
+        });
+
+        it('should categorize as ordered in getPatternsByKind()', () => {
+          // Given: ordered handler
+          const handler = createHandler({ ordered: true });
+          const handlers = new Map<string, MessageHandler>([['order.status', handler]]);
+
+          // When: registered
+          sut.registerHandlers(handlers);
+
+          // Then: in ordered, not in events
+          const kinds = sut.getPatternsByKind();
+
+          expect(kinds.ordered).toEqual(['order.status']);
+          expect(kinds.events).toEqual([]);
         });
       });
 
@@ -171,7 +231,12 @@ describe(PatternRegistry, () => {
         expect(sut.hasRpcHandlers()).toBe(false);
         expect(sut.hasEventHandlers()).toBe(false);
         expect(sut.hasBroadcastHandlers()).toBe(false);
-        expect(sut.getPatternsByKind()).toEqual({ commands: [], events: [], broadcasts: [] });
+        expect(sut.getPatternsByKind()).toEqual({
+          commands: [],
+          events: [],
+          broadcasts: [],
+          ordered: [],
+        });
       });
     });
   });

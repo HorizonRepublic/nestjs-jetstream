@@ -23,21 +23,14 @@ export interface DeadLetterConfig {
 }
 
 /**
- * Routes incoming event messages (workqueue and broadcast) to NestJS handlers.
+ * Routes incoming event messages (workqueue, broadcast, and ordered) to NestJS handlers.
  *
- * Delivery semantics (at-least-once):
- * - Handler executes first
- * - Success -> ack (message consumed)
- * - Handler error -> nak (NATS redelivers, up to `max_deliver` times)
- * - Dead letter (max_deliver reached) -> onDeadLetter hook -> term or nak
- * - Decode error -> term (no retry for malformed payloads)
- * - No handler found -> term (configuration error)
+ * **Workqueue & Broadcast** — at-least-once delivery:
+ * - Success -> ack | Error -> nak (retry) | Dead letter -> term
  *
- * Both workqueue and broadcast use the same ack/nak semantics.
- * Each durable consumer tracks delivery independently, so a nak from
- * one broadcast consumer does not affect others.
- *
- * Handlers must be idempotent — NATS may redeliver on failure or timeout.
+ * **Ordered** — strict sequential delivery:
+ * - No ack/nak/DLQ — nats.js auto-acknowledges ordered consumer messages.
+ * - Handler errors are logged but do not affect delivery.
  */
 export class EventRouter {
   private readonly logger = new Logger('Jetstream:EventRouter');
@@ -60,10 +53,11 @@ export class EventRouter {
     this.deadLetterConfig.maxDeliverByStream = consumerMaxDelivers;
   }
 
-  /** Start routing event and broadcast messages to handlers. */
+  /** Start routing event, broadcast, and ordered messages to handlers. */
   public start(): void {
     this.subscribeToStream(this.messageProvider.events$, 'workqueue');
     this.subscribeToStream(this.messageProvider.broadcasts$, 'broadcast');
+    this.subscribeToStream(this.messageProvider.ordered$, 'ordered', true);
   }
 
   /** Stop routing and unsubscribe from all streams. */
@@ -76,11 +70,11 @@ export class EventRouter {
   }
 
   /** Subscribe to a message stream and route each message. */
-  private subscribeToStream(stream$: Observable<JsMsg>, label: string): void {
+  private subscribeToStream(stream$: Observable<JsMsg>, label: string, isOrdered = false): void {
     const subscription = stream$
       .pipe(
         mergeMap((msg) =>
-          defer(() => this.handle(msg)).pipe(
+          defer(() => (isOrdered ? this.handleOrdered(msg) : this.handle(msg))).pipe(
             catchError((err) => {
               this.logger.error(`Unexpected error in ${label} event router`, err);
               return EMPTY;
@@ -139,6 +133,35 @@ export class EventRouter {
         msg.nak();
       }
     }
+  }
+
+  /** Handle an ordered message: decode -> execute handler -> no ack/nak. */
+  private handleOrdered(msg: JsMsg): Observable<void> {
+    const handler = this.patternRegistry.getHandler(msg.subject);
+
+    if (!handler) {
+      this.logger.error(`No handler for ordered subject: ${msg.subject}`);
+      return EMPTY;
+    }
+
+    let data: unknown;
+
+    try {
+      data = this.codec.decode(msg.data);
+    } catch (err) {
+      this.logger.error(`Decode error for ordered ${msg.subject}:`, err);
+      return EMPTY;
+    }
+
+    this.eventBus.emit(TransportEvent.MessageRouted, msg.subject, 'event');
+
+    const ctx = new RpcContext([msg]);
+
+    return from(
+      unwrapResult(handler(data, ctx)).catch((err: unknown) => {
+        this.logger.error(`Ordered handler error (${msg.subject}):`, err);
+      }),
+    );
   }
 
   /** Check if the message has exhausted all delivery attempts. */
