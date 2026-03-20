@@ -1,6 +1,6 @@
 # @horizon-republic/nestjs-jetstream
 
-A production-grade NestJS transport for NATS JetStream with built-in support for **Events**, **Broadcast**, and **RPC** messaging patterns.
+A production-grade NestJS transport for NATS JetStream with built-in support for **Events**, **Broadcast**, **Ordered Events**, and **RPC** messaging patterns.
 
 [![npm version](https://img.shields.io/npm/v/@horizon-republic/nestjs-jetstream.svg)](https://www.npmjs.com/package/@horizon-republic/nestjs-jetstream)
 [![codecov](https://codecov.io/github/HorizonRepublic/nestjs-jetstream/graph/badge.svg?token=40IPSWFMT4)](https://codecov.io/github/HorizonRepublic/nestjs-jetstream)
@@ -19,6 +19,7 @@ A production-grade NestJS transport for NATS JetStream with built-in support for
 - [Messaging Patterns](#messaging-patterns)
   - [RPC (Request/Reply)](#rpc-requestreply)
   - [Events](#events)
+  - [Ordered Events](#ordered-events)
   - [JetstreamRecord Builder](#jetstreamrecord-builder)
 - [Handler Context & Serialization](#handler-context--serialization)
   - [RpcContext](#rpccontext)
@@ -42,6 +43,7 @@ A production-grade NestJS transport for NATS JetStream with built-in support for
 
 - **Two RPC modes** — NATS Core request/reply (lowest latency) or JetStream-persisted commands
 - **At-least-once event delivery** — messages acked after handler success, redelivered on failure
+- **Ordered events** — strict sequential delivery with automatic failover, separate Limits-retention stream
 - **Broadcast events** — fan-out to all subscribing services with per-service durable consumers
 - **Pluggable codec** — JSON by default, swap in MessagePack, Protobuf, or any custom format
 - **Progressive configuration** — two lines to start, full NATS overrides for power users
@@ -251,6 +253,15 @@ interface JetstreamModuleOptions {
 
   /** Broadcast event stream/consumer overrides. */
   broadcast?: { stream?: Partial<StreamConfig>; consumer?: Partial<ConsumerConfig> };
+
+  /** Ordered event consumer configuration. */
+  ordered?: {
+    deliverPolicy?: DeliverPolicy;   // default: All (read from beginning)
+    optStartSeq?: number;            // for StartSequence policy
+    optStartTime?: string;           // for StartTime policy (ISO string)
+    replayPolicy?: ReplayPolicy;     // default: Instant
+    stream?: Partial<StreamConfig>;  // stream overrides (e.g., max_age)
+  };
 
   /** Transport lifecycle hook handlers. Unset hooks are silently ignored. */
   hooks?: Partial<TransportHooks>;
@@ -474,6 +485,93 @@ JetstreamModule.forRoot({
 ```
 
 > **Note:** The broadcast stream is shared across all services — stream-level settings (e.g., `max_age`, `max_bytes`) affect everyone. Consumer-level settings are per-service.
+
+### Ordered Events
+
+Ordered events guarantee **strict sequential delivery** — messages are delivered in exactly the order they were published. This is useful for event sourcing, audit logs, and any scenario where processing order matters.
+
+#### How it works
+
+- Uses a **separate stream** with Limits retention (messages persist based on `max_age`, not on ack)
+- **One active reader** — if multiple instances are running, only one reads at a time (automatic failover if it goes down)
+- **No ack/nak/DLQ** — nats.js auto-acknowledges ordered consumer messages. Handler errors are logged but don't affect delivery (at-most-once semantics)
+- **Self-healing** — if the consumer disconnects, nats.js automatically recreates it at the correct position
+
+```typescript
+// Sending — use the 'ordered:' prefix
+this.client.emit('ordered:order.status', { orderId: 42, status: 'shipped' });
+
+// Handling — use { ordered: true } in extras
+@EventPattern('order.status', { ordered: true })
+handleOrderStatus(@Payload() data: OrderStatusDto) {
+  // Messages arrive in strict publish order
+  await this.projectionService.apply(data);
+}
+```
+
+#### Delivery semantics (at-most-once, strictly ordered)
+
+| Scenario | Action | Redelivery? |
+|----------|--------|-------------|
+| Handler success | Auto-ack | No |
+| Handler throws | Logged, continues | No |
+| Decode error | Logged, skipped | No |
+| No handler found | Logged, skipped | No |
+
+> **Important:** Ordered consumers provide **ordering guarantees** at the cost of **at-most-once delivery**. If your handler fails, the message is not retried — the consumer moves to the next message. If you need both ordering and guaranteed delivery, consider using an external offset tracking mechanism or a different messaging pattern (e.g., SQS FIFO).
+
+#### Deliver policy
+
+Control where the ordered consumer starts reading when it is (re)created:
+
+| Policy | Behavior | Config |
+|--------|----------|--------|
+| `All` (default) | Read from the beginning of the stream | `ordered: {}` or omit |
+| `New` | Only messages published after consumer starts | `ordered: { deliverPolicy: DeliverPolicy.New }` |
+| `Last` | Start from the last message in the stream | `ordered: { deliverPolicy: DeliverPolicy.Last }` |
+| `LastPerSubject` | Last message per subject | `ordered: { deliverPolicy: DeliverPolicy.LastPerSubject }` |
+| `StartSequence` | From a specific sequence number | `ordered: { deliverPolicy: DeliverPolicy.StartSequence, optStartSeq: 100 }` |
+| `StartTime` | From a specific timestamp | `ordered: { deliverPolicy: DeliverPolicy.StartTime, optStartTime: '2026-01-01T00:00:00Z' }` |
+
+```typescript
+import { DeliverPolicy, nanos } from '@horizon-republic/nestjs-jetstream';
+
+JetstreamModule.forRoot({
+  name: 'projections',
+  servers: ['nats://localhost:4222'],
+  ordered: {
+    deliverPolicy: DeliverPolicy.New,
+    stream: {
+      max_age: nanos(7 * 24 * 60 * 60 * 1000), // keep 7 days of history
+    },
+  },
+})
+```
+
+#### Scaling and failover
+
+Ordered consumers guarantee one active reader at a time:
+
+- **Multiple instances** — all instances attempt to consume, but NATS delivers messages to only one. The others idle and wait.
+- **Failover** — if the active instance goes down, one of the waiting instances automatically picks up. No leader election or distributed locks needed.
+- **Restart behavior** — depends on `deliverPolicy`. With `All`, the new consumer replays from the beginning (within `max_age`). With `New`, it starts from where it connects — messages published during the gap are skipped.
+
+> **Handlers should be idempotent** regardless of consumer type — during failover, there may be a brief overlap where both the old and new consumers process the same message.
+
+#### Comparison with workqueue events
+
+| | Workqueue | Ordered |
+|---|---|---|
+| Delivery | At-least-once | At-most-once |
+| Ordering | Not guaranteed (parallel) | Strict sequential |
+| Parallelism | Multiple instances (load-balanced) | One active reader |
+| Retry on failure | Yes (`nak` → redeliver) | No (continues) |
+| DLQ support | Yes | No |
+| Stream retention | Workqueue (delete on ack) | Limits (delete by age/size) |
+| Use case | Workload distribution | Event sourcing, audit logs, projections |
+| Publish prefix | (none) | `ordered:` |
+
+> **Note:** Internally, the transport works around a [known nats.js issue](https://github.com/nats-io/nats.js) where explicitly passing `DeliverPolicy.All` to an ordered consumer causes `consume()` to hang. The library silently omits the field when `All` is configured (nats.js defaults to the same behavior). All other policies are passed through directly.
 
 ### JetstreamRecord Builder
 
@@ -826,16 +924,18 @@ The transport generates NATS subjects, streams, and consumers based on the servi
 | RPC subject        | `{internal}.cmd.{pattern}`      | `orders__microservice.cmd.get.order`      |
 | Event subject      | `{internal}.ev.{pattern}`       | `orders__microservice.ev.order.created`   |
 | Broadcast subject  | `broadcast.{pattern}`           | `broadcast.config.updated`                |
+| Ordered subject    | `{internal}.ordered.{pattern}`  | `orders__microservice.ordered.order.status`|
 | Event stream       | `{internal}_ev-stream`          | `orders__microservice_ev-stream`          |
 | Command stream     | `{internal}_cmd-stream`         | `orders__microservice_cmd-stream`         |
 | Broadcast stream   | `broadcast-stream`              | `broadcast-stream`                        |
+| Ordered stream     | `{internal}_ordered-stream`     | `orders__microservice_ordered-stream`     |
 | Event consumer     | `{internal}_ev-consumer`        | `orders__microservice_ev-consumer`        |
 | Command consumer   | `{internal}_cmd-consumer`       | `orders__microservice_cmd-consumer`       |
 | Broadcast consumer | `{internal}_broadcast-consumer` | `orders__microservice_broadcast-consumer` |
 
 ### Default Stream & Consumer Configs
 
-All defaults can be overridden via `events`, `broadcast`, or `rpc` options.
+All defaults can be overridden via `events`, `broadcast`, `ordered`, or `rpc` options.
 
 <details>
 <summary><strong>Event Stream</strong></summary>
@@ -888,6 +988,26 @@ All defaults can be overridden via `events`, `broadcast`, or `rpc` options.
 | Max bytes            | 2 GB       |
 | Max age              | 1 day      |
 | Duplicate window     | 2 minutes  |
+
+</details>
+
+<details>
+<summary><strong>Ordered Stream</strong></summary>
+
+| Property             | Value      |
+|----------------------|------------|
+| Retention            | Limits     |
+| Storage              | File       |
+| Replicas             | 1          |
+| Max consumers        | 100        |
+| Max message size     | 10 MB      |
+| Max messages/subject | 5,000,000  |
+| Max messages         | 50,000,000 |
+| Max bytes            | 5 GB       |
+| Max age              | 1 day      |
+| Duplicate window     | 2 minutes  |
+
+> Ordered consumers are **ephemeral** — no durable consumer config. Delivery policy and other consumer-level settings are configured via `ordered.deliverPolicy` etc.
 
 </details>
 
@@ -961,6 +1081,7 @@ DeadLetterInfo
 JetstreamModuleOptions
 JetstreamModuleAsyncOptions
 JetstreamFeatureOptions
+OrderedEventOverrides
 RpcConfig
 StreamConsumerOverrides
 TransportHooks
@@ -979,6 +1100,15 @@ events: {
   consumer: { ack_wait: nanos(30_000) },                   // 30s
 }
 ```
+
+## Roadmap
+
+### v3.0.0
+
+- **Multiple connections** — `connectionName` parameter in `forRoot`/`forFeature` to support connecting to different NATS instances from the same service (e.g., multi-region, domain separation)
+- **Dedicated documentation site** — move from README to a structured documentation platform
+
+Have a feature request? [Open a discussion](https://github.com/HorizonRepublic/nestjs-jetstream/discussions).
 
 ## Development
 
