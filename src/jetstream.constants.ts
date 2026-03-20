@@ -190,12 +190,6 @@ export enum JetstreamHeader {
   Subject = 'x-subject',
   /** Internal name of the service that sent the message. */
   CallerName = 'x-caller-name',
-  /** User-provided request ID (pass-through, not auto-generated). */
-  RequestId = 'x-request-id',
-  /** User-provided trace ID for distributed tracing (pass-through). */
-  TraceId = 'x-trace-id',
-  /** User-provided span ID for distributed tracing (pass-through). */
-  SpanId = 'x-span-id',
   /** Set to `'true'` on error responses so the client can distinguish success from failure. */
   Error = 'x-error',
 }

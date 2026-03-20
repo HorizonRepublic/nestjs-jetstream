@@ -129,7 +129,7 @@ export class JetstreamClient extends ClientProxy {
    */
   protected async dispatchEvent<T = unknown>(packet: ReadPacket): Promise<T> {
     const nc = await this.connect();
-    const { data, hdrs } = this.extractRecordData(packet.data);
+    const { data, hdrs, messageId } = this.extractRecordData(packet.data);
 
     // Determine if this is a broadcast event
     // Broadcast subjects start with 'broadcast:'
@@ -138,7 +138,7 @@ export class JetstreamClient extends ClientProxy {
 
     const ack = await nc.jetstream().publish(subject, this.codec.encode(data), {
       headers: msgHeaders,
-      msgID: crypto.randomUUID(),
+      msgID: messageId ?? crypto.randomUUID(),
     });
 
     if (ack.duplicate) {
@@ -156,7 +156,7 @@ export class JetstreamClient extends ClientProxy {
    */
   protected publish(packet: ReadPacket, callback: (p: WritePacket) => void): () => void {
     const subject = buildSubject(this.targetName, 'cmd', packet.pattern);
-    const { data, hdrs, timeout } = this.extractRecordData(packet.data);
+    const { data, hdrs, timeout, messageId } = this.extractRecordData(packet.data);
 
     const onUnhandled = (err: unknown): void => {
       this.logger.error('Unhandled publish error:', err);
@@ -177,6 +177,7 @@ export class JetstreamClient extends ClientProxy {
         timeout,
         callback,
         jetStreamCorrelationId,
+        messageId,
       ).catch(onUnhandled);
     }
 
@@ -238,6 +239,7 @@ export class JetstreamClient extends ClientProxy {
     timeout: number | undefined,
     callback: (p: WritePacket) => void,
     correlationId: string = crypto.randomUUID(),
+    messageId?: string,
   ): Promise<void> {
     const effectiveTimeout = timeout ?? this.getRpcTimeout();
 
@@ -270,7 +272,7 @@ export class JetstreamClient extends ClientProxy {
 
       await nc.jetstream().publish(subject, this.codec.encode(data), {
         headers: hdrs,
-        msgID: crypto.randomUUID(),
+        msgID: messageId ?? crypto.randomUUID(),
       });
     } catch (err) {
       clearTimeout(timeoutId);
@@ -418,10 +420,11 @@ export class JetstreamClient extends ClientProxy {
         data: rawData.data,
         hdrs: rawData.headers.size > 0 ? new Map(rawData.headers) : null,
         timeout: rawData.timeout,
+        messageId: rawData.messageId,
       };
     }
 
-    return { data: rawData, hdrs: null, timeout: undefined };
+    return { data: rawData, hdrs: null, timeout: undefined, messageId: undefined };
   }
 
   private isCoreRpcMode(): boolean {

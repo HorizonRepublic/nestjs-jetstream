@@ -16,4 +16,6 @@ export interface ExtractedRecordData {
   hdrs: Map<string, string> | null;
   /** Per-request RPC timeout override in ms, or `undefined` for default. */
   timeout: number | undefined;
+  /** Custom message ID for JetStream deduplication, or `undefined` for auto-generated UUID. */
+  messageId: string | undefined;
 }
