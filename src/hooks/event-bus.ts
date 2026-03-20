@@ -45,7 +45,16 @@ export class EventBus {
     if (!hook) return;
 
     try {
-      (hook as (...a: unknown[]) => void)(...args);
+      const result = (hook as (...a: unknown[]) => unknown)(...args);
+
+      // Catch async hook rejections that would otherwise go to unhandledRejection
+      if (result && typeof (result as Promise<unknown>).catch === 'function') {
+        (result as Promise<unknown>).catch((err: unknown) => {
+          this.logger.error(
+            `Async hook "${event}" rejected: ${err instanceof Error ? err.message : err}`,
+          );
+        });
+      }
     } catch (err) {
       this.logger.error(
         `Hook "${event}" threw an error: ${err instanceof Error ? err.message : err}`,
