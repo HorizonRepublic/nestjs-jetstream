@@ -1,4 +1,4 @@
-import { isObservable, Observable } from 'rxjs';
+import { isObservable, Observable, Subscription } from 'rxjs';
 
 /**
  * Unwrap a handler result that may be a Promise, Observable, or nested combination.
@@ -35,12 +35,15 @@ export const unwrapResult = async (result: unknown): Promise<unknown> => {
 const subscribeToFirst = (obs: Observable<unknown>): Promise<unknown> =>
   new Promise((resolve, reject) => {
     let done = false;
+    let subscription: Subscription | null = null;
 
-    obs.subscribe({
+    subscription = obs.subscribe({
       next: (val: unknown) => {
         if (!done) {
           done = true;
           resolve(val);
+          // Unsubscribe if subscribe() has already returned; otherwise deferred below
+          subscription?.unsubscribe();
         }
       },
       error: reject,
@@ -48,4 +51,10 @@ const subscribeToFirst = (obs: Observable<unknown>): Promise<unknown> =>
         if (!done) resolve(undefined);
       },
     });
+
+    // Handle synchronous emission: next fired before subscribe() returned
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- mutated in sync callback above
+    if (done) {
+      subscription.unsubscribe();
+    }
   });
