@@ -1,4 +1,5 @@
 import { CustomTransportStrategy, Server } from '@nestjs/microservices';
+import type { ConsumerInfo } from 'nats';
 
 import { ConnectionProvider } from '../connection';
 import type { JetstreamModuleOptions, StreamKind } from '../interfaces';
@@ -65,21 +66,24 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
       // 4. Ensure consumers exist
       const consumers = await this.consumerProvider.ensureConsumers(streamKinds);
 
-      // 5. Start message consumption
+      // 5. Update DLQ thresholds from actual NATS consumer configs
+      this.eventRouter.updateMaxDeliverMap(this.buildMaxDeliverMap(consumers));
+
+      // 6. Start message consumption
       this.messageProvider.start(consumers);
 
-      // 6. Start event router if needed
+      // 7. Start event router if needed
       if (this.patternRegistry.hasEventHandlers() || this.patternRegistry.hasBroadcastHandlers()) {
         this.eventRouter.start();
       }
 
-      // 7. Start RPC router if JetStream mode
+      // 8. Start RPC router if JetStream mode
       if (this.isJetStreamRpcMode() && this.patternRegistry.hasRpcHandlers()) {
         this.rpcRouter.start();
       }
     }
 
-    // 8. Start Core RPC server if core mode
+    // 9. Start Core RPC server if core mode
     if (this.isCoreRpcMode() && this.patternRegistry.hasRpcHandlers()) {
       await this.coreRpcServer.start();
     }
@@ -147,6 +151,22 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     }
 
     return kinds;
+  }
+
+  /** Build max_deliver map from actual NATS consumer configs (not options). */
+  private buildMaxDeliverMap(consumers: Map<StreamKind, ConsumerInfo>): Map<string, number> {
+    const map = new Map<string, number>();
+
+    for (const [, info] of consumers) {
+      const stream = info.stream_name;
+      const maxDeliver = info.config.max_deliver;
+
+      if (stream && maxDeliver) {
+        map.set(stream, maxDeliver);
+      }
+    }
+
+    return map;
   }
 
   private isCoreRpcMode(): boolean {

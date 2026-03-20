@@ -60,6 +60,15 @@ export class EventRouter {
     private readonly deadLetterConfig?: DeadLetterConfig,
   ) {}
 
+  /**
+   * Update the max_deliver thresholds from actual NATS consumer configs.
+   * Called after consumers are ensured so the DLQ map reflects reality.
+   */
+  public updateMaxDeliverMap(consumerMaxDelivers: Map<string, number>): void {
+    if (!this.deadLetterConfig) return;
+    this.deadLetterConfig.maxDeliverByStream = consumerMaxDelivers;
+  }
+
   /** Start routing event and broadcast messages to handlers. */
   public start(): void {
     this.subscribeToStream(this.messageProvider.events$, 'workqueue');
