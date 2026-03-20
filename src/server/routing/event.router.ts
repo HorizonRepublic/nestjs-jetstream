@@ -1,21 +1,12 @@
 import { Logger } from '@nestjs/common';
 import { JsMsg } from 'nats';
-import {
-  catchError,
-  defer,
-  EMPTY,
-  from,
-  isObservable,
-  lastValueFrom,
-  mergeMap,
-  Observable,
-  Subscription,
-} from 'rxjs';
+import { catchError, defer, EMPTY, from, mergeMap, Observable, Subscription } from 'rxjs';
 
 import { RpcContext } from '../../context';
 import { EventBus } from '../../hooks';
 import { TransportEvent } from '../../interfaces';
 import type { Codec, DeadLetterInfo } from '../../interfaces';
+import { unwrapResult } from '../../utils';
 
 import { MessageProvider } from '../infrastructure';
 import { PatternRegistry } from './pattern-registry';
@@ -137,12 +128,7 @@ export class EventRouter {
     msg: JsMsg,
   ): Promise<void> {
     try {
-      const result = await handler(data, ctx);
-
-      if (isObservable(result)) {
-        await lastValueFrom(result, { defaultValue: undefined });
-      }
-
+      await unwrapResult(handler(data, ctx));
       msg.ack();
     } catch (err) {
       this.logger.error(`Event handler error (${msg.subject}):`, err);
