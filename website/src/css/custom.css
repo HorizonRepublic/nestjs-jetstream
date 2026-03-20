@@ -182,9 +182,10 @@ pre[class*='prism-code'] {
   overflow: hidden;
 }
 
-/* Override Prism theme background */
+/* Override Prism theme background + padding */
 pre[class*='language-'] {
   background: #0E1525 !important;
+  padding: 1.25rem 1.5rem !important;
 }
 
 div[class*='codeBlockTitle'] {
