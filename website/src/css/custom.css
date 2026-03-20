@@ -74,6 +74,12 @@ div[class*='searchContainer'] button:hover,
   padding-top: 1rem;
 }
 
+/* Sidebar chevron arrows — match text color */
+.menu__caret::before,
+.menu__link--sublist-caret::after {
+  filter: invert(70%) sepia(10%) saturate(500%) hue-rotate(180deg);
+}
+
 .menu__link {
   color: #94A3B8;
   font-size: 0.9rem;
