@@ -141,7 +141,8 @@ describe('Workqueue Event Delivery', () => {
 
       // Then: wait and verify only one delivery (NATS deduplicates)
       await waitForCondition(() => controller.received.length > 0, 5_000);
-      await new Promise((r) => setTimeout(r, 1_000));
+      // Allow extra time for any duplicate to arrive before asserting deduplication
+      await new Promise((r) => setTimeout(r, 2_000));
 
       expect(controller.received).toHaveLength(1);
       expect(controller.received[0]).toEqual({ orderId: 1 });

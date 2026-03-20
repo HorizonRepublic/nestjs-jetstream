@@ -147,11 +147,10 @@ describe(ConsumerProvider, () => {
     describe('when ordered kind is passed', () => {
       it('should throw because ordered consumers are ephemeral', async () => {
         // Given: ordered kind (should never be used with durable consumer path)
-        mockJsm.consumers.info.mockRejectedValue(
-          Object.assign(new Error('not found'), {
-            api_error: { err_code: 10014, code: 404, description: 'consumer not found' },
-          }),
-        );
+        const notFoundError = new NatsError('consumer not found', 'UNKNOWN_ERROR');
+
+        notFoundError.api_error = { err_code: 10014, code: 404, description: 'consumer not found' };
+        mockJsm.consumers.info.mockRejectedValue(notFoundError);
 
         // When/Then: throws descriptive error
         await expect(sut.ensureConsumers(['ordered'])).rejects.toThrow(/ephemeral/i);
