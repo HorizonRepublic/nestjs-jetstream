@@ -47,6 +47,12 @@ const config: Config = {
         excludeInternal: true,
         excludeExternals: true,
         skipErrorChecking: true,
+        useHTMLEncodedBrackets: true,
+        pageTitleTemplates: {
+          index: '{projectName}',
+          member: '{name}',
+          module: '{name}',
+        },
       },
     ],
   ],
