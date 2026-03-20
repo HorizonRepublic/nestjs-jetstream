@@ -49,8 +49,13 @@ export const createTestApp = async (
   const app = module.createNestApplication({ logger: false });
   const strategy = module.get(JetstreamStrategy);
 
-  app.connectMicroservice<MicroserviceOptions>({ strategy } as MicroserviceOptions);
-  await app.startAllMicroservices();
+  // Publisher-only mode (consumer: false) has no strategy — skip microservice setup
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- strategy is null when consumer: false
+  if (strategy) {
+    app.connectMicroservice<MicroserviceOptions>({ strategy } as MicroserviceOptions);
+    await app.startAllMicroservices();
+  }
+
   await app.init();
 
   return { app, module };

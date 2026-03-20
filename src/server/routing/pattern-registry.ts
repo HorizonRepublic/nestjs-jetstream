@@ -32,6 +32,12 @@ export class PatternRegistry {
       const isBroadcast = !!extras?.broadcast;
       const isOrdered = !!extras?.ordered;
 
+      if (isBroadcast && isOrdered) {
+        throw new Error(
+          `Handler "${pattern}" cannot be both broadcast and ordered. Use one or the other.`,
+        );
+      }
+
       // Build the full NATS subject this handler should receive
       let fullSubject: string;
 

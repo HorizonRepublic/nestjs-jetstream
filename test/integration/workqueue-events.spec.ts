@@ -5,7 +5,7 @@ import { TestingModule } from '@nestjs/testing';
 import { NatsConnection } from 'nats';
 import { firstValueFrom } from 'rxjs';
 
-import { getClientToken } from '../../src';
+import { getClientToken, JetstreamRecordBuilder } from '../../src';
 
 import {
   cleanupStreams,
@@ -102,6 +102,49 @@ describe('Workqueue Event Delivery', () => {
       await waitForCondition(() => controller.received.length === 5, 10_000);
 
       expect(controller.received).toEqual([0, 1, 2, 3, 4].map((i) => ({ orderId: i })));
+    });
+  });
+
+  describe('custom messageId deduplication', () => {
+    let app: INestApplication;
+    let module: TestingModule;
+    let client: ClientProxy;
+    let serviceName: string;
+    let controller: EventController;
+
+    beforeEach(async () => {
+      serviceName = uniqueServiceName();
+
+      ({ app, module } = await createTestApp(
+        { name: serviceName },
+        [EventController],
+        [serviceName],
+      ));
+
+      client = module.get<ClientProxy>(getClientToken(serviceName));
+      controller = module.get(EventController);
+    });
+
+    afterEach(async () => {
+      await app.close();
+      await cleanupStreams(nc, serviceName);
+    });
+
+    it('should deduplicate events with the same messageId', async () => {
+      // Given: two events with the same messageId
+      const messageId = `order-dedup-${Date.now()}`;
+      const record = new JetstreamRecordBuilder({ orderId: 1 }).setMessageId(messageId).build();
+
+      // When: publish the same messageId twice
+      await firstValueFrom(client.emit('order.created', record));
+      await firstValueFrom(client.emit('order.created', record));
+
+      // Then: wait and verify only one delivery (NATS deduplicates)
+      await waitForCondition(() => controller.received.length > 0, 5_000);
+      await new Promise((r) => setTimeout(r, 1_000));
+
+      expect(controller.received).toHaveLength(1);
+      expect(controller.received[0]).toEqual({ orderId: 1 });
     });
   });
 

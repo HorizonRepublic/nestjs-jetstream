@@ -206,6 +206,8 @@ describe(EventRouter, () => {
 
     beforeEach(() => {
       ordered$ = new Subject<JsMsg>();
+      patternRegistry = createMock<PatternRegistry>();
+      patternRegistry.hasOrderedHandlers.mockReturnValue(true);
       messageProvider = createMock<MessageProvider>({
         events$: events$.asObservable(),
         broadcasts$: broadcasts$.asObservable(),

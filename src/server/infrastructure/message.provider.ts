@@ -32,6 +32,7 @@ export class MessageProvider {
   private readonly logger = new Logger('Jetstream:Message');
   private readonly activeIterators = new Set<ConsumerMessages>();
   private orderedReadyResolve: (() => void) | null = null;
+  private orderedReadyReject: ((err: unknown) => void) | null = null;
 
   private destroy$ = new Subject<void>();
   private eventMessages$ = new Subject<JsMsg>();
@@ -121,9 +122,10 @@ export class MessageProvider {
       consumerOpts.replay_policy = orderedConfig.replayPolicy;
     }
 
-    // Resolve when the ordered consumer is actively consuming (ready for messages)
-    const ready = new Promise<void>((resolve) => {
+    // Resolve/reject when the ordered consumer connects or fails on first attempt
+    const ready = new Promise<void>((resolve, reject) => {
       this.orderedReadyResolve = resolve;
+      this.orderedReadyReject = reject;
     });
 
     const flow = this.createOrderedFlow(streamName, consumerOpts);
@@ -247,9 +249,11 @@ export class MessageProvider {
           'message-provider',
         );
 
-        // Resolve ready promise on error so listen() doesn't hang forever
-        if (this.orderedReadyResolve) {
-          this.orderedReadyResolve();
+        // Fail fast on first error so listen() propagates the failure.
+        // Subsequent errors (after retry) are handled by the self-healing loop.
+        if (this.orderedReadyReject) {
+          this.orderedReadyReject(err);
+          this.orderedReadyReject = null;
           this.orderedReadyResolve = null;
         }
 
@@ -283,6 +287,7 @@ export class MessageProvider {
     if (this.orderedReadyResolve) {
       this.orderedReadyResolve();
       this.orderedReadyResolve = null;
+      this.orderedReadyReject = null;
     }
 
     this.activeIterators.add(messages);

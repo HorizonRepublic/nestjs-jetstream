@@ -1,6 +1,15 @@
 import { Logger } from '@nestjs/common';
 import { JsMsg } from 'nats';
-import { catchError, defer, EMPTY, from, mergeMap, Observable, Subscription } from 'rxjs';
+import {
+  catchError,
+  concatMap,
+  defer,
+  EMPTY,
+  from,
+  mergeMap,
+  Observable,
+  Subscription,
+} from 'rxjs';
 
 import { RpcContext } from '../../context';
 import { EventBus } from '../../hooks';
@@ -74,18 +83,17 @@ export class EventRouter {
 
   /** Subscribe to a message stream and route each message. */
   private subscribeToStream(stream$: Observable<JsMsg>, label: string, isOrdered = false): void {
-    const subscription = stream$
-      .pipe(
-        mergeMap((msg) =>
-          defer(() => (isOrdered ? this.handleOrdered(msg) : this.handle(msg))).pipe(
-            catchError((err) => {
-              this.logger.error(`Unexpected error in ${label} event router`, err);
-              return EMPTY;
-            }),
-          ),
-        ),
-      )
-      .subscribe();
+    const route = (msg: JsMsg): Observable<void> =>
+      defer(() => (isOrdered ? this.handleOrdered(msg) : this.handle(msg))).pipe(
+        catchError((err) => {
+          this.logger.error(`Unexpected error in ${label} event router`, err);
+          return EMPTY;
+        }),
+      );
+
+    // Ordered streams use concatMap for strict sequential processing;
+    // workqueue/broadcast use mergeMap for parallel handler execution.
+    const subscription = stream$.pipe(isOrdered ? concatMap(route) : mergeMap(route)).subscribe();
 
     this.subscriptions.push(subscription);
   }

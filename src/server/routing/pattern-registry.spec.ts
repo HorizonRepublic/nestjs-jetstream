@@ -234,6 +234,25 @@ describe(PatternRegistry, () => {
     });
   });
 
+  describe('error paths', () => {
+    describe('when handler has both broadcast and ordered', () => {
+      it('should throw a descriptive error', () => {
+        // Given: a handler with conflicting flags
+        const handler = vi.fn() as MessageHandler;
+
+        handler.isEventHandler = true;
+        handler.extras = { broadcast: true, ordered: true };
+
+        const handlers = new Map<string, MessageHandler>([['conflict', handler]]);
+
+        // When/Then: throws
+        expect(() => {
+          sut.registerHandlers(handlers);
+        }).toThrow(/cannot be both broadcast and ordered/i);
+      });
+    });
+  });
+
   describe('edge cases', () => {
     describe('when no handlers are registered', () => {
       it('should report no handlers of any type', () => {
