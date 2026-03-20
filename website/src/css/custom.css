@@ -72,6 +72,7 @@ div[class*='docRoot'] {
   border-radius: 8px !important;
   color: #94A3B8 !important;
   font-size: 0.85rem !important;
+  min-width: 200px !important;
   transition: border-color 0.15s;
 }
 
