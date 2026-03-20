@@ -90,11 +90,11 @@ describe('Core RPC Round-Trip', () => {
     expect(result).toEqual({ id: 1, tenant: 'acme' });
   });
 
-  it('should timeout when no handler matches', async () => {
+  it('should return error immediately when no handler matches', async () => {
     const record = new JetstreamRecordBuilder({}).setTimeout(500).build();
 
     await expect(firstValueFrom(client.send('nonexistent.pattern', record))).rejects.toThrow(
-      /timeout/i,
+      /no handler/i,
     );
   });
 });
