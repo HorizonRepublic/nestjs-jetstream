@@ -78,10 +78,10 @@
   "devDependencies": {
     "@faker-js/faker": "^10.3.0",
     "@golevelup/ts-vitest": "^4.0.0",
-    "@nestjs/platform-express": "^11.1.16",
-    "@nestjs/testing": "^11.1.16",
-    "@types/node": "^25.4.0",
-    "@vitest/coverage-v8": "^4.0.18",
+    "@nestjs/platform-express": "^11.1.17",
+    "@nestjs/testing": "^11.1.17",
+    "@types/node": "^25.5.0",
+    "@vitest/coverage-v8": "^4.1.0",
     "eslint": "^10.0.3",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prefer-arrow": "^1.2.3",
@@ -93,7 +93,7 @@
     "tsx": "^4.21.0",
     "typedoc": "^0.28.17",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.57.0",
-    "vitest": "^4.0.18"
+    "typescript-eslint": "^8.57.1",
+    "vitest": "^4.1.0"
   }
 }
