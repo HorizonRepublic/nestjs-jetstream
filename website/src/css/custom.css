@@ -1,7 +1,6 @@
 /* ===== Palette (dark-only) ===== */
 
-:root,
-[data-theme='dark'] {
+:root {
   --ifm-color-primary: #3B82F6;
   --ifm-color-primary-dark: #2563EB;
   --ifm-color-primary-darker: #1D4ED8;
@@ -9,13 +8,7 @@
   --ifm-color-primary-light: #60A5FA;
   --ifm-color-primary-lighter: #93C5FD;
   --ifm-color-primary-lightest: #BFDBFE;
-
-  --ifm-background-color: #0B1120;
-  --ifm-background-surface-color: #151D2E;
-  --ifm-font-color-base: #E2E8F0;
-  --ifm-font-color-secondary: #94A3B8;
   --ifm-code-font-size: 95%;
-  --docusaurus-highlighted-code-line-bg: rgba(59, 130, 246, 0.15);
 
   /* Landing */
   --landing-bg: #0B1120;
@@ -23,6 +16,29 @@
   --landing-border: #1E293B;
   --landing-text-muted: #94A3B8;
   --landing-accent: #06B6D4;
+}
+
+/* Higher specificity to override Docusaurus defaults */
+html[data-theme='dark'] {
+  --ifm-background-color: #0B1120;
+  --ifm-background-surface-color: #151D2E;
+  --ifm-font-color-base: #E2E8F0;
+  --ifm-font-color-secondary: #94A3B8;
+  --docusaurus-highlighted-code-line-bg: rgba(59, 130, 246, 0.15);
+  --ifm-toc-border-color: #1E293B;
+  --ifm-hr-background-color: #1E293B;
+}
+
+/* Direct body override in case variables don't cascade */
+body {
+  background: #0B1120;
+}
+
+/* Main doc wrapper */
+main[class*='docMainContainer'],
+div[class*='docPage'],
+div[class*='docRoot'] {
+  background: #0B1120;
 }
 
 /* ===== Navbar ===== */
