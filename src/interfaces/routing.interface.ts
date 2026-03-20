@@ -1,16 +1,23 @@
 import type { MessageHandler } from '@nestjs/microservices';
 
-/** Entry stored in the pattern registry. */
+/** @internal Entry stored in the pattern registry after handler registration. */
 export interface RegisteredHandler {
+  /** NestJS message handler function. */
   handler: MessageHandler;
+  /** Normalized NATS subject pattern. */
   pattern: string;
+  /** `true` if this handler was registered via `@EventPattern`. */
   isEvent: boolean;
+  /** `true` if this handler uses broadcast delivery (fan-out to all consumers). */
   isBroadcast: boolean;
 }
 
-/** Grouped pattern lists by stream kind. */
+/** @internal Grouped pattern lists by stream kind, used for stream/consumer setup. */
 export interface PatternsByKind {
+  /** Workqueue event patterns. */
   events: string[];
+  /** RPC command patterns. */
   commands: string[];
+  /** Broadcast event patterns. */
   broadcasts: string[];
 }

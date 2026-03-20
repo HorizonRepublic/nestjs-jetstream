@@ -28,8 +28,18 @@ export const JETSTREAM_CODEC = Symbol('JETSTREAM_CODEC');
 export const JETSTREAM_EVENT_BUS = Symbol('JETSTREAM_EVENT_BUS');
 
 /**
- * Generate a unique injection token for a forFeature client.
- * This is what users inject with `@Inject('service-name')`.
+ * Generate the injection token for a `forFeature()` client.
+ *
+ * Use with `@Inject()` to inject the client created by `JetstreamModule.forFeature()`.
+ *
+ * @param name - The service name passed to `forFeature({ name })`.
+ * @returns The DI token string.
+ *
+ * @example
+ * ```typescript
+ * @Inject(getClientToken('orders'))
+ * private readonly ordersClient: JetstreamClient;
+ * ```
  */
 export const getClientToken = (name: string): string => name;
 
@@ -41,7 +51,18 @@ const KB = 1024;
 const MB = 1024 * KB;
 const GB = 1024 * MB;
 
-/** Convert milliseconds to nanoseconds (NATS JetStream format). */
+/**
+ * Convert milliseconds to nanoseconds (NATS JetStream format).
+ *
+ * @param ms - Duration in milliseconds.
+ * @returns Duration in nanoseconds.
+ *
+ * @example
+ * ```typescript
+ * // Set consumer ack_wait to 30 seconds
+ * { ack_wait: nanos(30_000) }
+ * ```
+ */
 export const nanos = (ms: number): number => ms * 1_000_000;
 
 // ---------------------------------------------------------------------------
@@ -140,26 +161,42 @@ export const DEFAULT_BROADCAST_CONSUMER_CONFIG: Partial<ConsumerConfig> = {
 // Default Module Options
 // ---------------------------------------------------------------------------
 
-export const DEFAULT_RPC_TIMEOUT = 30_000; // 30s for core mode
+/** Default RPC timeout for Core mode (30 seconds). */
+export const DEFAULT_RPC_TIMEOUT = 30_000;
 
-export const DEFAULT_JETSTREAM_RPC_TIMEOUT = 180_000; // 3 min for jetstream mode
+/** Default RPC timeout for JetStream mode (3 minutes). */
+export const DEFAULT_JETSTREAM_RPC_TIMEOUT = 180_000;
 
-export const DEFAULT_SHUTDOWN_TIMEOUT = 10_000; // 10s
+/** Default graceful shutdown timeout (10 seconds). */
+export const DEFAULT_SHUTDOWN_TIMEOUT = 10_000;
 
 // ---------------------------------------------------------------------------
 // Reserved Headers
 // ---------------------------------------------------------------------------
 
-/** NATS headers managed by the transport. Users cannot overwrite these. */
+/**
+ * NATS headers managed by the transport.
+ *
+ * These headers are set automatically on outbound messages.
+ * Some are reserved ({@link RESERVED_HEADERS}) and cannot be overwritten
+ * via `JetstreamRecordBuilder.setHeader()`.
+ */
 export enum JetstreamHeader {
+  /** Unique ID linking an RPC request to its response. */
   CorrelationId = 'x-correlation-id',
+  /** Inbox subject where the RPC response should be published. */
   ReplyTo = 'x-reply-to',
+  /** Original subject the message was published to. */
   Subject = 'x-subject',
+  /** Internal name of the service that sent the message. */
   CallerName = 'x-caller-name',
+  /** User-provided request ID (pass-through, not auto-generated). */
   RequestId = 'x-request-id',
+  /** User-provided trace ID for distributed tracing (pass-through). */
   TraceId = 'x-trace-id',
+  /** User-provided span ID for distributed tracing (pass-through). */
   SpanId = 'x-span-id',
-  /** Set to 'true' on error responses so the client can distinguish success from failure. */
+  /** Set to `'true'` on error responses so the client can distinguish success from failure. */
   Error = 'x-error',
 }
 
@@ -174,23 +211,52 @@ export const RESERVED_HEADERS = new Set<string>([
 // Naming Helpers
 // ---------------------------------------------------------------------------
 
-/** Internal service name with microservice suffix. */
+/**
+ * Build the internal service name with microservice suffix.
+ *
+ * @param name - Service name from `forRoot({ name })`.
+ * @returns `{name}__microservice`
+ */
 export const internalName = (name: string): string => `${name}__microservice`;
 
-/** Build a fully-qualified NATS subject. */
+/**
+ * Build a fully-qualified NATS subject for workqueue events or RPC commands.
+ *
+ * @param serviceName - Target service name.
+ * @param kind - Subject kind (`'ev'` for events, `'cmd'` for RPC commands).
+ * @param pattern - The message pattern (e.g. `'user.created'`).
+ * @returns `{serviceName}__microservice.{kind}.{pattern}`
+ */
 export const buildSubject = (serviceName: string, kind: SubjectKind, pattern: string): string =>
   `${internalName(serviceName)}.${kind}.${pattern}`;
 
-/** Build a broadcast subject. */
+/**
+ * Build a broadcast subject.
+ *
+ * @param pattern - The message pattern (e.g. `'config.updated'`).
+ * @returns `broadcast.{pattern}`
+ */
 export const buildBroadcastSubject = (pattern: string): string => `broadcast.${pattern}`;
 
-/** Stream name for a given service and kind. */
+/**
+ * Build the JetStream stream name for a given service and kind.
+ *
+ * @param serviceName - Service name from `forRoot({ name })`.
+ * @param kind - Stream kind (`'ev'`, `'cmd'`, or `'broadcast'`).
+ * @returns Stream name (e.g. `orders__microservice_ev-stream` or `broadcast-stream`).
+ */
 export const streamName = (serviceName: string, kind: StreamKind): string => {
   if (kind === 'broadcast') return 'broadcast-stream';
   return `${internalName(serviceName)}_${kind}-stream`;
 };
 
-/** Consumer name for a given service and kind. */
+/**
+ * Build the JetStream consumer name for a given service and kind.
+ *
+ * @param serviceName - Service name from `forRoot({ name })`.
+ * @param kind - Stream kind (`'ev'`, `'cmd'`, or `'broadcast'`).
+ * @returns Consumer name (e.g. `orders__microservice_ev-consumer`).
+ */
 export const consumerName = (serviceName: string, kind: StreamKind): string => {
   if (kind === 'broadcast') return `${internalName(serviceName)}_broadcast-consumer`;
   return `${internalName(serviceName)}_${kind}-consumer`;

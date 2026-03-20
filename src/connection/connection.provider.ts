@@ -77,7 +77,9 @@ export class ConnectionProvider {
   }
 
   /**
-   * Get JetStream manager. Cached after first call.
+   * Get the JetStream manager. Cached after first call.
+   *
+   * @returns The JetStreamManager for stream/consumer administration.
    */
   public async getJetStreamManager(): Promise<JetStreamManager> {
     if (this.jsmInstance) return this.jsmInstance;
@@ -89,7 +91,7 @@ export class ConnectionProvider {
     return this.jsmInstance;
   }
 
-  /** Direct access to the raw NATS connection (assumes already connected). */
+  /** Direct access to the raw NATS connection, or `null` if not yet connected. */
   public get unwrap(): NatsConnection | null {
     return this.connection;
   }
