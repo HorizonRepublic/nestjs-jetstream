@@ -174,11 +174,17 @@ pre code {
   padding: 0 !important;
 }
 
-div[class*='codeBlockContainer'] {
+div[class*='codeBlockContainer'],
+pre[class*='prism-code'] {
   background: #0E1525 !important;
   border: 1px solid var(--landing-border);
   border-radius: 10px;
   overflow: hidden;
+}
+
+/* Override Prism theme background */
+pre[class*='language-'] {
+  background: #0E1525 !important;
 }
 
 div[class*='codeBlockTitle'] {

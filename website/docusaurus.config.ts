@@ -95,7 +95,7 @@ const config: Config = {
       copyright: `Copyright © ${new Date().getFullYear()} Horizon Republic. MIT License.`,
     },
     prism: {
-      theme: prismThemes.github,
+      theme: prismThemes.dracula,
       darkTheme: prismThemes.dracula,
       additionalLanguages: ['bash', 'json', 'yaml'],
     },
