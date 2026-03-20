@@ -29,12 +29,12 @@ import { TransportEvent } from '../../interfaces';
  */
 export class MessageProvider {
   private readonly logger = new Logger('Jetstream:Message');
-  private readonly destroy$ = new Subject<void>();
   private readonly activeIterators = new Set<ConsumerMessages>();
 
-  private readonly eventMessages$ = new Subject<JsMsg>();
-  private readonly commandMessages$ = new Subject<JsMsg>();
-  private readonly broadcastMessages$ = new Subject<JsMsg>();
+  private destroy$ = new Subject<void>();
+  private eventMessages$ = new Subject<JsMsg>();
+  private commandMessages$ = new Subject<JsMsg>();
+  private broadcastMessages$ = new Subject<JsMsg>();
 
   public constructor(
     private readonly connection: ConnectionProvider,
@@ -76,7 +76,7 @@ export class MessageProvider {
     }
   }
 
-  /** Stop all consumer flows and complete all subjects. */
+  /** Stop all consumer flows and reinitialize subjects for potential restart. */
   public destroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
@@ -90,19 +90,27 @@ export class MessageProvider {
     this.eventMessages$.complete();
     this.commandMessages$.complete();
     this.broadcastMessages$.complete();
+
+    // Reinitialize subjects so start() can be called again after destroy()
+    this.destroy$ = new Subject<void>();
+    this.eventMessages$ = new Subject<JsMsg>();
+    this.commandMessages$ = new Subject<JsMsg>();
+    this.broadcastMessages$ = new Subject<JsMsg>();
   }
 
   /** Create a self-healing consumer flow for a specific kind. */
   private createFlow(kind: StreamKind, info: ConsumerInfo): Observable<void> {
     const target$ = this.getTargetSubject(kind);
     let consecutiveFailures = 0;
+    let lastRunFailed = false;
 
     return defer(() => this.consumeOnce(info, target$)).pipe(
       tap(() => {
-        consecutiveFailures = 0;
+        lastRunFailed = false;
       }),
       catchError((err) => {
         consecutiveFailures++;
+        lastRunFailed = true;
         this.logger.error(`Consumer ${info.name} error, will restart:`, err);
         this.eventBus.emit(
           TransportEvent.Error,
@@ -113,14 +121,13 @@ export class MessageProvider {
       }),
       repeat({
         delay: () => {
+          if (!lastRunFailed) {
+            consecutiveFailures = 0;
+          }
+
           const delay = Math.min(100 * Math.pow(2, consecutiveFailures), 30_000);
 
           this.logger.warn(`Consumer ${info.name} stream ended, restarting in ${delay}ms...`);
-          this.eventBus.emit(
-            TransportEvent.Error,
-            new Error(`Consumer ${info.name} stream ended`),
-            'message-provider',
-          );
           return timer(delay);
         },
       }),
