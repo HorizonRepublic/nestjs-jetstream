@@ -48,11 +48,9 @@
   color: #E2E8F0;
 }
 
-/* ===== Search box ===== */
+/* ===== Search — navbar button ===== */
 
-div[class*='searchContainer'] button,
-.navbar .DocSearch-Button,
-.navbar [class*='searchBar'] input {
+.aa-DetachedSearchButton {
   background: rgba(21, 29, 46, 0.6) !important;
   border: 1px solid var(--landing-border) !important;
   border-radius: 8px !important;
@@ -61,55 +59,111 @@ div[class*='searchContainer'] button,
   transition: border-color 0.15s;
 }
 
-div[class*='searchContainer'] button:hover,
-.navbar .DocSearch-Button:hover,
-.navbar [class*='searchBar'] input:focus {
-  border-color: #3B82F6 !important;
+.aa-DetachedSearchButton:hover {
+  border-color: var(--landing-accent) !important;
 }
 
-/* ===== Search modal ===== */
-
-[class*='searchModal'] {
-  background: #0E1525 !important;
-  border: 1px solid var(--landing-border) !important;
-}
-
-[class*='searchModal'] input {
-  background: var(--landing-surface) !important;
-  border: 1px solid var(--landing-border) !important;
-  color: #E2E8F0 !important;
-  border-radius: 8px !important;
-}
-
-[class*='searchModal'] input::placeholder {
+.aa-DetachedSearchButtonIcon svg {
   color: #64748B !important;
 }
 
-[class*='searchResultItem'],
-[class*='searchResult'] {
-  border-color: var(--landing-border) !important;
+.aa-DetachedSearchButtonPlaceholder {
+  color: #64748B !important;
 }
 
-[class*='searchResultItem'] a,
-[class*='searchResult'] a {
+/* ===== Search — modal overlay ===== */
+
+.aa-DetachedOverlay {
+  background: rgba(0, 0, 0, 0.6) !important;
+  backdrop-filter: blur(4px);
+}
+
+/* ===== Search — modal container ===== */
+
+.aa-DetachedContainer--modal {
+  background: #0E1525 !important;
+  border: 1px solid var(--landing-border) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Search input form */
+.aa-Form {
+  background: var(--landing-surface) !important;
+  border: 1px solid var(--landing-border) !important;
+  border-radius: 8px !important;
+}
+
+.aa-Form:focus-within {
+  border-color: var(--landing-accent) !important;
+  box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.2) !important;
+}
+
+.aa-Input {
+  color: #E2E8F0 !important;
+  caret-color: var(--landing-accent) !important;
+}
+
+.aa-Input::placeholder {
+  color: #64748B !important;
+}
+
+.aa-SubmitButton,
+.aa-ClearButton,
+.aa-LoadingIndicator {
+  color: #64748B !important;
+}
+
+.aa-ClearButton:hover {
+  color: #94A3B8 !important;
+}
+
+/* Cancel button */
+.aa-DetachedCancelButton {
+  color: #94A3B8 !important;
+}
+
+.aa-DetachedCancelButton:hover {
   color: #E2E8F0 !important;
 }
 
-[class*='searchResultItem']:hover,
-[class*='searchResult']:hover {
+/* Results panel */
+.aa-Panel {
+  background: #0E1525 !important;
+}
+
+.aa-Source {
+  background: transparent !important;
+}
+
+.aa-SourceNoResults {
+  color: #94A3B8 !important;
+}
+
+/* Result items */
+.aa-ItemContent {
+  color: #E2E8F0 !important;
+}
+
+.aa-ItemContentBody {
+  color: #CBD5E1 !important;
+}
+
+.aa-Item[aria-selected='true'] {
   background: var(--landing-surface) !important;
 }
 
-[class*='searchModalOverlay'],
-[class*='searchBarContainer'] [class*='backdrop'] {
-  background: rgba(0, 0, 0, 0.6) !important;
+/* Gradient at bottom */
+.aa-GradientBottom {
+  background: linear-gradient(transparent, #0E1525) !important;
 }
 
-/* Search results page */
-[class*='searchResultsColumn'] {
-  color: #E2E8F0;
+/* Label styling in form */
+.aa-Label svg {
+  color: #64748B !important;
 }
 
+/* Search results page (full page) */
 [class*='searchQueryInput'] {
   background: var(--landing-surface) !important;
   border: 1px solid var(--landing-border) !important;
