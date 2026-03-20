@@ -246,6 +246,13 @@ export class MessageProvider {
           err instanceof Error ? err : new Error(String(err)),
           'message-provider',
         );
+
+        // Resolve ready promise on error so listen() doesn't hang forever
+        if (this.orderedReadyResolve) {
+          this.orderedReadyResolve();
+          this.orderedReadyResolve = null;
+        }
+
         return EMPTY;
       }),
       repeat({

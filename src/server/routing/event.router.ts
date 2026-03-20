@@ -57,7 +57,10 @@ export class EventRouter {
   public start(): void {
     this.subscribeToStream(this.messageProvider.events$, 'workqueue');
     this.subscribeToStream(this.messageProvider.broadcasts$, 'broadcast');
-    this.subscribeToStream(this.messageProvider.ordered$, 'ordered', true);
+
+    if (this.patternRegistry.hasOrderedHandlers()) {
+      this.subscribeToStream(this.messageProvider.ordered$, 'ordered', true);
+    }
   }
 
   /** Stop routing and unsubscribe from all streams. */
