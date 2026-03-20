@@ -5,51 +5,56 @@ import styles from './index.module.css';
 
 const features = [
   {
-    icon: '\u21C4',
-    title: 'RPC (Request/Reply)',
+    label: 'RPC',
+    title: 'Request / Reply',
     description:
       'Core NATS for lowest latency, or JetStream for persisted commands. Both modes, one API.',
   },
   {
-    icon: '\u2693',
-    title: 'Workqueue Events',
+    label: 'Events',
+    title: 'Workqueue Delivery',
     description:
-      'At-least-once delivery with automatic retry. Messages acked after handler success, redelivered on failure.',
+      'At-least-once delivery with automatic retry. Acked on success, redelivered on failure.',
   },
   {
-    icon: '\u269B',
-    title: 'Broadcast Events',
+    label: 'Broadcast',
+    title: 'Fan-out to All',
     description:
-      'Fan-out to all services. Each subscriber gets its own durable consumer with isolated delivery tracking.',
+      'Every subscribing service receives every message. Isolated durable consumers per service.',
   },
   {
-    icon: '\u2191',
-    title: 'Ordered Events',
+    label: 'Ordered',
+    title: 'Sequential Replay',
     description:
-      'Strict sequential delivery for event sourcing and projections. Six deliver policies for any replay scenario.',
+      'Strict ordering for event sourcing and projections. Six deliver policies for any scenario.',
   },
 ];
 
 function Hero(): React.ReactElement {
   return (
     <header className={styles.hero}>
-      <h1 className={styles.heroTitle}>
-        NestJS Transport for NATS&nbsp;JetStream
-      </h1>
-      <p className={styles.heroTagline}>
-        Production-grade events, broadcast, ordered delivery, and RPC — with
-        two lines of config
-      </p>
-      <div className={styles.heroCta}>
-        <Link className={styles.ctaPrimary} to="/docs/">
-          Get Started
-        </Link>
-        <Link
-          className={styles.ctaOutline}
-          href="https://github.com/HorizonRepublic/nestjs-jetstream"
-        >
-          GitHub
-        </Link>
+      <div className={styles.heroInner}>
+        <p className={styles.heroMono}>@horizon-republic/nestjs-jetstream</p>
+        <h1 className={styles.heroTitle}>
+          Ship reliable microservices
+          <br />
+          <span className={styles.heroAccent}>with NATS JetStream</span>
+        </h1>
+        <p className={styles.heroTagline}>
+          Events, broadcast, ordered delivery, and RPC for NestJS —
+          powered by JetStream under the hood.
+        </p>
+        <div className={styles.heroCta}>
+          <Link className={styles.ctaPrimary} to="/docs/">
+            Get Started
+          </Link>
+          <Link
+            className={styles.ctaOutline}
+            href="https://github.com/HorizonRepublic/nestjs-jetstream"
+          >
+            View on GitHub
+          </Link>
+        </div>
       </div>
     </header>
   );
@@ -59,14 +64,10 @@ function Features(): React.ReactElement {
   return (
     <section className={styles.features}>
       <div className={styles.featuresInner}>
-        <h2 className={styles.featuresHeading}>Messaging Patterns</h2>
-        <p className={styles.featuresSubheading}>
-          Four patterns that cover every NestJS messaging need
-        </p>
         <div className={styles.featuresGrid}>
           {features.map((f) => (
-            <div key={f.title} className={styles.featureCard}>
-              <div className={styles.featureIcon}>{f.icon}</div>
+            <div key={f.label} className={styles.featureCard}>
+              <span className={styles.featureLabel}>{f.label}</span>
               <h3 className={styles.featureTitle}>{f.title}</h3>
               <p className={styles.featureDesc}>{f.description}</p>
             </div>
@@ -77,17 +78,25 @@ function Features(): React.ReactElement {
   );
 }
 
-function Bottom(): React.ReactElement {
+function Install(): React.ReactElement {
   return (
-    <section className={styles.bottom}>
-      <h2 className={styles.bottomHeading}>Get Started in 5 Minutes</h2>
-      <div className={styles.installBlock}>
-        npm install @horizon-republic/nestjs-jetstream
+    <section className={styles.install}>
+      <div className={styles.installInner}>
+        <div className={styles.installTerminal}>
+          <div className={styles.terminalDots}>
+            <span />
+            <span />
+            <span />
+          </div>
+          <code className={styles.terminalCode}>
+            <span className={styles.terminalPrompt}>$</span>{' '}
+            npm install @horizon-republic/nestjs-jetstream
+          </code>
+        </div>
+        <Link className={styles.installCta} to="/docs/">
+          Read the Docs &rarr;
+        </Link>
       </div>
-      <br />
-      <Link className={styles.bottomCta} to="/docs/">
-        Read the Docs
-      </Link>
     </section>
   );
 }
@@ -96,11 +105,11 @@ export default function Home(): React.ReactElement {
   return (
     <Layout
       title="Home"
-      description="Production-grade NestJS transport for NATS JetStream — events, broadcast, ordered delivery, and RPC."
+      description="Ship reliable microservices with NATS JetStream and NestJS — events, broadcast, ordered delivery, and RPC."
     >
       <Hero />
       <Features />
-      <Bottom />
+      <Install />
     </Layout>
   );
 }

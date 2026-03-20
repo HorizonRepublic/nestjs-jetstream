@@ -4,7 +4,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
   title: '@horizon-republic/nestjs-jetstream',
-  tagline: 'Production-grade NestJS transport for NATS JetStream',
+  tagline: 'Ship reliable microservices with NATS JetStream and NestJS',
   favicon: 'img/favicon.ico',
   url: 'https://horizonrepublic.github.io',
   baseUrl: '/nestjs-jetstream/',
@@ -51,6 +51,11 @@ const config: Config = {
     ],
   ],
   themeConfig: {
+    colorMode: {
+      defaultMode: 'dark',
+      disableSwitch: true,
+      respectPrefersColorScheme: false,
+    },
     navbar: {
       title: 'nestjs-jetstream',
       items: [
