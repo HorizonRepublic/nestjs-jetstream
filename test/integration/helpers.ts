@@ -47,10 +47,14 @@ export const createTestApp = async (
   }).compile();
 
   const app = module.createNestApplication({ logger: false });
-  const strategy = module.get(JetstreamStrategy);
+  const strategy: JetstreamStrategy | undefined = module.get(JetstreamStrategy, { strict: false });
 
-  app.connectMicroservice<MicroserviceOptions>({ strategy } as MicroserviceOptions);
-  await app.startAllMicroservices();
+  // Publisher-only mode (consumer: false) has no strategy — skip microservice setup
+  if (strategy) {
+    app.connectMicroservice<MicroserviceOptions>({ strategy } as MicroserviceOptions);
+    await app.startAllMicroservices();
+  }
+
   await app.init();
 
   return { app, module };
@@ -80,7 +84,7 @@ const deleteStreamIfExists = async (
 export const cleanupStreams = async (nc: NatsConnection, serviceName: string): Promise<void> => {
   const jsm = await nc.jetstreamManager();
 
-  for (const kind of ['ev', 'cmd'] as const) {
+  for (const kind of ['ev', 'cmd', 'ordered'] as const) {
     await deleteStreamIfExists(jsm, streamName(serviceName, kind));
   }
 

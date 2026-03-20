@@ -141,6 +141,8 @@ export class ConsumerProvider {
         return DEFAULT_COMMAND_CONSUMER_CONFIG;
       case 'broadcast':
         return DEFAULT_BROADCAST_CONSUMER_CONFIG;
+      case 'ordered':
+        throw new Error('Ordered consumers are ephemeral and should not use durable config');
     }
   }
 
@@ -153,6 +155,8 @@ export class ConsumerProvider {
         return this.options.rpc?.mode === 'jetstream' ? (this.options.rpc.consumer ?? {}) : {};
       case 'broadcast':
         return this.options.broadcast?.consumer ?? {};
+      case 'ordered':
+        throw new Error('Ordered consumers are ephemeral and should not use durable config');
     }
   }
 }

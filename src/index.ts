@@ -10,6 +10,7 @@ export type {
   JetstreamFeatureOptions,
   JetstreamModuleAsyncOptions,
   JetstreamModuleOptions,
+  OrderedEventOverrides,
   RpcConfig,
   StreamConsumerOverrides,
   TransportHooks,

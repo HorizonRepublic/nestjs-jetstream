@@ -201,6 +201,21 @@ describe(JetstreamClient, () => {
           expect.objectContaining({ headers: expect.anything() }),
         );
       });
+
+      it('should publish ordered event to ordered subject', async () => {
+        // Given: ordered-prefixed event
+        const data = { status: faker.lorem.word() };
+
+        // When: ordered event emitted
+        await firstValueFrom(sut.emit('ordered:order.status', data));
+
+        // Then: published to ordered subject (prefix stripped)
+        expect(mockJs.publish).toHaveBeenCalledWith(
+          `${targetName}__microservice.ordered.order.status`,
+          codec.encode(data),
+          expect.objectContaining({ headers: expect.anything() }),
+        );
+      });
     });
 
     describe('when using JetstreamRecord', () => {

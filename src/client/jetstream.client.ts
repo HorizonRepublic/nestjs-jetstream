@@ -372,13 +372,16 @@ export class JetstreamClient extends ClientProxy {
     }
   }
 
-  /** Build event subject — workqueue or broadcast. */
+  /** Build event subject — workqueue, broadcast, or ordered. */
   private buildEventSubject(pattern: string): string {
     // Convention: 'broadcast:' prefix routes to the shared broadcast stream.
-    // The prefix is stripped and the pattern is published to broadcast.{pattern}.
-    // Example: 'broadcast:user.created' → 'broadcast.user.created'
     if (pattern.startsWith('broadcast:')) {
       return buildBroadcastSubject(pattern.slice('broadcast:'.length));
+    }
+
+    // Convention: 'ordered:' prefix routes to the ordered stream.
+    if (pattern.startsWith('ordered:')) {
+      return buildSubject(this.targetName, 'ordered', pattern.slice('ordered:'.length));
     }
 
     return buildSubject(this.targetName, 'ev', pattern);

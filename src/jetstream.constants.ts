@@ -121,6 +121,20 @@ export const DEFAULT_BROADCAST_STREAM_CONFIG: Partial<StreamConfig> = {
   duplicate_window: nanos(2 * 60 * 1000), // 2 min
 };
 
+/** Default config for ordered event streams (Limits retention). */
+export const DEFAULT_ORDERED_STREAM_CONFIG: Partial<StreamConfig> = {
+  ...baseStreamConfig,
+  retention: RetentionPolicy.Limits,
+  allow_rollup_hdrs: false,
+  max_consumers: 100,
+  max_msg_size: 10 * MB,
+  max_msgs_per_subject: 5_000_000,
+  max_msgs: 50_000_000,
+  max_bytes: 5 * GB,
+  max_age: nanos(24 * 60 * 60 * 1000), // 1 day
+  duplicate_window: nanos(2 * 60 * 1000), // 2 min
+};
+
 // ---------------------------------------------------------------------------
 // Default Consumer Configurations
 // ---------------------------------------------------------------------------
@@ -214,10 +228,10 @@ export const RESERVED_HEADERS = new Set<string>([
 export const internalName = (name: string): string => `${name}__microservice`;
 
 /**
- * Build a fully-qualified NATS subject for workqueue events or RPC commands.
+ * Build a fully-qualified NATS subject for workqueue events, RPC commands, or ordered events.
  *
  * @param serviceName - Target service name.
- * @param kind - Subject kind (`'ev'` for events, `'cmd'` for RPC commands).
+ * @param kind - Subject kind (`'ev'`, `'cmd'`, or `'ordered'`).
  * @param pattern - The message pattern (e.g. `'user.created'`).
  * @returns `{serviceName}__microservice.{kind}.{pattern}`
  */
