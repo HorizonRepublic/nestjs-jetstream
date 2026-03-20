@@ -357,13 +357,13 @@ JetstreamModule.forRoot({
 
 **Error behavior:**
 
-| Scenario | Result |
-|----------|--------|
-| Handler success | Response returned to caller |
-| Handler throws | Error response returned to caller |
+| Scenario              | Result                            |
+|-----------------------|-----------------------------------|
+| Handler success       | Response returned to caller       |
+| Handler throws        | Error response returned to caller |
 | No handler registered | Error response returned to caller |
-| Server not running | Client times out |
-| Decode error | Error response returned to caller |
+| Server not running    | Client times out                  |
+| Decode error          | Error response returned to caller |
 
 #### JetStream Mode
 
@@ -511,12 +511,12 @@ handleOrderStatus(@Payload() data: OrderStatusDto) {
 
 #### Delivery semantics (at-most-once, strictly ordered)
 
-| Scenario | Action | Redelivery? |
-|----------|--------|-------------|
-| Handler success | Auto-ack | No |
-| Handler throws | Logged, continues | No |
-| Decode error | Logged, skipped | No |
-| No handler found | Logged, skipped | No |
+| Scenario         | Action            | Redelivery? |
+|------------------|-------------------|-------------|
+| Handler success  | Auto-ack          | No          |
+| Handler throws   | Logged, continues | No          |
+| Decode error     | Logged, skipped   | No          |
+| No handler found | Logged, skipped   | No          |
 
 > **Important:** Ordered consumers provide **ordering guarantees** at the cost of **at-most-once delivery**. If your handler fails, the message is not retried — the consumer moves to the next message. If you need both ordering and guaranteed delivery, consider using an external offset tracking mechanism or a different messaging pattern (e.g., SQS FIFO).
 
@@ -524,14 +524,14 @@ handleOrderStatus(@Payload() data: OrderStatusDto) {
 
 Control where the ordered consumer starts reading when it is (re)created:
 
-| Policy | Behavior | Config |
-|--------|----------|--------|
-| `All` (default) | Read from the beginning of the stream | `ordered: {}` or omit |
-| `New` | Only messages published after consumer starts | `ordered: { deliverPolicy: DeliverPolicy.New }` |
-| `Last` | Start from the last message in the stream | `ordered: { deliverPolicy: DeliverPolicy.Last }` |
-| `LastPerSubject` | Last message per subject | `ordered: { deliverPolicy: DeliverPolicy.LastPerSubject }` |
-| `StartSequence` | From a specific sequence number | `ordered: { deliverPolicy: DeliverPolicy.StartSequence, optStartSeq: 100 }` |
-| `StartTime` | From a specific timestamp | `ordered: { deliverPolicy: DeliverPolicy.StartTime, optStartTime: '2026-01-01T00:00:00Z' }` |
+| Policy           | Behavior                                      | Config                                                                                      |
+|------------------|-----------------------------------------------|---------------------------------------------------------------------------------------------|
+| `All` (default)  | Read from the beginning of the stream         | `ordered: {}` or omit                                                                       |
+| `New`            | Only messages published after consumer starts | `ordered: { deliverPolicy: DeliverPolicy.New }`                                             |
+| `Last`           | Start from the last message in the stream     | `ordered: { deliverPolicy: DeliverPolicy.Last }`                                            |
+| `LastPerSubject` | Last message per subject                      | `ordered: { deliverPolicy: DeliverPolicy.LastPerSubject }`                                  |
+| `StartSequence`  | From a specific sequence number               | `ordered: { deliverPolicy: DeliverPolicy.StartSequence, optStartSeq: 100 }`                 |
+| `StartTime`      | From a specific timestamp                     | `ordered: { deliverPolicy: DeliverPolicy.StartTime, optStartTime: '2026-01-01T00:00:00Z' }` |
 
 ```typescript
 import { DeliverPolicy, nanos } from '@horizon-republic/nestjs-jetstream';
@@ -548,6 +548,17 @@ JetstreamModule.forRoot({
 })
 ```
 
+#### Use cases by deliver policy
+
+| Policy           | Use case                                                                                                                                                                    | Example                                                            |
+|------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------|
+| `All`            | **CQRS read model rebuild.** Each instance replays all events from the stream to build a local projection (cache, search index, materialized view). Full replay on restart. | Rebuilding an Elasticsearch index from order events                |
+| `New`            | **Real-time dashboard.** Instance starts and only processes new events — history is irrelevant.                                                                             | Live order feed in admin panel, real-time metrics                  |
+| `Last`           | **Current state initialization.** Instance receives the last known message (e.g., latest config or status) and then listens for updates.                                    | Initializing a config cache from the most recent config event      |
+| `LastPerSubject` | **State snapshot across keys.** Stream has per-key subjects (`order.status.123`, `order.status.456`) — on startup, get the latest state of each key.                        | Populating an in-memory order status map on boot                   |
+| `StartSequence`  | **Manual offset tracking.** Store the last processed sequence in a database, restart from that point. Enables exactly-once processing with external state.                  | Resumable projection that survives restarts without re-processing  |
+| `StartTime`      | **Time-based replay.** Re-process events from a specific moment — useful for debugging, recovery, or rebuilding a projection from a known good point.                       | "Rebuild projection from start of today" or "replay the last hour" |
+
 #### Scaling behavior
 
 Ordered consumers are **ephemeral** — each instance creates its own independent consumer:
@@ -560,16 +571,16 @@ Ordered consumers are **ephemeral** — each instance creates its own independen
 
 #### Comparison with workqueue events
 
-| | Workqueue | Ordered |
-|---|---|---|
-| Delivery | At-least-once | At-most-once |
-| Ordering | Not guaranteed (parallel) | Strict sequential |
-| Parallelism | Multiple instances (load-balanced) | All instances (independent replay) |
-| Retry on failure | Yes (`nak` → redeliver) | No (continues) |
-| DLQ support | Yes | No |
-| Stream retention | Workqueue (delete on ack) | Limits (delete by age/size) |
-| Use case | Workload distribution | Event sourcing, audit logs, projections |
-| Publish prefix | (none) | `ordered:` |
+|                  | Workqueue                          | Ordered                                 |
+|------------------|------------------------------------|-----------------------------------------|
+| Delivery         | At-least-once                      | At-most-once                            |
+| Ordering         | Not guaranteed (parallel)          | Strict sequential                       |
+| Parallelism      | Multiple instances (load-balanced) | All instances (independent replay)      |
+| Retry on failure | Yes (`nak` → redeliver)            | No (continues)                          |
+| DLQ support      | Yes                                | No                                      |
+| Stream retention | Workqueue (delete on ack)          | Limits (delete by age/size)             |
+| Use case         | Workload distribution              | Event sourcing, audit logs, projections |
+| Publish prefix   | (none)                             | `ordered:`                              |
 
 > **Note:** Internally, the transport works around a [known nats.js issue](https://github.com/nats-io/nats.js) where explicitly passing `DeliverPolicy.All` to an ordered consumer causes `consume()` to hang. The library silently omits the field when `All` is configured (nats.js defaults to the same behavior). All other policies are passed through directly.
 
@@ -607,8 +618,8 @@ Attempting to set a reserved header throws an error at build time.
 
 **Additional transport headers** (set automatically, available in handlers via `RpcContext`):
 
-| Header          | Purpose              |
-|-----------------|----------------------|
+| Header          | Purpose               |
+|-----------------|-----------------------|
 | `x-subject`     | Original NATS subject |
 | `x-caller-name` | Sending service name  |
 
@@ -918,20 +929,20 @@ Custom headers are transmitted as NATS message headers. NATS has a default heade
 
 The transport generates NATS subjects, streams, and consumers based on the service `name`:
 
-| Resource           | Format                          | Example (`name: 'orders'`)                |
-|--------------------|---------------------------------|-------------------------------------------|
-| Internal name      | `{name}__microservice`          | `orders__microservice`                    |
-| RPC subject        | `{internal}.cmd.{pattern}`      | `orders__microservice.cmd.get.order`      |
-| Event subject      | `{internal}.ev.{pattern}`       | `orders__microservice.ev.order.created`   |
-| Broadcast subject  | `broadcast.{pattern}`           | `broadcast.config.updated`                |
-| Ordered subject    | `{internal}.ordered.{pattern}`  | `orders__microservice.ordered.order.status`|
-| Event stream       | `{internal}_ev-stream`          | `orders__microservice_ev-stream`          |
-| Command stream     | `{internal}_cmd-stream`         | `orders__microservice_cmd-stream`         |
-| Broadcast stream   | `broadcast-stream`              | `broadcast-stream`                        |
-| Ordered stream     | `{internal}_ordered-stream`     | `orders__microservice_ordered-stream`     |
-| Event consumer     | `{internal}_ev-consumer`        | `orders__microservice_ev-consumer`        |
-| Command consumer   | `{internal}_cmd-consumer`       | `orders__microservice_cmd-consumer`       |
-| Broadcast consumer | `{internal}_broadcast-consumer` | `orders__microservice_broadcast-consumer` |
+| Resource           | Format                          | Example (`name: 'orders'`)                  |
+|--------------------|---------------------------------|---------------------------------------------|
+| Internal name      | `{name}__microservice`          | `orders__microservice`                      |
+| RPC subject        | `{internal}.cmd.{pattern}`      | `orders__microservice.cmd.get.order`        |
+| Event subject      | `{internal}.ev.{pattern}`       | `orders__microservice.ev.order.created`     |
+| Broadcast subject  | `broadcast.{pattern}`           | `broadcast.config.updated`                  |
+| Ordered subject    | `{internal}.ordered.{pattern}`  | `orders__microservice.ordered.order.status` |
+| Event stream       | `{internal}_ev-stream`          | `orders__microservice_ev-stream`            |
+| Command stream     | `{internal}_cmd-stream`         | `orders__microservice_cmd-stream`           |
+| Broadcast stream   | `broadcast-stream`              | `broadcast-stream`                          |
+| Ordered stream     | `{internal}_ordered-stream`     | `orders__microservice_ordered-stream`       |
+| Event consumer     | `{internal}_ev-consumer`        | `orders__microservice_ev-consumer`          |
+| Command consumer   | `{internal}_cmd-consumer`       | `orders__microservice_cmd-consumer`         |
+| Broadcast consumer | `{internal}_broadcast-consumer` | `orders__microservice_broadcast-consumer`   |
 
 ### Default Stream & Consumer Configs
 
