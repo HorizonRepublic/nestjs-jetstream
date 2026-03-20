@@ -142,7 +142,7 @@ describe(CoreRpcServer, () => {
 
     describe('edge cases', () => {
       describe('when no handler is found', () => {
-        it('should not respond', async () => {
+        it('should respond with error instead of silently dropping', async () => {
           // Given: no handler registered
           patternRegistry.getHandler.mockReturnValue(null);
 
@@ -155,8 +155,13 @@ describe(CoreRpcServer, () => {
           subscriptionCallback(null, msg);
           await new Promise(process.nextTick);
 
-          // Then: no response sent
-          expect(msg.respond).not.toHaveBeenCalled();
+          // Then: error response sent with x-error header
+          expect(msg.respond).toHaveBeenCalledWith(
+            expect.any(Uint8Array),
+            expect.objectContaining({
+              headers: expect.anything(),
+            }),
+          );
         });
       });
 

@@ -69,6 +69,7 @@ export class CoreRpcServer {
 
     if (!handler) {
       this.logger.warn(`No handler for Core RPC: ${msg.subject}`);
+      this.respondWithError(msg, new Error(`No handler for subject: ${msg.subject}`));
       return;
     }
 
