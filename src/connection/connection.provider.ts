@@ -38,6 +38,7 @@ export class ConnectionProvider {
   private connection: NatsConnection | null = null;
   private connectionPromise: Promise<NatsConnection> | null = null;
   private jsmInstance: JetStreamManager | null = null;
+  private jsmPromise: Promise<JetStreamManager> | null = null;
 
   public constructor(
     private readonly options: JetstreamModuleOptions,
@@ -83,12 +84,18 @@ export class ConnectionProvider {
    */
   public async getJetStreamManager(): Promise<JetStreamManager> {
     if (this.jsmInstance) return this.jsmInstance;
+    if (this.jsmPromise) return this.jsmPromise;
 
-    const nc = await this.getConnection();
+    this.jsmPromise = (async (): Promise<JetStreamManager> => {
+      const nc = await this.getConnection();
 
-    this.jsmInstance = await nc.jetstreamManager();
-    this.logger.log('JetStream manager initialized');
-    return this.jsmInstance;
+      this.jsmInstance = await nc.jetstreamManager();
+      this.logger.log('JetStream manager initialized');
+      this.jsmPromise = null;
+      return this.jsmInstance;
+    })();
+
+    return this.jsmPromise;
   }
 
   /** Direct access to the raw NATS connection, or `null` if not yet connected. */
@@ -102,6 +109,15 @@ export class ConnectionProvider {
    * Sequence: drain → wait for close. Falls back to force-close on error.
    */
   public async shutdown(): Promise<void> {
+    // Wait for in-flight connection to settle so it doesn't escape shutdown
+    if (this.connectionPromise) {
+      try {
+        await this.connectionPromise;
+      } catch {
+        // Connection failed — nothing to shut down
+      }
+    }
+
     if (!this.connection || this.connection.isClosed()) return;
 
     try {
@@ -117,6 +133,7 @@ export class ConnectionProvider {
       this.connection = null;
       this.connectionPromise = null;
       this.jsmInstance = null;
+      this.jsmPromise = null;
     }
   }
 
@@ -156,7 +173,8 @@ export class ConnectionProvider {
             this.eventBus.emit(TransportEvent.Disconnect);
             break;
           case Events.Reconnect:
-            this.jsmInstance = null; // Invalidate cached JSM
+            this.jsmInstance = null;
+            this.jsmPromise = null;
             this.eventBus.emit(TransportEvent.Reconnect, nc.getServer());
             break;
           case Events.Error:
