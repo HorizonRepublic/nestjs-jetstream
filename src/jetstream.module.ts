@@ -21,15 +21,12 @@ import type {
   JetstreamModuleOptions,
 } from './interfaces';
 import {
-  DEFAULT_BROADCAST_CONSUMER_CONFIG,
-  DEFAULT_EVENT_CONSUMER_CONFIG,
   DEFAULT_SHUTDOWN_TIMEOUT,
   getClientToken,
   JETSTREAM_CODEC,
   JETSTREAM_CONNECTION,
   JETSTREAM_EVENT_BUS,
   JETSTREAM_OPTIONS,
-  streamName,
 } from './jetstream.constants';
 import {
   CoreRpcServer,
@@ -195,30 +192,6 @@ export class JetstreamModule implements OnApplicationShutdown {
   // Provider factories
   // -------------------------------------------------------------------
 
-  /** Create all providers for synchronous forRoot(). */
-  /**
-   * Build a map of stream name -> max_deliver for dead letter detection.
-   * Each stream kind (ev, broadcast) has its own consumer config with potentially
-   * different max_deliver values.
-   */
-  private static buildMaxDeliverMap(options: JetstreamModuleOptions): Map<string, number> {
-    const map = new Map<string, number>();
-    const defaultEventMax = DEFAULT_EVENT_CONSUMER_CONFIG.max_deliver ?? 3;
-    const defaultBroadcastMax = DEFAULT_BROADCAST_CONSUMER_CONFIG.max_deliver ?? 3;
-
-    map.set(
-      streamName(options.name, 'ev'),
-      options.events?.consumer?.max_deliver ?? defaultEventMax,
-    );
-
-    map.set(
-      streamName(options.name, 'broadcast'),
-      options.broadcast?.consumer?.max_deliver ?? defaultBroadcastMax,
-    );
-
-    return map;
-  }
-
   private static createCoreProviders(options: JetstreamModuleOptions): Provider[] {
     return [
       {
@@ -369,7 +342,7 @@ export class JetstreamModule implements OnApplicationShutdown {
 
           const deadLetterConfig: DeadLetterConfig | undefined = options.onDeadLetter
             ? {
-                maxDeliverByStream: JetstreamModule.buildMaxDeliverMap(options),
+                maxDeliverByStream: new Map(),
                 onDeadLetter: options.onDeadLetter,
               }
             : undefined;

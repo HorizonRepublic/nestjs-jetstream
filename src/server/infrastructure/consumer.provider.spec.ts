@@ -18,7 +18,13 @@ describe(ConsumerProvider, () => {
   let connection: Mocked<ConnectionProvider>;
   let streamProvider: Mocked<StreamProvider>;
   let patternRegistry: Mocked<PatternRegistry>;
-  let mockJsm: { consumers: { info: ReturnType<typeof vi.fn>; add: ReturnType<typeof vi.fn> } };
+  let mockJsm: {
+    consumers: {
+      info: ReturnType<typeof vi.fn>;
+      add: ReturnType<typeof vi.fn>;
+      update: ReturnType<typeof vi.fn>;
+    };
+  };
 
   beforeEach(() => {
     options = { name: faker.lorem.word(), servers: ['nats://localhost:4222'] };
@@ -27,6 +33,7 @@ describe(ConsumerProvider, () => {
       consumers: {
         info: vi.fn(),
         add: vi.fn(),
+        update: vi.fn(),
       },
     };
 
@@ -69,17 +76,21 @@ describe(ConsumerProvider, () => {
 
         patternRegistry.getBroadcastPatterns.mockReturnValue(patterns);
 
-        const existingConsumer = createMock<ConsumerInfo>({
-          config: { durable_name: sut.getConsumerName('broadcast') },
-        });
+        mockJsm.consumers.info.mockResolvedValue(createMock<ConsumerInfo>());
 
-        mockJsm.consumers.info.mockResolvedValue(existingConsumer);
+        const updated = createMock<ConsumerInfo>();
+
+        mockJsm.consumers.update.mockResolvedValue(updated);
 
         // When: ensure broadcast consumer
         await sut.ensureConsumers(['broadcast']);
 
-        // Then: consumer.info was called (consumer exists), config had filter_subjects
-        expect(mockJsm.consumers.info).toHaveBeenCalled();
+        // Then: consumer updated with filter_subjects
+        expect(mockJsm.consumers.update).toHaveBeenCalledWith(
+          'test-stream',
+          expect.any(String),
+          expect.objectContaining({ filter_subjects: patterns }),
+        );
       });
     });
 
@@ -88,17 +99,21 @@ describe(ConsumerProvider, () => {
         // Given: registry returns 1 broadcast pattern
         patternRegistry.getBroadcastPatterns.mockReturnValue(['broadcast.config.updated']);
 
-        const existingConsumer = createMock<ConsumerInfo>({
-          config: { durable_name: sut.getConsumerName('broadcast') },
-        });
+        mockJsm.consumers.info.mockResolvedValue(createMock<ConsumerInfo>());
 
-        mockJsm.consumers.info.mockResolvedValue(existingConsumer);
+        const updated = createMock<ConsumerInfo>();
+
+        mockJsm.consumers.update.mockResolvedValue(updated);
 
         // When: ensure broadcast consumer
         await sut.ensureConsumers(['broadcast']);
 
-        // Then: consumer.info was called
-        expect(mockJsm.consumers.info).toHaveBeenCalled();
+        // Then: consumer updated with filter_subject
+        expect(mockJsm.consumers.update).toHaveBeenCalledWith(
+          'test-stream',
+          expect.any(String),
+          expect.objectContaining({ filter_subject: 'broadcast.config.updated' }),
+        );
       });
     });
 
