@@ -161,7 +161,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
       const stream = info.stream_name;
       const maxDeliver = info.config.max_deliver;
 
-      if (stream && maxDeliver) {
+      if (stream && maxDeliver !== undefined && maxDeliver > 0) {
         map.set(stream, maxDeliver);
       }
     }

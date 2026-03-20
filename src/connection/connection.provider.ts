@@ -91,9 +91,10 @@ export class ConnectionProvider {
 
       this.jsmInstance = await nc.jetstreamManager();
       this.logger.log('JetStream manager initialized');
-      this.jsmPromise = null;
       return this.jsmInstance;
-    })();
+    })().finally(() => {
+      this.jsmPromise = null;
+    });
 
     return this.jsmPromise;
   }
