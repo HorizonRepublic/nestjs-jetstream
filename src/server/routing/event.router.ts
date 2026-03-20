@@ -172,7 +172,7 @@ export class EventRouter {
       unwrapResult(handler(data, ctx)).catch((err: unknown) => {
         this.logger.error(`Ordered handler error (${msg.subject}):`, err);
       }),
-    );
+    ) as Observable<void>;
   }
 
   /** Check if the message has exhausted all delivery attempts. */
