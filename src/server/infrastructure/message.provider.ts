@@ -101,8 +101,10 @@ export class MessageProvider {
   ): Promise<void> {
     const consumerOpts: Partial<OrderedConsumerOptions> = { filterSubjects };
 
-    // Workaround: nats.js has a bug where explicit DeliverPolicy.All causes consume()
-    // to hang (opt_start_seq not deleted). Omitting the field gives the same behavior.
+    // Workaround: in nats.js (v2.29.x), explicitly passing DeliverPolicy.All to an
+    // ordered consumer leaves opt_start_seq in the config, causing consume() to hang.
+    // Omitting deliver_policy lets nats.js use its internal default (same All behavior).
+    // See: nats.js/lib/jetstream/consumer.js, OrderedPullConsumerImpl.resetConsumer()
     if (
       orderedConfig?.deliverPolicy !== undefined &&
       orderedConfig.deliverPolicy !== DeliverPolicy.All

@@ -582,7 +582,7 @@ Ordered consumers are **ephemeral** — each instance creates its own independen
 | Use case         | Workload distribution              | Event sourcing, audit logs, projections |
 | Publish prefix   | (none)                             | `ordered:`                              |
 
-> **Note:** Internally, the transport works around a [known nats.js issue](https://github.com/nats-io/nats.js) where explicitly passing `DeliverPolicy.All` to an ordered consumer causes `consume()` to hang. The library silently omits the field when `All` is configured (nats.js defaults to the same behavior). All other policies are passed through directly.
+> **Note:** In nats.js v2.29.x, explicitly passing `DeliverPolicy.All` to an ordered consumer causes `consume()` to hang due to a residual `opt_start_seq` in the internal config. The transport works around this by omitting the field when `All` is configured — nats.js defaults to the same behavior. All other policies are passed through directly.
 
 ### JetstreamRecord Builder
 
