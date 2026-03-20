@@ -222,6 +222,22 @@
   text-decoration: none;
 }
 
+.ctaPrimary:focus-visible,
+.ctaOutline:focus-visible,
+.installCta:focus-visible {
+  outline: 2px solid var(--landing-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ctaPrimary,
+  .ctaOutline,
+  .featureCard,
+  .installCta {
+    transition: none;
+  }
+}
+
 /* Responsive */
 
 @media (max-width: 768px) {

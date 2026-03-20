@@ -51,6 +51,8 @@ function Hero(): React.ReactElement {
           <Link
             className={styles.ctaOutline}
             href="https://github.com/HorizonRepublic/nestjs-jetstream"
+            target="_blank"
+            rel="noopener noreferrer"
           >
             View on GitHub
           </Link>
@@ -83,7 +85,7 @@ function Install(): React.ReactElement {
     <section className={styles.install}>
       <div className={styles.installInner}>
         <div className={styles.installTerminal}>
-          <div className={styles.terminalDots}>
+          <div className={styles.terminalDots} aria-hidden="true">
             <span />
             <span />
             <span />
