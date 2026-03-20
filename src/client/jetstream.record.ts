@@ -24,6 +24,8 @@ export class JetstreamRecord<TData = unknown> {
     public readonly headers: ReadonlyMap<string, string>,
     /** Per-request RPC timeout override in ms. */
     public readonly timeout?: number,
+    /** Custom message ID for JetStream deduplication. */
+    public readonly messageId?: string,
   ) {}
 }
 
@@ -37,6 +39,7 @@ export class JetstreamRecordBuilder<TData = unknown> {
   private data: TData | undefined;
   private readonly headers = new Map<string, string>();
   private timeout: number | undefined;
+  private messageId: string | undefined;
 
   public constructor(data?: TData) {
     this.data = data;
@@ -80,6 +83,29 @@ export class JetstreamRecordBuilder<TData = unknown> {
   }
 
   /**
+   * Set a custom message ID for JetStream deduplication.
+   *
+   * NATS JetStream uses this ID to detect duplicate publishes within the
+   * stream's `duplicate_window`. If two messages with the same ID arrive
+   * within the window, the second is silently dropped.
+   *
+   * When not set, a random UUID is generated automatically.
+   *
+   * @param id - Unique message identifier (e.g. order ID, idempotency key).
+   *
+   * @example
+   * ```typescript
+   * new JetstreamRecordBuilder(data)
+   *   .setMessageId(`order-${order.id}`)
+   *   .build();
+   * ```
+   */
+  public setMessageId(id: string): this {
+    this.messageId = id;
+    return this;
+  }
+
+  /**
    * Set per-request RPC timeout.
    *
    * @param ms - Timeout in milliseconds. Overrides the global RPC timeout for this request only.
@@ -95,7 +121,12 @@ export class JetstreamRecordBuilder<TData = unknown> {
    * @returns A frozen record ready to pass to `client.send()` or `client.emit()`.
    */
   public build(): JetstreamRecord<TData> {
-    return new JetstreamRecord(this.data as TData, new Map(this.headers), this.timeout);
+    return new JetstreamRecord(
+      this.data as TData,
+      new Map(this.headers),
+      this.timeout,
+      this.messageId,
+    );
   }
 
   /** Validate that a header key is not reserved. */

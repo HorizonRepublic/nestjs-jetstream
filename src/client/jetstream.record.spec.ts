@@ -68,6 +68,29 @@ describe(JetstreamRecordBuilder, () => {
       });
     });
 
+    describe('when using setMessageId()', () => {
+      it('should set custom message ID for deduplication', () => {
+        // Given: a custom message ID
+        const messageId = `order-${faker.string.uuid()}`;
+
+        // When: built with messageId
+        const record = sut.setData({ id: 1 }).setMessageId(messageId).build();
+
+        // Then: messageId is set
+        expect(record.messageId).toBe(messageId);
+      });
+    });
+
+    describe('when messageId is not set', () => {
+      it('should be undefined', () => {
+        // When: built without messageId
+        const record = sut.setData({ id: 1 }).build();
+
+        // Then: messageId is undefined
+        expect(record.messageId).toBeUndefined();
+      });
+    });
+
     describe('when using setHeaders() with multiple entries', () => {
       it('should set all headers at once', () => {
         // Given: multiple headers

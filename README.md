@@ -483,14 +483,18 @@ Attach custom headers and per-request timeouts using the builder pattern:
 import { JetstreamRecordBuilder } from '@horizon-republic/nestjs-jetstream';
 
 const record = new JetstreamRecordBuilder({ id: 1 })
-  .setHeader('x-trace-id', 'abc-123')
   .setHeader('x-tenant', 'acme')
   .setTimeout(5000)
   .build();
 
+// Custom message ID for JetStream deduplication
+const idempotentRecord = new JetstreamRecordBuilder(orderData)
+  .setMessageId(`order-${order.id}`)
+  .build();
+
 // Works with both send() and emit()
 this.client.send('user.get', record);
-this.client.emit('user.created', record);
+this.client.emit('order.created', idempotentRecord);
 ```
 
 **Reserved headers** (set automatically by the transport, cannot be overridden):
@@ -503,15 +507,12 @@ this.client.emit('user.created', record);
 
 Attempting to set a reserved header throws an error at build time.
 
-**Additional transport headers** (set automatically, available in handlers):
+**Additional transport headers** (set automatically, available in handlers via `RpcContext`):
 
-| Header          | Purpose                                     |
-|-----------------|---------------------------------------------|
-| `x-subject`     | Original NATS subject                       |
-| `x-caller-name` | Sending service name                        |
-| `x-request-id`  | Available for user-defined request tracking |
-| `x-trace-id`    | Available for distributed tracing           |
-| `x-span-id`     | Available for distributed tracing           |
+| Header          | Purpose              |
+|-----------------|----------------------|
+| `x-subject`     | Original NATS subject |
+| `x-caller-name` | Sending service name  |
 
 ## Handler Context & Serialization
 
@@ -526,7 +527,7 @@ import { RpcContext } from '@horizon-republic/nestjs-jetstream';
 @MessagePattern('user.get')
 getUser(@Payload() data: GetUserDto, @Ctx() ctx: RpcContext) {
   const subject = ctx.getSubject();            // Full NATS subject
-  const traceId = ctx.getHeader('x-trace-id'); // Single header value
+  const tenant = ctx.getHeader('x-tenant');     // Single header value
   const headers = ctx.getHeaders();            // All headers (MsgHdrs)
   const isJs = ctx.isJetStream();              // true for JetStream messages
   const msg = ctx.getMessage();                // Raw JsMsg | Msg (escape hatch)
