@@ -67,7 +67,7 @@ export class AppModule {}
 ```
 
 :::info The `name` lives outside the factory
-The `name` property is defined at the top level of `forRootAsync()`, not inside the factory return value. This is by design -- the name is needed upfront for DI token generation before the factory runs.
+The `name` property is defined at the top level of `forRootAsync()`, not inside the factory return value. This is by design — the name is needed upfront for DI token generation before the factory runs.
 :::
 
 ### useExisting
@@ -97,7 +97,7 @@ JetstreamModule.forRootAsync({
 
 ## forFeature()
 
-`forFeature()` creates a lightweight `JetstreamClient` proxy for a target service. It reuses the shared NATS connection from `forRoot()` -- no new connections are created.
+`forFeature()` creates a lightweight `JetstreamClient` proxy for a target service. It reuses the shared NATS connection from `forRoot()` — no new connections are created.
 
 Import it in each feature module that needs to communicate with a specific service:
 
@@ -124,6 +124,7 @@ Inject the client using `@Inject()` with the service name as the token:
 ```typescript title="src/orders/orders.service.ts"
 import { Injectable, Inject } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
+import { firstValueFrom } from 'rxjs';
 
 @Injectable()
 export class OrdersService {
@@ -134,7 +135,9 @@ export class OrdersService {
 
   async createOrder(userId: number) {
     // RPC call to the users service
-    const user = await this.usersClient.send('user.get', { id: userId }).toPromise();
+    const user = await firstValueFrom(
+      this.usersClient.send('user.get', { id: userId }),
+    );
 
     // Fire-and-forget event to the payments service
     this.paymentsClient.emit('payment.initiate', {
@@ -340,8 +343,6 @@ connectionOptions: {
 
 ## Publisher-only mode
 
-<Since version="1.0.0" />
-
 Set `consumer: false` to skip all consumer infrastructure. This is useful for API gateways or services that only publish messages and never handle them:
 
 ```typescript
@@ -367,7 +368,7 @@ void bootstrap();
 
 ## What's next?
 
-- [**RPC Patterns**](/docs/patterns/rpc) -- Core vs JetStream mode, error handling, and timeouts
-- [**Events & Broadcast**](/docs/patterns/events) -- workqueue events and fan-out delivery
-- [**Lifecycle Hooks**](/docs/guides/lifecycle-hooks) -- monitor connection state and transport events
-- [**Default Configs**](/docs/reference/default-configs) -- full list of production-ready stream and consumer defaults
+- [**RPC Patterns**](/docs/patterns/rpc) — Core vs JetStream mode, error handling, and timeouts
+- [**Events & Broadcast**](/docs/patterns/events) — workqueue events and fan-out delivery
+- [**Lifecycle Hooks**](/docs/guides/lifecycle-hooks) — monitor connection state and transport events
+- [**Default Configs**](/docs/reference/default-configs) — full list of production-ready stream and consumer defaults

@@ -28,7 +28,7 @@ await lastValueFrom(this.client.emit('order.created', record));
 const result = await lastValueFrom(this.client.send('get.order', record));
 ```
 
-The builder is immutable after `.build()` -- the returned `JetstreamRecord` is a frozen snapshot of the data, headers, timeout, and message ID at the time of construction.
+The builder is immutable after `.build()` — the returned `JetstreamRecord` is a frozen snapshot of the data, headers, timeout, and message ID at the time of construction.
 
 ## Custom headers
 
@@ -57,20 +57,13 @@ const record = new JetstreamRecordBuilder(data)
 
 <Since version="2.3.0" />
 
-JetStream has built-in **server-side deduplication**. When a message is published with a message ID, the server remembers that ID for a configurable time window. If a second message with the same ID arrives within the window, it is silently dropped -- no duplicate processing occurs.
+JetStream has built-in **server-side deduplication**. When a message is published with a message ID, the server remembers that ID for a configurable time window. If a second message with the same ID arrives within the window, it is silently dropped — no duplicate processing occurs.
 
 ### How the dedup window works
 
-Each JetStream stream has a `duplicate_window` setting that controls how long the server remembers message IDs:
+Each JetStream stream has a `duplicate_window` setting that controls how long the server remembers message IDs. The default window is **2 minutes** for event, broadcast, and ordered streams, and **30 seconds** for command (RPC) streams.
 
-| Stream type | Default dedup window |
-|---|---|
-| Event (workqueue) | 2 minutes |
-| Command (RPC) | 30 seconds |
-| Broadcast | 2 minutes |
-| Ordered | 2 minutes |
-
-If you do **not** set a message ID, the transport generates a random UUID for every publish. This means no deduplication by default -- each publish is treated as a unique message.
+If you do **not** set a message ID, the transport generates a random UUID for every publish. This means no deduplication by default — each publish is treated as a unique message.
 
 ### Setting a deterministic message ID
 
@@ -87,7 +80,7 @@ await lastValueFrom(this.client.emit('order.created', record));
 Now if a network retry or application restart causes the same event to be published twice, the JetStream server drops the duplicate automatically.
 
 :::tip Choose IDs carefully
-Good message IDs are derived from business identifiers: `order-${orderId}`, `payment-${paymentId}-refund`, `user-${userId}-email-changed`. Avoid timestamps or random values -- they defeat the purpose of deduplication.
+Good message IDs are derived from business identifiers: `order-${orderId}`, `payment-${paymentId}-refund`, `user-${userId}-email-changed`. Avoid timestamps or random values — they defeat the purpose of deduplication.
 :::
 
 :::warning Window expiration
@@ -144,7 +137,7 @@ In addition to reserved headers, the transport automatically sets two informatio
 | `x-subject` | NATS subject | The original subject the message was published to |
 | `x-caller-name` | Service name | The internal name of the sending service |
 
-These headers are read-only from the handler's perspective -- you can access them via `ctx.getHeader('x-subject')` but cannot override them via the builder.
+These headers are read-only from the handler's perspective — you can access them via `ctx.getHeader('x-subject')` but cannot override them via the builder.
 
 ## API summary
 
@@ -160,6 +153,6 @@ These headers are read-only from the handler's perspective -- you can access the
 
 ## Next steps
 
-- [Handler Context](./handler-context.md) -- access headers and message metadata in your handlers
-- [Custom Codec](./custom-codec.md) -- control how payloads are serialized
-- [Module Configuration](/docs/getting-started/module-configuration) -- configure dedup windows via stream overrides
+- [Handler Context](./handler-context.md) — access headers and message metadata in your handlers
+- [Custom Codec](./custom-codec.md) — control how payloads are serialized
+- [Module Configuration](/docs/getting-started/module-configuration) — configure dedup windows via stream overrides

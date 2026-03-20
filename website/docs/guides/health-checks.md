@@ -5,14 +5,14 @@ title: "Health Checks"
 
 # Health Checks
 
-The library provides a `JetstreamHealthIndicator` that reports the NATS connection status and round-trip latency. It is auto-registered by `forRoot()` and exported from the module -- no additional setup required.
+The library provides a `JetstreamHealthIndicator` that reports the NATS connection status and round-trip latency. It is auto-registered by `forRoot()` and exported from the module — no additional setup required.
 
 ## What it checks
 
 Every health check call performs two things:
 
-1. **Connection status** -- is the NATS connection open?
-2. **RTT latency** -- a round-trip ping to the NATS server via `nc.rtt()`, measuring actual network latency in milliseconds.
+1. **Connection status** — is the NATS connection open?
+2. **RTT latency** — a round-trip ping to the NATS server via `nc.rtt()`, measuring actual network latency in milliseconds.
 
 If the connection is closed or the RTT ping fails, the indicator reports the connection as unhealthy.
 
@@ -25,7 +25,7 @@ The health indicator exposes two methods for different use cases:
 | `check()` | No | Custom health endpoints, monitoring integrations |
 | `isHealthy(key?)` | Yes | @nestjs/terminus integration |
 
-### check() -- plain status object
+### check() — plain status object
 
 `check()` returns a `JetstreamHealthStatus` object and **never throws**. Use it when you want to inspect the status programmatically without try/catch:
 
@@ -61,7 +61,7 @@ export class HealthController {
 }
 ```
 
-### isHealthy(key?) -- Terminus-compatible
+### isHealthy(key?) — Terminus-compatible
 
 `isHealthy()` follows the @nestjs/terminus convention: returns `{ [key]: { status: 'up', ... } }` on success, **throws** on failure. The `key` parameter defaults to `'jetstream'`.
 
@@ -126,7 +126,7 @@ return this.health.check([
 ```
 
 :::caution Terminus error details
-The `isHealthy()` method throws a plain `Error` with structured details attached as a property -- not a Terminus `HealthCheckError`. Terminus still picks up the details correctly because it reads the error properties, but be aware of this if you catch the error directly in custom code.
+The `isHealthy()` method throws a plain `Error` with structured details attached as a property — not a Terminus `HealthCheckError`. Terminus still picks up the details correctly because it reads the error properties, but be aware of this if you catch the error directly in custom code.
 :::
 
 ## Without @nestjs/terminus (standalone)
@@ -182,10 +182,10 @@ export class MonitoringService {
 }
 ```
 
-No need to add it to any `providers` array -- it's already registered globally.
+No need to add it to any `providers` array — it's already registered globally.
 
 ## What's next?
 
-- [**Lifecycle Hooks**](/docs/guides/lifecycle-hooks) -- monitor connection state changes (connect, disconnect, reconnect)
-- [**Graceful Shutdown**](/docs/guides/graceful-shutdown) -- drain connections cleanly on termination
-- [**Module Configuration**](/docs/getting-started/module-configuration) -- full options reference
+- [**Lifecycle Hooks**](/docs/guides/lifecycle-hooks) — monitor connection state changes (connect, disconnect, reconnect)
+- [**Graceful Shutdown**](/docs/guides/graceful-shutdown) — drain connections cleanly on termination
+- [**Module Configuration**](/docs/getting-started/module-configuration) — full options reference

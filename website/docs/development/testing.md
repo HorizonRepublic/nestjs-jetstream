@@ -121,9 +121,9 @@ describe('StreamProvider', () => {
 
 Tests within a `describe` block follow this order:
 
-1. **Happy path** -- the expected successful behavior
-2. **Edge cases** -- boundary conditions and unusual inputs
-3. **Error cases** -- failure modes and error handling
+1. **Happy path** — the expected successful behavior
+2. **Edge cases** — boundary conditions and unusual inputs
+3. **Error cases** — failure modes and error handling
 
 ### Mock Reset
 

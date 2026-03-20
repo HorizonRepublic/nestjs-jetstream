@@ -10,12 +10,12 @@ title: Introduction
 
 ## Why this library?
 
-NestJS ships with a [built-in NATS transport](https://docs.nestjs.com/microservices/nats), but it operates exclusively over NATS Core -- a fire-and-forget, in-memory pub/sub layer. That's fine for ephemeral messages, but when you need:
+NestJS ships with a [built-in NATS transport](https://docs.nestjs.com/microservices/nats), but it operates exclusively over NATS Core — a fire-and-forget, in-memory pub/sub layer. That's fine for ephemeral messages, but when you need:
 
-- **Persistent delivery** -- messages survive broker and consumer restarts
-- **At-least-once semantics** -- automatic redelivery on failure with configurable retry limits
-- **Stream-based replay** -- new consumers can catch up on historical messages
-- **Fan-out broadcast** -- every running instance of a service receives every message
+- **Persistent delivery** — messages survive broker and consumer restarts
+- **At-least-once semantics** — automatic redelivery on failure with configurable retry limits
+- **Stream-based replay** — new consumers can catch up on historical messages
+- **Fan-out broadcast** — every running instance of a service receives every message
 
 ...you need JetStream. This library manages streams, consumers, and subjects automatically so you can focus on business logic instead of NATS plumbing.
 
@@ -26,12 +26,12 @@ NestJS ships with a [built-in NATS transport](https://docs.nestjs.com/microservi
 | **Workqueue Events** | At-least-once delivery, one handler instance processes each message |
 | **Broadcast Events** | Fan-out to all subscribing services via per-service durable consumers |
 | **Ordered Events** | Strict sequential delivery with automatic failover (Limits retention) |
-| **RPC -- Core mode** | NATS native request/reply for lowest latency |
-| **RPC -- JetStream mode** | Commands persisted in a stream, responses via Core NATS inbox |
+| **RPC — Core mode** | NATS native request/reply for lowest latency |
+| **RPC — JetStream mode** | Commands persisted in a stream, responses via Core NATS inbox |
 | **Dead Letter Queue** | Callback when a message exhausts all delivery attempts |
 | **Lifecycle Hooks** | Observable events: connect, disconnect, errors, timeouts, shutdown |
 | **Health Checks** | `JetstreamHealthIndicator` for readiness/liveness probes |
-| **Custom Codec** | Pluggable serialization -- JSON (default), MessagePack, Protobuf, etc. |
+| **Custom Codec** | Pluggable serialization — JSON (default), MessagePack, Protobuf, etc. |
 | **Graceful Shutdown** | Drain in-flight messages before closing the connection |
 | **Publisher-only mode** | `consumer: false` for API gateways that only emit messages |
 
@@ -60,9 +60,9 @@ NestJS ships with a [built-in NATS transport](https://docs.nestjs.com/microservi
 
 The library sits between your NestJS application code and the NATS server. It:
 
-1. **Manages infrastructure** -- creates and updates JetStream streams and consumers on startup
-2. **Routes messages** -- maps NATS subjects to your `@EventPattern` and `@MessagePattern` handlers
-3. **Handles lifecycle** -- connection management, graceful shutdown, error propagation
+1. **Manages infrastructure** — creates and updates JetStream streams and consumers on startup
+2. **Routes messages** — maps NATS subjects to your `@EventPattern` and `@MessagePattern` handlers
+3. **Handles lifecycle** — connection management, graceful shutdown, error propagation
 
 You interact with standard NestJS abstractions (`ClientProxy`, `@Payload()`, `@Ctx()`) and the library translates them into JetStream operations.
 
@@ -70,10 +70,10 @@ You interact with standard NestJS abstractions (`ClientProxy`, `@Payload()`, `@C
 
 This documentation is organized into sections that progressively build on each other:
 
-- [**Getting Started**](/docs/getting-started/installation) -- install, configure, and run your first handler in minutes
-- [**Messaging Patterns**](/docs/patterns/rpc) -- deep dive into RPC, Events, Broadcast, and Ordered Events
-- [**Guides**](/docs/guides/record-builder) -- Record Builder, Custom Codec, Handler Context, DLQ, Health Checks, Lifecycle Hooks, Graceful Shutdown
-- [**Reference**](/docs/reference/naming-conventions) -- naming conventions, default configs, edge cases, and full API reference
+- [**Getting Started**](/docs/getting-started/installation) — install, configure, and run your first handler in minutes
+- [**Messaging Patterns**](/docs/patterns/rpc) — deep dive into RPC, Events, Broadcast, and Ordered Events
+- [**Guides**](/docs/guides/record-builder) — Record Builder, Custom Codec, Handler Context, DLQ, Health Checks, Lifecycle Hooks, Graceful Shutdown
+- [**Reference**](/docs/reference/naming-conventions) — naming conventions, default configs, edge cases, and full API reference
 
 :::tip Ready to start?
 Head to [Installation](/docs/getting-started/installation) to add the library to your project, or jump straight to the [Quick Start](/docs/getting-started/quick-start) if you already have NATS running.

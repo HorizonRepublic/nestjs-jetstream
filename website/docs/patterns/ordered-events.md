@@ -11,15 +11,15 @@ import Since from '@site/src/components/Since';
 
 ## The problem: rebuilding state from event history
 
-Imagine you're building an e-commerce platform. Every time an order changes status -- created, paid, shipped, delivered -- you publish an event. Downstream, a projections service rebuilds a read model (an Elasticsearch index, a Redis cache, a reporting database) from these events.
+Imagine you're building an e-commerce platform. Every time an order changes status — created, paid, shipped, delivered — you publish an event. Downstream, a projections service rebuilds a read model (an Elasticsearch index, a Redis cache, a reporting database) from these events.
 
 Here's the catch: **order matters**. If the projections service processes "delivered" before "shipped", your read model is wrong. If it processes "paid" before "created", you get a foreign key violation. And if a message is lost, your projection diverges silently from reality.
 
-Standard workqueue events don't help here -- they're designed for parallel processing and load balancing, not for sequential replay. You need a messaging primitive that guarantees:
+Standard workqueue events don't help here — they're designed for parallel processing and load balancing, not for sequential replay. You need a messaging primitive that guarantees:
 
-1. **Strict ordering** -- messages arrive in exactly the sequence they were published
-2. **Full replay** -- new instances can catch up from the beginning of the stream
-3. **Per-instance delivery** -- each service instance gets its own independent view of the stream
+1. **Strict ordering** — messages arrive in exactly the sequence they were published
+2. **Full replay** — new instances can catch up from the beginning of the stream
+3. **Per-instance delivery** — each service instance gets its own independent view of the stream
 
 This is what ordered events provide.
 
@@ -29,7 +29,7 @@ Under the hood, ordered events use a fundamentally different NATS JetStream prim
 
 ### Ephemeral, not durable
 
-Workqueue and broadcast events use **durable consumers** -- server-side state that tracks which messages have been acknowledged. Ordered events use **ordered consumers**, which are ephemeral. There is no server-side consumer state. The nats.js client library creates a new consumer on each connection and manages its lifecycle internally.
+Workqueue and broadcast events use **durable consumers** — server-side state that tracks which messages have been acknowledged. Ordered events use **ordered consumers**, which are ephemeral. There is no server-side consumer state. The nats.js client library creates a new consumer on each connection and manages its lifecycle internally.
 
 This means:
 - No consumer name appears in `nats consumer ls`
@@ -47,11 +47,11 @@ The ordered stream uses **Limits retention** (`RetentionPolicy.Limits`), not Wor
 | Replay possible | No (messages are gone after ack) | Yes (messages persist) |
 | Default `max_age` | 7 days | **1 day** |
 
-With Limits retention, messages stay in the stream until they expire (default: 1 day, configurable via `max_age`). Every consumer -- and every service instance -- can read the full history independently.
+With Limits retention, messages stay in the stream until they expire (default: 1 day, configurable via `max_age`). Every consumer — and every service instance — can read the full history independently.
 
 ### Auto-acknowledgment by nats.js
 
-The nats.js library automatically acknowledges messages from ordered consumers. Your handler code never calls `msg.ack()` or `msg.nak()`. This is not optional -- it's baked into the ordered consumer protocol.
+The nats.js library automatically acknowledges messages from ordered consumers. Your handler code never calls `msg.ack()` or `msg.nak()`. This is not optional — it's baked into the ordered consumer protocol.
 
 ### Self-healing
 
@@ -75,7 +75,7 @@ Ordered consumers provide **at-most-once** delivery. This is the fundamental tra
 Retrying a failed message would block all subsequent messages (since ordering must be preserved), creating a head-of-line blocking problem. A single poison message could halt your entire pipeline. Instead, the transport logs the error and moves on.
 
 :::warning Handler errors are silent from a delivery perspective
-If your handler throws, the message is gone. The ordered consumer does not support `nak()`, `term()`, or any form of negative acknowledgment. Design your handlers to be defensive -- catch errors internally if you need to persist failures to a dead letter table or retry queue.
+If your handler throws, the message is gone. The ordered consumer does not support `nak()`, `term()`, or any form of negative acknowledgment. Design your handlers to be defensive — catch errors internally if you need to persist failures to a dead letter table or retry queue.
 :::
 
 ### Sequential processing with concatMap
@@ -234,10 +234,10 @@ JetstreamModule.forRoot({
 
 **How it works:** On every startup (or reconnection), the consumer replays **all messages** currently in the stream, bounded by `max_age`. If your stream has 7 days of history, every restart replays 7 days of events.
 
-**Restart behavior:** Full replay from the beginning of the stream. Your handlers must be **idempotent** -- processing the same event twice must produce the same result.
+**Restart behavior:** Full replay from the beginning of the stream. Your handlers must be **idempotent** — processing the same event twice must produce the same result.
 
 :::tip When to use
-Use `All` when your service builds state entirely from events and can afford to replay on startup. This is the simplest model -- no external offset tracking needed.
+Use `All` when your service builds state entirely from events and can afford to replay on startup. This is the simplest model — no external offset tracking needed.
 :::
 
 :::caution Replay volume
@@ -246,7 +246,7 @@ With `All` policy, a service that restarts after running for 7 days will replay 
 
 ### New
 
-**Scenario:** A real-time dashboard that shows live order activity. Historical data is loaded from a database on startup -- you only need events published *after* the service starts.
+**Scenario:** A real-time dashboard that shows live order activity. Historical data is loaded from a database on startup — you only need events published *after* the service starts.
 
 ```typescript
 import { DeliverPolicy } from 'nats';
@@ -270,7 +270,7 @@ If your service restarts and messages were published during downtime, those mess
 
 ### Last
 
-**Scenario:** A configuration cache service that needs the latest config value on startup, then listens for updates. The stream contains configuration snapshots -- you only need the most recent one to initialize, then you track changes going forward.
+**Scenario:** A configuration cache service that needs the latest config value on startup, then listens for updates. The stream contains configuration snapshots — you only need the most recent one to initialize, then you track changes going forward.
 
 ```typescript
 import { DeliverPolicy } from 'nats';
@@ -310,7 +310,7 @@ JetstreamModule.forRoot({
 
 **How it works:** On startup, delivers the **last message for each unique subject** in the stream. If the stream has 10,000 subjects, you get 10,000 messages (one per subject). Then continues with new messages.
 
-**Restart behavior:** Same as initial startup -- delivers the latest per subject, then live messages.
+**Restart behavior:** Same as initial startup — delivers the latest per subject, then live messages.
 
 :::info Subject granularity matters
 The "per subject" grouping is based on the full NATS subject. If you publish to `ordered:order.status` (a single subject), `LastPerSubject` behaves like `Last`. To get per-entity delivery, publish to `ordered:order.status.{orderId}` and register your handler with a wildcard or specific patterns.
@@ -318,7 +318,7 @@ The "per subject" grouping is based on the full NATS subject. If you publish to 
 
 ### StartSequence
 
-**Scenario:** A resumable projection that stores its last-processed sequence number in an external database. On restart, it reads the stored offset and resumes from exactly that point -- no re-processing, no gaps.
+**Scenario:** A resumable projection that stores its last-processed sequence number in an external database. On restart, it reads the stored offset and resumes from exactly that point — no re-processing, no gaps.
 
 ```typescript
 import { DeliverPolicy } from 'nats';
@@ -473,24 +473,16 @@ Ordered consumers behave fundamentally differently from workqueue consumers when
 
 Unlike workqueue events (where messages are load-balanced across instances), **every instance with an ordered consumer receives all messages independently**. There is no competition, no message distribution, no consumer groups.
 
-```
-                         ┌─────────────┐
-                    ┌───►│ Instance A   │  Receives ALL messages
-                    │    │ (own consumer)│
-┌──────────────┐    │    └─────────────┘
-│ Ordered      │────┤
-│ Stream       │    │    ┌─────────────┐
-│ (Limits)     │────┤───►│ Instance B   │  Receives ALL messages
-└──────────────┘    │    │ (own consumer)│
-                    │    └─────────────┘
-                    │
-                    │    ┌─────────────┐
-                    └───►│ Instance C   │  Receives ALL messages
-                         │ (own consumer)│
-                         └─────────────┘
+```mermaid
+flowchart LR
+    Stream["Ordered Stream<br/>(Limits retention)"] --> A["Instance A<br/>(own consumer)"]
+    Stream --> B["Instance B<br/>(own consumer)"]
+    Stream --> C["Instance C<br/>(own consumer)"]
 ```
 
-This is by design -- ordered consumers are meant for per-instance state building (caches, projections, in-memory indexes).
+Each instance receives **all** messages independently.
+
+This is by design — ordered consumers are meant for per-instance state building (caches, projections, in-memory indexes).
 
 ### Single-instance for exclusive processing
 
@@ -530,7 +522,7 @@ async handleOrderStatus(@Payload() data: OrderStatusDto) {
 |---|---|---|
 | **Delivery guarantee** | At-least-once | At-most-once |
 | **Message ordering** | Not guaranteed (parallel) | Strict sequential |
-| **Handler parallelism** | `mergeMap` -- concurrent | `concatMap` -- one at a time |
+| **Handler parallelism** | `mergeMap` — concurrent | `concatMap` — one at a time |
 | **Retry on failure** | Yes (`nak` triggers redeliver) | No (error logged, continues) |
 | **Dead letter queue** | Yes (after `max_deliver` attempts) | No |
 | **Acknowledgment** | Explicit (`msg.ack()`) | Automatic by nats.js |
@@ -561,7 +553,7 @@ See [Events (Workqueue)](/docs/patterns/events) for workqueue event documentatio
 
 In nats.js v2.29.x, explicitly passing `DeliverPolicy.All` to an ordered consumer causes `consume()` to hang indefinitely. The root cause: when `deliver_policy` is set to `All`, nats.js internally leaves a residual `opt_start_seq` field in the consumer configuration, which conflicts with the ordered consumer protocol.
 
-**The transport works around this automatically.** When the configured deliver policy is `All` (or unset), the transport omits the `deliver_policy` field entirely. The nats.js default behavior is identical to `All`, so the result is the same -- without the bug.
+**The transport works around this automatically.** When the configured deliver policy is `All` (or unset), the transport omits the `deliver_policy` field entirely. The nats.js default behavior is identical to `All`, so the result is the same — without the bug.
 
 ```typescript
 // This works correctly (transport omits deliver_policy internally):
@@ -581,15 +573,15 @@ This workaround is invisible to your application code. It's documented here for 
 
 ### No partial replay
 
-Ordered consumers do not support "resume from where I left off" natively. If the consumer disconnects and reconnects, nats.js recreates it -- but the starting position depends on the configured deliver policy, not on the last message processed. For resumable processing, use `DeliverPolicy.StartSequence` with external offset tracking (see the [StartSequence section](#startsequence) above).
+Ordered consumers do not support "resume from where I left off" natively. If the consumer disconnects and reconnects, nats.js recreates it — but the starting position depends on the configured deliver policy, not on the last message processed. For resumable processing, use `DeliverPolicy.StartSequence` with external offset tracking (see the [StartSequence section](#startsequence) above).
 
 ### Stream name is derived automatically
 
-The ordered stream name follows the library's [naming conventions](/docs/reference/naming-conventions): `{name}__microservice_ordered-stream`. You cannot specify a custom stream name -- it's computed from the `name` field in `forRoot()`.
+The ordered stream name follows the library's [naming conventions](/docs/reference/naming-conventions): `{name}__microservice_ordered-stream`. You cannot specify a custom stream name — it's computed from the `name` field in `forRoot()`.
 
 ## What's next?
 
-- [Events (Workqueue)](/docs/patterns/events) -- at-least-once delivery with load balancing
-- [Module Configuration](/docs/getting-started/module-configuration) -- full options reference including `ordered`
-- [Default Configs](/docs/reference/default-configs) -- stream and consumer defaults for all stream types
-- [Lifecycle Hooks](/docs/guides/lifecycle-hooks) -- monitor errors, reconnections, and transport events
+- [Events (Workqueue)](/docs/patterns/events) — at-least-once delivery with load balancing
+- [Module Configuration](/docs/getting-started/module-configuration) — full options reference including `ordered`
+- [Default Configs](/docs/reference/default-configs) — stream and consumer defaults for all stream types
+- [Lifecycle Hooks](/docs/guides/lifecycle-hooks) — monitor errors, reconnections, and transport events

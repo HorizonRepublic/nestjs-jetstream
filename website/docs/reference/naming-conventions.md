@@ -9,7 +9,7 @@ The transport derives all NATS subject names, stream names, and consumer names f
 
 ## The `__microservice` Suffix
 
-Every service name is suffixed with `__microservice` to create an **internal name**. This suffix provides namespace isolation -- it ensures your application subjects never collide with other NATS clients sharing the same cluster that might use bare service names.
+Every service name is suffixed with `__microservice` to create an **internal name**. This suffix provides namespace isolation — it ensures your application subjects never collide with other NATS clients sharing the same cluster that might use bare service names.
 
 ```typescript
 JetstreamModule.forRoot({
@@ -50,7 +50,7 @@ Given `name: 'orders'`, the transport generates the following names:
 | Broadcast consumer | `{name}__microservice_broadcast-consumer` | `orders__microservice_broadcast-consumer` |
 
 :::note
-Ordered consumers are **ephemeral** -- they are created and managed by nats.js at consumption time and do not have a durable consumer name.
+Ordered consumers are **ephemeral** — they are created and managed by nats.js at consumption time and do not have a durable consumer name.
 :::
 
 :::info

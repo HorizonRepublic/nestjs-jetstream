@@ -13,7 +13,7 @@ Answers to common questions and non-obvious behaviors of the transport.
 
 This transport does not implement fire-and-forget on Core NATS (non-JetStream) subjects. If you need fire-and-forget over raw NATS `publish()`, use the standard NestJS NATS transport (`@nestjs/microservices` `ClientProxy`) alongside this library. Both transports can share the same NATS cluster.
 
-For JetStream-based fire-and-forget, use `client.emit()` -- this publishes an event to the event stream without expecting a response:
+For JetStream-based fire-and-forget, use `client.emit()` — this publishes an event to the event stream without expecting a response:
 
 ```typescript
 this.client.emit('order.created', { orderId: '123' });
@@ -52,7 +52,7 @@ See [Broadcast Events](/docs/patterns/broadcast) for usage details.
 
 **Q: What happens if NATS is unreachable at startup?**
 
-The transport **throws immediately** on startup if the initial connection fails. This is intentional -- your NestJS application will fail to bootstrap, which lets orchestrators (Kubernetes, Docker Compose) detect and restart the service.
+The transport **throws immediately** on startup if the initial connection fails. This is intentional — your NestJS application will fail to bootstrap, which lets orchestrators (Kubernetes, Docker Compose) detect and restart the service.
 
 **After a successful initial connection**, the nats.js client handles automatic reconnection transparently. The transport monitors connection status events and emits lifecycle hooks (`Disconnect`, `Reconnect`) so your application can react. See [Lifecycle Hooks](/docs/guides/lifecycle-hooks) for details.
 
@@ -103,7 +103,7 @@ NATS imposes a total header size limit (default 4 KB per message in most server 
 
 When using `JetstreamRecordBuilder.setHeader()`, keep in mind:
 - Reserved headers (`x-correlation-id`, `x-reply-to`, `x-error`) cannot be overwritten
-- Custom headers are additive -- they are included alongside transport-managed headers
+- Custom headers are additive — they are included alongside transport-managed headers
 - If the total header size exceeds the NATS server limit, the publish will fail
 
 See [Record Builder](/docs/guides/record-builder) for custom header usage.
@@ -114,7 +114,7 @@ See [Record Builder](/docs/guides/record-builder) for custom header usage.
 
 There is a known issue in nats.js (v2.29.x) where explicitly passing `DeliverPolicy.All` to an ordered consumer leaves `opt_start_seq` in the consumer configuration, which causes `consume()` to hang indefinitely.
 
-The transport works around this by **omitting** the `deliver_policy` field when it would be `DeliverPolicy.All` (the default). Since nats.js uses `All` as its internal default anyway, the behavior is identical -- but the workaround avoids the hanging bug.
+The transport works around this by **omitting** the `deliver_policy` field when it would be `DeliverPolicy.All` (the default). Since nats.js uses `All` as its internal default anyway, the behavior is identical — but the workaround avoids the hanging bug.
 
 If you configure a custom `deliverPolicy` on the ordered consumer (e.g., `DeliverPolicy.Last` or `DeliverPolicy.New`), it will be passed through explicitly:
 

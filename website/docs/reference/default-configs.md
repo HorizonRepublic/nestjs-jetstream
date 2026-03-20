@@ -22,7 +22,7 @@ All streams share a common base configuration:
 
 ### Event Stream
 
-Workqueue retention -- each message is removed after being acknowledged by a consumer.
+Workqueue retention — each message is removed after being acknowledged by a consumer.
 
 | Property | Value | Notes |
 |----------|-------|-------|
@@ -58,7 +58,7 @@ Short-lived RPC commands (JetStream RPC mode only).
 
 ### Broadcast Stream
 
-Limits retention -- messages persist until the configured limits are reached. Shared across all services.
+Limits retention — messages persist until the configured limits are reached. Shared across all services.
 
 | Property | Value | Notes |
 |----------|-------|-------|
@@ -110,7 +110,7 @@ Limits retention for strict sequential delivery. Ordered consumers are ephemeral
 | Property | Value | Notes |
 |----------|-------|-------|
 | `ack_wait` | `5 minutes` | 300,000 ms in nanos; allows long-running RPC handlers |
-| `max_deliver` | `1` | No retries -- RPC failures propagate immediately |
+| `max_deliver` | `1` | No retries — RPC failures propagate immediately |
 | `max_ack_pending` | `100` | |
 | `ack_policy` | `Explicit` | |
 | `deliver_policy` | `All` | |
@@ -150,7 +150,7 @@ The transport waits up to 10 seconds for in-flight messages to be processed befo
 
 ## Overriding Defaults
 
-All stream and consumer defaults can be overridden in `forRoot()` options. User-provided values are merged on top of the defaults -- you only need to specify the properties you want to change.
+All stream and consumer defaults can be overridden in `forRoot()` options. User-provided values are merged on top of the defaults — you only need to specify the properties you want to change.
 
 ```typescript
 import { RetentionPolicy, StorageType } from 'nats';

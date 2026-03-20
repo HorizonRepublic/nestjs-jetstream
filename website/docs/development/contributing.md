@@ -31,7 +31,7 @@ We welcome contributions from the community. The full contribution guidelines li
 
 - Node.js >= 20.0.0
 - pnpm 10.x or higher
-- Docker (for integration tests -- runs a NATS container)
+- Docker (for integration tests — runs a NATS container)
 
 ## Development Commands
 
@@ -78,7 +78,7 @@ Use a scope in parentheses (e.g., `feat(client):`, `fix(strategy):`) to indicate
 - Ensure the build passes (`pnpm build`)
 - All linting checks must pass (`pnpm lint`)
 - All existing tests must pass, and new code should include tests
-- Use clear, descriptive PR titles -- they become changelog entries via Release Please
+- Use clear, descriptive PR titles — they become changelog entries via Release Please
 - Keep PRs focused on a single concern
 
 ## Coding Standards

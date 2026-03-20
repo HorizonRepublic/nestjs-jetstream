@@ -9,7 +9,7 @@ Broadcast events implement **fan-out** delivery: every subscribing service recei
 
 ## When to use
 
-Imagine a multi-service platform where an admin updates a feature flag. Every service -- orders, payments, notifications, analytics -- must refresh its local cache immediately. You don't want to call each service individually, and you don't want only one instance to get the update.
+Imagine a multi-service platform where an admin updates a feature flag. Every service — orders, payments, notifications, analytics — must refresh its local cache immediately. You don't want to call each service individually, and you don't want only one instance to get the update.
 
 Broadcast events solve this. When you publish a broadcast event, every service that has registered a handler receives the message independently.
 
@@ -17,29 +17,26 @@ Broadcast events solve this. When you publish a broadcast event, every service t
 
 The broadcast flow, step by step:
 
-1. **Publish** -- a service calls `client.emit('broadcast:config.updated', data)`. The `broadcast:` prefix tells the transport this is a fan-out event.
-2. **Route** -- the transport publishes to the subject `broadcast.config.updated` (a global subject, not scoped to any service).
-3. **Shared stream** -- the message is persisted in a single **shared** `broadcast-stream` with **Limits** retention (messages are kept even after acknowledgement, up to the configured limits).
-4. **Per-service consumers** -- each service that registered a `{ broadcast: true }` handler has its own durable consumer on the shared stream. Every consumer independently receives the message.
-5. **Dispatch** -- each service's `EventRouter` decodes the payload and invokes the matching handler.
-6. **Acknowledge** -- each consumer acks or naks independently.
+1. **Publish** — a service calls `client.emit('broadcast:config.updated', data)`. The `broadcast:` prefix tells the transport this is a fan-out event.
+2. **Route** — the transport publishes to the subject `broadcast.config.updated` (a global subject, not scoped to any service).
+3. **Shared stream** — the message is persisted in a single **shared** `broadcast-stream` with **Limits** retention (messages are kept even after acknowledgement, up to the configured limits).
+4. **Per-service consumers** — each service that registered a `{ broadcast: true }` handler has its own durable consumer on the shared stream. Every consumer independently receives the message.
+5. **Dispatch** — each service's `EventRouter` decodes the payload and invokes the matching handler.
+6. **Acknowledge** — each consumer acks or naks independently.
 
-```
-Publisher
-   |
-   v
-broadcast-stream  (shared, Limits retention)
-   |          |          |
-   v          v          v
-orders     payments   analytics    <-- per-service durable consumers
-consumer   consumer   consumer
-   |          |          |
-   v          v          v
-handler    handler    handler      <-- each gets the message
+```mermaid
+flowchart TD
+    Publisher --> Stream["broadcast-stream<br/>(shared, Limits retention)"]
+    Stream --> OC["orders consumer"]
+    Stream --> PC["payments consumer"]
+    Stream --> AC["analytics consumer"]
+    OC --> OH["handler"]
+    PC --> PH["handler"]
+    AC --> AH["handler"]
 ```
 
 :::info Limits vs. Workqueue retention
-The broadcast stream uses **Limits** retention, not Workqueue. Messages are not deleted after acknowledgement -- they stay in the stream until they exceed `max_age`, `max_msgs`, or `max_bytes`. This allows new consumers to replay historical broadcasts.
+The broadcast stream uses **Limits** retention, not Workqueue. Messages are not deleted after acknowledgement — they stay in the stream until they exceed `max_age`, `max_msgs`, or `max_bytes`. This allows new consumers to replay historical broadcasts.
 :::
 
 ## Code examples
@@ -80,7 +77,7 @@ export class AdminService {
 
 ### Handling broadcast events
 
-Use `@EventPattern` with `{ broadcast: true }` in the extras object. The pattern itself does **not** include the `broadcast:` prefix -- that's only for the sending side.
+Use `@EventPattern` with `{ broadcast: true }` in the extras object. The pattern itself does **not** include the `broadcast:` prefix — that's only for the sending side.
 
 ```typescript title="src/orders/orders.controller.ts"
 import { Controller, Logger } from '@nestjs/common';
@@ -121,10 +118,10 @@ export class PaymentsController {
 }
 ```
 
-Both `OrdersController` and `PaymentsController` receive the same `config.updated` message independently -- each through their own durable consumer.
+Both `OrdersController` and `PaymentsController` receive the same `config.updated` message independently — each through their own durable consumer.
 
 :::warning Asymmetric prefixing
-The `broadcast:` prefix is used **only on the sending side** (`client.emit('broadcast:config.updated', ...)`). On the handler side, the pattern is just `'config.updated'` with `{ broadcast: true }` in extras. This asymmetry is intentional -- the prefix controls routing, while the extras flag controls consumer registration.
+The `broadcast:` prefix is used **only on the sending side** (`client.emit('broadcast:config.updated', ...)`). On the handler side, the pattern is just `'config.updated'` with `{ broadcast: true }` in extras. This asymmetry is intentional — the prefix controls routing, while the extras flag controls consumer registration.
 :::
 
 ## Delivery semantics
@@ -150,14 +147,20 @@ If the orders service fails to process a broadcast message and the message is na
 - The payments service and analytics service are **completely unaffected**.
 - Each consumer tracks its own delivery count independently.
 
-```
-broadcast:config.updated
-   |
-   +--> orders-consumer:    attempt 1 -> FAIL (nak) -> attempt 2 -> SUCCESS (ack)
-   |
-   +--> payments-consumer:  attempt 1 -> SUCCESS (ack)
-   |
-   +--> analytics-consumer: attempt 1 -> SUCCESS (ack)
+```mermaid
+sequenceDiagram
+    participant Msg as broadcast:config.updated
+    participant OC as orders-consumer
+    participant PC as payments-consumer
+    participant AC as analytics-consumer
+    Msg->>OC: attempt 1
+    OC-->>OC: FAIL (nak)
+    Msg->>PC: attempt 1
+    PC-->>PC: SUCCESS (ack)
+    Msg->>AC: attempt 1
+    AC-->>AC: SUCCESS (ack)
+    Msg->>OC: attempt 2
+    OC-->>OC: SUCCESS (ack)
 ```
 
 This means:
@@ -308,7 +311,7 @@ handleFeatureFlag(@Payload() data: FeatureFlagEvent): void {
 
 ## What's next?
 
-- [**Events (Workqueue)**](/docs/patterns/events) -- single-consumer event delivery
-- [**Dead Letter Queue**](/docs/guides/dead-letter-queue) -- handle messages that exhaust all retries
-- [**Lifecycle Hooks**](/docs/guides/lifecycle-hooks) -- observe transport events like dead letters and message routing
-- [**Module Configuration**](/docs/getting-started/module-configuration) -- full reference for stream and consumer options
+- [**Events (Workqueue)**](/docs/patterns/events) — single-consumer event delivery
+- [**Dead Letter Queue**](/docs/guides/dead-letter-queue) — handle messages that exhaust all retries
+- [**Lifecycle Hooks**](/docs/guides/lifecycle-hooks) — observe transport events like dead letters and message routing
+- [**Module Configuration**](/docs/getting-started/module-configuration) — full reference for stream and consumer options

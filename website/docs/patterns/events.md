@@ -9,7 +9,7 @@ Workqueue events are fire-and-forget messages where **exactly one** handler inst
 
 ## When to use
 
-Imagine an e-commerce system: an order is created, and you need to send a confirmation email, update inventory, and notify the warehouse. Each of these tasks should happen **once** -- you don't want three instances of the email service each sending the same confirmation.
+Imagine an e-commerce system: an order is created, and you need to send a confirmation email, update inventory, and notify the warehouse. Each of these tasks should happen **once** — you don't want three instances of the email service each sending the same confirmation.
 
 Workqueue events solve this. When you publish an event, NATS JetStream delivers it to a single consumer in the group. If that consumer fails, the message is redelivered to another instance. If all retries are exhausted, the message is routed to a dead letter queue for investigation.
 
@@ -17,14 +17,14 @@ Workqueue events solve this. When you publish an event, NATS JetStream delivers 
 
 The workqueue flow, step by step:
 
-1. **Publish** -- a service calls `client.emit('order.created', data)`.
-2. **Route** -- the transport publishes to the JetStream subject `{service}__microservice.ev.order.created`.
-3. **Stream** -- the message is persisted in the service's event stream (workqueue retention).
-4. **Consume** -- one durable pull consumer picks up the message from the stream.
-5. **Dispatch** -- the `EventRouter` decodes the payload and invokes the matching `@EventPattern` handler.
-6. **Acknowledge** -- on success, the message is `ack`'d and removed from the stream. On failure, it is `nak`'d for redelivery.
+1. **Publish** — a service calls `client.emit('order.created', data)`.
+2. **Route** — the transport publishes to the JetStream subject `{service}__microservice.ev.order.created`.
+3. **Stream** — the message is persisted in the service's event stream (workqueue retention).
+4. **Consume** — one durable pull consumer picks up the message from the stream.
+5. **Dispatch** — the `EventRouter` decodes the payload and invokes the matching `@EventPattern` handler.
+6. **Acknowledge** — on success, the message is `ack`'d and removed from the stream. On failure, it is `nak`'d for redelivery.
 
-Because the stream uses **workqueue retention**, a message is automatically deleted once acknowledged -- keeping the stream compact.
+Because the stream uses **workqueue retention**, a message is automatically deleted once acknowledged — keeping the stream compact.
 
 :::info Parallel handler execution
 Workqueue event handlers run concurrently using RxJS `mergeMap`. Multiple messages can be processed in parallel, limited by the consumer's `max_ack_pending` setting (default: 100).
@@ -87,7 +87,7 @@ export class NotificationsController {
 ```
 
 :::tip Handler errors trigger retry
-If `handleOrderCreated` throws an exception, the message is automatically `nak`'d and redelivered. You don't need try/catch for retry logic -- the transport handles it.
+If `handleOrderCreated` throws an exception, the message is automatically `nak`'d and redelivered. You don't need try/catch for retry logic — the transport handles it.
 :::
 
 ## Delivery semantics
@@ -116,12 +116,27 @@ When a handler throws an error, the following retry sequence occurs:
 4. On the final delivery attempt, if the handler still fails, the transport detects that `deliveryCount >= max_deliver` and treats the message as a **dead letter**.
 5. The `onDeadLetter` callback is invoked (if configured), then the message is terminated with `term()`.
 
-```
-emit() --> stream --> consumer --> handler fails --> nak
-                         ^                           |
-                         |___ redeliver (attempt 2) _|
-                         ^                           |
-                         |___ redeliver (attempt 3) _| --> dead letter --> term
+```mermaid
+sequenceDiagram
+    participant Publisher
+    participant Stream
+    participant Consumer
+    participant Handler
+    Publisher->>Stream: emit()
+    Stream->>Consumer: deliver
+    Consumer->>Handler: attempt 1
+    Handler-->>Consumer: fails
+    Consumer->>Stream: nak
+    Stream->>Consumer: redeliver (attempt 2)
+    Consumer->>Handler: attempt 2
+    Handler-->>Consumer: fails
+    Consumer->>Stream: nak
+    Stream->>Consumer: redeliver (attempt 3)
+    Consumer->>Handler: attempt 3
+    Handler-->>Consumer: fails
+    Note over Consumer: max_deliver reached
+    Consumer->>Consumer: dead letter callback
+    Consumer->>Stream: term
 ```
 
 If the `onDeadLetter` callback itself fails, the message is `nak`'d one more time, giving the dead letter hook another chance on the next cycle.
@@ -130,11 +145,11 @@ For full details on dead letter handling, see the [Dead Letter Queue](/docs/guid
 
 ## Idempotency
 
-Because the transport provides **at-least-once** delivery, a handler may receive the same message more than once -- for example, if the service crashes after processing but before acknowledging. Your handlers must be **idempotent**: processing the same message twice should produce the same result.
+Because the transport provides **at-least-once** delivery, a handler may receive the same message more than once — for example, if the service crashes after processing but before acknowledging. Your handlers must be **idempotent**: processing the same message twice should produce the same result.
 
 ### Practical patterns
 
-**Database upsert** -- use a unique constraint or `ON CONFLICT` clause so re-processing the same event doesn't create duplicates:
+**Database upsert** — use a unique constraint or `ON CONFLICT` clause so re-processing the same event doesn't create duplicates:
 
 ```typescript
 @EventPattern('order.created')
@@ -149,7 +164,7 @@ async handleOrderCreated(@Payload() data: OrderCreatedEvent): Promise<void> {
 }
 ```
 
-**Idempotency key** -- track processed message IDs in a cache or database:
+**Idempotency key** — track processed message IDs in a cache or database:
 
 ```typescript
 @EventPattern('payment.completed')
@@ -194,7 +209,7 @@ This prevents duplicate publishes in scenarios like:
 The event stream's default `duplicate_window` is **2 minutes**. Messages with the same ID published within this window are deduplicated. If you need a longer window, override it in the stream config (see [Custom configuration](#custom-configuration) below).
 :::
 
-When no message ID is set explicitly, the transport generates a random UUID for each publish -- meaning no deduplication occurs by default. Always set a deterministic message ID when duplicate publishes are a concern.
+When no message ID is set explicitly, the transport generates a random UUID for each publish — meaning no deduplication occurs by default. Always set a deterministic message ID when duplicate publishes are a concern.
 
 ## Custom configuration
 
@@ -235,7 +250,7 @@ JetstreamModule.forRoot({
 ```
 
 :::tip When to increase ack_wait
-If your handler calls a slow external API (e.g., sending emails, processing payments), increase `ack_wait` so that NATS doesn't redeliver the message before your handler finishes. The default is 10 seconds -- long-running handlers may need 30s or more.
+If your handler calls a slow external API (e.g., sending emails, processing payments), increase `ack_wait` so that NATS doesn't redeliver the message before your handler finishes. The default is 10 seconds — long-running handlers may need 30s or more.
 :::
 
 :::tip When to increase max_deliver
@@ -268,7 +283,7 @@ The default of 3 delivery attempts works well for transient errors (network blip
 
 ## What's next?
 
-- [**Broadcast Events**](/docs/patterns/broadcast) -- fan-out delivery to all service instances
-- [**Dead Letter Queue**](/docs/guides/dead-letter-queue) -- handle messages that exhaust all retries
-- [**Record Builder**](/docs/guides/record-builder) -- attach custom headers and message IDs
-- [**Lifecycle Hooks**](/docs/guides/lifecycle-hooks) -- observe transport events like dead letters and message routing
+- [**Broadcast Events**](/docs/patterns/broadcast) — fan-out delivery to all service instances
+- [**Dead Letter Queue**](/docs/guides/dead-letter-queue) — handle messages that exhaust all retries
+- [**Record Builder**](/docs/guides/record-builder) — attach custom headers and message IDs
+- [**Lifecycle Hooks**](/docs/guides/lifecycle-hooks) — observe transport events like dead letters and message routing

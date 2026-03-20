@@ -28,7 +28,7 @@ import { GatewayController } from './gateway.controller';
 
 @Module({
   imports: [
-    // Global setup -- creates NATS connection, streams, consumers
+    // Global setup — creates NATS connection, streams, consumers
     JetstreamModule.forRoot({
       name: 'orders',
       servers: ['nats://localhost:4222'],
@@ -177,7 +177,7 @@ export class GatewayController {
 | `client.send(pattern, data)` | Request/reply RPC | Depends on RPC mode | `Observable<TResponse>` |
 
 :::info Broadcast prefix
-To send a broadcast event, prefix the pattern with `broadcast:` when calling `emit()`. On the handler side, use `{ broadcast: true }` in the decorator extras -- no prefix needed.
+To send a broadcast event, prefix the pattern with `broadcast:` when calling `emit()`. On the handler side, use `{ broadcast: true }` in the decorator extras — no prefix needed.
 :::
 
 ## Test it
@@ -198,11 +198,9 @@ curl http://localhost:3000/orders/broadcast
 curl http://localhost:3000/orders/42
 ```
 
-You should see log output from the handlers confirming message delivery.
-
 ## What's next?
 
-- [**Module Configuration**](/docs/getting-started/module-configuration) -- learn about all configuration options, async setup, and advanced connection settings
-- [**RPC Patterns**](/docs/patterns/rpc) -- deep dive into Core vs JetStream RPC modes
-- [**Events & Broadcast**](/docs/patterns/events) -- workqueue events, broadcast fan-out, and ordered events
-- [**Record Builder**](/docs/guides/record-builder) -- attach custom headers and per-message timeouts
+- [**Module Configuration**](/docs/getting-started/module-configuration) — learn about all configuration options, async setup, and advanced connection settings
+- [**RPC Patterns**](/docs/patterns/rpc) — deep dive into Core vs JetStream RPC modes
+- [**Events & Broadcast**](/docs/patterns/events) — workqueue events, broadcast fan-out, and ordered events
+- [**Record Builder**](/docs/guides/record-builder) — attach custom headers and per-message timeouts

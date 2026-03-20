@@ -9,20 +9,34 @@ import Since from '@site/src/components/Since';
 
 <Since version="2.2.0" />
 
-When a message fails on every delivery attempt and exhausts its `max_deliver` limit, the transport treats it as a **dead letter**. Instead of silently discarding the message, you get a callback with full context -- enough to persist, inspect, or re-publish it.
+When a message fails on every delivery attempt and exhausts its `max_deliver` limit, the transport treats it as a **dead letter**. Instead of silently discarding the message, you get a callback with full context — enough to persist, inspect, or re-publish it.
 
 ## What is a dead letter?
 
-In NATS JetStream, each consumer has a `max_deliver` setting (default: **3**). Every time a handler throws an exception, the message is `nak`'d and redelivered. Once the delivery count reaches `max_deliver`, the message has nowhere to go -- it's "dead."
+In NATS JetStream, each consumer has a `max_deliver` setting (default: **3**). Every time a handler throws an exception, the message is `nak`'d and redelivered. Once the delivery count reaches `max_deliver`, the message has nowhere to go — it's "dead."
 
 Without the `onDeadLetter` callback, the transport would simply `term()` the message after the final failed attempt. With the callback, you get a chance to save it before it's gone.
 
-```
-emit() → stream → consumer → handler fails → nak
-                      ^                         |
-                      |__ redeliver (attempt 2) _|
-                      ^                         |
-                      |__ redeliver (attempt 3) _| → onDeadLetter → term
+```mermaid
+sequenceDiagram
+    participant P as Publisher
+    participant S as Stream
+    participant C as Consumer
+    participant H as Handler
+    participant DLQ as onDeadLetter
+
+    P->>S: emit()
+    S->>C: deliver (attempt 1)
+    C->>H: invoke handler
+    H-->>C: fails → nak
+    S->>C: redeliver (attempt 2)
+    C->>H: invoke handler
+    H-->>C: fails → nak
+    S->>C: redeliver (attempt 3)
+    C->>H: invoke handler
+    H-->>C: fails
+    C->>DLQ: onDeadLetter(info)
+    DLQ-->>C: term()
 ```
 
 ## Configuring the callback
@@ -71,16 +85,16 @@ The `onDeadLetter` callback is **async** and **awaited** before the message is a
 2. The transport builds a `DeadLetterInfo` object.
 3. The `TransportEvent.DeadLetter` hook fires (for observability).
 4. `onDeadLetter(info)` is called and awaited.
-5. On success: the message is `term()`'d (terminated -- removed from the stream permanently).
+5. On success: the message is `term()`'d (terminated — removed from the stream permanently).
 6. On failure: the message is `nak()`'d, giving the callback another chance on the next delivery cycle.
 
 :::warning Safety net: callback failures trigger retry
-If your `onDeadLetter` callback throws (e.g., the database is down), the message is **not** terminated. Instead, it is `nak`'d so that NATS redelivers it. This means your callback will be retried -- but be aware that the delivery count has already reached `max_deliver`, so the message will be treated as a dead letter again on the next attempt.
+If your `onDeadLetter` callback throws (e.g., the database is down), the message is **not** terminated. Instead, it is `nak`'d so that NATS redelivers it. This means your callback will be retried — but be aware that the delivery count has already reached `max_deliver`, so the message will be treated as a dead letter again on the next attempt.
 :::
 
 ## DI integration with forRootAsync
 
-In real applications, the dead letter callback typically needs access to injected services -- a repository, a queue client, a logger. Use `forRootAsync()` to inject dependencies:
+In real applications, the dead letter callback typically needs access to injected services — a repository, a queue client, a logger. Use `forRootAsync()` to inject dependencies:
 
 ```typescript title="src/app.module.ts"
 import { Module } from '@nestjs/common';
@@ -163,19 +177,19 @@ JetstreamModule.forRoot({
 ```
 
 :::tip Hook vs callback
-The `TransportEvent.DeadLetter` **hook** is synchronous and fire-and-forget -- use it for lightweight observability (metrics, logs). The `onDeadLetter` **callback** is async and awaited -- use it for persistence that must succeed before the message is terminated. See [Lifecycle Hooks](/docs/guides/lifecycle-hooks) for more on the difference.
+The `TransportEvent.DeadLetter` **hook** is synchronous and fire-and-forget — use it for lightweight observability (metrics, logs). The `onDeadLetter` **callback** is async and awaited — use it for persistence that must succeed before the message is terminated. See [Lifecycle Hooks](/docs/guides/lifecycle-hooks) for more on the difference.
 :::
 
 ## Scope
 
 Dead letter detection applies to **workqueue** and **broadcast** events only. It does not apply to:
 
-- **RPC messages** -- RPC uses a request/reply pattern with its own timeout mechanism. Failed RPC handlers return error responses to the caller rather than entering a dead letter flow.
-- **Ordered events** -- Ordered consumers are ephemeral and auto-acknowledged by nats.js. There is no ack/nak cycle, so there is no concept of delivery exhaustion.
+- **RPC messages** — RPC uses a request/reply pattern with its own timeout mechanism. Failed RPC handlers return error responses to the caller rather than entering a dead letter flow.
+- **Ordered events** — Ordered consumers are ephemeral and auto-acknowledged by nats.js. There is no ack/nak cycle, so there is no concept of delivery exhaustion.
 
 ## What's next?
 
-- [**Events (Workqueue)**](/docs/patterns/events) -- retry flow and delivery semantics
-- [**Broadcast Events**](/docs/patterns/broadcast) -- fan-out delivery with per-instance DLQ
-- [**Lifecycle Hooks**](/docs/guides/lifecycle-hooks) -- observe transport events including dead letters
-- [**Module Configuration**](/docs/getting-started/module-configuration) -- `forRoot()` and `forRootAsync()` options reference
+- [**Events (Workqueue)**](/docs/patterns/events) — retry flow and delivery semantics
+- [**Broadcast Events**](/docs/patterns/broadcast) — fan-out delivery with per-instance DLQ
+- [**Lifecycle Hooks**](/docs/guides/lifecycle-hooks) — observe transport events including dead letters
+- [**Module Configuration**](/docs/getting-started/module-configuration) — `forRoot()` and `forRootAsync()` options reference

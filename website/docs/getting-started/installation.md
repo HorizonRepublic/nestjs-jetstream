@@ -34,23 +34,6 @@ yarn add @horizon-republic/nestjs-jetstream
   </TabItem>
 </Tabs>
 
-## Peer dependencies
-
-The library requires these packages to be installed in your project. If you already have a NestJS application, most of them are likely present.
-
-| Package | Version | Notes |
-|---|---|---|
-| `@nestjs/common` | `^10.2.0 \|\| ^11.0.0` | NestJS core framework |
-| `@nestjs/core` | `^10.2.0 \|\| ^11.0.0` | NestJS core framework |
-| `@nestjs/microservices` | `^10.2.0 \|\| ^11.0.0` | Microservices module (provides `@EventPattern`, `@MessagePattern`, `ClientProxy`) |
-| `nats` | `^2.0.0` | Official NATS.js client |
-| `reflect-metadata` | `^0.2.0` | Decorator metadata (standard NestJS dependency) |
-| `rxjs` | `^7.8.0` | Reactive extensions (standard NestJS dependency) |
-
-:::info NestJS version compatibility
-The library supports both **NestJS 10.x** and **NestJS 11.x**. All features work identically on both major versions.
-:::
-
 ## Runtime requirements
 
 - **Node.js** >= 20.0.0
@@ -70,16 +53,6 @@ To verify it's running:
 
 ```bash
 docker logs nats | head -5
-```
-
-You should see output like:
-
-```
-[1] ... [INF] Starting nats-server
-[1] ... [INF]   Version:  2.x.x
-[1] ... [INF] Starting JetStream
-[1] ... [INF] Listening for client connections on 0.0.0.0:4222
-[1] ... [INF] Server is ready
 ```
 
 :::tip Docker Compose

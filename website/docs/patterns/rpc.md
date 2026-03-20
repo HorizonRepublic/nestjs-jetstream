@@ -18,14 +18,16 @@ Core mode uses NATS native request/reply — the fastest path with no persistenc
 3. The handler processes the message and calls `msg.respond(result)` to send the reply.
 4. The client receives the reply on a temporary inbox managed by NATS itself.
 
-```
-Client                    NATS                  Server (queue group)
-  │                        │                          │
-  │── nc.request(subject) ──►                         │
-  │                        │── deliver to one sub ────►
-  │                        │                          │── handler(data)
-  │                        │◄──── msg.respond() ──────│
-  │◄──── reply ────────────│                          │
+```mermaid
+sequenceDiagram
+    participant Client
+    participant NATS
+    participant Server as Server (queue group)
+    Client->>NATS: nc.request(subject, payload)
+    NATS->>Server: deliver to one subscriber
+    Server->>Server: handler(data)
+    Server->>NATS: msg.respond(result)
+    NATS->>Client: reply
 ```
 
 ### Code example
@@ -102,16 +104,16 @@ JetstreamModule.forRoot({
 4. The handler executes within the timeout window. On success, the server calls `msg.ack()` and then publishes the response to the client's inbox via Core NATS `nc.publish()`.
 5. The client's inbox subscription matches the correlation ID and resolves the pending callback.
 
-```
-Client                    JetStream               Server (consumer)
-  │                          │                          │
-  │── js.publish(subject) ──►│                          │
-  │   [x-reply-to: inbox]   │── deliver ───────────────►
-  │   [x-correlation-id]    │                          │── handler(data)
-  │                          │◄──── msg.ack() ─────────│
-  │                          │                          │
-  │◄──── nc.publish(inbox) ──────── response ──────────│
-  │      [x-correlation-id] │                          │
+```mermaid
+sequenceDiagram
+    participant Client
+    participant JetStream
+    participant Server as Server (consumer)
+    Client->>JetStream: js.publish(subject)<br/>x-reply-to: inbox<br/>x-correlation-id
+    JetStream->>Server: deliver
+    Server->>Server: handler(data)
+    Server->>JetStream: msg.ack()
+    Server->>Client: nc.publish(inbox, response)<br/>x-correlation-id
 ```
 
 ### Code example

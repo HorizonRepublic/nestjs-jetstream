@@ -11,7 +11,10 @@ const config: Config = {
   organizationName: 'HorizonRepublic',
   projectName: 'nestjs-jetstream',
   onBrokenLinks: 'warn',
-  onBrokenMarkdownLinks: 'warn',
+  markdown: {
+    mermaid: true,
+    hooks: { onBrokenMarkdownLinks: 'warn' },
+  },
   i18n: { defaultLocale: 'en', locales: ['en'] },
   presets: [
     [
@@ -27,6 +30,7 @@ const config: Config = {
     ],
   ],
   themes: [
+    '@docusaurus/theme-mermaid',
     [
       '@cmfcmf/docusaurus-search-local',
       {
@@ -57,6 +61,27 @@ const config: Config = {
     ],
   ],
   themeConfig: {
+    mermaid: {
+      theme: { light: 'dark', dark: 'dark' },
+      options: {
+        themeVariables: {
+          primaryColor: '#151D2E',
+          primaryTextColor: '#E2E8F0',
+          primaryBorderColor: '#1E293B',
+          lineColor: '#3B82F6',
+          secondaryColor: '#0E1525',
+          tertiaryColor: '#0B1120',
+          noteBkgColor: '#151D2E',
+          noteTextColor: '#94A3B8',
+          noteBorderColor: '#1E293B',
+          actorBkg: '#151D2E',
+          actorTextColor: '#E2E8F0',
+          actorBorder: '#3B82F6',
+          signalColor: '#E2E8F0',
+          signalTextColor: '#E2E8F0',
+        },
+      },
+    },
     colorMode: {
       defaultMode: 'dark',
       disableSwitch: true,

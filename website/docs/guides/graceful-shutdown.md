@@ -11,19 +11,21 @@ The transport handles shutdown automatically through the NestJS application life
 
 The `JetstreamModule` implements NestJS's `OnApplicationShutdown` interface. When the application receives a termination signal (SIGTERM, SIGINT), NestJS calls the module's `onApplicationShutdown()` method, which triggers the following sequence:
 
-1. **Emit `ShutdownStart` hook** -- notifies lifecycle hooks that shutdown has begun.
-2. **Stop subscriptions** -- closes all RxJS subscriptions and stops JetStream consumers. No new messages are accepted.
-3. **Drain NATS connection** -- calls `nc.drain()`, which waits for all in-flight message handlers to finish processing and acknowledge their messages, then closes the connection.
-4. **Safety timeout** -- if drain doesn't complete within `shutdownTimeout` milliseconds, the transport proceeds with shutdown anyway. This prevents a stuck handler from blocking the process indefinitely.
-5. **Emit `ShutdownComplete` hook** -- notifies lifecycle hooks that shutdown is finished.
+1. **Emit `ShutdownStart` hook** — notifies lifecycle hooks that shutdown has begun.
+2. **Stop subscriptions** — closes all RxJS subscriptions and stops JetStream consumers. No new messages are accepted.
+3. **Drain NATS connection** — calls `nc.drain()`, which waits for all in-flight message handlers to finish processing and acknowledge their messages, then closes the connection.
+4. **Safety timeout** — if drain doesn't complete within `shutdownTimeout` milliseconds, the transport proceeds with shutdown anyway. This prevents a stuck handler from blocking the process indefinitely.
+5. **Emit `ShutdownComplete` hook** — notifies lifecycle hooks that shutdown is finished.
 
-```
-SIGTERM → NestJS onApplicationShutdown()
-  → ShutdownStart hook
-  → stop subscriptions (no new messages)
-  → drain NATS connection (wait for in-flight handlers)
-  → safety timeout (if drain exceeds limit)
-  → ShutdownComplete hook
+```mermaid
+flowchart LR
+    A[SIGTERM] --> B[onApplicationShutdown]
+    B --> C[ShutdownStart hook]
+    C --> D[Stop subscriptions]
+    D --> E[Drain NATS connection]
+    E --> F{Drain within timeout?}
+    F -- Yes --> G[ShutdownComplete hook]
+    F -- No --> G
 ```
 
 ## What "drain" means
@@ -61,7 +63,7 @@ export class AppModule {}
 Set `shutdownTimeout` to slightly more than your longest handler's expected duration. If your slowest handler takes 20 seconds, a timeout of 25-30 seconds gives it room to finish. Too short, and handlers may be abandoned mid-execution; too long, and your deployment pipeline will wait unnecessarily.
 :::
 
-If the timeout fires before drain completes, the transport closes the connection immediately. Any in-flight handlers that haven't finished will be interrupted -- their messages will not be acknowledged, so NATS will redeliver them to another instance after the consumer's `ack_wait` expires.
+If the timeout fires before drain completes, the transport closes the connection immediately. Any in-flight handlers that haven't finished will be interrupted — their messages will not be acknowledged, so NATS will redeliver them to another instance after the consumer's `ack_wait` expires.
 
 ## Enabling shutdown hooks
 
@@ -84,7 +86,7 @@ void bootstrap();
 ```
 
 :::warning Without enableShutdownHooks(), shutdown is not graceful
-If you skip `enableShutdownHooks()`, the process will terminate immediately on SIGTERM/SIGINT without calling `onApplicationShutdown()`. The NATS connection will drop abruptly, and in-flight messages will be redelivered after `ack_wait` expires -- which works, but is not clean.
+If you skip `enableShutdownHooks()`, the process will terminate immediately on SIGTERM/SIGINT without calling `onApplicationShutdown()`. The NATS connection will drop abruptly, and in-flight messages will be redelivered after `ack_wait` expires — which works, but is not clean.
 :::
 
 ## No manual shutdown code needed
@@ -121,6 +123,6 @@ See [Lifecycle Hooks](/docs/guides/lifecycle-hooks) for all available events.
 
 ## What's next?
 
-- [**Lifecycle Hooks**](/docs/guides/lifecycle-hooks) -- all 9 transport lifecycle events
-- [**Health Checks**](/docs/guides/health-checks) -- monitor connection status
-- [**Module Configuration**](/docs/getting-started/module-configuration) -- `shutdownTimeout` and other options
+- [**Lifecycle Hooks**](/docs/guides/lifecycle-hooks) — all 9 transport lifecycle events
+- [**Health Checks**](/docs/guides/health-checks) — monitor connection status
+- [**Module Configuration**](/docs/getting-started/module-configuration) — `shutdownTimeout` and other options

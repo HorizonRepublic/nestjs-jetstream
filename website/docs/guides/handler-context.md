@@ -37,7 +37,7 @@ export class OrdersController {
 | `getSubject()` | `string` | The NATS subject this message was published to |
 | `getHeader(key)` | `string \| undefined` | Value of a single header, or `undefined` if missing |
 | `getHeaders()` | `MsgHdrs \| undefined` | All NATS message headers (the raw nats.js `MsgHdrs` object) |
-| `isJetStream()` | `boolean` | Type guard -- returns `true` when the message is a JetStream message |
+| `isJetStream()` | `boolean` | Type guard — returns `true` when the message is a JetStream message |
 | `getMessage()` | `JsMsg \| Msg` | The raw NATS message (type depends on transport mode) |
 
 ## Extracting custom headers
@@ -123,7 +123,7 @@ async handleRpc(@Payload() data: any, @Ctx() ctx: RpcContext) {
 
 ## Accessing the raw NATS message
 
-For advanced use cases, `getMessage()` gives you direct access to the underlying nats.js message object. This is an escape hatch -- prefer the typed accessors when possible.
+For advanced use cases, `getMessage()` gives you direct access to the underlying nats.js message object. This is an escape hatch — prefer the typed accessors when possible.
 
 ```typescript
 @EventPattern('order.created')
@@ -152,5 +152,5 @@ The transport automatically acknowledges messages after successful handler execu
 
 ## Next steps
 
-- [Record Builder & Deduplication](./record-builder.md) -- set custom headers and message IDs on the publisher side
-- [Custom Codec](./custom-codec.md) -- control how the `@Payload()` data is serialized and deserialized
+- [Record Builder & Deduplication](./record-builder.md) — set custom headers and message IDs on the publisher side
+- [Custom Codec](./custom-codec.md) — control how the `@Payload()` data is serialized and deserialized

@@ -21,7 +21,7 @@ interface Codec {
 }
 ```
 
-Both methods work with `Uint8Array` -- the binary format that NATS uses on the wire.
+Both methods work with `Uint8Array` — the binary format that NATS uses on the wire.
 
 ## Default: JsonCodec
 
@@ -159,7 +159,7 @@ This applies across service boundaries: if `orders-service` publishes events tha
 
 When `codec.decode()` throws (e.g., a MsgPack consumer receives a JSON-encoded message), the transport handles it safely:
 
-- **Workqueue and RPC messages**: the message is **terminated** (`msg.term()`) -- it will not be redelivered. Retrying a message that cannot be decoded would cause an infinite failure loop.
+- **Workqueue and RPC messages**: the message is **terminated** (`msg.term()`) — it will not be redelivered. Retrying a message that cannot be decoded would cause an infinite failure loop.
 - **Ordered events**: the message is **skipped** (logged and dropped) since ordered consumers do not support `term()`.
 
 In both cases, the error is logged with the full subject and error details.
@@ -175,6 +175,6 @@ To switch codecs without downtime, deploy consumers that can handle both formats
 
 ## Next steps
 
-- [Record Builder & Deduplication](./record-builder.md) -- attach headers and dedup IDs to outbound messages
-- [Handler Context](./handler-context.md) -- access decoded payloads and metadata in handlers
-- [Module Configuration](/docs/getting-started/module-configuration) -- full reference for `forRoot()` and `forFeature()` options
+- [Record Builder & Deduplication](./record-builder.md) — attach headers and dedup IDs to outbound messages
+- [Handler Context](./handler-context.md) — access decoded payloads and metadata in handlers
+- [Module Configuration](/docs/getting-started/module-configuration) — full reference for `forRoot()` and `forFeature()` options
