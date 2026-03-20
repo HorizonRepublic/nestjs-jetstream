@@ -3,15 +3,16 @@ import { isObservable, Observable } from 'rxjs';
 /**
  * Unwrap a handler result that may be a Promise, Observable, or nested combination.
  *
- * NestJS-wrapped handlers may return Promise<Observable> (e.g. when exception
- * filters convert errors to throwError() Observables). This function handles:
+ * NestJS-wrapped handlers may return `Promise<Observable>` (e.g. when exception
+ * filters convert errors to `throwError()` Observables). This function handles:
  *
- * - Observable → subscribe immediately (no await — preserves sync emissions)
- * - Promise<Observable> → await Promise, then subscribe
- * - Promise<value> → await
- * - Plain value → return as-is
+ * - `Observable` — subscribe immediately (no await — preserves sync emissions)
+ * - `Promise<Observable>` — await Promise, then subscribe
+ * - `Promise<value>` — await
+ * - Plain value — return as-is
  *
- * Used by both CoreRpcServer and RpcRouter to normalize handler output.
+ * @param result - The raw handler return value.
+ * @returns The resolved value after unwrapping all layers.
  */
 export const unwrapResult = async (result: unknown): Promise<unknown> => {
   // Direct Observable — subscribe immediately (no microtask yield)

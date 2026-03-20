@@ -53,113 +53,25 @@ describe(EventBus, () => {
     });
   });
 
-  describe('default handlers (Logger fallback)', () => {
-    describe('when no hook is provided for Connect', () => {
-      it('should log the server address', () => {
-        const server = faker.internet.url();
+  describe('no-op when hook is not registered', () => {
+    it('should not log anything when no hook is provided', () => {
+      // Given: no hooks registered
+      // When: events emitted
+      sut.emit(TransportEvent.Connect, faker.internet.url());
+      sut.emit(TransportEvent.Disconnect);
+      sut.emit(TransportEvent.Error, new Error('test'));
 
-        sut.emit(TransportEvent.Connect, server);
-
-        expect(logger.log).toHaveBeenCalledWith(expect.stringContaining(server));
-      });
-    });
-
-    describe('when no hook is provided for Disconnect', () => {
-      it('should warn about connection loss', () => {
-        sut.emit(TransportEvent.Disconnect);
-
-        expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('connection lost'));
-      });
-    });
-
-    describe('when no hook is provided for Reconnect', () => {
-      it('should log the reconnection', () => {
-        const server = faker.internet.url();
-
-        sut.emit(TransportEvent.Reconnect, server);
-
-        expect(logger.log).toHaveBeenCalledWith(expect.stringContaining('Reconnected'));
-      });
-    });
-
-    describe('when no hook is provided for Error', () => {
-      it('should log the error', () => {
-        sut.emit(TransportEvent.Error, new Error('test'));
-
-        expect(logger.error).toHaveBeenCalled();
-      });
-    });
-
-    describe('when no hook is provided for RpcTimeout', () => {
-      it('should warn with subject and correlation id', () => {
-        const subject = faker.lorem.word();
-        const cid = faker.string.uuid();
-
-        sut.emit(TransportEvent.RpcTimeout, subject, cid);
-
-        expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining(subject));
-      });
-    });
-
-    describe('when no hook is provided for MessageRouted', () => {
-      it('should debug log the subject', () => {
-        const subject = faker.lorem.word();
-
-        sut.emit(TransportEvent.MessageRouted, subject, 'event');
-
-        expect(logger.debug).toHaveBeenCalledWith(expect.stringContaining(subject));
-      });
-    });
-
-    describe('when no hook is provided for ShutdownStart', () => {
-      it('should log shutdown initiation', () => {
-        sut.emit(TransportEvent.ShutdownStart);
-
-        expect(logger.log).toHaveBeenCalledWith(expect.stringContaining('shutdown'));
-      });
-    });
-
-    describe('when no hook is provided for ShutdownComplete', () => {
-      it('should log shutdown completion', () => {
-        sut.emit(TransportEvent.ShutdownComplete);
-
-        expect(logger.log).toHaveBeenCalledWith(expect.stringContaining('shutdown'));
-      });
-    });
-
-    describe('when no hook is provided for DeadLetter', () => {
-      it('should warn with the message subject', () => {
-        // Given: dead letter info with a subject
-        const subject = faker.lorem.word();
-
-        // When: DeadLetter event emitted
-        sut.emit(TransportEvent.DeadLetter, { subject } as Parameters<
-          import('../interfaces').TransportHooks[typeof TransportEvent.DeadLetter]
-        >[0]);
-
-        // Then: subject appears in the warning
-        expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining(subject));
-      });
-
-      it('should warn with "unknown" when subject is missing', () => {
-        // Given: dead letter info without a subject
-        // When: DeadLetter event emitted with info lacking subject
-        sut.emit(
-          TransportEvent.DeadLetter,
-          {} as Parameters<
-            import('../interfaces').TransportHooks[typeof TransportEvent.DeadLetter]
-          >[0],
-        );
-
-        // Then: "unknown" appears in the warning
-        expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('unknown'));
-      });
+      // Then: logger is never called
+      expect(logger.log).not.toHaveBeenCalled();
+      expect(logger.warn).not.toHaveBeenCalled();
+      expect(logger.error).not.toHaveBeenCalled();
+      expect(logger.debug).not.toHaveBeenCalled();
     });
   });
 
   describe('edge cases', () => {
     describe('when partial hooks are provided', () => {
-      it('should use hook for overridden events and logger for the rest', () => {
+      it('should dispatch to hook for registered events and no-op for the rest', () => {
         // Given: only Connect is overridden
         const onConnect = vi.fn();
 
@@ -169,9 +81,9 @@ describe(EventBus, () => {
         sut.emit(TransportEvent.Connect, 'server');
         sut.emit(TransportEvent.Disconnect);
 
-        // Then: Connect goes to hook, Disconnect to logger
+        // Then: Connect goes to hook, Disconnect is silently ignored
         expect(onConnect).toHaveBeenCalled();
-        expect(logger.warn).toHaveBeenCalled();
+        expect(logger.warn).not.toHaveBeenCalled();
       });
     });
   });

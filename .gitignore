@@ -7,7 +7,6 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 .pnpm-debug.log*
-.idea
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
@@ -130,13 +129,19 @@ dist
 .yarn/install-state.gz
 .pnp.*
 dist-example/
-
-# Jest coverage
-coverage/
 coverage-integration/
-.nyc_output/
-*.lcov
 
-# Internal docs, specs and plans
+# Generated API docs (TypeDoc)
 docs/
+
+# IDE & editor configs
+.vscode/
+.idea/
+.cursor/
+*.swp
+*.swo
+
+# AI tools
+.claude/
+.copilot/
 

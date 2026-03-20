@@ -15,9 +15,9 @@ export enum TransportEvent {
 /**
  * Hook callbacks for transport lifecycle and operational events.
  *
- * Each hook has a default implementation that logs via NestJS Logger.
- * Providing a custom hook replaces the default for that specific event.
- * Hooks that are not overridden continue using the Logger fallback.
+ * Events without a registered hook are silently ignored.
+ * Register hooks via `forRoot({ hooks: { ... } })` for monitoring,
+ * alerting, or custom observability integration.
  *
  * @example
  * ```typescript

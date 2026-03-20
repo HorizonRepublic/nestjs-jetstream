@@ -3,12 +3,14 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConnectionProvider } from '../connection';
 
 /**
- * Health status returned by `check()`.
+ * Health status returned by {@link JetstreamHealthIndicator.check}.
  */
 export interface JetstreamHealthStatus {
+  /** Whether the NATS connection is alive. */
   connected: boolean;
+  /** NATS server URL, or `null` if not connected. */
   server: string | null;
-  /** Round-trip latency in ms (null if disconnected). */
+  /** Round-trip latency in ms, or `null` if disconnected. */
   latency: number | null;
 }
 
@@ -38,6 +40,8 @@ export class JetstreamHealthIndicator {
    *
    * Returns the current connection status without throwing.
    * Use this for custom health endpoints or monitoring integrations.
+   *
+   * @returns Connection status with server URL and RTT latency.
    */
   public async check(): Promise<JetstreamHealthStatus> {
     const nc = this.connection.unwrap;
@@ -66,7 +70,9 @@ export class JetstreamHealthIndicator {
    * Returns `{ [key]: { status: 'up', ... } }` on success.
    * Throws an error with `{ [key]: { status: 'down', ... } }` on failure.
    *
-   * @param key Health indicator key (default: 'jetstream')
+   * @param key - Health indicator key (default: `'jetstream'`).
+   * @returns Object with status, server, and latency under the given key.
+   * @throws Error with `{ [key]: { status: 'down' } }` when disconnected.
    */
   public async isHealthy(key = 'jetstream'): Promise<Record<string, Record<string, unknown>>> {
     const status = await this.check();

@@ -1,13 +1,12 @@
 import { Logger } from '@nestjs/common';
 
-import { TransportEvent } from '../interfaces';
 import type { TransportHooks } from '../interfaces';
 
 /**
  * Central event bus for transport lifecycle notifications.
  *
- * Dispatches events to user-provided hooks or falls back to
- * the NestJS Logger for each event type independently.
+ * Dispatches events to user-provided hooks. Events without a
+ * registered hook are silently ignored — no default logging.
  *
  * @example
  * ```typescript
@@ -16,10 +15,10 @@ import type { TransportHooks } from '../interfaces';
  * });
  *
  * bus.emit(TransportEvent.Error, new Error('timeout'), 'rpc-router');
- * // → calls sentry, not logger
+ * // → calls sentry
  *
  * bus.emit(TransportEvent.Connect, 'nats://localhost:4222');
- * // → calls logger.log (no custom hook for connect)
+ * // → no-op (no hook registered)
  * ```
  */
 export class EventBus {
@@ -31,62 +30,26 @@ export class EventBus {
     this.hooks = hooks ?? {};
   }
 
-  /** Emit a lifecycle event. Dispatches to custom hook or Logger fallback. */
+  /**
+   * Emit a lifecycle event. Dispatches to custom hook if registered, otherwise no-op.
+   *
+   * @param event - The {@link TransportEvent} to emit.
+   * @param args - Arguments matching the hook signature for this event.
+   */
   public emit<K extends keyof TransportHooks>(
     event: K,
     ...args: Parameters<TransportHooks[K]>
   ): void {
     const hook = this.hooks[event];
 
-    if (hook) {
-      try {
-        (hook as (...a: unknown[]) => void)(...args);
-      } catch (err) {
-        this.logger.error(
-          `Hook "${event}" threw an error: ${err instanceof Error ? err.message : err}`,
-        );
-      }
+    if (!hook) return;
 
-      return;
-    }
-
-    this.defaultHandler(event, args);
-  }
-
-  /** Default Logger-based handlers for each event type. */
-  private defaultHandler(event: keyof TransportHooks, args: unknown[]): void {
-    switch (event) {
-      case TransportEvent.Connect:
-        this.logger.log(`Connected to NATS: ${args[0]}`);
-        break;
-      case TransportEvent.Disconnect:
-        this.logger.warn('NATS connection lost');
-        break;
-      case TransportEvent.Reconnect:
-        this.logger.log(`Reconnected to NATS: ${args[0]}`);
-        break;
-      case TransportEvent.Error:
-        this.logger.error(`Transport error: ${args[0]}`, args[1] ?? '');
-        break;
-      case TransportEvent.RpcTimeout:
-        this.logger.warn(`RPC timeout: ${args[0]} (cid: ${args[1]})`);
-        break;
-      case TransportEvent.MessageRouted:
-        this.logger.debug(`Message routed: ${args[0]} [${args[1]}]`);
-        break;
-      case TransportEvent.ShutdownStart:
-        this.logger.log('Graceful shutdown initiated');
-        break;
-      case TransportEvent.ShutdownComplete:
-        this.logger.log('Graceful shutdown complete');
-        break;
-
-      case TransportEvent.DeadLetter: {
-        const info = args[0] as { subject?: string } | undefined;
-
-        this.logger.warn(`Dead letter: ${info?.subject ?? 'unknown'}`);
-        break;
-      }
+    try {
+      (hook as (...a: unknown[]) => void)(...args);
+    } catch (err) {
+      this.logger.error(
+        `Hook "${event}" threw an error: ${err instanceof Error ? err.message : err}`,
+      );
     }
   }
 }
