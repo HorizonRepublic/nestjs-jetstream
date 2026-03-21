@@ -161,7 +161,7 @@ JetstreamModule.forRoot({
   events: {
     stream: {
       storage: StorageType.Memory,   // override just storage type
-      max_age: nanos(3 * 24 * 60 * 60 * 1000), // 3 days instead of 7
+      max_age: toNanos(3, 'days'), // 3 days instead of 7
     },
     consumer: {
       max_deliver: 5, // 5 retries instead of 3

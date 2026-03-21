@@ -166,7 +166,7 @@ import { JetstreamModule } from '@horizon-republic/nestjs-jetstream';
         // Replay all events from the stream on startup
         // (default behavior -- included for clarity)
         stream: {
-          max_age: nanos(7 * 24 * 60 * 60 * 1000), // 7 days of history
+          max_age: toNanos(7, 'days'), // 7 days of history
         },
       },
     }),
@@ -226,7 +226,7 @@ JetstreamModule.forRoot({
   ordered: {
     // DeliverPolicy.All is the default -- you can omit this entirely
     stream: {
-      max_age: nanos(7 * 24 * 60 * 60 * 1000), // 7 days
+      max_age: toNanos(7, 'days'), // 7 days
     },
   },
 })
@@ -430,11 +430,11 @@ The `ordered` field in `JetstreamModuleOptions` accepts the following options:
 The ordered stream defaults to Limits retention with a 1-day `max_age`. Override these for your use case:
 
 ```typescript
-import { nanos } from '@horizon-republic/nestjs-jetstream';
+import { toNanos } from '@horizon-republic/nestjs-jetstream';
 
 ordered: {
   stream: {
-    max_age: nanos(7 * 24 * 60 * 60 * 1000),  // 7 days instead of default 1 day
+    max_age: toNanos(7, 'days'),  // 7 days instead of default 1 day
     max_bytes: 10 * 1024 * 1024 * 1024,         // 10 GB instead of default 5 GB
     max_msg_size: 1024 * 1024,                   // 1 MB instead of default 10 MB
   },

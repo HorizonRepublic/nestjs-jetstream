@@ -6,7 +6,7 @@ import { NatsConnection } from 'nats';
 import { firstValueFrom } from 'rxjs';
 
 import type { DeadLetterInfo } from '../../src';
-import { getClientToken, nanos } from '../../src';
+import { getClientToken, toNanos } from '../../src';
 
 import {
   cleanupStreams,
@@ -66,7 +66,7 @@ describe('Dead Letter Queue Hook', () => {
             consumer: {
               max_deliver: 2,
 
-              ack_wait: nanos(2_000),
+              ack_wait: toNanos(2, 'seconds'),
             },
           },
           onDeadLetter: async (info) => {
@@ -127,7 +127,7 @@ describe('Dead Letter Queue Hook', () => {
             consumer: {
               max_deliver: 2,
 
-              ack_wait: nanos(2_000),
+              ack_wait: toNanos(2, 'seconds'),
             },
           },
         },

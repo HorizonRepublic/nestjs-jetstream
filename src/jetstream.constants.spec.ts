@@ -8,18 +8,21 @@ import {
   consumerName,
   getClientToken,
   internalName,
-  nanos,
+  toNanos,
   streamName,
 } from './jetstream.constants';
 
 describe('jetstream.constants', () => {
-  describe(nanos.name, () => {
+  describe(toNanos.name, () => {
     it.each([
-      [1, 1_000_000],
-      [1000, 1_000_000_000],
-      [0, 0],
-    ])('should convert %dms to %dns', (ms, expected) => {
-      expect(nanos(ms)).toBe(expected);
+      [1, 'ms', 1_000_000],
+      [1, 'seconds', 1_000_000_000],
+      [2, 'minutes', 120_000_000_000],
+      [1, 'hours', 3_600_000_000_000],
+      [1, 'days', 86_400_000_000_000],
+      [0, 'seconds', 0],
+    ] as const)('should convert %d %s to %d nanoseconds', (value, unit, expected) => {
+      expect(toNanos(value, unit)).toBe(expected);
     });
   });
 

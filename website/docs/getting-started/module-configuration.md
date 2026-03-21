@@ -15,7 +15,7 @@ The library follows NestJS conventions with three registration methods: `forRoot
 
 ```typescript title="src/app.module.ts"
 import { Module } from '@nestjs/common';
-import { JetstreamModule, TransportEvent, nanos } from '@horizon-republic/nestjs-jetstream';
+import { JetstreamModule, TransportEvent, toNanos } from '@horizon-republic/nestjs-jetstream';
 
 @Module({
   imports: [
@@ -25,7 +25,7 @@ import { JetstreamModule, TransportEvent, nanos } from '@horizon-republic/nestjs
       rpc: { mode: 'core', timeout: 10_000 },
       shutdownTimeout: 15_000,
       events: {
-        consumer: { max_deliver: 5, ack_wait: nanos(30_000) },
+        consumer: { max_deliver: 5, ack_wait: toNanos(30, 'seconds') },
       },
       hooks: {
         [TransportEvent.Error]: (err, ctx) => console.error(`[${ctx}]`, err),
@@ -221,7 +221,7 @@ rpc: { mode: 'core', timeout: 10_000 }
 rpc: {
   mode: 'jetstream',
   timeout: 60_000,
-  stream: { max_age: nanos(60_000) },     // stream overrides
+  stream: { max_age: toNanos(1, 'minutes') },     // stream overrides
   consumer: { max_deliver: 3 },            // consumer overrides
 }
 ```
@@ -237,19 +237,19 @@ See [RPC Patterns](/docs/patterns/rpc) for a full comparison of the two modes.
 The `events` and `broadcast` fields accept stream and consumer configuration overrides:
 
 ```typescript
-import { nanos } from '@horizon-republic/nestjs-jetstream';
+import { toNanos } from '@horizon-republic/nestjs-jetstream';
 
 JetstreamModule.forRoot({
   name: 'orders',
   servers: ['nats://localhost:4222'],
   events: {
     stream: {
-      max_age: nanos(3 * 24 * 60 * 60 * 1000), // 3 days instead of default 7
+      max_age: toNanos(3, 'days'), // 3 days instead of default 7
       max_bytes: 512 * 1024 * 1024,              // 512 MB instead of default 5 GB
     },
     consumer: {
       max_deliver: 5,          // retry 5 times instead of default 3
-      ack_wait: nanos(30_000), // 30s ack timeout instead of default 10s
+      ack_wait: toNanos(30, 'seconds'), // 30s ack timeout instead of default 10s
     },
   },
 })
@@ -257,8 +257,8 @@ JetstreamModule.forRoot({
 
 These overrides are merged with the [production defaults](/docs/reference/default-configs). You only need to specify the fields you want to change.
 
-:::tip The nanos() helper
-NATS JetStream uses nanoseconds for all time-based configuration. The library exports a `nanos(ms)` helper that converts milliseconds to nanoseconds, so you don't have to do the math yourself.
+:::tip The toNanos() helper
+NATS JetStream uses nanoseconds for all time-based configuration. The library exports a `toNanos(value, unit)` helper that converts human-readable durations to nanoseconds. Supported units: `'ms'`, `'seconds'`, `'minutes'`, `'hours'`, `'days'`.
 :::
 
 ### OrderedEventOverrides
@@ -276,7 +276,7 @@ JetstreamModule.forRoot({
   ordered: {
     deliverPolicy: DeliverPolicy.New,   // only new messages (default: All)
     stream: {
-      max_age: nanos(12 * 60 * 60 * 1000), // 12 hours
+      max_age: toNanos(12, 'hours'), // 12 hours
     },
   },
 })

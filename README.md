@@ -45,9 +45,8 @@ export class OrdersController {
 **[Read the full documentation →](https://horizonrepublic.github.io/nestjs-jetstream/)**
 
 - [Getting Started](https://horizonrepublic.github.io/nestjs-jetstream/docs/getting-started) — installation, module setup, first handler
-- [Messaging Patterns](https://horizonrepublic.github.io/nestjs-jetstream/docs/category/messaging-patterns) — events, broadcast, ordered delivery, RPC
 - [Guides](https://horizonrepublic.github.io/nestjs-jetstream/docs/guides/health-checks) — health checks, graceful shutdown, lifecycle hooks
-- [API Reference](https://horizonrepublic.github.io/nestjs-jetstream/api) — full TypeDoc-generated API
+- [API Reference](https://horizonrepublic.github.io/nestjs-jetstream/docs/reference/api/) — full TypeDoc-generated API
 
 ## Links
 

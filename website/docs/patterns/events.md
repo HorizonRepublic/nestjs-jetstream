@@ -223,9 +223,9 @@ JetstreamModule.forRoot({
   servers: ['nats://localhost:4222'],
   events: {
     stream: {
-      max_age: nanos(14 * 24 * 60 * 60 * 1000), // 14 days instead of 7
+      max_age: toNanos(14, 'days'), // 14 days instead of 7
       max_bytes: 10 * 1024 * 1024 * 1024,        // 10 GB instead of 5 GB
-      duplicate_window: nanos(5 * 60 * 1000),     // 5 min dedup window instead of 2 min
+      duplicate_window: toNanos(5, 'minutes'),     // 5 min dedup window instead of 2 min
     },
   },
 }),
@@ -242,7 +242,7 @@ JetstreamModule.forRoot({
   events: {
     consumer: {
       max_deliver: 5,              // 5 retries instead of 3
-      ack_wait: nanos(30 * 1000),  // 30s ack timeout instead of 10s
+      ack_wait: toNanos(30, 'seconds'),  // 30s ack timeout instead of 10s
       max_ack_pending: 50,         // Limit in-flight messages to 50
     },
   },
