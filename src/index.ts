@@ -40,7 +40,7 @@ export {
   JETSTREAM_CONNECTION,
   JETSTREAM_EVENT_BUS,
   JETSTREAM_OPTIONS,
-  nanos,
+  toNanos,
 } from './jetstream.constants';
 
 // Hooks

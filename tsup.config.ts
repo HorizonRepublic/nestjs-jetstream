@@ -5,7 +5,7 @@ export default defineConfig({
   format: ['cjs', 'esm'],
   dts: true,
   tsconfig: 'tsconfig.build.json',
-  sourcemap: true,
+  sourcemap: false,
   clean: true,
   target: 'es2024',
   splitting: false,

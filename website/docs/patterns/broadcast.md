@@ -183,7 +183,7 @@ JetstreamModule.forRoot({
   servers: ['nats://localhost:4222'],
   broadcast: {
     stream: {
-      max_age: nanos(48 * 60 * 60 * 1000), // Keep broadcasts for 48 hours
+      max_age: toNanos(48, 'hours'), // Keep broadcasts for 48 hours
       max_bytes: 5 * 1024 * 1024 * 1024,   // 5 GB limit
     },
   },
@@ -206,7 +206,7 @@ JetstreamModule.forRoot({
   broadcast: {
     consumer: {
       max_deliver: 5,              // Orders service retries 5 times
-      ack_wait: nanos(30 * 1000),  // 30s timeout for orders handlers
+      ack_wait: toNanos(30, 'seconds'),  // 30s timeout for orders handlers
     },
   },
 }),
@@ -220,7 +220,7 @@ JetstreamModule.forRoot({
   broadcast: {
     consumer: {
       max_deliver: 10,             // Payments retries 10 times
-      ack_wait: nanos(60 * 1000),  // 60s timeout for payment handlers
+      ack_wait: toNanos(60, 'seconds'),  // 60s timeout for payment handlers
     },
   },
 }),

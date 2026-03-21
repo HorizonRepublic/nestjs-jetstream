@@ -10,6 +10,7 @@ const config: Config = {
   baseUrl: '/nestjs-jetstream/',
   organizationName: 'HorizonRepublic',
   projectName: 'nestjs-jetstream',
+  trailingSlash: false,
   onBrokenLinks: 'throw',
   markdown: {
     mermaid: true,
@@ -60,7 +61,17 @@ const config: Config = {
       },
     ],
   ],
+  headTags: [
+    { tagName: 'meta', attributes: { name: 'keywords', content: 'NestJS, NATS, JetStream, microservices, message queue, event-driven, Node.js, TypeScript' } },
+  ],
   themeConfig: {
+    metadata: [
+      { name: 'description', content: 'Events, broadcast, ordered delivery, and RPC for NestJS — powered by NATS JetStream.' },
+      { property: 'og:type', content: 'website' },
+      { property: 'og:title', content: '@horizon-republic/nestjs-jetstream' },
+      { property: 'og:description', content: 'Ship reliable microservices with NATS JetStream and NestJS — events, broadcast, ordered delivery, and RPC.' },
+      { name: 'twitter:card', content: 'summary' },
+    ],
     mermaid: {
       theme: { light: 'dark', dark: 'dark' },
       options: {

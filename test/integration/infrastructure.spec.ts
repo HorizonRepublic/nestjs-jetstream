@@ -3,7 +3,7 @@ import { Controller } from '@nestjs/common';
 import { EventPattern, MessagePattern } from '@nestjs/microservices';
 import { NatsConnection, RetentionPolicy } from 'nats';
 
-import { nanos } from '../../src';
+import { toNanos } from '../../src';
 
 import { cleanupStreams, createNatsConnection, createTestApp, uniqueServiceName } from './helpers';
 
@@ -110,7 +110,7 @@ describe('Stream & Consumer Lifecycle', () => {
 
     it('should apply user stream config overrides', async () => {
       const serviceName = uniqueServiceName();
-      const customMaxAge = nanos(5 * 60 * 1000); // 5 minutes (must exceed duplicate_window default of 2 min)
+      const customMaxAge = toNanos(5, 'minutes');
 
       const { app } = await createTestApp(
         {
