@@ -46,7 +46,12 @@ const subscribeToFirst = (obs: Observable<unknown>): Promise<unknown> =>
           subscription?.unsubscribe();
         }
       },
-      error: reject,
+      error: (err: unknown) => {
+        if (!done) {
+          done = true;
+          reject(err);
+        }
+      },
       complete: () => {
         if (!done) resolve(undefined);
       },

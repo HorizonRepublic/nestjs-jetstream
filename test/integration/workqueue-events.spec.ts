@@ -86,7 +86,7 @@ describe('Workqueue Event Delivery', () => {
       await cleanupStreams(nc, serviceName);
     });
 
-    it('should deliver event to handler and ack', async () => {
+    it('should deliver event to handler', async () => {
       await firstValueFrom(client.emit('order.created', { orderId: 123 }));
 
       await waitForCondition(() => controller.received.length > 0, 5_000);
