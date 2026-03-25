@@ -412,6 +412,7 @@ describe(ConnectionProvider, () => {
 
       // When: get client before reconnect
       const js1 = sut.getJetStreamClient();
+
       expect(jetstreamFn).toHaveBeenCalledTimes(1);
 
       // Trigger reconnect event and let it propagate
@@ -420,6 +421,7 @@ describe(ConnectionProvider, () => {
 
       // Then: cache was invalidated, new instance returned
       const js2 = sut.getJetStreamClient();
+
       expect(jetstreamFn).toHaveBeenCalledTimes(2);
       expect(js1).not.toBe(js2);
     });

@@ -332,7 +332,8 @@ export class JetstreamModule implements OnApplicationShutdown {
 
           const consumeOptionsMap = new Map<StreamKind, Partial<ConsumeOptions>>();
 
-          if (options.events?.consume) consumeOptionsMap.set(StreamKind.Event, options.events.consume);
+          if (options.events?.consume)
+            consumeOptionsMap.set(StreamKind.Event, options.events.consume);
           if (options.broadcast?.consume)
             consumeOptionsMap.set(StreamKind.Broadcast, options.broadcast.consume);
 

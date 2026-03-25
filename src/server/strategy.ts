@@ -209,5 +209,4 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
 
     return map;
   }
-
 }

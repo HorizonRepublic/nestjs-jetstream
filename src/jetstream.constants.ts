@@ -308,5 +308,4 @@ export const isJetStreamRpcMode = (rpc: RpcConfig | undefined): boolean =>
   rpc?.mode === 'jetstream';
 
 /** Check if the RPC config specifies Core mode (default). */
-export const isCoreRpcMode = (rpc: RpcConfig | undefined): boolean =>
-  !rpc || rpc.mode === 'core';
+export const isCoreRpcMode = (rpc: RpcConfig | undefined): boolean => !rpc || rpc.mode === 'core';

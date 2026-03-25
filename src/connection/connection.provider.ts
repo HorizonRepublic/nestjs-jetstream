@@ -17,7 +17,7 @@ import { TransportEvent } from '../interfaces';
 import type { JetstreamModuleOptions } from '../interfaces';
 import { internalName } from '../jetstream.constants';
 
-const PERFORMANCE_CONNECTION_DEFAULTS: Partial<ConnectionOptions> = {
+const DEFAULT_OPTIONS: Partial<ConnectionOptions> = {
   maxReconnectAttempts: -1,
   reconnectTimeWait: 1_000,
 };
@@ -119,6 +119,7 @@ export class ConnectionProvider {
     if (!this.connection || this.connection.isClosed()) {
       throw new Error('Not connected — call getConnection() before getJetStreamClient()');
     }
+
     this.jsClient ??= this.connection.jetstream();
     return this.jsClient;
   }
@@ -169,7 +170,7 @@ export class ConnectionProvider {
 
     try {
       const nc = await connect({
-        ...PERFORMANCE_CONNECTION_DEFAULTS,
+        ...DEFAULT_OPTIONS,
         ...this.options.connectionOptions,
         servers: this.options.servers,
         name,

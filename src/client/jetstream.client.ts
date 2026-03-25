@@ -401,7 +401,11 @@ export class JetstreamClient extends ClientProxy {
     }
 
     if (pattern.startsWith(PatternPrefix.Ordered)) {
-      return buildSubject(this.targetName, StreamKind.Ordered, pattern.slice(PatternPrefix.Ordered.length));
+      return buildSubject(
+        this.targetName,
+        StreamKind.Ordered,
+        pattern.slice(PatternPrefix.Ordered.length),
+      );
     }
 
     return buildSubject(this.targetName, StreamKind.Event, pattern);

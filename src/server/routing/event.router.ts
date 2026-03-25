@@ -15,7 +15,12 @@ import {
 import { RpcContext } from '../../context';
 import { EventBus } from '../../hooks';
 import { MessageKind, StreamKind, TransportEvent } from '../../interfaces';
-import type { Codec, DeadLetterConfig, DeadLetterInfo, EventProcessingConfig } from '../../interfaces';
+import type {
+  Codec,
+  DeadLetterConfig,
+  DeadLetterInfo,
+  EventProcessingConfig,
+} from '../../interfaces';
 import { resolveAckExtensionInterval, startAckExtensionTimer, unwrapResult } from '../../utils';
 
 import { MessageProvider } from '../infrastructure';
@@ -84,7 +89,9 @@ export class EventRouter {
     const concurrency = this.getConcurrency(kind);
 
     const route = (msg: JsMsg): Observable<void> =>
-      defer(() => (isOrdered ? this.handleOrdered(msg) : this.handle(msg, ackExtensionInterval))).pipe(
+      defer(() =>
+        isOrdered ? this.handleOrdered(msg) : this.handle(msg, ackExtensionInterval),
+      ).pipe(
         catchError((err) => {
           this.logger.error(`Unexpected error in ${kind} event router`, err);
           return EMPTY;
@@ -118,7 +125,9 @@ export class EventRouter {
 
     if (!resolved) return EMPTY;
 
-    return from(this.executeHandler(resolved.handler, resolved.data, resolved.ctx, msg, ackExtensionInterval));
+    return from(
+      this.executeHandler(resolved.handler, resolved.data, resolved.ctx, msg, ackExtensionInterval),
+    );
   }
 
   /** Handle an ordered message: decode -> execute handler -> no ack/nak. */
