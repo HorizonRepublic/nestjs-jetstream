@@ -2,12 +2,13 @@
 export { JetstreamModule } from './jetstream.module';
 
 // Interfaces
-export { TransportEvent } from './interfaces';
+export { MessageKind, StreamKind, TransportEvent } from './interfaces';
 
 export type {
   Codec,
   DeadLetterInfo,
   JetstreamFeatureOptions,
+  JetstreamHealthStatus,
   JetstreamModuleAsyncOptions,
   JetstreamModuleOptions,
   OrderedEventOverrides,
@@ -30,16 +31,17 @@ export { RpcContext } from './context';
 // Health
 export { JetstreamHealthIndicator } from './health';
 
-export type { JetstreamHealthStatus } from './health';
-
 // Constants (selective — only what users need)
 export {
   getClientToken,
+  isCoreRpcMode,
+  isJetStreamRpcMode,
   JetstreamHeader,
   JETSTREAM_CODEC,
   JETSTREAM_CONNECTION,
   JETSTREAM_EVENT_BUS,
   JETSTREAM_OPTIONS,
+  PatternPrefix,
   toNanos,
 } from './jetstream.constants';
 

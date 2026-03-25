@@ -189,3 +189,4 @@ No need to add it to any `providers` array or re-import `JetstreamModule` — it
 - [**Lifecycle Hooks**](/docs/guides/lifecycle-hooks) — monitor connection state changes (connect, disconnect, reconnect)
 - [**Graceful Shutdown**](/docs/guides/graceful-shutdown) — drain connections cleanly on termination
 - [**Module Configuration**](/docs/getting-started/module-configuration) — full options reference
+- [**Troubleshooting**](/docs/guides/troubleshooting) — diagnosing connection and consumer issues

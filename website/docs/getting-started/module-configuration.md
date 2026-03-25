@@ -20,13 +20,24 @@ import { JetstreamModule, TransportEvent, toNanos } from '@horizon-republic/nest
 @Module({
   imports: [
     JetstreamModule.forRoot({
-      name: 'orders',
+      name: 'user-events',
       servers: ['nats://localhost:4222'],
+      events: {
+        stream: {
+          max_age: toNanos(30, 'days'),
+          max_bytes: 10 * 1024 * 1024 * 1024, // 10 GB
+          num_replicas: 3,
+        },
+        consumer: {
+          max_ack_pending: 500,
+          ack_wait: toNanos(30, 'seconds'),
+        },
+        consume: { idle_heartbeat: 10_000 },
+        concurrency: 200,
+        ackExtension: true,
+      },
       rpc: { mode: 'core', timeout: 10_000 },
       shutdownTimeout: 15_000,
-      events: {
-        consumer: { max_deliver: 5, ack_wait: toNanos(30, 'seconds') },
-      },
       hooks: {
         [TransportEvent.Error]: (err, ctx) => console.error(`[${ctx}]`, err),
         [TransportEvent.Connect]: (server) => console.log(`Connected to ${server}`),
@@ -36,6 +47,16 @@ import { JetstreamModule, TransportEvent, toNanos } from '@horizon-republic/nest
 })
 export class AppModule {}
 ```
+
+### How `name` maps to streams and subjects
+
+The `name` field drives all NATS resource naming. Given `name: 'user-events'`:
+
+- **Event stream:** `user-events__microservice_ev-stream`
+- **Event subjects:** `user-events__microservice.ev.{pattern}` (e.g., `user-events__microservice.ev.user.created`)
+- **Consumer:** `user-events__microservice_ev-consumer`
+
+The `__microservice` suffix provides namespace isolation from other NATS clients on the same cluster. See [Naming Conventions](/docs/reference/naming-conventions) for the full naming table and helper functions.
 
 ## forRootAsync()
 

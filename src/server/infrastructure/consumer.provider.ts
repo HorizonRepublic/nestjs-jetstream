@@ -2,7 +2,8 @@ import { Logger } from '@nestjs/common';
 import { ConsumerConfig, ConsumerInfo, NatsError } from 'nats';
 
 import { ConnectionProvider } from '../../connection';
-import type { JetstreamModuleOptions, StreamKind } from '../../interfaces';
+import { StreamKind } from '../../interfaces';
+import type { JetstreamModuleOptions } from '../../interfaces';
 import {
   consumerName,
   DEFAULT_BROADCAST_CONSUMER_CONFIG,
@@ -93,7 +94,7 @@ export class ConsumerProvider {
     const overrides = this.getOverrides(kind);
 
     /* eslint-disable @typescript-eslint/naming-convention -- NATS API uses snake_case */
-    if (kind === 'broadcast') {
+    if (kind === StreamKind.Broadcast) {
       const broadcastPatterns = this.patternRegistry.getBroadcastPatterns();
 
       if (broadcastPatterns.length === 0) {
@@ -119,8 +120,11 @@ export class ConsumerProvider {
       };
     }
 
-    // Build filter_subject based on kind
-    const filter_subject = kind === 'ev' ? `${serviceName}.ev.>` : `${serviceName}.cmd.>`;
+    if (kind !== StreamKind.Event && kind !== StreamKind.Command) {
+      throw new Error(`Unexpected durable consumer kind: ${kind}`);
+    }
+
+    const filter_subject = `${serviceName}.${kind}.>`;
 
     return {
       ...defaults,
@@ -135,13 +139,13 @@ export class ConsumerProvider {
   /** Get default config for a consumer kind. */
   private getDefaults(kind: StreamKind): Partial<ConsumerConfig> {
     switch (kind) {
-      case 'ev':
+      case StreamKind.Event:
         return DEFAULT_EVENT_CONSUMER_CONFIG;
-      case 'cmd':
+      case StreamKind.Command:
         return DEFAULT_COMMAND_CONSUMER_CONFIG;
-      case 'broadcast':
+      case StreamKind.Broadcast:
         return DEFAULT_BROADCAST_CONSUMER_CONFIG;
-      case 'ordered':
+      case StreamKind.Ordered:
         throw new Error('Ordered consumers are ephemeral and should not use durable config');
     }
   }
@@ -149,13 +153,13 @@ export class ConsumerProvider {
   /** Get user-provided overrides for a consumer kind. */
   private getOverrides(kind: StreamKind): Partial<ConsumerConfig> {
     switch (kind) {
-      case 'ev':
+      case StreamKind.Event:
         return this.options.events?.consumer ?? {};
-      case 'cmd':
+      case StreamKind.Command:
         return this.options.rpc?.mode === 'jetstream' ? (this.options.rpc.consumer ?? {}) : {};
-      case 'broadcast':
+      case StreamKind.Broadcast:
         return this.options.broadcast?.consumer ?? {};
-      case 'ordered':
+      case StreamKind.Ordered:
         throw new Error('Ordered consumers are ephemeral and should not use durable config');
     }
   }

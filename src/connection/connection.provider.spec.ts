@@ -10,7 +10,7 @@ import {
 } from 'vitest';
 import { createMock } from '@golevelup/ts-vitest';
 import { faker } from '@faker-js/faker';
-import type { JetStreamManager, NatsConnection, Status } from 'nats';
+import type { JetStreamClient, JetStreamManager, NatsConnection, Status } from 'nats';
 import { connect, Events, NatsError } from 'nats';
 
 import { EventBus } from '../hooks';
@@ -43,6 +43,7 @@ describe(ConnectionProvider, () => {
       status: vi.fn().mockReturnValue(emptyStatusStream()),
       drain: vi.fn().mockResolvedValue(undefined),
       closed: vi.fn().mockResolvedValue(undefined),
+      jetstream: vi.fn().mockReturnValue(createMock<JetStreamClient>()),
       ...overrides,
     });
 
@@ -324,6 +325,105 @@ describe(ConnectionProvider, () => {
         expect.any(Error),
         'connection',
       );
+    });
+  });
+
+  describe('performance connection defaults', () => {
+    it('should connect with unlimited reconnect attempts by default', async () => {
+      // When: connection established
+      await sut.getConnection();
+
+      // Then: default applied
+      expect(mockConnect).toHaveBeenCalledWith(
+        expect.objectContaining({ maxReconnectAttempts: -1 }),
+      );
+    });
+
+    it('should connect with 1s reconnect wait by default', async () => {
+      // When: connection established
+      await sut.getConnection();
+
+      // Then: default applied
+      expect(mockConnect).toHaveBeenCalledWith(
+        expect.objectContaining({ reconnectTimeWait: 1_000 }),
+      );
+    });
+
+    it('should allow user connectionOptions to override performance defaults', async () => {
+      // Given: user overrides maxReconnectAttempts
+      options.connectionOptions = { maxReconnectAttempts: 50 };
+      sut = new ConnectionProvider(options, eventBus);
+
+      // When: connection established
+      await sut.getConnection();
+
+      // Then: user value wins
+      expect(mockConnect).toHaveBeenCalledWith(
+        expect.objectContaining({ maxReconnectAttempts: 50 }),
+      );
+    });
+  });
+
+  describe('getJetStreamClient()', () => {
+    it('should return a cached JetStreamClient instance', async () => {
+      // Given: connected
+      await sut.getConnection();
+
+      // When: called twice
+      const js1 = sut.getJetStreamClient();
+      const js2 = sut.getJetStreamClient();
+
+      // Then: same instance, jetstream() called once
+      expect(js1).toBe(js2);
+      expect(mockNc.jetstream).toHaveBeenCalledTimes(1);
+    });
+
+    it('should throw if not connected', () => {
+      // When/Then: throws before connection
+      expect(() => sut.getJetStreamClient()).toThrow('Not connected');
+    });
+
+    it('should invalidate cached client on reconnect', async () => {
+      // Given: connected, jetstream() returns different objects on each call.
+      // Use a gate to delay the Reconnect event until after the first getJetStreamClient() call.
+      let callCount = 0;
+      const jetstreamFn = vi.fn().mockImplementation(() => {
+        return { id: ++callCount } as unknown as JetStreamClient;
+      });
+
+      let emitReconnect!: () => void;
+      const reconnectGate = new Promise<void>((resolve) => {
+        emitReconnect = resolve;
+      });
+
+      const nc = createNc({
+        jetstream: jetstreamFn,
+        status: vi.fn().mockReturnValue(
+          (async function* (): AsyncGenerator<Status> {
+            await reconnectGate;
+            yield { type: Events.Reconnect, data: '' } as Status;
+          })(),
+        ),
+      });
+
+      mockConnect.mockResolvedValue(nc);
+      sut = new ConnectionProvider(options, eventBus);
+      await sut.getConnection();
+
+      // When: get client before reconnect
+      const js1 = sut.getJetStreamClient();
+
+      expect(jetstreamFn).toHaveBeenCalledTimes(1);
+
+      // Trigger reconnect event and let it propagate
+      emitReconnect();
+      await new Promise(process.nextTick);
+
+      // Then: cache was invalidated, new instance returned
+      const js2 = sut.getJetStreamClient();
+
+      expect(jetstreamFn).toHaveBeenCalledTimes(2);
+      expect(js1).not.toBe(js2);
     });
   });
 });

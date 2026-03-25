@@ -30,6 +30,9 @@ const sidebars: SidebarsConfig = {
         'guides/health-checks',
         'guides/lifecycle-hooks',
         'guides/graceful-shutdown',
+        'guides/performance',
+        'guides/troubleshooting',
+        'guides/migration',
       ],
     },
     {

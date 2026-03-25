@@ -2,7 +2,8 @@ import { Logger } from '@nestjs/common';
 import { NatsError, StreamConfig, StreamInfo } from 'nats';
 
 import { ConnectionProvider } from '../../connection';
-import type { JetstreamModuleOptions, StreamKind } from '../../interfaces';
+import { StreamKind } from '../../interfaces';
+import type { JetstreamModuleOptions } from '../../interfaces';
 import {
   DEFAULT_BROADCAST_STREAM_CONFIG,
   DEFAULT_COMMAND_STREAM_CONFIG,
@@ -55,14 +56,14 @@ export class StreamProvider {
     const name = internalName(this.options.name);
 
     switch (kind) {
-      case 'ev':
-        return [`${name}.ev.>`];
-      case 'cmd':
-        return [`${name}.cmd.>`];
-      case 'broadcast':
+      case StreamKind.Event:
+        return [`${name}.${StreamKind.Event}.>`];
+      case StreamKind.Command:
+        return [`${name}.${StreamKind.Command}.>`];
+      case StreamKind.Broadcast:
         return ['broadcast.>'];
-      case 'ordered':
-        return [`${name}.ordered.>`];
+      case StreamKind.Ordered:
+        return [`${name}.${StreamKind.Ordered}.>`];
     }
   }
 
@@ -114,13 +115,13 @@ export class StreamProvider {
   /** Get default config for a stream kind. */
   private getDefaults(kind: StreamKind): Partial<StreamConfig> {
     switch (kind) {
-      case 'ev':
+      case StreamKind.Event:
         return DEFAULT_EVENT_STREAM_CONFIG;
-      case 'cmd':
+      case StreamKind.Command:
         return DEFAULT_COMMAND_STREAM_CONFIG;
-      case 'broadcast':
+      case StreamKind.Broadcast:
         return DEFAULT_BROADCAST_STREAM_CONFIG;
-      case 'ordered':
+      case StreamKind.Ordered:
         return DEFAULT_ORDERED_STREAM_CONFIG;
     }
   }
@@ -128,13 +129,13 @@ export class StreamProvider {
   /** Get user-provided overrides for a stream kind. */
   private getOverrides(kind: StreamKind): Partial<StreamConfig> {
     switch (kind) {
-      case 'ev':
+      case StreamKind.Event:
         return this.options.events?.stream ?? {};
-      case 'cmd':
+      case StreamKind.Command:
         return this.options.rpc?.mode === 'jetstream' ? (this.options.rpc.stream ?? {}) : {};
-      case 'broadcast':
+      case StreamKind.Broadcast:
         return this.options.broadcast?.stream ?? {};
-      case 'ordered':
+      case StreamKind.Ordered:
         return this.options.ordered?.stream ?? {};
     }
   }

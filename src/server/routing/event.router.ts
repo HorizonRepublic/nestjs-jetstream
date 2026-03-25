@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { MessageHandler } from '@nestjs/microservices';
 import { JsMsg } from 'nats';
 import {
   catchError,
@@ -13,23 +14,17 @@ import {
 
 import { RpcContext } from '../../context';
 import { EventBus } from '../../hooks';
-import { TransportEvent } from '../../interfaces';
-import type { Codec, DeadLetterInfo } from '../../interfaces';
-import { unwrapResult } from '../../utils';
+import { MessageKind, StreamKind, TransportEvent } from '../../interfaces';
+import type {
+  Codec,
+  DeadLetterConfig,
+  DeadLetterInfo,
+  EventProcessingConfig,
+} from '../../interfaces';
+import { resolveAckExtensionInterval, startAckExtensionTimer, unwrapResult } from '../../utils';
 
 import { MessageProvider } from '../infrastructure';
 import { PatternRegistry } from './pattern-registry';
-
-/** Options for dead letter queue handling. */
-export interface DeadLetterConfig {
-  /**
-   * Map of stream name -> max_deliver value.
-   * Used to detect when a message from a given stream has exhausted all delivery attempts.
-   */
-  maxDeliverByStream: Map<string, number>;
-  /** Async callback invoked when a message exhausts all deliveries. */
-  onDeadLetter(info: DeadLetterInfo): Promise<void>;
-}
 
 /**
  * Routes incoming event messages (workqueue, broadcast, and ordered) to NestJS handlers.
@@ -51,6 +46,8 @@ export class EventRouter {
     private readonly codec: Codec,
     private readonly eventBus: EventBus,
     private readonly deadLetterConfig?: DeadLetterConfig,
+    private readonly processingConfig?: EventProcessingConfig,
+    private readonly ackWaitMap?: Map<StreamKind, number>,
   ) {}
 
   /**
@@ -64,11 +61,11 @@ export class EventRouter {
 
   /** Start routing event, broadcast, and ordered messages to handlers. */
   public start(): void {
-    this.subscribeToStream(this.messageProvider.events$, 'workqueue');
-    this.subscribeToStream(this.messageProvider.broadcasts$, 'broadcast');
+    this.subscribeToStream(this.messageProvider.events$, StreamKind.Event);
+    this.subscribeToStream(this.messageProvider.broadcasts$, StreamKind.Broadcast);
 
     if (this.patternRegistry.hasOrderedHandlers()) {
-      this.subscribeToStream(this.messageProvider.ordered$, 'ordered', true);
+      this.subscribeToStream(this.messageProvider.ordered$, StreamKind.Ordered);
     }
   }
 
@@ -82,30 +79,81 @@ export class EventRouter {
   }
 
   /** Subscribe to a message stream and route each message. */
-  private subscribeToStream(stream$: Observable<JsMsg>, label: string, isOrdered = false): void {
+  private subscribeToStream(stream$: Observable<JsMsg>, kind: StreamKind): void {
+    const isOrdered = kind === StreamKind.Ordered;
+
+    // Resolve once per stream — these never change after startup
+    const ackExtensionInterval = isOrdered
+      ? null
+      : resolveAckExtensionInterval(this.getAckExtensionConfig(kind), this.ackWaitMap?.get(kind));
+    const concurrency = this.getConcurrency(kind);
+
     const route = (msg: JsMsg): Observable<void> =>
-      defer(() => (isOrdered ? this.handleOrdered(msg) : this.handle(msg))).pipe(
+      defer(() =>
+        isOrdered ? this.handleOrdered(msg) : this.handle(msg, ackExtensionInterval),
+      ).pipe(
         catchError((err) => {
-          this.logger.error(`Unexpected error in ${label} event router`, err);
+          this.logger.error(`Unexpected error in ${kind} event router`, err);
           return EMPTY;
         }),
       );
 
     // Ordered streams use concatMap for strict sequential processing;
     // workqueue/broadcast use mergeMap for parallel handler execution.
-    const subscription = stream$.pipe(isOrdered ? concatMap(route) : mergeMap(route)).subscribe();
+    const subscription = stream$
+      .pipe(isOrdered ? concatMap(route) : mergeMap(route, concurrency))
+      .subscribe();
 
     this.subscriptions.push(subscription);
   }
 
+  private getConcurrency(kind: StreamKind): number | undefined {
+    if (kind === StreamKind.Event) return this.processingConfig?.events?.concurrency;
+    if (kind === StreamKind.Broadcast) return this.processingConfig?.broadcast?.concurrency;
+    return undefined;
+  }
+
+  private getAckExtensionConfig(kind: StreamKind): boolean | number | undefined {
+    if (kind === StreamKind.Event) return this.processingConfig?.events?.ackExtension;
+    if (kind === StreamKind.Broadcast) return this.processingConfig?.broadcast?.ackExtension;
+    return undefined;
+  }
+
   /** Handle a single event message: decode -> execute handler -> ack/nak. */
-  private handle(msg: JsMsg): Observable<void> {
+  private handle(msg: JsMsg, ackExtensionInterval: number | null): Observable<void> {
+    const resolved = this.decodeMessage(msg);
+
+    if (!resolved) return EMPTY;
+
+    return from(
+      this.executeHandler(resolved.handler, resolved.data, resolved.ctx, msg, ackExtensionInterval),
+    );
+  }
+
+  /** Handle an ordered message: decode -> execute handler -> no ack/nak. */
+  private handleOrdered(msg: JsMsg): Observable<void> {
+    const resolved = this.decodeMessage(msg, true);
+
+    if (!resolved) return EMPTY;
+
+    return from(
+      unwrapResult(resolved.handler(resolved.data, resolved.ctx)).catch((err: unknown) => {
+        this.logger.error(`Ordered handler error (${msg.subject}):`, err);
+      }),
+    ) as Observable<void>;
+  }
+
+  /** Resolve handler, decode payload, and build context. Returns null on failure. */
+  private decodeMessage(
+    msg: JsMsg,
+    isOrdered = false,
+  ): { handler: MessageHandler; data: unknown; ctx: RpcContext } | null {
     const handler = this.patternRegistry.getHandler(msg.subject);
 
     if (!handler) {
-      msg.term(`No handler for event: ${msg.subject}`);
-      this.logger.error(`No handler for event subject: ${msg.subject}`);
-      return EMPTY;
+      if (!isOrdered) msg.term(`No handler for event: ${msg.subject}`);
+      this.logger.error(`No handler for subject: ${msg.subject}`);
+      return null;
     }
 
     let data: unknown;
@@ -113,25 +161,26 @@ export class EventRouter {
     try {
       data = this.codec.decode(msg.data);
     } catch (err) {
-      msg.term('Decode error');
+      if (!isOrdered) msg.term('Decode error');
       this.logger.error(`Decode error for ${msg.subject}:`, err);
-      return EMPTY;
+      return null;
     }
 
-    this.eventBus.emit(TransportEvent.MessageRouted, msg.subject, 'event');
+    this.eventBus.emit(TransportEvent.MessageRouted, msg.subject, MessageKind.Event);
 
-    const ctx = new RpcContext([msg]);
-
-    return from(this.executeHandler(handler, data, ctx, msg));
+    return { handler, data, ctx: new RpcContext([msg]) };
   }
 
   /** Execute handler, then ack on success or nak/dead-letter on failure. */
   private async executeHandler(
-    handler: (data: unknown, ctx: RpcContext) => Promise<unknown>,
+    handler: MessageHandler,
     data: unknown,
     ctx: RpcContext,
     msg: JsMsg,
+    ackExtensionInterval: number | null,
   ): Promise<void> {
+    const stopAckExtension = startAckExtensionTimer(msg, ackExtensionInterval);
+
     try {
       await unwrapResult(handler(data, ctx));
       msg.ack();
@@ -143,36 +192,9 @@ export class EventRouter {
       } else {
         msg.nak();
       }
+    } finally {
+      stopAckExtension?.();
     }
-  }
-
-  /** Handle an ordered message: decode -> execute handler -> no ack/nak. */
-  private handleOrdered(msg: JsMsg): Observable<void> {
-    const handler = this.patternRegistry.getHandler(msg.subject);
-
-    if (!handler) {
-      this.logger.error(`No handler for ordered subject: ${msg.subject}`);
-      return EMPTY;
-    }
-
-    let data: unknown;
-
-    try {
-      data = this.codec.decode(msg.data);
-    } catch (err) {
-      this.logger.error(`Decode error for ordered ${msg.subject}:`, err);
-      return EMPTY;
-    }
-
-    this.eventBus.emit(TransportEvent.MessageRouted, msg.subject, 'event');
-
-    const ctx = new RpcContext([msg]);
-
-    return from(
-      unwrapResult(handler(data, ctx)).catch((err: unknown) => {
-        this.logger.error(`Ordered handler error (${msg.subject}):`, err);
-      }),
-    ) as Observable<void>;
   }
 
   /** Check if the message has exhausted all delivery attempts. */
@@ -201,7 +223,12 @@ export class EventRouter {
 
     this.eventBus.emit(TransportEvent.DeadLetter, info);
 
-    if (!this.deadLetterConfig) return;
+    // Safety net: deadLetterConfig is guaranteed by isDeadLetter() guard,
+    // but if somehow null, term the message to prevent infinite redelivery.
+    if (!this.deadLetterConfig) {
+      msg.term('Dead letter config unavailable');
+      return;
+    }
 
     try {
       await this.deadLetterConfig.onDeadLetter(info);

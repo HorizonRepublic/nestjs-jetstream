@@ -585,3 +585,4 @@ The ordered stream name follows the library's [naming conventions](/docs/referen
 - [Module Configuration](/docs/getting-started/module-configuration) — full options reference including `ordered`
 - [Default Configs](/docs/reference/default-configs) — stream and consumer defaults for all stream types
 - [Lifecycle Hooks](/docs/guides/lifecycle-hooks) — monitor errors, reconnections, and transport events
+- [Troubleshooting](/docs/guides/troubleshooting) — common issues and debugging

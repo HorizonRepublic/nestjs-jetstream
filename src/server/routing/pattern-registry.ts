@@ -1,8 +1,22 @@
 import { Logger } from '@nestjs/common';
 import { MessageHandler } from '@nestjs/microservices';
 
-import type { JetstreamModuleOptions, PatternsByKind, RegisteredHandler } from '../../interfaces';
+import { MessageKind, StreamKind } from '../../interfaces';
+import type {
+  JetstreamModuleOptions,
+  PatternsByKind,
+  RegisteredHandler,
+  SubjectKind,
+} from '../../interfaces';
 import { buildBroadcastSubject, buildSubject, internalName } from '../../jetstream.constants';
+
+/** Maps StreamKind to a human-readable label for logging. */
+const HANDLER_LABELS: Record<StreamKind, string> = {
+  [StreamKind.Broadcast]: StreamKind.Broadcast,
+  [StreamKind.Ordered]: StreamKind.Ordered,
+  [StreamKind.Event]: MessageKind.Event,
+  [StreamKind.Command]: MessageKind.Rpc,
+};
 
 /**
  * Registry mapping NATS subjects to NestJS message handlers.
@@ -15,6 +29,9 @@ import { buildBroadcastSubject, buildSubject, internalName } from '../../jetstre
 export class PatternRegistry {
   private readonly logger = new Logger('Jetstream:PatternRegistry');
   private readonly registry = new Map<string, RegisteredHandler>();
+
+  // Cached after registerHandlers() — the registry is immutable from that point
+  private cachedPatterns: PatternsByKind | null = null;
 
   public constructor(private readonly options: JetstreamModuleOptions) {}
 
@@ -38,18 +55,17 @@ export class PatternRegistry {
         );
       }
 
-      // Build the full NATS subject this handler should receive
-      let fullSubject: string;
+      let kind: StreamKind;
 
-      if (isBroadcast) {
-        fullSubject = buildBroadcastSubject(pattern);
-      } else if (isOrdered) {
-        fullSubject = buildSubject(serviceName, 'ordered', pattern);
-      } else if (isEvent) {
-        fullSubject = buildSubject(serviceName, 'ev', pattern);
-      } else {
-        fullSubject = buildSubject(serviceName, 'cmd', pattern);
-      }
+      if (isBroadcast) kind = StreamKind.Broadcast;
+      else if (isOrdered) kind = StreamKind.Ordered;
+      else if (isEvent) kind = StreamKind.Event;
+      else kind = StreamKind.Command;
+
+      const fullSubject =
+        kind === StreamKind.Broadcast
+          ? buildBroadcastSubject(pattern)
+          : buildSubject(serviceName, kind as SubjectKind, pattern);
 
       this.registry.set(fullSubject, {
         handler,
@@ -59,21 +75,10 @@ export class PatternRegistry {
         isOrdered,
       });
 
-      let kind: string;
-
-      if (isBroadcast) {
-        kind = 'broadcast';
-      } else if (isOrdered) {
-        kind = 'ordered';
-      } else if (isEvent) {
-        kind = 'event';
-      } else {
-        kind = 'rpc';
-      }
-
-      this.logger.debug(`Registered ${kind}: ${pattern} -> ${fullSubject}`);
+      this.logger.debug(`Registered ${HANDLER_LABELS[kind]}: ${pattern} -> ${fullSubject}`);
     }
 
+    this.cachedPatterns = this.buildPatternsByKind();
     this.logSummary();
   }
 
@@ -84,44 +89,64 @@ export class PatternRegistry {
 
   /** Get all registered broadcast patterns (for consumer filter_subject setup). */
   public getBroadcastPatterns(): string[] {
-    return Array.from(this.registry.values())
-      .filter((r) => r.isBroadcast)
-      .map((r) => `broadcast.${r.pattern}`);
+    return this.getPatternsByKind().broadcasts.map((p) => buildBroadcastSubject(p));
   }
 
-  /** Check if any broadcast handlers are registered. */
   public hasBroadcastHandlers(): boolean {
-    return Array.from(this.registry.values()).some((r) => r.isBroadcast);
+    return this.getPatternsByKind().broadcasts.length > 0;
   }
 
-  /** Check if any RPC (command) handlers are registered. */
   public hasRpcHandlers(): boolean {
-    return Array.from(this.registry.values()).some(
-      (r) => !r.isEvent && !r.isBroadcast && !r.isOrdered,
-    );
+    return this.getPatternsByKind().commands.length > 0;
   }
 
-  /** Check if any workqueue event handlers are registered. */
   public hasEventHandlers(): boolean {
-    return Array.from(this.registry.values()).some((r) => r.isEvent && !r.isBroadcast);
+    return this.getPatternsByKind().events.length > 0;
   }
 
-  /** Check if any ordered event handlers are registered. */
   public hasOrderedHandlers(): boolean {
-    return Array.from(this.registry.values()).some((r) => r.isOrdered);
+    return this.getPatternsByKind().ordered.length > 0;
   }
 
   /** Get fully-qualified NATS subjects for ordered handlers. */
   public getOrderedSubjects(): string[] {
-    const name = internalName(this.options.name);
-
-    return Array.from(this.registry.values())
-      .filter((r) => r.isOrdered)
-      .map((r) => `${name}.ordered.${r.pattern}`);
+    return this.getPatternsByKind().ordered.map((p) =>
+      buildSubject(this.options.name, StreamKind.Ordered, p),
+    );
   }
 
-  /** Get patterns grouped by kind. */
+  /** Get patterns grouped by kind (cached after registration). */
   public getPatternsByKind(): PatternsByKind {
+    const patterns = this.cachedPatterns ?? this.buildPatternsByKind();
+
+    return {
+      events: [...patterns.events],
+      commands: [...patterns.commands],
+      broadcasts: [...patterns.broadcasts],
+      ordered: [...patterns.ordered],
+    };
+  }
+
+  /** Normalize a full NATS subject back to the user-facing pattern. */
+  public normalizeSubject(subject: string): string {
+    const name = internalName(this.options.name);
+    const prefixes = [
+      `${name}.${StreamKind.Command}.`,
+      `${name}.${StreamKind.Event}.`,
+      `${name}.${StreamKind.Ordered}.`,
+      `${StreamKind.Broadcast}.`,
+    ];
+
+    for (const prefix of prefixes) {
+      if (subject.startsWith(prefix)) {
+        return subject.slice(prefix.length);
+      }
+    }
+
+    return subject;
+  }
+
+  private buildPatternsByKind(): PatternsByKind {
     const events: string[] = [];
     const commands: string[] = [];
     const broadcasts: string[] = [];
@@ -137,21 +162,6 @@ export class PatternRegistry {
     return { events, commands, broadcasts, ordered };
   }
 
-  /** Normalize a full NATS subject back to the user-facing pattern. */
-  public normalizeSubject(subject: string): string {
-    const name = internalName(this.options.name);
-    const prefixes = [`${name}.cmd.`, `${name}.ev.`, `${name}.ordered.`, 'broadcast.'];
-
-    for (const prefix of prefixes) {
-      if (subject.startsWith(prefix)) {
-        return subject.slice(prefix.length);
-      }
-    }
-
-    return subject;
-  }
-
-  /** Log a summary of all registered handlers. */
   private logSummary(): void {
     const { events, commands, broadcasts, ordered } = this.getPatternsByKind();
 

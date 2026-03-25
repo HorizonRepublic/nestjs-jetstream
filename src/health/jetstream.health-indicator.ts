@@ -1,18 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 
 import { ConnectionProvider } from '../connection';
-
-/**
- * Health status returned by {@link JetstreamHealthIndicator.check}.
- */
-export interface JetstreamHealthStatus {
-  /** Whether the NATS connection is alive. */
-  connected: boolean;
-  /** NATS server URL, or `null` if not connected. */
-  server: string | null;
-  /** Round-trip latency in ms, or `null` if disconnected. */
-  latency: number | null;
-}
+import type { JetstreamHealthStatus } from '../interfaces';
 
 /**
  * Health indicator result compatible with @nestjs/terminus.

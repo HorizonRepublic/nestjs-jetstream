@@ -1,5 +1,11 @@
 import type { MsgHdrs } from 'nats';
 
+/** Discriminates the kind of message routed through the transport. */
+export enum MessageKind {
+  Event = 'event',
+  Rpc = 'rpc',
+}
+
 export enum TransportEvent {
   Connect = 'connect',
   Disconnect = 'disconnect',
@@ -46,7 +52,7 @@ export interface TransportHooks {
   [TransportEvent.RpcTimeout](subject: string, correlationId: string): void;
 
   /** Fired after a message is successfully routed to its handler. */
-  [TransportEvent.MessageRouted](subject: string, kind: 'rpc' | 'event'): void;
+  [TransportEvent.MessageRouted](subject: string, kind: MessageKind): void;
 
   /** Fired at the start of the graceful shutdown sequence. */
   [TransportEvent.ShutdownStart](): void;

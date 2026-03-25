@@ -315,3 +315,5 @@ handleFeatureFlag(@Payload() data: FeatureFlagEvent): void {
 - [**Dead Letter Queue**](/docs/guides/dead-letter-queue) — handle messages that exhaust all retries
 - [**Lifecycle Hooks**](/docs/guides/lifecycle-hooks) — observe transport events like dead letters and message routing
 - [**Module Configuration**](/docs/getting-started/module-configuration) — full reference for stream and consumer options
+- [**Performance Tuning**](/docs/guides/performance) — concurrency limits for broadcast handlers
+- [**Troubleshooting**](/docs/guides/troubleshooting#consumer-issues) — diagnosing delivery issues

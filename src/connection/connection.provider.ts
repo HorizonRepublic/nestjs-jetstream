@@ -4,6 +4,7 @@ import {
   ConnectionOptions,
   DebugEvents,
   Events,
+  type JetStreamClient,
   JetStreamManager,
   NatsConnection,
   NatsError,
@@ -15,6 +16,11 @@ import { EventBus } from '../hooks';
 import { TransportEvent } from '../interfaces';
 import type { JetstreamModuleOptions } from '../interfaces';
 import { internalName } from '../jetstream.constants';
+
+const DEFAULT_OPTIONS: Partial<ConnectionOptions> = {
+  maxReconnectAttempts: -1,
+  reconnectTimeWait: 1_000,
+};
 
 /**
  * Manages the lifecycle of a single NATS connection shared across the application.
@@ -37,6 +43,7 @@ export class ConnectionProvider {
 
   private connection: NatsConnection | null = null;
   private connectionPromise: Promise<NatsConnection> | null = null;
+  private jsClient: JetStreamClient | null = null;
   private jsmInstance: JetStreamManager | null = null;
   private jsmPromise: Promise<JetStreamManager> | null = null;
 
@@ -99,6 +106,24 @@ export class ConnectionProvider {
     return this.jsmPromise;
   }
 
+  /**
+   * Get a cached JetStream client.
+   *
+   * Invalidated automatically on reconnect and shutdown so consumers always
+   * operate against the live connection.
+   *
+   * @returns The cached JetStreamClient.
+   * @throws Error if the connection has not been established yet.
+   */
+  public getJetStreamClient(): JetStreamClient {
+    if (!this.connection || this.connection.isClosed()) {
+      throw new Error('Not connected — call getConnection() before getJetStreamClient()');
+    }
+
+    this.jsClient ??= this.connection.jetstream();
+    return this.jsClient;
+  }
+
   /** Direct access to the raw NATS connection, or `null` if not yet connected. */
   public get unwrap(): NatsConnection | null {
     return this.connection;
@@ -133,6 +158,7 @@ export class ConnectionProvider {
     } finally {
       this.connection = null;
       this.connectionPromise = null;
+      this.jsClient = null;
       this.jsmInstance = null;
       this.jsmPromise = null;
     }
@@ -144,6 +170,7 @@ export class ConnectionProvider {
 
     try {
       const nc = await connect({
+        ...DEFAULT_OPTIONS,
         ...this.options.connectionOptions,
         servers: this.options.servers,
         name,
@@ -174,6 +201,7 @@ export class ConnectionProvider {
             this.eventBus.emit(TransportEvent.Disconnect);
             break;
           case Events.Reconnect:
+            this.jsClient = null;
             this.jsmInstance = null;
             this.jsmPromise = null;
             this.eventBus.emit(TransportEvent.Reconnect, nc.getServer());

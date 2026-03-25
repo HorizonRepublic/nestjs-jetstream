@@ -18,7 +18,18 @@ All streams share a common base configuration:
 | `num_replicas` | `1` |
 | `discard` | `Old` |
 | `allow_direct` | `true` |
-| `compression` | `None` |
+| `compression` | `S2` |
+
+:::info S2 Compression
+All streams default to [Snappy S2 compression](https://github.com/nats-io/nats-server). This reduces disk I/O and storage with negligible CPU overhead (~1-3%). Requires NATS Server >= 2.10 (see [runtime requirements](/docs/getting-started/installation#runtime-requirements)). Override per stream kind:
+
+```typescript
+events: {
+  stream: { compression: StoreCompression.None }, // disable for event streams
+}
+```
+
+:::
 
 ### Event Stream
 
@@ -130,6 +141,28 @@ Limits retention for strict sequential delivery. Ordered consumers are ephemeral
 :::note
 Ordered consumers do not have a durable consumer configuration. They are ephemeral and managed entirely by the nats.js client library.
 :::
+
+## Connection Defaults
+
+The transport applies the following connection defaults for production resilience:
+
+| Property | Value | Notes |
+|----------|-------|-------|
+| `maxReconnectAttempts` | `-1` | Unlimited reconnection attempts |
+| `reconnectTimeWait` | `1000` | 1 second between reconnection attempts |
+
+These defaults ensure the transport automatically recovers from transient network failures without manual intervention. Override them via `connectionOptions` in `forRoot()`:
+
+```typescript
+JetstreamModule.forRoot({
+  name: 'orders',
+  servers: ['nats://localhost:4222'],
+  connectionOptions: {
+    maxReconnectAttempts: 10,   // limit to 10 attempts
+    reconnectTimeWait: 2_000,  // 2 seconds between attempts
+  },
+})
+```
 
 ## RPC Timeouts
 

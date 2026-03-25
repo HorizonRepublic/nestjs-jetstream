@@ -72,7 +72,8 @@ This documentation is organized into sections that progressively build on each o
 
 - [**Getting Started**](/docs/getting-started/installation) — install, configure, and run your first handler in minutes
 - [**Messaging Patterns**](/docs/patterns/rpc) — deep dive into RPC, Events, Broadcast, and Ordered Events
-- [**Guides**](/docs/guides/record-builder) — Record Builder, Custom Codec, Handler Context, DLQ, Health Checks, Lifecycle Hooks, Graceful Shutdown
+- [**Guides**](/docs/guides/record-builder) — Record Builder, Custom Codec, Handler Context, DLQ, Health Checks, Lifecycle Hooks, Graceful Shutdown, Performance Tuning, Troubleshooting
+- [**Migration**](/docs/guides/migration) — upgrading from the built-in NATS transport or between library versions
 - [**Reference**](/docs/reference/naming-conventions) — naming conventions, default configs, edge cases, and full API reference
 
 :::tip Ready to start?
