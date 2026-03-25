@@ -386,7 +386,7 @@ export class JetstreamModule implements OnApplicationShutdown {
             connection,
             codec,
             eventBus,
-            timeout,
+            { timeout },
           );
         },
       },

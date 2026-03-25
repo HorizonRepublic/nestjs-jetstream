@@ -14,6 +14,14 @@ import { serializeError, unwrapResult } from '../../utils';
 import { MessageProvider } from '../infrastructure';
 import { PatternRegistry } from './pattern-registry';
 
+/** Options for configuring RPC processing behavior. */
+export interface RpcRouterOptions {
+  timeout?: number;
+  concurrency?: number;
+  ackExtension?: boolean | number;
+  ackWaitNanos?: number;
+}
+
 /**
  * Routes RPC command messages in JetStream mode.
  *
@@ -29,6 +37,9 @@ import { PatternRegistry } from './pattern-registry';
 export class RpcRouter {
   private readonly logger = new Logger('Jetstream:RpcRouter');
   private readonly timeout: number;
+  private readonly concurrency: number | undefined;
+  private readonly ackExtensionInterval: number | null;
+  private readonly rpcOptions?: RpcRouterOptions;
   private subscription: Subscription | null = null;
 
   public constructor(
@@ -37,22 +48,27 @@ export class RpcRouter {
     private readonly connection: ConnectionProvider,
     private readonly codec: Codec,
     private readonly eventBus: EventBus,
-    timeout?: number,
+    options?: RpcRouterOptions,
   ) {
-    this.timeout = timeout ?? DEFAULT_JETSTREAM_RPC_TIMEOUT;
+    this.rpcOptions = options;
+    this.timeout = options?.timeout ?? DEFAULT_JETSTREAM_RPC_TIMEOUT;
+    this.concurrency = options?.concurrency;
+    this.ackExtensionInterval = this.resolveAckExtension(options?.ackExtension);
   }
 
   /** Start routing command messages to handlers. */
   public start(): void {
     this.subscription = this.messageProvider.commands$
       .pipe(
-        mergeMap((msg) =>
-          defer(() => this.handle(msg)).pipe(
-            catchError((err) => {
-              this.logger.error('Unexpected error in RPC router', err);
-              return EMPTY;
-            }),
-          ),
+        mergeMap(
+          (msg) =>
+            defer(() => this.handle(msg)).pipe(
+              catchError((err) => {
+                this.logger.error('Unexpected error in RPC router', err);
+                return EMPTY;
+              }),
+            ),
+          this.concurrency,
         ),
       )
       .subscribe();
@@ -115,10 +131,16 @@ export class RpcRouter {
 
     let settled = false;
 
+    // Ack extension: keep NATS happy while handler runs
+    const ackTimer = this.ackExtensionInterval
+      ? setInterval(() => msg.working(), this.ackExtensionInterval)
+      : null;
+
     // Race handler against timeout
     const timeoutId = setTimeout(() => {
       if (settled) return;
       settled = true;
+      if (ackTimer) clearInterval(ackTimer);
       this.logger.error(`RPC timeout (${this.timeout}ms): ${msg.subject}`);
       this.eventBus.emit(TransportEvent.RpcTimeout, msg.subject, correlationId);
       msg.term('Handler timeout');
@@ -132,6 +154,7 @@ export class RpcRouter {
       if (settled) return;
       settled = true;
       clearTimeout(timeoutId);
+      if (ackTimer) clearInterval(ackTimer);
 
       // Ack first — handler succeeded, message is processed regardless of
       // whether we can deliver the response back to the caller.
@@ -146,6 +169,7 @@ export class RpcRouter {
       if (settled) return;
       settled = true;
       clearTimeout(timeoutId);
+      if (ackTimer) clearInterval(ackTimer);
 
       // Publish error response with x-error header
       try {
@@ -157,5 +181,17 @@ export class RpcRouter {
 
       msg.term(`Handler error: ${msg.subject}`);
     }
+  }
+
+  private resolveAckExtension(config?: boolean | number): number | null {
+    if (config === false || config === undefined) return null;
+    if (typeof config === 'number') return config;
+
+    // true -> auto-calculate from ack_wait (nanos -> ms / 2)
+    if (this.rpcOptions?.ackWaitNanos) {
+      return Math.floor(this.rpcOptions.ackWaitNanos / 1_000_000 / 2);
+    }
+
+    return 5_000; // fallback
   }
 }
