@@ -20,6 +20,12 @@ import { unwrapResult } from '../../utils';
 import { MessageProvider } from '../infrastructure';
 import { PatternRegistry } from './pattern-registry';
 
+/** Options for configuring event/broadcast processing behavior. */
+export interface EventProcessingConfig {
+  events?: { concurrency?: number; ackExtension?: boolean | number };
+  broadcast?: { concurrency?: number; ackExtension?: boolean | number };
+}
+
 /** Options for dead letter queue handling. */
 export interface DeadLetterConfig {
   /**
@@ -51,6 +57,8 @@ export class EventRouter {
     private readonly codec: Codec,
     private readonly eventBus: EventBus,
     private readonly deadLetterConfig?: DeadLetterConfig,
+    private readonly processingConfig?: EventProcessingConfig,
+    private readonly ackWaitMap?: Map<string, number>,
   ) {}
 
   /**
@@ -84,7 +92,7 @@ export class EventRouter {
   /** Subscribe to a message stream and route each message. */
   private subscribeToStream(stream$: Observable<JsMsg>, label: string, isOrdered = false): void {
     const route = (msg: JsMsg): Observable<void> =>
-      defer(() => (isOrdered ? this.handleOrdered(msg) : this.handle(msg))).pipe(
+      defer(() => (isOrdered ? this.handleOrdered(msg) : this.handle(msg, label))).pipe(
         catchError((err) => {
           this.logger.error(`Unexpected error in ${label} event router`, err);
           return EMPTY;
@@ -93,13 +101,22 @@ export class EventRouter {
 
     // Ordered streams use concatMap for strict sequential processing;
     // workqueue/broadcast use mergeMap for parallel handler execution.
-    const subscription = stream$.pipe(isOrdered ? concatMap(route) : mergeMap(route)).subscribe();
+    const concurrency = this.getConcurrency(label);
+    const subscription = stream$
+      .pipe(isOrdered ? concatMap(route) : mergeMap(route, concurrency))
+      .subscribe();
 
     this.subscriptions.push(subscription);
   }
 
+  private getConcurrency(label: string): number | undefined {
+    if (label === 'workqueue') return this.processingConfig?.events?.concurrency;
+    if (label === 'broadcast') return this.processingConfig?.broadcast?.concurrency;
+    return undefined;
+  }
+
   /** Handle a single event message: decode -> execute handler -> ack/nak. */
-  private handle(msg: JsMsg): Observable<void> {
+  private handle(msg: JsMsg, label: string): Observable<void> {
     const handler = this.patternRegistry.getHandler(msg.subject);
 
     if (!handler) {
@@ -122,7 +139,7 @@ export class EventRouter {
 
     const ctx = new RpcContext([msg]);
 
-    return from(this.executeHandler(handler, data, ctx, msg));
+    return from(this.executeHandler(handler, data, ctx, msg, label));
   }
 
   /** Execute handler, then ack on success or nak/dead-letter on failure. */
@@ -131,7 +148,11 @@ export class EventRouter {
     data: unknown,
     ctx: RpcContext,
     msg: JsMsg,
+    label: string,
   ): Promise<void> {
+    const interval = this.resolveAckExtensionInterval(label);
+    const timer = interval ? setInterval(() => msg.working(), interval) : null;
+
     try {
       await unwrapResult(handler(data, ctx));
       msg.ack();
@@ -143,6 +164,8 @@ export class EventRouter {
       } else {
         msg.nak();
       }
+    } finally {
+      if (timer) clearInterval(timer);
     }
   }
 
@@ -173,6 +196,32 @@ export class EventRouter {
         this.logger.error(`Ordered handler error (${msg.subject}):`, err);
       }),
     ) as Observable<void>;
+  }
+
+  private resolveAckExtensionInterval(label: string): number | null {
+    const config =
+      label === 'workqueue'
+        ? this.processingConfig?.events?.ackExtension
+        : label === 'broadcast'
+          ? this.processingConfig?.broadcast?.ackExtension
+          : undefined;
+
+    if (config === false || config === undefined) return null;
+    if (typeof config === 'number') return config;
+
+    // true -> auto-calculate from ack_wait
+    return this.getDefaultAckExtensionInterval(label);
+  }
+
+  private getDefaultAckExtensionInterval(label: string): number {
+    const kind = label === 'workqueue' ? 'ev' : label === 'broadcast' ? 'broadcast' : undefined;
+    const ackWaitNanos = kind ? this.ackWaitMap?.get(kind) : undefined;
+
+    if (!ackWaitNanos) return 5_000; // fallback: 5s
+
+    // IMPORTANT: ConsumerInfo.config.ack_wait is in NANOSECONDS.
+    // Convert to ms, then halve for the extension interval.
+    return Math.floor(ackWaitNanos / 1_000_000 / 2);
   }
 
   /** Check if the message has exhausted all delivery attempts. */

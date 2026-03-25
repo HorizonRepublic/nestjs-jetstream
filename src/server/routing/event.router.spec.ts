@@ -9,7 +9,7 @@ import type { Codec } from '../../interfaces';
 import { TransportEvent } from '../../interfaces';
 import { MessageProvider } from '../infrastructure/message.provider';
 
-import type { DeadLetterConfig } from './event.router';
+import type { DeadLetterConfig, EventProcessingConfig } from './event.router';
 import { EventRouter } from './event.router';
 import { PatternRegistry } from './pattern-registry';
 
@@ -523,6 +523,259 @@ describe(EventRouter, () => {
         // Then: handler called exactly once for msg2 (no duplicate)
         expect(handler).toHaveBeenCalledTimes(1);
       });
+    });
+  });
+
+  describe('concurrency control', () => {
+    it('should limit parallel handler execution when concurrency is set', async () => {
+      // Given: sut with concurrency = 1
+      const processingConfig: EventProcessingConfig = { events: { concurrency: 1 } };
+
+      sut = new EventRouter(
+        messageProvider,
+        patternRegistry,
+        codec,
+        eventBus,
+        undefined,
+        processingConfig,
+      );
+      sut.start();
+
+      let concurrentCount = 0;
+      let maxConcurrent = 0;
+
+      const handler = vi.fn().mockImplementation(async () => {
+        concurrentCount++;
+        maxConcurrent = Math.max(maxConcurrent, concurrentCount);
+        await new Promise((r) => setTimeout(r, 50));
+        concurrentCount--;
+      });
+
+      patternRegistry.getHandler.mockReturnValue(handler);
+
+      const msg1 = createMock<JsMsg>({
+        subject: faker.lorem.word(),
+        data: new TextEncoder().encode(JSON.stringify({ n: 1 })),
+      });
+      const msg2 = createMock<JsMsg>({
+        subject: faker.lorem.word(),
+        data: new TextEncoder().encode(JSON.stringify({ n: 2 })),
+      });
+
+      // When: two messages arrive simultaneously
+      events$.next(msg1);
+      events$.next(msg2);
+
+      // Then: only one handler runs at a time
+      await new Promise((r) => setTimeout(r, 200));
+
+      expect(maxConcurrent).toBe(1);
+      expect(handler).toHaveBeenCalledTimes(2);
+    });
+
+    it('should allow unlimited concurrency when no config is set', async () => {
+      // Given: default sut (no processingConfig)
+      sut.start();
+
+      let concurrentCount = 0;
+      let maxConcurrent = 0;
+
+      const handler = vi.fn().mockImplementation(async () => {
+        concurrentCount++;
+        maxConcurrent = Math.max(maxConcurrent, concurrentCount);
+        await new Promise((r) => setTimeout(r, 50));
+        concurrentCount--;
+      });
+
+      patternRegistry.getHandler.mockReturnValue(handler);
+
+      const msg1 = createMock<JsMsg>({
+        subject: faker.lorem.word(),
+        data: new TextEncoder().encode(JSON.stringify({ n: 1 })),
+      });
+      const msg2 = createMock<JsMsg>({
+        subject: faker.lorem.word(),
+        data: new TextEncoder().encode(JSON.stringify({ n: 2 })),
+      });
+
+      // When: two messages arrive simultaneously
+      events$.next(msg1);
+      events$.next(msg2);
+
+      // Then: both handlers run in parallel
+      await new Promise((r) => setTimeout(r, 200));
+
+      expect(maxConcurrent).toBe(2);
+      expect(handler).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('ack extension', () => {
+    it('should call msg.working() periodically when ackExtension is a number', async () => {
+      // Given: sut with ackExtension = 50ms
+      sut = new EventRouter(
+        messageProvider,
+        patternRegistry,
+        codec,
+        eventBus,
+        undefined,
+        { events: { ackExtension: 50 } },
+      );
+      sut.start();
+
+      let resolveHandler!: () => void;
+      const handlerPromise = new Promise<void>((r) => {
+        resolveHandler = r;
+      });
+      const handler = vi.fn().mockReturnValue(handlerPromise);
+
+      patternRegistry.getHandler.mockReturnValue(handler);
+
+      const msg = createMock<JsMsg>({
+        subject: faker.lorem.word(),
+        data: new TextEncoder().encode(JSON.stringify({ test: true })),
+      });
+
+      // When: message arrives and handler is slow
+      events$.next(msg);
+
+      // Then: working() is called periodically while handler is running
+      await new Promise((r) => setTimeout(r, 160));
+      resolveHandler();
+      await new Promise((r) => setTimeout(r, 10));
+
+      expect(msg.working).toHaveBeenCalled();
+
+      const callCount = (msg.working as ReturnType<typeof vi.fn>).mock.calls.length;
+
+      expect(callCount).toBeGreaterThanOrEqual(2);
+    });
+
+    it('should clear working() interval after handler completes', async () => {
+      // Given: sut with ackExtension = 30ms
+      sut = new EventRouter(
+        messageProvider,
+        patternRegistry,
+        codec,
+        eventBus,
+        undefined,
+        { events: { ackExtension: 30 } },
+      );
+      sut.start();
+
+      const handler = vi.fn().mockResolvedValue(undefined);
+
+      patternRegistry.getHandler.mockReturnValue(handler);
+
+      const msg = createMock<JsMsg>({
+        subject: faker.lorem.word(),
+        data: new TextEncoder().encode(JSON.stringify({ test: true })),
+      });
+
+      // When: message arrives and handler completes quickly
+      events$.next(msg);
+      await new Promise((r) => setTimeout(r, 50));
+
+      const countAfterDone = (msg.working as ReturnType<typeof vi.fn>).mock.calls.length;
+
+      // Then: no additional working() calls after handler completes
+      await new Promise((r) => setTimeout(r, 100));
+
+      expect((msg.working as ReturnType<typeof vi.fn>).mock.calls.length).toBe(countAfterDone);
+    });
+
+    it('should not call working() when ackExtension is disabled', async () => {
+      // Given: default sut (no processingConfig)
+      sut.start();
+
+      const handler = vi.fn().mockResolvedValue(undefined);
+
+      patternRegistry.getHandler.mockReturnValue(handler);
+
+      const msg = createMock<JsMsg>({
+        subject: faker.lorem.word(),
+        data: new TextEncoder().encode(JSON.stringify({ test: true })),
+      });
+
+      // When: message arrives and is processed
+      events$.next(msg);
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Then: working() is never called
+      expect(msg.working).not.toHaveBeenCalled();
+    });
+
+    it('should auto-calculate interval from ackWaitMap when ackExtension is true', async () => {
+      // Given: sut with ackExtension = true and ackWaitMap with 200ms (in nanos) ack_wait
+      const ackWaitNanos = 200 * 1_000_000; // 200ms in nanoseconds
+      const ackWaitMap = new Map<string, number>([['ev', ackWaitNanos]]);
+
+      sut = new EventRouter(
+        messageProvider,
+        patternRegistry,
+        codec,
+        eventBus,
+        undefined,
+        { events: { ackExtension: true } },
+        ackWaitMap,
+      );
+      sut.start();
+
+      let resolveHandler!: () => void;
+      const handlerPromise = new Promise<void>((r) => {
+        resolveHandler = r;
+      });
+      const handler = vi.fn().mockReturnValue(handlerPromise);
+
+      patternRegistry.getHandler.mockReturnValue(handler);
+
+      const msg = createMock<JsMsg>({
+        subject: faker.lorem.word(),
+        data: new TextEncoder().encode(JSON.stringify({ test: true })),
+      });
+
+      // When: message arrives and handler is slow
+      // Expected interval: 200ms / 2 = 100ms
+      events$.next(msg);
+      await new Promise((r) => setTimeout(r, 250));
+      resolveHandler();
+      await new Promise((r) => setTimeout(r, 10));
+
+      // Then: working() called ~2 times (at 100ms and 200ms)
+      const callCount = (msg.working as ReturnType<typeof vi.fn>).mock.calls.length;
+
+      expect(callCount).toBeGreaterThanOrEqual(2);
+      expect(callCount).toBeLessThanOrEqual(3);
+    });
+
+    it('should use 5s fallback when ackExtension is true but no ackWaitMap entry', async () => {
+      // Given: sut with ackExtension = true but no ackWaitMap
+      sut = new EventRouter(
+        messageProvider,
+        patternRegistry,
+        codec,
+        eventBus,
+        undefined,
+        { events: { ackExtension: true } },
+      );
+      sut.start();
+
+      const handler = vi.fn().mockResolvedValue(undefined);
+
+      patternRegistry.getHandler.mockReturnValue(handler);
+
+      const msg = createMock<JsMsg>({
+        subject: faker.lorem.word(),
+        data: new TextEncoder().encode(JSON.stringify({ test: true })),
+      });
+
+      // When: message arrives and handler completes quickly
+      events$.next(msg);
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Then: no working() calls (5s interval > 50ms wait)
+      // The fallback 5s interval means no call within the short window
+      expect(msg.working).not.toHaveBeenCalled();
     });
   });
 });
