@@ -1,5 +1,12 @@
 import { Logger } from '@nestjs/common';
-import { Consumer, ConsumerEvents, ConsumerInfo, ConsumerMessages, DeliverPolicy, JsMsg } from 'nats';
+import {
+  Consumer,
+  ConsumerEvents,
+  ConsumerInfo,
+  ConsumerMessages,
+  DeliverPolicy,
+  JsMsg,
+} from 'nats';
 import type { ConsumeOptions, OrderedConsumerOptions } from 'nats';
 import {
   catchError,
@@ -94,6 +101,7 @@ export class MessageProvider {
    *
    * @param streamName - JetStream stream to consume from.
    * @param filterSubjects - NATS subjects to filter on.
+   * @param orderedConfig - Optional overrides for ordered consumer options.
    */
   public async startOrdered(
     streamName: string,
@@ -173,10 +181,7 @@ export class MessageProvider {
   private createFlow(kind: StreamKind, info: ConsumerInfo): Observable<void> {
     const target$ = this.getTargetSubject(kind);
 
-    return this.createSelfHealingFlow(
-      () => this.consumeOnce(kind, info, target$),
-      info.name,
-    );
+    return this.createSelfHealingFlow(() => this.consumeOnce(kind, info, target$), info.name);
   }
 
   /** Single iteration: get consumer -> pull messages -> emit to subject. */
@@ -188,7 +193,9 @@ export class MessageProvider {
     const js = this.connection.getJetStreamClient();
     const consumer: Consumer = await js.consumers.get(info.stream_name, info.name);
 
+    /* eslint-disable @typescript-eslint/naming-convention -- NATS API uses snake_case */
     const defaults: Partial<ConsumeOptions> = { idle_heartbeat: 5_000 };
+    /* eslint-enable @typescript-eslint/naming-convention */
     const userOptions = this.consumeOptionsMap.get(kind) ?? {};
 
     const messages = await consumer.consume({ ...defaults, ...userOptions } as ConsumeOptions);
@@ -221,15 +228,12 @@ export class MessageProvider {
 
   /** Monitor heartbeats and restart the consumer iterator on prolonged silence. */
   private monitorConsumerHealth(messages: ConsumerMessages, name: string): void {
-    (async () => {
+    (async (): Promise<void> => {
       for await (const status of await messages.status()) {
         // Threshold: 2 consecutive missed heartbeats triggers restart.
         // One missed heartbeat can happen during normal GC pauses or brief network blips.
         // Two consecutive misses strongly indicate a stale consumer.
-        if (
-          status.type === ConsumerEvents.HeartbeatsMissed &&
-          (status.data as number) >= 2
-        ) {
+        if (status.type === ConsumerEvents.HeartbeatsMissed && (status.data as number) >= 2) {
           this.logger.warn(`Consumer ${name}: ${status.data} heartbeats missed, restarting`);
           messages.stop();
           break;

@@ -11,10 +11,10 @@ const MIN_ACK_EXTENSION_INTERVAL = 500;
  * @param ackWaitNanos - Consumer `ack_wait` in nanoseconds (for auto-calculation).
  * @returns Interval in ms, or `null` if disabled.
  */
-export function resolveAckExtensionInterval(
+export const resolveAckExtensionInterval = (
   config: boolean | number | undefined,
   ackWaitNanos: number | undefined,
-): number | null {
+): number | null => {
   if (config === false || config === undefined) return null;
   if (typeof config === 'number') return config;
 
@@ -22,18 +22,19 @@ export function resolveAckExtensionInterval(
 
   // IMPORTANT: ack_wait is in NANOSECONDS. Convert to ms, then halve for the extension interval.
   const interval = Math.floor(ackWaitNanos / 1_000_000 / 2);
+
   return Math.max(interval, MIN_ACK_EXTENSION_INTERVAL);
-}
+};
 
 /**
  * Start an ack extension timer that periodically calls `msg.working()`.
  *
  * @returns Cleanup function to stop the timer, or `null` if disabled.
  */
-export function startAckExtensionTimer(
+export const startAckExtensionTimer = (
   msg: { working(): void },
   interval: number | null,
-): (() => void) | null {
+): (() => void) | null => {
   if (!interval) return null;
 
   const timer = setInterval(() => {
@@ -44,5 +45,7 @@ export function startAckExtensionTimer(
     }
   }, interval);
 
-  return () => clearInterval(timer);
-}
+  return () => {
+    clearInterval(timer);
+  };
+};

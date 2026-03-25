@@ -7,9 +7,10 @@ import { Subject } from 'rxjs';
 import { EventBus } from '../../hooks';
 import type { Codec } from '../../interfaces';
 import { TransportEvent } from '../../interfaces';
-import { MessageProvider } from '../infrastructure/message.provider';
+import { MessageProvider } from '../infrastructure';
 
-import type { DeadLetterConfig, EventProcessingConfig } from './event.router';
+import { StreamKind } from '../../interfaces';
+import type { DeadLetterConfig, EventProcessingConfig } from '../../interfaces';
 import { EventRouter } from './event.router';
 import { PatternRegistry } from './pattern-registry';
 
@@ -132,7 +133,7 @@ describe(EventRouter, () => {
       describe('when codec.decode() throws', () => {
         it('should term the message without calling handler', async () => {
           // Given: decode fails
-          patternRegistry.getHandler.mockReturnValue(vi.fn());
+          patternRegistry.getHandler.mockReturnValue(vi.fn().mockResolvedValue(undefined));
           codec.decode.mockImplementation(() => {
             throw new Error('bad payload');
           });
@@ -287,7 +288,7 @@ describe(EventRouter, () => {
     describe('when decode fails for ordered message', () => {
       it('should skip without ack/nak/term', async () => {
         // Given: handler exists but decode throws
-        patternRegistry.getHandler.mockReturnValue(vi.fn());
+        patternRegistry.getHandler.mockReturnValue(vi.fn().mockResolvedValue(undefined));
         codec.decode.mockImplementation(() => {
           throw new Error('bad payload');
         });
@@ -613,14 +614,9 @@ describe(EventRouter, () => {
   describe('ack extension', () => {
     it('should call msg.working() periodically when ackExtension is a number', async () => {
       // Given: sut with ackExtension = 50ms
-      sut = new EventRouter(
-        messageProvider,
-        patternRegistry,
-        codec,
-        eventBus,
-        undefined,
-        { events: { ackExtension: 50 } },
-      );
+      sut = new EventRouter(messageProvider, patternRegistry, codec, eventBus, undefined, {
+        events: { ackExtension: 50 },
+      });
       sut.start();
 
       let resolveHandler!: () => void;
@@ -653,14 +649,9 @@ describe(EventRouter, () => {
 
     it('should clear working() interval after handler completes', async () => {
       // Given: sut with ackExtension = 30ms
-      sut = new EventRouter(
-        messageProvider,
-        patternRegistry,
-        codec,
-        eventBus,
-        undefined,
-        { events: { ackExtension: 30 } },
-      );
+      sut = new EventRouter(messageProvider, patternRegistry, codec, eventBus, undefined, {
+        events: { ackExtension: 30 },
+      });
       sut.start();
 
       const handler = vi.fn().mockResolvedValue(undefined);
@@ -708,7 +699,7 @@ describe(EventRouter, () => {
     it('should auto-calculate interval from ackWaitMap when ackExtension is true', async () => {
       // Given: sut with ackExtension = true and ackWaitMap with 200ms (in nanos) ack_wait
       const ackWaitNanos = 1_000 * 1_000_000; // 1000ms in nanoseconds
-      const ackWaitMap = new Map<string, number>([['ev', ackWaitNanos]]);
+      const ackWaitMap = new Map<StreamKind, number>([[StreamKind.Event, ackWaitNanos]]);
 
       sut = new EventRouter(
         messageProvider,
@@ -750,14 +741,9 @@ describe(EventRouter, () => {
 
     it('should use 5s fallback when ackExtension is true but no ackWaitMap entry', async () => {
       // Given: sut with ackExtension = true but no ackWaitMap
-      sut = new EventRouter(
-        messageProvider,
-        patternRegistry,
-        codec,
-        eventBus,
-        undefined,
-        { events: { ackExtension: true } },
-      );
+      sut = new EventRouter(messageProvider, patternRegistry, codec, eventBus, undefined, {
+        events: { ackExtension: true },
+      });
       sut.start();
 
       const handler = vi.fn().mockResolvedValue(undefined);

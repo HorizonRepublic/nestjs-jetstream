@@ -7,7 +7,7 @@ import { Subject } from 'rxjs';
 import { ConnectionProvider } from '../../connection';
 import { EventBus } from '../../hooks';
 import type { Codec } from '../../interfaces';
-import { TransportEvent } from '../../interfaces';
+import { StreamKind, TransportEvent } from '../../interfaces';
 import { DEFAULT_JETSTREAM_RPC_TIMEOUT, JetstreamHeader } from '../../jetstream.constants';
 import { MessageProvider } from '../infrastructure';
 
@@ -279,14 +279,9 @@ describe(RpcRouter, () => {
         // Given: short timeout and a handler that never resolves
         const customTimeout = 100;
 
-        sut = new RpcRouter(
-          messageProvider,
-          patternRegistry,
-          connection,
-          codec,
-          eventBus,
-          { timeout: customTimeout },
-        );
+        sut = new RpcRouter(messageProvider, patternRegistry, connection, codec, eventBus, {
+          timeout: customTimeout,
+        });
         sut.start();
 
         const handler = vi.fn().mockReturnValue(new Promise(() => {}));
@@ -354,14 +349,9 @@ describe(RpcRouter, () => {
         // Given: custom timeout
         const customTimeout = faker.number.int({ min: 1000, max: 5000 });
 
-        sut = new RpcRouter(
-          messageProvider,
-          patternRegistry,
-          connection,
-          codec,
-          eventBus,
-          { timeout: customTimeout },
-        );
+        sut = new RpcRouter(messageProvider, patternRegistry, connection, codec, eventBus, {
+          timeout: customTimeout,
+        });
 
         // Then: no error, router created successfully
         expect(sut).toBeDefined();
@@ -372,14 +362,9 @@ describe(RpcRouter, () => {
   describe('concurrency', () => {
     it('should limit concurrent handler execution when concurrency is set', async () => {
       // Given: sut with concurrency = 1
-      sut = new RpcRouter(
-        messageProvider,
-        patternRegistry,
-        connection,
-        codec,
-        eventBus,
-        { concurrency: 1 },
-      );
+      sut = new RpcRouter(messageProvider, patternRegistry, connection, codec, eventBus, {
+        concurrency: 1,
+      });
       sut.start();
 
       let concurrentCount = 0;
@@ -446,14 +431,9 @@ describe(RpcRouter, () => {
   describe('ack extension', () => {
     it('should call msg.working() periodically when ackExtension is a number', async () => {
       // Given: sut with ackExtension = 50ms
-      sut = new RpcRouter(
-        messageProvider,
-        patternRegistry,
-        connection,
-        codec,
-        eventBus,
-        { ackExtension: 50 },
-      );
+      sut = new RpcRouter(messageProvider, patternRegistry, connection, codec, eventBus, {
+        ackExtension: 50,
+      });
       sut.start();
 
       let resolveHandler!: () => void;
@@ -485,14 +465,9 @@ describe(RpcRouter, () => {
 
     it('should clear working() interval after handler completes', async () => {
       // Given: sut with ackExtension = 30ms
-      sut = new RpcRouter(
-        messageProvider,
-        patternRegistry,
-        connection,
-        codec,
-        eventBus,
-        { ackExtension: 30 },
-      );
+      sut = new RpcRouter(messageProvider, patternRegistry, connection, codec, eventBus, {
+        ackExtension: 30,
+      });
       sut.start();
 
       const handler = vi.fn().mockResolvedValue({ ok: true });
@@ -519,14 +494,10 @@ describe(RpcRouter, () => {
       vi.useFakeTimers();
 
       // Given: sut with ackExtension = 50ms and timeout = 200ms
-      sut = new RpcRouter(
-        messageProvider,
-        patternRegistry,
-        connection,
-        codec,
-        eventBus,
-        { timeout: 200, ackExtension: 50 },
-      );
+      sut = new RpcRouter(messageProvider, patternRegistry, connection, codec, eventBus, {
+        timeout: 200,
+        ackExtension: 50,
+      });
       sut.start();
 
       const handler = vi.fn().mockReturnValue(new Promise(() => {}));
@@ -578,7 +549,7 @@ describe(RpcRouter, () => {
     it('should auto-calculate interval from ackWaitMap when ackExtension is true', async () => {
       // Given: sut with ackExtension = true and ackWaitMap with 200ms (in nanos) ack_wait
       const ackWaitNanos = 1_000 * 1_000_000; // 1000ms in nanoseconds
-      const ackWaitMap = new Map<string, number>([['cmd', ackWaitNanos]]);
+      const ackWaitMap = new Map<StreamKind, number>([[StreamKind.Command, ackWaitNanos]]);
 
       sut = new RpcRouter(
         messageProvider,
@@ -619,14 +590,9 @@ describe(RpcRouter, () => {
 
     it('should use 5s fallback when ackExtension is true but no ackWaitMap entry', async () => {
       // Given: sut with ackExtension = true but no ackWaitMap
-      sut = new RpcRouter(
-        messageProvider,
-        patternRegistry,
-        connection,
-        codec,
-        eventBus,
-        { ackExtension: true },
-      );
+      sut = new RpcRouter(messageProvider, patternRegistry, connection, codec, eventBus, {
+        ackExtension: true,
+      });
       sut.start();
 
       const handler = vi.fn().mockResolvedValue({ ok: true });
@@ -647,14 +613,9 @@ describe(RpcRouter, () => {
 
     it('should clear working() interval on handler error', async () => {
       // Given: sut with ackExtension = 30ms
-      sut = new RpcRouter(
-        messageProvider,
-        patternRegistry,
-        connection,
-        codec,
-        eventBus,
-        { ackExtension: 30 },
-      );
+      sut = new RpcRouter(messageProvider, patternRegistry, connection, codec, eventBus, {
+        ackExtension: 30,
+      });
       sut.start();
 
       const handler = vi.fn().mockRejectedValue(new Error('handler failed'));

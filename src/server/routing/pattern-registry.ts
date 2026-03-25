@@ -2,7 +2,12 @@ import { Logger } from '@nestjs/common';
 import { MessageHandler } from '@nestjs/microservices';
 
 import { MessageKind, StreamKind } from '../../interfaces';
-import type { JetstreamModuleOptions, PatternsByKind, RegisteredHandler, SubjectKind } from '../../interfaces';
+import type {
+  JetstreamModuleOptions,
+  PatternsByKind,
+  RegisteredHandler,
+  SubjectKind,
+} from '../../interfaces';
 import { buildBroadcastSubject, buildSubject, internalName } from '../../jetstream.constants';
 
 /** Maps StreamKind to a human-readable label for logging. */
@@ -50,13 +55,12 @@ export class PatternRegistry {
         );
       }
 
-      const kind: StreamKind = isBroadcast
-        ? StreamKind.Broadcast
-        : isOrdered
-          ? StreamKind.Ordered
-          : isEvent
-            ? StreamKind.Event
-            : StreamKind.Command;
+      let kind: StreamKind;
+
+      if (isBroadcast) kind = StreamKind.Broadcast;
+      else if (isOrdered) kind = StreamKind.Ordered;
+      else if (isEvent) kind = StreamKind.Event;
+      else kind = StreamKind.Command;
 
       const fullSubject =
         kind === StreamKind.Broadcast
