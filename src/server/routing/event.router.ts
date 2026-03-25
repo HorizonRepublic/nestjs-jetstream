@@ -259,7 +259,12 @@ export class EventRouter {
 
     this.eventBus.emit(TransportEvent.DeadLetter, info);
 
-    if (!this.deadLetterConfig) return;
+    // Safety net: deadLetterConfig is guaranteed by isDeadLetter() guard,
+    // but if somehow null, term the message to prevent infinite redelivery.
+    if (!this.deadLetterConfig) {
+      msg.term('Dead letter config unavailable');
+      return;
+    }
 
     try {
       await this.deadLetterConfig.onDeadLetter(info);

@@ -140,6 +140,13 @@ export class MessageProvider {
 
   /** Stop all consumer flows and reinitialize subjects for potential restart. */
   public destroy(): void {
+    // Reject pending ordered consumer ready promise to unblock listen()
+    if (this.orderedReadyReject) {
+      this.orderedReadyReject(new Error('Destroyed before ordered consumer connected'));
+      this.orderedReadyResolve = null;
+      this.orderedReadyReject = null;
+    }
+
     this.destroy$.next();
     this.destroy$.complete();
 

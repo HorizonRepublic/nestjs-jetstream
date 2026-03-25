@@ -65,6 +65,11 @@ export class CoreRpcServer {
 
   /** Handle an incoming Core NATS request. */
   private async handleRequest(msg: Msg): Promise<void> {
+    if (!msg.reply) {
+      this.logger.warn(`Ignoring fire-and-forget message on RPC subject: ${msg.subject}`);
+      return;
+    }
+
     const handler = this.patternRegistry.getHandler(msg.subject);
 
     if (!handler) {

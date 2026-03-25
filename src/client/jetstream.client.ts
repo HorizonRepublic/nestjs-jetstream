@@ -140,10 +140,12 @@ export class JetstreamClient extends ClientProxy {
     const subject = this.buildEventSubject(packet.pattern);
     const msgHeaders = this.buildHeaders(hdrs, { subject });
 
-    const ack = await this.connection.getJetStreamClient().publish(subject, this.codec.encode(data), {
-      headers: msgHeaders,
-      msgID: messageId ?? crypto.randomUUID(),
-    });
+    const ack = await this.connection
+      .getJetStreamClient()
+      .publish(subject, this.codec.encode(data), {
+        headers: msgHeaders,
+        msgID: messageId ?? crypto.randomUUID(),
+      });
 
     if (ack.duplicate) {
       this.logger.warn(`Duplicate event publish detected: ${subject} (seq: ${ack.seq})`);
@@ -249,24 +251,34 @@ export class JetstreamClient extends ClientProxy {
 
     this.pendingMessages.set(correlationId, callback);
 
-    const timeoutId = setTimeout(() => {
-      if (!this.pendingMessages.has(correlationId)) return;
-
-      this.pendingTimeouts.delete(correlationId);
-      this.pendingMessages.delete(correlationId);
-      this.logger.error(`JetStream RPC timeout (${effectiveTimeout}ms): ${subject}`);
-      this.eventBus.emit(TransportEvent.RpcTimeout, subject, correlationId);
-      callback({ err: new Error('RPC timeout'), response: null, isDisposed: true });
-    }, effectiveTimeout);
-
-    this.pendingTimeouts.set(correlationId, timeoutId);
-
     try {
       await this.connect();
 
+      // Bail out if cleaned up during connect (e.g. consumer unsubscribed)
+      if (!this.pendingMessages.has(correlationId)) return;
+
       if (!this.inbox) {
-        throw new Error('Inbox not initialized — JetStream RPC mode requires a connected inbox');
+        this.pendingMessages.delete(correlationId);
+        callback({
+          err: new Error('Inbox not initialized — JetStream RPC mode requires a connected inbox'),
+          response: null,
+          isDisposed: true,
+        });
+        return;
       }
+
+      // Start timeout AFTER connect — measures actual RPC wait time, not connect + RPC
+      const timeoutId = setTimeout(() => {
+        if (!this.pendingMessages.has(correlationId)) return;
+
+        this.pendingTimeouts.delete(correlationId);
+        this.pendingMessages.delete(correlationId);
+        this.logger.error(`JetStream RPC timeout (${effectiveTimeout}ms): ${subject}`);
+        this.eventBus.emit(TransportEvent.RpcTimeout, subject, correlationId);
+        callback({ err: new Error('RPC timeout'), response: null, isDisposed: true });
+      }, effectiveTimeout);
+
+      this.pendingTimeouts.set(correlationId, timeoutId);
 
       const hdrs = this.buildHeaders(customHeaders, {
         subject,
@@ -279,8 +291,12 @@ export class JetstreamClient extends ClientProxy {
         msgID: messageId ?? crypto.randomUUID(),
       });
     } catch (err) {
-      clearTimeout(timeoutId);
-      this.pendingTimeouts.delete(correlationId);
+      const existingTimeout = this.pendingTimeouts.get(correlationId);
+
+      if (existingTimeout) {
+        clearTimeout(existingTimeout);
+        this.pendingTimeouts.delete(correlationId);
+      }
 
       if (!this.pendingMessages.has(correlationId)) return;
 
