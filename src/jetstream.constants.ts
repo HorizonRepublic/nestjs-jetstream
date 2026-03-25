@@ -91,7 +91,7 @@ const baseStreamConfig: Partial<StreamConfig> = {
   num_replicas: 1,
   discard: DiscardPolicy.Old,
   allow_direct: true,
-  compression: StoreCompression.None,
+  compression: StoreCompression.S2,
 };
 
 /** Default config for workqueue event streams. */

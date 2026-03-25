@@ -1,11 +1,16 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { faker } from '@faker-js/faker';
+import { StoreCompression } from 'nats';
 
 import type { StreamKind } from './interfaces';
 import {
   buildBroadcastSubject,
   buildSubject,
   consumerName,
+  DEFAULT_BROADCAST_STREAM_CONFIG,
+  DEFAULT_COMMAND_STREAM_CONFIG,
+  DEFAULT_EVENT_STREAM_CONFIG,
+  DEFAULT_ORDERED_STREAM_CONFIG,
   getClientToken,
   internalName,
   toNanos,
@@ -90,6 +95,26 @@ describe('jetstream.constants', () => {
 
     it('should return fixed name for broadcast', () => {
       expect(streamName(serviceName, 'broadcast')).toBe('broadcast-stream');
+    });
+  });
+
+  describe('stream compression defaults', () => {
+    // Given: default stream configs are used without explicit compression override
+    it('should default to S2 compression for event streams', () => {
+      // Then: compression is set to S2
+      expect(DEFAULT_EVENT_STREAM_CONFIG.compression).toBe(StoreCompression.S2);
+    });
+
+    it('should default to S2 compression for command streams', () => {
+      expect(DEFAULT_COMMAND_STREAM_CONFIG.compression).toBe(StoreCompression.S2);
+    });
+
+    it('should default to S2 compression for broadcast streams', () => {
+      expect(DEFAULT_BROADCAST_STREAM_CONFIG.compression).toBe(StoreCompression.S2);
+    });
+
+    it('should default to S2 compression for ordered streams', () => {
+      expect(DEFAULT_ORDERED_STREAM_CONFIG.compression).toBe(StoreCompression.S2);
     });
   });
 
