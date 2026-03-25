@@ -49,6 +49,9 @@ export class JetstreamClient extends ClientProxy {
   /** Target service name this client sends messages to. */
   private readonly targetName: string;
 
+  /** Pre-cached caller name derived from rootOptions.name, computed once in constructor. */
+  private readonly callerName: string;
+
   /** Shared inbox for JetStream-mode RPC responses. */
   private inbox: string | null = null;
   private inboxSubscription: Subscription | null = null;
@@ -71,6 +74,7 @@ export class JetstreamClient extends ClientProxy {
   ) {
     super();
     this.targetName = targetServiceName;
+    this.callerName = internalName(this.rootOptions.name);
   }
 
   /**
@@ -128,7 +132,7 @@ export class JetstreamClient extends ClientProxy {
    * depending on the subject prefix.
    */
   protected async dispatchEvent<T = unknown>(packet: ReadPacket): Promise<T> {
-    const nc = await this.connect();
+    await this.connect();
     const { data, hdrs, messageId } = this.extractRecordData(packet.data);
 
     // Determine if this is a broadcast event
@@ -136,7 +140,7 @@ export class JetstreamClient extends ClientProxy {
     const subject = this.buildEventSubject(packet.pattern);
     const msgHeaders = this.buildHeaders(hdrs, { subject });
 
-    const ack = await nc.jetstream().publish(subject, this.codec.encode(data), {
+    const ack = await this.connection.getJetStreamClient().publish(subject, this.codec.encode(data), {
       headers: msgHeaders,
       msgID: messageId ?? crypto.randomUUID(),
     });
@@ -258,7 +262,7 @@ export class JetstreamClient extends ClientProxy {
     this.pendingTimeouts.set(correlationId, timeoutId);
 
     try {
-      const nc = await this.connect();
+      await this.connect();
 
       if (!this.inbox) {
         throw new Error('Inbox not initialized — JetStream RPC mode requires a connected inbox');
@@ -270,7 +274,7 @@ export class JetstreamClient extends ClientProxy {
         replyTo: this.inbox,
       });
 
-      await nc.jetstream().publish(subject, this.codec.encode(data), {
+      await this.connection.getJetStreamClient().publish(subject, this.codec.encode(data), {
         headers: hdrs,
         msgID: messageId ?? crypto.randomUUID(),
       });
@@ -396,7 +400,7 @@ export class JetstreamClient extends ClientProxy {
 
     // Set transport headers
     hdrs.set(JetstreamHeader.Subject, transport.subject);
-    hdrs.set(JetstreamHeader.CallerName, internalName(this.rootOptions.name));
+    hdrs.set(JetstreamHeader.CallerName, this.callerName);
 
     if (transport.correlationId) {
       hdrs.set(JetstreamHeader.CorrelationId, transport.correlationId);
