@@ -6,4 +6,4 @@ export { ConsumerProvider, MessageProvider, StreamProvider } from './infrastruct
 
 export { EventRouter, PatternRegistry, RpcRouter } from './routing';
 
-export type { DeadLetterConfig } from './routing';
+export type { DeadLetterConfig, EventProcessingConfig } from './routing';

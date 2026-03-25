@@ -35,6 +35,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     private readonly eventRouter: EventRouter,
     private readonly rpcRouter: RpcRouter,
     private readonly coreRpcServer: CoreRpcServer,
+    private readonly ackWaitMap: Map<string, number> = new Map(),
   ) {
     super();
   }
@@ -68,14 +69,17 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
       if (durableKinds.length > 0) {
         const consumers = await this.consumerProvider.ensureConsumers(durableKinds);
 
-        // 5. Update DLQ thresholds from actual NATS consumer configs
+        // 5. Populate shared ack_wait map from actual NATS consumer configs
+        this.populateAckWaitMap(consumers);
+
+        // 6. Update DLQ thresholds from actual NATS consumer configs
         this.eventRouter.updateMaxDeliverMap(this.buildMaxDeliverMap(consumers));
 
-        // 6. Start durable message consumption
+        // 7. Start durable message consumption
         this.messageProvider.start(consumers);
       }
 
-      // 7. Start ordered consumer if handlers are registered
+      // 8. Start ordered consumer if handlers are registered
       if (this.patternRegistry.hasOrderedHandlers()) {
         const orderedStreamName = this.streamProvider.getStreamName('ordered');
 
@@ -86,7 +90,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
         );
       }
 
-      // 8. Start event router if any event-type handlers exist
+      // 9. Start event router if any event-type handlers exist
       if (
         this.patternRegistry.hasEventHandlers() ||
         this.patternRegistry.hasBroadcastHandlers() ||
@@ -95,13 +99,13 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
         this.eventRouter.start();
       }
 
-      // 9. Start RPC router if JetStream mode
+      // 10. Start RPC router if JetStream mode
       if (this.isJetStreamRpcMode() && this.patternRegistry.hasRpcHandlers()) {
         this.rpcRouter.start();
       }
     }
 
-    // 10. Start Core RPC server if core mode
+    // 11. Start Core RPC server if core mode
     if (this.isCoreRpcMode() && this.patternRegistry.hasRpcHandlers()) {
       await this.coreRpcServer.start();
     }
@@ -192,6 +196,15 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     }
 
     return kinds;
+  }
+
+  /** Populate the shared ack_wait map from actual NATS consumer configs. */
+  private populateAckWaitMap(consumers: Map<StreamKind, ConsumerInfo>): void {
+    for (const [kind, info] of consumers) {
+      if (info.config.ack_wait) {
+        this.ackWaitMap.set(kind, info.config.ack_wait);
+      }
+    }
   }
 
   /** Build max_deliver map from actual NATS consumer configs (not options). */

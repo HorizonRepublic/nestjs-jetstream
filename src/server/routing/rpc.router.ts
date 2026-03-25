@@ -19,7 +19,6 @@ export interface RpcRouterOptions {
   timeout?: number;
   concurrency?: number;
   ackExtension?: boolean | number;
-  ackWaitNanos?: number;
 }
 
 /**
@@ -38,8 +37,7 @@ export class RpcRouter {
   private readonly logger = new Logger('Jetstream:RpcRouter');
   private readonly timeout: number;
   private readonly concurrency: number | undefined;
-  private readonly ackExtensionInterval: number | null;
-  private readonly rpcOptions?: RpcRouterOptions;
+  private resolvedAckExtensionInterval: number | null | undefined;
   private subscription: Subscription | null = null;
 
   public constructor(
@@ -48,12 +46,18 @@ export class RpcRouter {
     private readonly connection: ConnectionProvider,
     private readonly codec: Codec,
     private readonly eventBus: EventBus,
-    options?: RpcRouterOptions,
+    private readonly rpcOptions?: RpcRouterOptions,
+    private readonly ackWaitMap?: Map<string, number>,
   ) {
-    this.rpcOptions = options;
-    this.timeout = options?.timeout ?? DEFAULT_JETSTREAM_RPC_TIMEOUT;
-    this.concurrency = options?.concurrency;
-    this.ackExtensionInterval = this.resolveAckExtension(options?.ackExtension);
+    this.timeout = rpcOptions?.timeout ?? DEFAULT_JETSTREAM_RPC_TIMEOUT;
+    this.concurrency = rpcOptions?.concurrency;
+  }
+
+  /** Lazily resolve the ack extension interval (needs ackWaitMap populated at runtime). */
+  private get ackExtensionInterval(): number | null {
+    if (this.resolvedAckExtensionInterval !== undefined) return this.resolvedAckExtensionInterval;
+    this.resolvedAckExtensionInterval = this.resolveAckExtension(this.rpcOptions?.ackExtension);
+    return this.resolvedAckExtensionInterval;
   }
 
   /** Start routing command messages to handlers. */
@@ -188,8 +192,10 @@ export class RpcRouter {
     if (typeof config === 'number') return config;
 
     // true -> auto-calculate from ack_wait (nanos -> ms / 2)
-    if (this.rpcOptions?.ackWaitNanos) {
-      return Math.floor(this.rpcOptions.ackWaitNanos / 1_000_000 / 2);
+    const ackWaitNanos = this.ackWaitMap?.get('cmd');
+
+    if (ackWaitNanos) {
+      return Math.floor(ackWaitNanos / 1_000_000 / 2);
     }
 
     return 5_000; // fallback

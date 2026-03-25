@@ -575,9 +575,10 @@ describe(RpcRouter, () => {
       expect(msg.working).not.toHaveBeenCalled();
     });
 
-    it('should auto-calculate interval from ackWaitNanos when ackExtension is true', async () => {
-      // Given: sut with ackExtension = true and ackWaitNanos = 200ms in nanoseconds
+    it('should auto-calculate interval from ackWaitMap when ackExtension is true', async () => {
+      // Given: sut with ackExtension = true and ackWaitMap with 200ms (in nanos) ack_wait
       const ackWaitNanos = 200 * 1_000_000; // 200ms in nanoseconds
+      const ackWaitMap = new Map<string, number>([['cmd', ackWaitNanos]]);
 
       sut = new RpcRouter(
         messageProvider,
@@ -585,7 +586,8 @@ describe(RpcRouter, () => {
         connection,
         codec,
         eventBus,
-        { ackExtension: true, ackWaitNanos },
+        { ackExtension: true },
+        ackWaitMap,
       );
       sut.start();
 
@@ -615,8 +617,8 @@ describe(RpcRouter, () => {
       expect(callCount).toBeLessThanOrEqual(3);
     });
 
-    it('should use 5s fallback when ackExtension is true but no ackWaitNanos', async () => {
-      // Given: sut with ackExtension = true but no ackWaitNanos
+    it('should use 5s fallback when ackExtension is true but no ackWaitMap entry', async () => {
+      // Given: sut with ackExtension = true but no ackWaitMap
       sut = new RpcRouter(
         messageProvider,
         patternRegistry,
