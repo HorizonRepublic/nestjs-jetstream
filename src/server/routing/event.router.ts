@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { MessageHandler } from '@nestjs/microservices';
 import { JsMsg } from 'nats';
 import {
   catchError,
@@ -41,7 +42,7 @@ export class EventRouter {
     private readonly eventBus: EventBus,
     private readonly deadLetterConfig?: DeadLetterConfig,
     private readonly processingConfig?: EventProcessingConfig,
-    private readonly ackWaitMap?: Map<string, number>,
+    private readonly ackWaitMap?: Map<StreamKind, number>,
   ) {}
 
   /**
@@ -113,12 +114,37 @@ export class EventRouter {
 
   /** Handle a single event message: decode -> execute handler -> ack/nak. */
   private handle(msg: JsMsg, ackExtensionInterval: number | null): Observable<void> {
+    const resolved = this.decodeMessage(msg);
+
+    if (!resolved) return EMPTY;
+
+    return from(this.executeHandler(resolved.handler, resolved.data, resolved.ctx, msg, ackExtensionInterval));
+  }
+
+  /** Handle an ordered message: decode -> execute handler -> no ack/nak. */
+  private handleOrdered(msg: JsMsg): Observable<void> {
+    const resolved = this.decodeMessage(msg, true);
+
+    if (!resolved) return EMPTY;
+
+    return from(
+      unwrapResult(resolved.handler(resolved.data, resolved.ctx)).catch((err: unknown) => {
+        this.logger.error(`Ordered handler error (${msg.subject}):`, err);
+      }),
+    ) as Observable<void>;
+  }
+
+  /** Resolve handler, decode payload, and build context. Returns null on failure. */
+  private decodeMessage(
+    msg: JsMsg,
+    isOrdered = false,
+  ): { handler: MessageHandler; data: unknown; ctx: RpcContext } | null {
     const handler = this.patternRegistry.getHandler(msg.subject);
 
     if (!handler) {
-      msg.term(`No handler for event: ${msg.subject}`);
-      this.logger.error(`No handler for event subject: ${msg.subject}`);
-      return EMPTY;
+      if (!isOrdered) msg.term(`No handler for event: ${msg.subject}`);
+      this.logger.error(`No handler for subject: ${msg.subject}`);
+      return null;
     }
 
     let data: unknown;
@@ -126,21 +152,19 @@ export class EventRouter {
     try {
       data = this.codec.decode(msg.data);
     } catch (err) {
-      msg.term('Decode error');
+      if (!isOrdered) msg.term('Decode error');
       this.logger.error(`Decode error for ${msg.subject}:`, err);
-      return EMPTY;
+      return null;
     }
 
     this.eventBus.emit(TransportEvent.MessageRouted, msg.subject, MessageKind.Event);
 
-    const ctx = new RpcContext([msg]);
-
-    return from(this.executeHandler(handler, data, ctx, msg, ackExtensionInterval));
+    return { handler, data, ctx: new RpcContext([msg]) };
   }
 
   /** Execute handler, then ack on success or nak/dead-letter on failure. */
   private async executeHandler(
-    handler: (data: unknown, ctx: RpcContext) => Promise<unknown>,
+    handler: MessageHandler,
     data: unknown,
     ctx: RpcContext,
     msg: JsMsg,
@@ -162,35 +186,6 @@ export class EventRouter {
     } finally {
       stopAckExtension?.();
     }
-  }
-
-  /** Handle an ordered message: decode -> execute handler -> no ack/nak. */
-  private handleOrdered(msg: JsMsg): Observable<void> {
-    const handler = this.patternRegistry.getHandler(msg.subject);
-
-    if (!handler) {
-      this.logger.error(`No handler for ordered subject: ${msg.subject}`);
-      return EMPTY;
-    }
-
-    let data: unknown;
-
-    try {
-      data = this.codec.decode(msg.data);
-    } catch (err) {
-      this.logger.error(`Decode error for ordered ${msg.subject}:`, err);
-      return EMPTY;
-    }
-
-    this.eventBus.emit(TransportEvent.MessageRouted, msg.subject, MessageKind.Event);
-
-    const ctx = new RpcContext([msg]);
-
-    return from(
-      unwrapResult(handler(data, ctx)).catch((err: unknown) => {
-        this.logger.error(`Ordered handler error (${msg.subject}):`, err);
-      }),
-    ) as Observable<void>;
   }
 
   /** Check if the message has exhausted all delivery attempts. */

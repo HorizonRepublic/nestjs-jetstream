@@ -270,15 +270,13 @@ export class MessageProvider {
     onFirstError?: (err: unknown) => void,
   ): Observable<void> {
     let consecutiveFailures = 0;
-    let lastRunFailed = false;
 
     return defer(source).pipe(
       tap(() => {
-        lastRunFailed = false;
+        consecutiveFailures = 0;
       }),
       catchError((err) => {
         consecutiveFailures++;
-        lastRunFailed = true;
         this.logger.error(`Consumer ${label} error, will restart:`, err);
         this.eventBus.emit(
           TransportEvent.Error,
@@ -291,10 +289,6 @@ export class MessageProvider {
       }),
       repeat({
         delay: () => {
-          if (!lastRunFailed) {
-            consecutiveFailures = 0;
-          }
-
           const delay = Math.min(100 * Math.pow(2, consecutiveFailures), 30_000);
 
           this.logger.warn(`Consumer ${label} stream ended, restarting in ${delay}ms...`);

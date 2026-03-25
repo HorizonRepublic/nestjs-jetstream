@@ -45,7 +45,7 @@ export class RpcRouter {
     private readonly codec: Codec,
     private readonly eventBus: EventBus,
     private readonly rpcOptions?: RpcRouterOptions,
-    private readonly ackWaitMap?: Map<string, number>,
+    private readonly ackWaitMap?: Map<StreamKind, number>,
   ) {
     this.timeout = rpcOptions?.timeout ?? DEFAULT_JETSTREAM_RPC_TIMEOUT;
     this.concurrency = rpcOptions?.concurrency;

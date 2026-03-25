@@ -37,7 +37,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     private readonly eventRouter: EventRouter,
     private readonly rpcRouter: RpcRouter,
     private readonly coreRpcServer: CoreRpcServer,
-    private readonly ackWaitMap: Map<string, number> = new Map(),
+    private readonly ackWaitMap: Map<StreamKind, number> = new Map(),
   ) {
     super();
   }
@@ -60,8 +60,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     this.patternRegistry.registerHandlers(this.getHandlers());
 
     // 2. Determine which streams and durable consumers are needed
-    const streamKinds = this.resolveStreamKinds();
-    const durableKinds = this.resolveDurableConsumerKinds();
+    const { streams: streamKinds, durableConsumers: durableKinds } = this.resolveRequiredKinds();
 
     if (streamKinds.length > 0) {
       // 3. Ensure streams exist
@@ -158,46 +157,32 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     return this.patternRegistry;
   }
 
-  /** Determine which JetStream streams are needed. */
-  private resolveStreamKinds(): StreamKind[] {
-    const kinds: StreamKind[] = [];
+  /** Determine which streams and durable consumers are needed. */
+  private resolveRequiredKinds(): { streams: StreamKind[]; durableConsumers: StreamKind[] } {
+    const streams: StreamKind[] = [];
+    const durableConsumers: StreamKind[] = [];
 
     if (this.patternRegistry.hasEventHandlers()) {
-      kinds.push(StreamKind.Event);
+      streams.push(StreamKind.Event);
+      durableConsumers.push(StreamKind.Event);
     }
 
+    if (isJetStreamRpcMode(this.options.rpc) && this.patternRegistry.hasRpcHandlers()) {
+      streams.push(StreamKind.Command);
+      durableConsumers.push(StreamKind.Command);
+    }
+
+    if (this.patternRegistry.hasBroadcastHandlers()) {
+      streams.push(StreamKind.Broadcast);
+      durableConsumers.push(StreamKind.Broadcast);
+    }
+
+    // Ordered consumers are ephemeral — stream only, no durable consumer
     if (this.patternRegistry.hasOrderedHandlers()) {
-      kinds.push(StreamKind.Ordered);
+      streams.push(StreamKind.Ordered);
     }
 
-    if (isJetStreamRpcMode(this.options.rpc) && this.patternRegistry.hasRpcHandlers()) {
-      kinds.push(StreamKind.Command);
-    }
-
-    if (this.patternRegistry.hasBroadcastHandlers()) {
-      kinds.push(StreamKind.Broadcast);
-    }
-
-    return kinds;
-  }
-
-  /** Determine which stream kinds need durable consumers (ordered consumers are ephemeral). */
-  private resolveDurableConsumerKinds(): StreamKind[] {
-    const kinds: StreamKind[] = [];
-
-    if (this.patternRegistry.hasEventHandlers()) {
-      kinds.push(StreamKind.Event);
-    }
-
-    if (isJetStreamRpcMode(this.options.rpc) && this.patternRegistry.hasRpcHandlers()) {
-      kinds.push(StreamKind.Command);
-    }
-
-    if (this.patternRegistry.hasBroadcastHandlers()) {
-      kinds.push(StreamKind.Broadcast);
-    }
-
-    return kinds;
+    return { streams, durableConsumers };
   }
 
   /** Populate the shared ack_wait map from actual NATS consumer configs. */

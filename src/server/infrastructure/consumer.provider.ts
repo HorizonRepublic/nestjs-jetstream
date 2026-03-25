@@ -120,11 +120,12 @@ export class ConsumerProvider {
       };
     }
 
-    // Build filter_subject based on kind
-    const filter_subject =
-      kind === StreamKind.Event
-        ? `${serviceName}.${StreamKind.Event}.>`
-        : `${serviceName}.${StreamKind.Command}.>`;
+    const filterSubjectByKind: Record<StreamKind.Event | StreamKind.Command, string> = {
+      [StreamKind.Event]: `${serviceName}.${StreamKind.Event}.>`,
+      [StreamKind.Command]: `${serviceName}.${StreamKind.Command}.>`,
+    };
+
+    const filter_subject = filterSubjectByKind[kind as StreamKind.Event | StreamKind.Command];
 
     return {
       ...defaults,

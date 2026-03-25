@@ -316,7 +316,7 @@ export class JetstreamModule implements OnApplicationShutdown {
       // Shared ack_wait map — populated by strategy after ensureConsumers()
       {
         provide: JETSTREAM_ACK_WAIT_MAP,
-        useFactory: (): Map<string, number> => new Map(),
+        useFactory: (): Map<StreamKind, number> => new Map(),
       },
 
       // MessageProvider — pull-based message consumption
@@ -361,7 +361,7 @@ export class JetstreamModule implements OnApplicationShutdown {
           patternRegistry: PatternRegistry,
           codec: Codec,
           eventBus: EventBus,
-          ackWaitMap: Map<string, number>,
+          ackWaitMap: Map<StreamKind, number>,
         ): EventRouter | null => {
           if (options.consumer === false) return null;
 
@@ -414,7 +414,7 @@ export class JetstreamModule implements OnApplicationShutdown {
           connection: ConnectionProvider,
           codec: Codec,
           eventBus: EventBus,
-          ackWaitMap: Map<string, number>,
+          ackWaitMap: Map<StreamKind, number>,
         ): RpcRouter | null => {
           if (options.consumer === false) return null;
 
@@ -487,7 +487,7 @@ export class JetstreamModule implements OnApplicationShutdown {
           eventRouter: EventRouter,
           rpcRouter: RpcRouter,
           coreRpcServer: CoreRpcServer,
-          ackWaitMap: Map<string, number>,
+          ackWaitMap: Map<StreamKind, number>,
         ): JetstreamStrategy | null => {
           if (options.consumer === false) return null;
 
