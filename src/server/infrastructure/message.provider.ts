@@ -243,6 +243,9 @@ export class MessageProvider {
   private monitorConsumerHealth(messages: ConsumerMessages, name: string): void {
     (async () => {
       for await (const status of await messages.status()) {
+        // Threshold: 2 consecutive missed heartbeats triggers restart.
+        // One missed heartbeat can happen during normal GC pauses or brief network blips.
+        // Two consecutive misses strongly indicate a stale consumer.
         if (
           status.type === ConsumerEvents.HeartbeatsMissed &&
           (status.data as number) >= 2
@@ -252,8 +255,11 @@ export class MessageProvider {
           break;
         }
       }
-    })().catch(() => {
-      // Iterator closed on destroy — expected
+    })().catch((err: unknown) => {
+      // Iterator closed on destroy is expected; log anything else
+      if (err) {
+        this.logger.debug(`Consumer ${name} health monitor ended:`, err);
+      }
     });
   }
 

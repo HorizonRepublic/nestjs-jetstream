@@ -21,7 +21,7 @@ All streams share a common base configuration:
 | `compression` | `S2` |
 
 :::info S2 Compression
-All streams default to [Snappy S2 compression](https://github.com/nats-io/nats-server). This reduces disk I/O and storage with negligible CPU overhead (~1-3%). Requires **NATS Server >= 2.10**. Override per stream kind:
+All streams default to [Snappy S2 compression](https://github.com/nats-io/nats-server). This reduces disk I/O and storage with negligible CPU overhead (~1-3%). Requires NATS Server >= 2.10 (see [runtime requirements](/docs/getting-started/installation#runtime-requirements)). Override per stream kind:
 
 ```typescript
 events: {

@@ -38,7 +38,7 @@ export type RpcConfig =
       concurrency?: number;
 
       /**
-       * Auto-extend ack deadline via `msg.inProgress()` during RPC handler execution.
+       * Auto-extend ack deadline via `msg.working()` during RPC handler execution.
        * The RPC handler timeout (`setTimeout` + `msg.term()`) still acts as the hard cap.
        */
       ackExtension?: boolean | number;
@@ -53,8 +53,9 @@ export interface StreamConsumerOverrides {
    * Options passed to the nats.js `consumer.consume()` call.
    * Controls prefetch buffer size, idle heartbeat interval, and auto-refill thresholds.
    *
-   * Note: `ConsumeOptions` is `ConsumeBytes | ConsumeMessages` — configure either
-   * byte-based or message-based consumption, not both.
+   * nats.js supports two consumption modes (message-based and byte-based).
+   * Do not mix `max_bytes`/`threshold_bytes` with `threshold_messages` —
+   * use one mode or the other.
    *
    * @see https://github.com/nats-io/nats.js — ConsumeOptions
    */
@@ -73,7 +74,7 @@ export interface StreamConsumerOverrides {
   concurrency?: number;
 
   /**
-   * Auto-extend the NATS ack deadline via `msg.inProgress()` during handler execution.
+   * Auto-extend the NATS ack deadline via `msg.working()` during handler execution.
    *
    * - `false` (default): disabled — NATS redelivers after `ack_wait` if not acked.
    * - `true`: auto-extend at `ack_wait / 2` interval (calculated from consumer config).

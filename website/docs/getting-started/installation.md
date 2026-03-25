@@ -36,8 +36,8 @@ yarn add @horizon-republic/nestjs-jetstream
 
 ## Runtime requirements
 
-- **Node.js** >= 20.0.0
-- **NATS Server** with JetStream enabled
+- **Node.js** >= 22.0.0
+- **NATS Server** >= 2.10 with JetStream enabled
 
 ## Run NATS locally
 

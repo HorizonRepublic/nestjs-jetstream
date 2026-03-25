@@ -137,7 +137,13 @@ export class RpcRouter {
 
     // Ack extension: keep NATS happy while handler runs
     const ackTimer = this.ackExtensionInterval
-      ? setInterval(() => msg.working(), this.ackExtensionInterval)
+      ? setInterval(() => {
+          try {
+            msg.working();
+          } catch {
+            // Connection degraded — handler will settle soon
+          }
+        }, this.ackExtensionInterval)
       : null;
 
     // Race handler against timeout
@@ -195,7 +201,8 @@ export class RpcRouter {
     const ackWaitNanos = this.ackWaitMap?.get('cmd');
 
     if (ackWaitNanos) {
-      return Math.floor(ackWaitNanos / 1_000_000 / 2);
+      const interval = Math.floor(ackWaitNanos / 1_000_000 / 2);
+      return Math.max(interval, 500);
     }
 
     return 5_000; // fallback

@@ -707,7 +707,7 @@ describe(EventRouter, () => {
 
     it('should auto-calculate interval from ackWaitMap when ackExtension is true', async () => {
       // Given: sut with ackExtension = true and ackWaitMap with 200ms (in nanos) ack_wait
-      const ackWaitNanos = 200 * 1_000_000; // 200ms in nanoseconds
+      const ackWaitNanos = 1_000 * 1_000_000; // 1000ms in nanoseconds
       const ackWaitMap = new Map<string, number>([['ev', ackWaitNanos]]);
 
       sut = new EventRouter(
@@ -735,13 +735,13 @@ describe(EventRouter, () => {
       });
 
       // When: message arrives and handler is slow
-      // Expected interval: 200ms / 2 = 100ms
+      // Expected interval: max(1000ms / 2, 500) = 500ms
       events$.next(msg);
-      await new Promise((r) => setTimeout(r, 250));
+      await new Promise((r) => setTimeout(r, 1_100));
       resolveHandler();
       await new Promise((r) => setTimeout(r, 10));
 
-      // Then: working() called ~2 times (at 100ms and 200ms)
+      // Then: working() called ~2 times (at 500ms and 1000ms)
       const callCount = (msg.working as ReturnType<typeof vi.fn>).mock.calls.length;
 
       expect(callCount).toBeGreaterThanOrEqual(2);

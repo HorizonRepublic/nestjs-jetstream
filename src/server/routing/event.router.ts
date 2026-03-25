@@ -151,7 +151,15 @@ export class EventRouter {
     label: string,
   ): Promise<void> {
     const interval = this.resolveAckExtensionInterval(label);
-    const timer = interval ? setInterval(() => msg.working(), interval) : null;
+    const timer = interval
+      ? setInterval(() => {
+          try {
+            msg.working();
+          } catch {
+            // Connection degraded — handler will settle soon
+          }
+        }, interval)
+      : null;
 
     try {
       await unwrapResult(handler(data, ctx));
@@ -221,7 +229,8 @@ export class EventRouter {
 
     // IMPORTANT: ConsumerInfo.config.ack_wait is in NANOSECONDS.
     // Convert to ms, then halve for the extension interval.
-    return Math.floor(ackWaitNanos / 1_000_000 / 2);
+    const interval = Math.floor(ackWaitNanos / 1_000_000 / 2);
+    return Math.max(interval, 500);
   }
 
   /** Check if the message has exhausted all delivery attempts. */
