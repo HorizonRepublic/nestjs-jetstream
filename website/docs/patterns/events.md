@@ -281,6 +281,75 @@ The default of 3 delivery attempts works well for transient errors (network blip
 | `max_ack_pending` | 100 | Maximum unacknowledged messages in flight |
 | `deliver_policy` | `All` | Deliver all available messages |
 
+## Error handling
+
+When a handler throws, the transport automatically `nak`'s the message for redelivery. For most cases, this is all you need. However, some errors are **non-recoverable** — retrying will never succeed. For these, use `msg.term()` to permanently discard the message.
+
+```typescript title="src/orders/orders.controller.ts"
+import { Controller, Logger } from '@nestjs/common';
+import { Ctx, EventPattern, Payload } from '@nestjs/microservices';
+import { RpcContext } from '@horizon-republic/nestjs-jetstream';
+import type { JsMsg } from 'nats';
+
+@Controller()
+export class OrdersController {
+  private readonly logger = new Logger(OrdersController.name);
+
+  @EventPattern('order.process')
+  async handleOrder(
+    @Payload() data: OrderPayload,
+    @Ctx() ctx: RpcContext,
+  ): Promise<void> {
+    const msg = ctx.getMessage<JsMsg>();
+
+    try {
+      await this.ordersService.process(data);
+      // Success — msg.ack() is called automatically by the transport
+    } catch (error) {
+      if (this.isNonRecoverable(error)) {
+        // Non-recoverable: invalid payload, business rule violation, etc.
+        // msg.term() prevents redelivery — the message is permanently discarded.
+        msg.term('Non-recoverable: ' + error.message);
+        this.logger.error(`Permanently discarding ${msg.subject}`, error);
+        return;
+      }
+
+      // Recoverable errors (DB timeout, external API down, etc.):
+      // Re-throw — the transport calls msg.nak() automatically,
+      // triggering redelivery after ack_wait.
+      // After max_deliver attempts, onDeadLetter is invoked.
+      throw error;
+    }
+  }
+
+  private isNonRecoverable(error: unknown): boolean {
+    return error instanceof ValidationError
+      || error instanceof BusinessRuleViolation;
+  }
+}
+```
+
+### Message settlement outcomes
+
+Every message ends in one of three states:
+
+| Outcome | When | Effect |
+|---------|------|--------|
+| **`msg.ack()`** | Handler succeeds | Message removed from stream. Called automatically by the transport on success. |
+| **`msg.nak()`** | Recoverable error | Message redelivered after `ack_wait`. Called automatically when the handler throws. |
+| **`msg.term(reason)`** | Non-recoverable error | Message permanently discarded. Must be called manually in the handler. |
+
+### Relationship with dead letter handling
+
+When a message is `nak`'d repeatedly and reaches the `max_deliver` limit (default: 3), the transport treats it as a dead letter:
+
+1. The `onDeadLetter` callback is invoked (if configured) with full message context.
+2. The message is terminated with `term()`.
+
+This means `msg.term()` is for errors you **know** will never succeed (validation failures, schema mismatches), while `throw` is for errors that **might** succeed on retry (timeouts, temporary unavailability). For messages that exhaust all retries, the dead letter mechanism provides a safety net.
+
+See the [Dead Letter Queue](/docs/guides/dead-letter-queue) guide for how to configure and handle dead letters.
+
 ## What's next?
 
 - [**Broadcast Events**](/docs/patterns/broadcast) — fan-out delivery to all service instances
