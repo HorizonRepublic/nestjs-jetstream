@@ -55,11 +55,11 @@ export class EventRouter {
 
   /** Start routing event, broadcast, and ordered messages to handlers. */
   public start(): void {
-    this.subscribeToStream(this.messageProvider.events$, 'workqueue');
-    this.subscribeToStream(this.messageProvider.broadcasts$, 'broadcast');
+    this.subscribeToStream(this.messageProvider.events$, StreamKind.Event);
+    this.subscribeToStream(this.messageProvider.broadcasts$, StreamKind.Broadcast);
 
     if (this.patternRegistry.hasOrderedHandlers()) {
-      this.subscribeToStream(this.messageProvider.ordered$, 'ordered', true);
+      this.subscribeToStream(this.messageProvider.ordered$, StreamKind.Ordered);
     }
   }
 
@@ -73,18 +73,25 @@ export class EventRouter {
   }
 
   /** Subscribe to a message stream and route each message. */
-  private subscribeToStream(stream$: Observable<JsMsg>, label: string, isOrdered = false): void {
+  private subscribeToStream(stream$: Observable<JsMsg>, kind: StreamKind): void {
+    const isOrdered = kind === StreamKind.Ordered;
+
+    // Resolve once per stream — these never change after startup
+    const ackExtensionInterval = isOrdered
+      ? null
+      : resolveAckExtensionInterval(this.getAckExtensionConfig(kind), this.ackWaitMap?.get(kind));
+    const concurrency = this.getConcurrency(kind);
+
     const route = (msg: JsMsg): Observable<void> =>
-      defer(() => (isOrdered ? this.handleOrdered(msg) : this.handle(msg, label))).pipe(
+      defer(() => (isOrdered ? this.handleOrdered(msg) : this.handle(msg, ackExtensionInterval))).pipe(
         catchError((err) => {
-          this.logger.error(`Unexpected error in ${label} event router`, err);
+          this.logger.error(`Unexpected error in ${kind} event router`, err);
           return EMPTY;
         }),
       );
 
     // Ordered streams use concatMap for strict sequential processing;
     // workqueue/broadcast use mergeMap for parallel handler execution.
-    const concurrency = this.getConcurrency(label);
     const subscription = stream$
       .pipe(isOrdered ? concatMap(route) : mergeMap(route, concurrency))
       .subscribe();
@@ -92,14 +99,20 @@ export class EventRouter {
     this.subscriptions.push(subscription);
   }
 
-  private getConcurrency(label: string): number | undefined {
-    if (label === 'workqueue') return this.processingConfig?.events?.concurrency;
-    if (label === 'broadcast') return this.processingConfig?.broadcast?.concurrency;
+  private getConcurrency(kind: StreamKind): number | undefined {
+    if (kind === StreamKind.Event) return this.processingConfig?.events?.concurrency;
+    if (kind === StreamKind.Broadcast) return this.processingConfig?.broadcast?.concurrency;
+    return undefined;
+  }
+
+  private getAckExtensionConfig(kind: StreamKind): boolean | number | undefined {
+    if (kind === StreamKind.Event) return this.processingConfig?.events?.ackExtension;
+    if (kind === StreamKind.Broadcast) return this.processingConfig?.broadcast?.ackExtension;
     return undefined;
   }
 
   /** Handle a single event message: decode -> execute handler -> ack/nak. */
-  private handle(msg: JsMsg, label: string): Observable<void> {
+  private handle(msg: JsMsg, ackExtensionInterval: number | null): Observable<void> {
     const handler = this.patternRegistry.getHandler(msg.subject);
 
     if (!handler) {
@@ -122,7 +135,7 @@ export class EventRouter {
 
     const ctx = new RpcContext([msg]);
 
-    return from(this.executeHandler(handler, data, ctx, msg, label));
+    return from(this.executeHandler(handler, data, ctx, msg, ackExtensionInterval));
   }
 
   /** Execute handler, then ack on success or nak/dead-letter on failure. */
@@ -131,14 +144,9 @@ export class EventRouter {
     data: unknown,
     ctx: RpcContext,
     msg: JsMsg,
-    label: string,
+    ackExtensionInterval: number | null,
   ): Promise<void> {
-    const ackExtConfig = this.getAckExtensionConfig(label);
-    const ackWaitNanos = this.getAckWaitNanos(label);
-    const stopAckExtension = startAckExtensionTimer(
-      msg,
-      resolveAckExtensionInterval(ackExtConfig, ackWaitNanos),
-    );
+    const stopAckExtension = startAckExtensionTimer(msg, ackExtensionInterval);
 
     try {
       await unwrapResult(handler(data, ctx));
@@ -183,22 +191,6 @@ export class EventRouter {
         this.logger.error(`Ordered handler error (${msg.subject}):`, err);
       }),
     ) as Observable<void>;
-  }
-
-  private getAckExtensionConfig(label: string): boolean | number | undefined {
-    if (label === 'workqueue') return this.processingConfig?.events?.ackExtension;
-    if (label === 'broadcast') return this.processingConfig?.broadcast?.ackExtension;
-    return undefined;
-  }
-
-  private getAckWaitNanos(label: string): number | undefined {
-    const kind =
-      label === 'workqueue'
-        ? StreamKind.Event
-        : label === 'broadcast'
-          ? StreamKind.Broadcast
-          : undefined;
-    return kind ? this.ackWaitMap?.get(kind) : undefined;
   }
 
   /** Check if the message has exhausted all delivery attempts. */

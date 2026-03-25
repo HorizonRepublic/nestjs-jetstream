@@ -92,12 +92,10 @@ export class JetstreamClient extends ClientProxy {
   public async connect(): Promise<NatsConnection> {
     const nc = await this.connection.getConnection();
 
-    // Setup inbox for JetStream RPC mode
     if (isJetStreamRpcMode(this.rootOptions.rpc) && !this.inboxSubscription) {
       this.setupInbox(nc);
     }
 
-    // Subscribe to disconnect events (once)
     this.statusSubscription ??= this.connection.status$.subscribe((status) => {
       if (status.type === Events.Disconnect) {
         this.handleDisconnect();

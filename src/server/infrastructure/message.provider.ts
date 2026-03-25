@@ -172,37 +172,10 @@ export class MessageProvider {
   /** Create a self-healing consumer flow for a specific kind. */
   private createFlow(kind: StreamKind, info: ConsumerInfo): Observable<void> {
     const target$ = this.getTargetSubject(kind);
-    let consecutiveFailures = 0;
-    let lastRunFailed = false;
 
-    return defer(() => this.consumeOnce(kind, info, target$)).pipe(
-      tap(() => {
-        lastRunFailed = false;
-      }),
-      catchError((err) => {
-        consecutiveFailures++;
-        lastRunFailed = true;
-        this.logger.error(`Consumer ${info.name} error, will restart:`, err);
-        this.eventBus.emit(
-          TransportEvent.Error,
-          err instanceof Error ? err : new Error(String(err)),
-          'message-provider',
-        );
-        return EMPTY;
-      }),
-      repeat({
-        delay: () => {
-          if (!lastRunFailed) {
-            consecutiveFailures = 0;
-          }
-
-          const delay = Math.min(100 * Math.pow(2, consecutiveFailures), 30_000);
-
-          this.logger.warn(`Consumer ${info.name} stream ended, restarting in ${delay}ms...`);
-          return timer(delay);
-        },
-      }),
-      takeUntil(this.destroy$),
+    return this.createSelfHealingFlow(
+      () => this.consumeOnce(kind, info, target$),
+      info.name,
     );
   }
 
@@ -275,23 +248,10 @@ export class MessageProvider {
     streamName: string,
     consumerOpts: Partial<OrderedConsumerOptions>,
   ): Observable<void> {
-    let consecutiveFailures = 0;
-    let lastRunFailed = false;
-
-    return defer(() => this.consumeOrderedOnce(streamName, consumerOpts)).pipe(
-      tap(() => {
-        lastRunFailed = false;
-      }),
-      catchError((err) => {
-        consecutiveFailures++;
-        lastRunFailed = true;
-        this.logger.error('Ordered consumer error, will restart:', err);
-        this.eventBus.emit(
-          TransportEvent.Error,
-          err instanceof Error ? err : new Error(String(err)),
-          'message-provider',
-        );
-
+    return this.createSelfHealingFlow(
+      () => this.consumeOrderedOnce(streamName, consumerOpts),
+      StreamKind.Ordered,
+      (err) => {
         // Fail fast on first error so listen() propagates the failure.
         // Subsequent errors (after retry) are handled by the self-healing loop.
         if (this.orderedReadyReject) {
@@ -299,7 +259,34 @@ export class MessageProvider {
           this.orderedReadyReject = null;
           this.orderedReadyResolve = null;
         }
+      },
+    );
+  }
 
+  /** Shared self-healing flow: defer -> retry with exponential backoff on error/completion. */
+  private createSelfHealingFlow(
+    source: () => Promise<void>,
+    label: string,
+    onFirstError?: (err: unknown) => void,
+  ): Observable<void> {
+    let consecutiveFailures = 0;
+    let lastRunFailed = false;
+
+    return defer(source).pipe(
+      tap(() => {
+        lastRunFailed = false;
+      }),
+      catchError((err) => {
+        consecutiveFailures++;
+        lastRunFailed = true;
+        this.logger.error(`Consumer ${label} error, will restart:`, err);
+        this.eventBus.emit(
+          TransportEvent.Error,
+          err instanceof Error ? err : new Error(String(err)),
+          'message-provider',
+        );
+        onFirstError?.(err);
+        onFirstError = undefined;
         return EMPTY;
       }),
       repeat({
@@ -310,7 +297,7 @@ export class MessageProvider {
 
           const delay = Math.min(100 * Math.pow(2, consecutiveFailures), 30_000);
 
-          this.logger.warn(`Ordered consumer stream ended, restarting in ${delay}ms...`);
+          this.logger.warn(`Consumer ${label} stream ended, restarting in ${delay}ms...`);
           return timer(delay);
         },
       }),
