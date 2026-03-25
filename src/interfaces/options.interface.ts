@@ -1,5 +1,6 @@
 import { FactoryProvider, ModuleMetadata, Type } from '@nestjs/common';
 import { ConnectionOptions, ConsumerConfig, DeliverPolicy, ReplayPolicy, StreamConfig } from 'nats';
+import type { ConsumeOptions } from 'nats';
 
 import { Codec } from './codec.interface';
 import type { DeadLetterInfo } from './hooks.interface';
@@ -29,12 +30,56 @@ export type RpcConfig =
       stream?: Partial<StreamConfig>;
       /** Raw NATS ConsumerConfig overrides for the command consumer. */
       consumer?: Partial<ConsumerConfig>;
+
+      /** Options passed to the nats.js `consumer.consume()` call for the command consumer. */
+      consume?: Partial<ConsumeOptions>;
+
+      /** Maximum number of concurrent RPC handler executions. */
+      concurrency?: number;
+
+      /**
+       * Auto-extend ack deadline via `msg.inProgress()` during RPC handler execution.
+       * The RPC handler timeout (`setTimeout` + `msg.term()`) still acts as the hard cap.
+       */
+      ackExtension?: boolean | number;
     };
 
 /** Overrides for JetStream stream and consumer configuration. */
 export interface StreamConsumerOverrides {
   stream?: Partial<StreamConfig>;
   consumer?: Partial<ConsumerConfig>;
+
+  /**
+   * Options passed to the nats.js `consumer.consume()` call.
+   * Controls prefetch buffer size, idle heartbeat interval, and auto-refill thresholds.
+   *
+   * Note: `ConsumeOptions` is `ConsumeBytes | ConsumeMessages` — configure either
+   * byte-based or message-based consumption, not both.
+   *
+   * @see https://github.com/nats-io/nats.js — ConsumeOptions
+   */
+  consume?: Partial<ConsumeOptions>;
+
+  /**
+   * Maximum number of concurrent handler executions (RxJS `mergeMap` limit).
+   *
+   * Default: `undefined` (unlimited — naturally bounded by `max_ack_pending`).
+   * Set this to protect downstream systems from overload.
+   *
+   * **Important:** if `concurrency < max_ack_pending`, messages buffer in RxJS
+   * while their NATS ack timer ticks. Increase `ack_wait` proportionally to
+   * prevent unnecessary redeliveries.
+   */
+  concurrency?: number;
+
+  /**
+   * Auto-extend the NATS ack deadline via `msg.inProgress()` during handler execution.
+   *
+   * - `false` (default): disabled — NATS redelivers after `ack_wait` if not acked.
+   * - `true`: auto-extend at `ack_wait / 2` interval (calculated from consumer config).
+   * - `number`: explicit extension interval in milliseconds.
+   */
+  ackExtension?: boolean | number;
 }
 
 /**
