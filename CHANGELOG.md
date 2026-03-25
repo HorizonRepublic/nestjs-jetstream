@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.1](https://github.com/HorizonRepublic/nestjs-jetstream/compare/v2.6.0...v2.6.1) (2026-03-25)
+
+
+### Bug Fixes
+
+* revert typescript to 5.9 (TS 6 breaks DTS build via baseUrl deprecation) ([e3f2e36](https://github.com/HorizonRepublic/nestjs-jetstream/commit/e3f2e36eda38a29c1ce7740b252e9527da2f222d))
+
 ## [2.6.0](https://github.com/HorizonRepublic/nestjs-jetstream/compare/v2.5.1...v2.6.0) (2026-03-25)
 
 
