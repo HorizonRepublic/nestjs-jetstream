@@ -13,7 +13,7 @@ Pull consumers provide **implicit backpressure** — the client controls how fas
 
 The message flow through the system:
 
-```
+```text
 NATS Server → pull consumer (max_ack_pending) → consume() buffer → RxJS mergeMap (concurrency) → handler → ack → frees slot
 ```
 

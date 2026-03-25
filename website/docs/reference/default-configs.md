@@ -28,6 +28,7 @@ events: {
   stream: { compression: StoreCompression.None }, // disable for event streams
 }
 ```
+
 :::
 
 ### Event Stream

@@ -120,12 +120,11 @@ export class ConsumerProvider {
       };
     }
 
-    const filterSubjectByKind: Record<StreamKind.Event | StreamKind.Command, string> = {
-      [StreamKind.Event]: `${serviceName}.${StreamKind.Event}.>`,
-      [StreamKind.Command]: `${serviceName}.${StreamKind.Command}.>`,
-    };
+    if (kind !== StreamKind.Event && kind !== StreamKind.Command) {
+      throw new Error(`Unexpected durable consumer kind: ${kind}`);
+    }
 
-    const filter_subject = filterSubjectByKind[kind as StreamKind.Event | StreamKind.Command];
+    const filter_subject = `${serviceName}.${kind}.>`;
 
     return {
       ...defaults,

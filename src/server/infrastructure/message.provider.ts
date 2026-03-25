@@ -223,6 +223,10 @@ export class MessageProvider {
         return this.broadcastMessages$;
       case StreamKind.Ordered:
         return this.orderedMessages$;
+      default: {
+        const _exhaustive: never = kind;
+        throw new Error(`Unknown stream kind: ${_exhaustive}`);
+      }
     }
   }
 

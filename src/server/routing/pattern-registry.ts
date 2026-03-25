@@ -117,7 +117,14 @@ export class PatternRegistry {
 
   /** Get patterns grouped by kind (cached after registration). */
   public getPatternsByKind(): PatternsByKind {
-    return this.cachedPatterns ?? this.buildPatternsByKind();
+    const patterns = this.cachedPatterns ?? this.buildPatternsByKind();
+
+    return {
+      events: [...patterns.events],
+      commands: [...patterns.commands],
+      broadcasts: [...patterns.broadcasts],
+      ordered: [...patterns.ordered],
+    };
   }
 
   /** Normalize a full NATS subject back to the user-facing pattern. */

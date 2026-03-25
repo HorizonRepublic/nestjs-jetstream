@@ -16,7 +16,10 @@ export const resolveAckExtensionInterval = (
   ackWaitNanos: number | undefined,
 ): number | null => {
   if (config === false || config === undefined) return null;
-  if (typeof config === 'number') return config;
+  if (typeof config === 'number') {
+    if (!Number.isFinite(config) || config <= 0) return null;
+    return Math.floor(config);
+  }
 
   if (!ackWaitNanos) return DEFAULT_ACK_EXTENSION_INTERVAL;
 
@@ -35,7 +38,7 @@ export const startAckExtensionTimer = (
   msg: { working(): void },
   interval: number | null,
 ): (() => void) | null => {
-  if (!interval) return null;
+  if (interval === null || interval <= 0) return null;
 
   const timer = setInterval(() => {
     try {
