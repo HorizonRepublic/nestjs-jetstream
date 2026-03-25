@@ -356,3 +356,5 @@ See the [Dead Letter Queue](/docs/guides/dead-letter-queue) guide for how to con
 - [**Dead Letter Queue**](/docs/guides/dead-letter-queue) — handle messages that exhaust all retries
 - [**Record Builder**](/docs/guides/record-builder) — attach custom headers and message IDs
 - [**Lifecycle Hooks**](/docs/guides/lifecycle-hooks) — observe transport events like dead letters and message routing
+- [**Performance Tuning**](/docs/guides/performance) — concurrency, ack extension, and backpressure
+- [**Troubleshooting**](/docs/guides/troubleshooting#consumer-issues) — diagnosing delivery and redelivery issues

@@ -131,3 +131,31 @@ This configuration:
 - Extends ack deadlines automatically for long-running event and RPC handlers.
 - Limits broadcast processing to 50 concurrent handlers.
 - Sets a 60-second RPC timeout with ack extension to prevent redelivery during processing.
+
+## Performance expectations
+
+Actual throughput depends heavily on handler complexity, network latency, and NATS deployment. Here are rough ballpark numbers for a single Node.js instance on modern hardware (16-core, 32 GB RAM, local NATS):
+
+| Scenario | Throughput | Notes |
+|----------|-----------|-------|
+| **Event handlers** (fast, no I/O) | 10k–50k msg/s | CPU-bound; concurrency helps up to core count |
+| **Event handlers** (DB write per msg) | 1k–5k msg/s | I/O-bound; increase concurrency and `max_ack_pending` |
+| **RPC Core mode** (fast handler) | 5k–20k req/s | Lowest latency; no stream overhead |
+| **RPC JetStream mode** | 1k–10k req/s | Adds stream write + inbox reply |
+| **Broadcast** (N instances) | Same per-instance as events | Each instance processes independently |
+
+:::info These are guidelines, not guarantees
+Always benchmark your specific workload. The bottleneck is usually the handler, not the transport. Profile your handlers first before tuning transport settings.
+:::
+
+### Measuring your throughput
+
+1. **NATS monitoring:** Enable the [NATS monitoring endpoint](https://docs.nats.io/running-a-nats-service/configuration/monitoring) (`-m 8222`) and check `msgs_in`/`msgs_out` rates.
+2. **Consumer lag:** `nats consumer info <stream> <consumer>` — watch "Num Pending" to detect falling behind.
+3. **Application metrics:** Use [Lifecycle Hooks](/docs/guides/lifecycle-hooks) to emit Prometheus counters for `MessageRouted`, `Error`, and `RpcTimeout` events.
+
+## See also
+
+- [Default Configs](/docs/reference/default-configs) — all stream, consumer, and connection defaults
+- [Module Configuration](/docs/getting-started/module-configuration) — where to set these options
+- [Troubleshooting](/docs/guides/troubleshooting#consumer-issues) — diagnosing consumer lag
