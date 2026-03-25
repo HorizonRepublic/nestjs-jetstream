@@ -349,16 +349,6 @@ describe(ConnectionProvider, () => {
       );
     });
 
-    it('should connect with 5MB reconnect buffer by default', async () => {
-      // When: connection established
-      await sut.getConnection();
-
-      // Then: default applied
-      expect(mockConnect).toHaveBeenCalledWith(
-        expect.objectContaining({ reconnectBufSize: 5 * 1024 * 1024 }),
-      );
-    });
-
     it('should allow user connectionOptions to override performance defaults', async () => {
       // Given: user overrides maxReconnectAttempts
       options.connectionOptions = { maxReconnectAttempts: 50 };

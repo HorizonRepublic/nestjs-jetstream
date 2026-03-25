@@ -20,7 +20,6 @@ import { internalName } from '../jetstream.constants';
 const PERFORMANCE_CONNECTION_DEFAULTS: Partial<ConnectionOptions> = {
   maxReconnectAttempts: -1,
   reconnectTimeWait: 1_000,
-  reconnectBufSize: 5 * 1024 * 1024,
 };
 
 /**
