@@ -1,8 +1,10 @@
 export type { Codec } from './codec.interface';
 
-export { TransportEvent } from './hooks.interface';
+export { MessageKind, TransportEvent } from './hooks.interface';
 
 export type { DeadLetterInfo, TransportHooks } from './hooks.interface';
+
+export type { JetstreamHealthStatus } from './health.interface';
 
 export type {
   JetstreamFeatureOptions,
@@ -13,8 +15,16 @@ export type {
   StreamConsumerOverrides,
 } from './options.interface';
 
-export type { StreamKind, SubjectKind } from './stream.interface';
+export { StreamKind } from './stream.interface';
+
+export type { SubjectKind } from './stream.interface';
 
 export type { TransportHeaderOptions, ExtractedRecordData } from './client.interface';
 
-export type { RegisteredHandler, PatternsByKind } from './routing.interface';
+export type {
+  DeadLetterConfig,
+  EventProcessingConfig,
+  PatternsByKind,
+  RegisteredHandler,
+  RpcRouterOptions,
+} from './routing.interface';

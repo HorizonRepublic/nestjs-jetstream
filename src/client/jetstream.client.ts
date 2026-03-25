@@ -20,13 +20,17 @@ import type {
   JetstreamModuleOptions,
   TransportHeaderOptions,
 } from '../interfaces';
+import { StreamKind } from '../interfaces';
 import {
   buildBroadcastSubject,
   buildSubject,
   DEFAULT_JETSTREAM_RPC_TIMEOUT,
   DEFAULT_RPC_TIMEOUT,
+  isCoreRpcMode,
+  isJetStreamRpcMode,
   internalName,
   JetstreamHeader,
+  PatternPrefix,
 } from '../jetstream.constants';
 
 import { JetstreamRecord } from './jetstream.record';
@@ -48,6 +52,9 @@ export class JetstreamClient extends ClientProxy {
 
   /** Target service name this client sends messages to. */
   private readonly targetName: string;
+
+  /** Pre-cached caller name derived from rootOptions.name, computed once in constructor. */
+  private readonly callerName: string;
 
   /** Shared inbox for JetStream-mode RPC responses. */
   private inbox: string | null = null;
@@ -71,6 +78,7 @@ export class JetstreamClient extends ClientProxy {
   ) {
     super();
     this.targetName = targetServiceName;
+    this.callerName = internalName(this.rootOptions.name);
   }
 
   /**
@@ -84,12 +92,10 @@ export class JetstreamClient extends ClientProxy {
   public async connect(): Promise<NatsConnection> {
     const nc = await this.connection.getConnection();
 
-    // Setup inbox for JetStream RPC mode
-    if (this.isJetStreamRpcMode() && !this.inboxSubscription) {
+    if (isJetStreamRpcMode(this.rootOptions.rpc) && !this.inboxSubscription) {
       this.setupInbox(nc);
     }
 
-    // Subscribe to disconnect events (once)
     this.statusSubscription ??= this.connection.status$.subscribe((status) => {
       if (status.type === Events.Disconnect) {
         this.handleDisconnect();
@@ -128,7 +134,7 @@ export class JetstreamClient extends ClientProxy {
    * depending on the subject prefix.
    */
   protected async dispatchEvent<T = unknown>(packet: ReadPacket): Promise<T> {
-    const nc = await this.connect();
+    await this.connect();
     const { data, hdrs, messageId } = this.extractRecordData(packet.data);
 
     // Determine if this is a broadcast event
@@ -136,10 +142,12 @@ export class JetstreamClient extends ClientProxy {
     const subject = this.buildEventSubject(packet.pattern);
     const msgHeaders = this.buildHeaders(hdrs, { subject });
 
-    const ack = await nc.jetstream().publish(subject, this.codec.encode(data), {
-      headers: msgHeaders,
-      msgID: messageId ?? crypto.randomUUID(),
-    });
+    const ack = await this.connection
+      .getJetStreamClient()
+      .publish(subject, this.codec.encode(data), {
+        headers: msgHeaders,
+        msgID: messageId ?? crypto.randomUUID(),
+      });
 
     if (ack.duplicate) {
       this.logger.warn(`Duplicate event publish detected: ${subject} (seq: ${ack.seq})`);
@@ -155,7 +163,7 @@ export class JetstreamClient extends ClientProxy {
    * JetStream mode: publishes to stream + waits for inbox response.
    */
   protected publish(packet: ReadPacket, callback: (p: WritePacket) => void): () => void {
-    const subject = buildSubject(this.targetName, 'cmd', packet.pattern);
+    const subject = buildSubject(this.targetName, StreamKind.Command, packet.pattern);
     const { data, hdrs, timeout, messageId } = this.extractRecordData(packet.data);
 
     const onUnhandled = (err: unknown): void => {
@@ -166,19 +174,16 @@ export class JetstreamClient extends ClientProxy {
     // Track correlation ID for cleanup in JetStream mode
     let jetStreamCorrelationId: string | null = null;
 
-    if (this.isCoreRpcMode()) {
+    if (isCoreRpcMode(this.rootOptions.rpc)) {
       this.publishCoreRpc(subject, data, hdrs, timeout, callback).catch(onUnhandled);
     } else {
       jetStreamCorrelationId = crypto.randomUUID();
-      this.publishJetStreamRpc(
-        subject,
-        data,
-        hdrs,
+      this.publishJetStreamRpc(subject, data, callback, {
+        headers: hdrs,
         timeout,
-        callback,
-        jetStreamCorrelationId,
+        correlationId: jetStreamCorrelationId,
         messageId,
-      ).catch(onUnhandled);
+      }).catch(onUnhandled);
     }
 
     return () => {
@@ -235,34 +240,47 @@ export class JetstreamClient extends ClientProxy {
   private async publishJetStreamRpc(
     subject: string,
     data: unknown,
-    customHeaders: Map<string, string> | null,
-    timeout: number | undefined,
     callback: (p: WritePacket) => void,
-    correlationId: string = crypto.randomUUID(),
-    messageId?: string,
+    options: {
+      headers: Map<string, string> | null;
+      timeout: number | undefined;
+      correlationId: string;
+      messageId?: string;
+    },
   ): Promise<void> {
-    const effectiveTimeout = timeout ?? this.getRpcTimeout();
+    const { headers: customHeaders, correlationId, messageId } = options;
+    const effectiveTimeout = options.timeout ?? this.getRpcTimeout();
 
     this.pendingMessages.set(correlationId, callback);
 
-    const timeoutId = setTimeout(() => {
+    try {
+      await this.connect();
+
+      // Bail out if cleaned up during connect (e.g. consumer unsubscribed)
       if (!this.pendingMessages.has(correlationId)) return;
 
-      this.pendingTimeouts.delete(correlationId);
-      this.pendingMessages.delete(correlationId);
-      this.logger.error(`JetStream RPC timeout (${effectiveTimeout}ms): ${subject}`);
-      this.eventBus.emit(TransportEvent.RpcTimeout, subject, correlationId);
-      callback({ err: new Error('RPC timeout'), response: null, isDisposed: true });
-    }, effectiveTimeout);
-
-    this.pendingTimeouts.set(correlationId, timeoutId);
-
-    try {
-      const nc = await this.connect();
-
       if (!this.inbox) {
-        throw new Error('Inbox not initialized — JetStream RPC mode requires a connected inbox');
+        this.pendingMessages.delete(correlationId);
+        callback({
+          err: new Error('Inbox not initialized — JetStream RPC mode requires a connected inbox'),
+          response: null,
+          isDisposed: true,
+        });
+        return;
       }
+
+      // Start timeout AFTER connect — measures actual RPC wait time, not connect + RPC
+      const timeoutId = setTimeout(() => {
+        if (!this.pendingMessages.has(correlationId)) return;
+
+        this.pendingTimeouts.delete(correlationId);
+        this.pendingMessages.delete(correlationId);
+        this.logger.error(`JetStream RPC timeout (${effectiveTimeout}ms): ${subject}`);
+        this.eventBus.emit(TransportEvent.RpcTimeout, subject, correlationId);
+        callback({ err: new Error('RPC timeout'), response: null, isDisposed: true });
+      }, effectiveTimeout);
+
+      this.pendingTimeouts.set(correlationId, timeoutId);
 
       const hdrs = this.buildHeaders(customHeaders, {
         subject,
@@ -270,13 +288,17 @@ export class JetstreamClient extends ClientProxy {
         replyTo: this.inbox,
       });
 
-      await nc.jetstream().publish(subject, this.codec.encode(data), {
+      await this.connection.getJetStreamClient().publish(subject, this.codec.encode(data), {
         headers: hdrs,
         msgID: messageId ?? crypto.randomUUID(),
       });
     } catch (err) {
-      clearTimeout(timeoutId);
-      this.pendingTimeouts.delete(correlationId);
+      const existingTimeout = this.pendingTimeouts.get(correlationId);
+
+      if (existingTimeout) {
+        clearTimeout(existingTimeout);
+        this.pendingTimeouts.delete(correlationId);
+      }
 
       if (!this.pendingMessages.has(correlationId)) return;
 
@@ -374,17 +396,19 @@ export class JetstreamClient extends ClientProxy {
 
   /** Build event subject — workqueue, broadcast, or ordered. */
   private buildEventSubject(pattern: string): string {
-    // Convention: 'broadcast:' prefix routes to the shared broadcast stream.
-    if (pattern.startsWith('broadcast:')) {
-      return buildBroadcastSubject(pattern.slice('broadcast:'.length));
+    if (pattern.startsWith(PatternPrefix.Broadcast)) {
+      return buildBroadcastSubject(pattern.slice(PatternPrefix.Broadcast.length));
     }
 
-    // Convention: 'ordered:' prefix routes to the ordered stream.
-    if (pattern.startsWith('ordered:')) {
-      return buildSubject(this.targetName, 'ordered', pattern.slice('ordered:'.length));
+    if (pattern.startsWith(PatternPrefix.Ordered)) {
+      return buildSubject(
+        this.targetName,
+        StreamKind.Ordered,
+        pattern.slice(PatternPrefix.Ordered.length),
+      );
     }
 
-    return buildSubject(this.targetName, 'ev', pattern);
+    return buildSubject(this.targetName, StreamKind.Event, pattern);
   }
 
   /** Build NATS headers merging custom headers with transport headers. */
@@ -396,7 +420,7 @@ export class JetstreamClient extends ClientProxy {
 
     // Set transport headers
     hdrs.set(JetstreamHeader.Subject, transport.subject);
-    hdrs.set(JetstreamHeader.CallerName, internalName(this.rootOptions.name));
+    hdrs.set(JetstreamHeader.CallerName, this.callerName);
 
     if (transport.correlationId) {
       hdrs.set(JetstreamHeader.CorrelationId, transport.correlationId);
@@ -430,18 +454,10 @@ export class JetstreamClient extends ClientProxy {
     return { data: rawData, hdrs: null, timeout: undefined, messageId: undefined };
   }
 
-  private isCoreRpcMode(): boolean {
-    return !this.rootOptions.rpc || this.rootOptions.rpc.mode === 'core';
-  }
-
-  private isJetStreamRpcMode(): boolean {
-    return this.rootOptions.rpc?.mode === 'jetstream';
-  }
-
   private getRpcTimeout(): number {
     if (!this.rootOptions.rpc) return DEFAULT_RPC_TIMEOUT;
 
-    const defaultTimeout = this.isJetStreamRpcMode()
+    const defaultTimeout = isJetStreamRpcMode(this.rootOptions.rpc)
       ? DEFAULT_JETSTREAM_RPC_TIMEOUT
       : DEFAULT_RPC_TIMEOUT;
 

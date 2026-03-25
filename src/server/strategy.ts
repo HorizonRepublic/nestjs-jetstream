@@ -2,7 +2,9 @@ import { CustomTransportStrategy, Server } from '@nestjs/microservices';
 import type { ConsumerInfo } from 'nats';
 
 import { ConnectionProvider } from '../connection';
-import type { JetstreamModuleOptions, StreamKind } from '../interfaces';
+import { StreamKind } from '../interfaces';
+import type { JetstreamModuleOptions } from '../interfaces';
+import { isCoreRpcMode, isJetStreamRpcMode } from '../jetstream.constants';
 
 import { CoreRpcServer } from './core-rpc.server';
 import { ConsumerProvider, MessageProvider, StreamProvider } from './infrastructure';
@@ -35,6 +37,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     private readonly eventRouter: EventRouter,
     private readonly rpcRouter: RpcRouter,
     private readonly coreRpcServer: CoreRpcServer,
+    private readonly ackWaitMap: Map<StreamKind, number> = new Map(),
   ) {
     super();
   }
@@ -57,8 +60,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     this.patternRegistry.registerHandlers(this.getHandlers());
 
     // 2. Determine which streams and durable consumers are needed
-    const streamKinds = this.resolveStreamKinds();
-    const durableKinds = this.resolveDurableConsumerKinds();
+    const { streams: streamKinds, durableConsumers: durableKinds } = this.resolveRequiredKinds();
 
     if (streamKinds.length > 0) {
       // 3. Ensure streams exist
@@ -68,16 +70,19 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
       if (durableKinds.length > 0) {
         const consumers = await this.consumerProvider.ensureConsumers(durableKinds);
 
-        // 5. Update DLQ thresholds from actual NATS consumer configs
+        // 5. Populate shared ack_wait map from actual NATS consumer configs
+        this.populateAckWaitMap(consumers);
+
+        // 6. Update DLQ thresholds from actual NATS consumer configs
         this.eventRouter.updateMaxDeliverMap(this.buildMaxDeliverMap(consumers));
 
-        // 6. Start durable message consumption
+        // 7. Start durable message consumption
         this.messageProvider.start(consumers);
       }
 
-      // 7. Start ordered consumer if handlers are registered
+      // 8. Start ordered consumer if handlers are registered
       if (this.patternRegistry.hasOrderedHandlers()) {
-        const orderedStreamName = this.streamProvider.getStreamName('ordered');
+        const orderedStreamName = this.streamProvider.getStreamName(StreamKind.Ordered);
 
         await this.messageProvider.startOrdered(
           orderedStreamName,
@@ -86,7 +91,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
         );
       }
 
-      // 8. Start event router if any event-type handlers exist
+      // 9. Start event router if any event-type handlers exist
       if (
         this.patternRegistry.hasEventHandlers() ||
         this.patternRegistry.hasBroadcastHandlers() ||
@@ -95,14 +100,14 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
         this.eventRouter.start();
       }
 
-      // 9. Start RPC router if JetStream mode
-      if (this.isJetStreamRpcMode() && this.patternRegistry.hasRpcHandlers()) {
+      // 10. Start RPC router if JetStream mode
+      if (isJetStreamRpcMode(this.options.rpc) && this.patternRegistry.hasRpcHandlers()) {
         this.rpcRouter.start();
       }
     }
 
-    // 10. Start Core RPC server if core mode
-    if (this.isCoreRpcMode() && this.patternRegistry.hasRpcHandlers()) {
+    // 11. Start Core RPC server if core mode
+    if (isCoreRpcMode(this.options.rpc) && this.patternRegistry.hasRpcHandlers()) {
       await this.coreRpcServer.start();
     }
 
@@ -152,46 +157,41 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     return this.patternRegistry;
   }
 
-  /** Determine which JetStream streams are needed. */
-  private resolveStreamKinds(): StreamKind[] {
-    const kinds: StreamKind[] = [];
+  /** Determine which streams and durable consumers are needed. */
+  private resolveRequiredKinds(): { streams: StreamKind[]; durableConsumers: StreamKind[] } {
+    const streams: StreamKind[] = [];
+    const durableConsumers: StreamKind[] = [];
 
     if (this.patternRegistry.hasEventHandlers()) {
-      kinds.push('ev');
+      streams.push(StreamKind.Event);
+      durableConsumers.push(StreamKind.Event);
     }
 
-    if (this.patternRegistry.hasOrderedHandlers()) {
-      kinds.push('ordered');
-    }
-
-    if (this.isJetStreamRpcMode() && this.patternRegistry.hasRpcHandlers()) {
-      kinds.push('cmd');
+    if (isJetStreamRpcMode(this.options.rpc) && this.patternRegistry.hasRpcHandlers()) {
+      streams.push(StreamKind.Command);
+      durableConsumers.push(StreamKind.Command);
     }
 
     if (this.patternRegistry.hasBroadcastHandlers()) {
-      kinds.push('broadcast');
+      streams.push(StreamKind.Broadcast);
+      durableConsumers.push(StreamKind.Broadcast);
     }
 
-    return kinds;
+    // Ordered consumers are ephemeral — stream only, no durable consumer
+    if (this.patternRegistry.hasOrderedHandlers()) {
+      streams.push(StreamKind.Ordered);
+    }
+
+    return { streams, durableConsumers };
   }
 
-  /** Determine which stream kinds need durable consumers (ordered consumers are ephemeral). */
-  private resolveDurableConsumerKinds(): StreamKind[] {
-    const kinds: StreamKind[] = [];
-
-    if (this.patternRegistry.hasEventHandlers()) {
-      kinds.push('ev');
+  /** Populate the shared ack_wait map from actual NATS consumer configs. */
+  private populateAckWaitMap(consumers: Map<StreamKind, ConsumerInfo>): void {
+    for (const [kind, info] of consumers) {
+      if (info.config.ack_wait) {
+        this.ackWaitMap.set(kind, info.config.ack_wait);
+      }
     }
-
-    if (this.isJetStreamRpcMode() && this.patternRegistry.hasRpcHandlers()) {
-      kinds.push('cmd');
-    }
-
-    if (this.patternRegistry.hasBroadcastHandlers()) {
-      kinds.push('broadcast');
-    }
-
-    return kinds;
   }
 
   /** Build max_deliver map from actual NATS consumer configs (not options). */
@@ -208,13 +208,5 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     }
 
     return map;
-  }
-
-  private isCoreRpcMode(): boolean {
-    return !this.options.rpc || this.options.rpc.mode === 'core';
-  }
-
-  private isJetStreamRpcMode(): boolean {
-    return this.options.rpc?.mode === 'jetstream';
   }
 }

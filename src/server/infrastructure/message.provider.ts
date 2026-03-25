@@ -1,6 +1,13 @@
 import { Logger } from '@nestjs/common';
-import { Consumer, ConsumerInfo, ConsumerMessages, DeliverPolicy, JsMsg } from 'nats';
-import type { OrderedConsumerOptions } from 'nats';
+import {
+  Consumer,
+  ConsumerEvents,
+  ConsumerInfo,
+  ConsumerMessages,
+  DeliverPolicy,
+  JsMsg,
+} from 'nats';
+import type { ConsumeOptions, OrderedConsumerOptions } from 'nats';
 import {
   catchError,
   defer,
@@ -16,8 +23,8 @@ import {
 
 import { ConnectionProvider } from '../../connection';
 import { EventBus } from '../../hooks';
-import type { OrderedEventOverrides, StreamKind } from '../../interfaces';
-import { TransportEvent } from '../../interfaces';
+import { StreamKind, TransportEvent } from '../../interfaces';
+import type { OrderedEventOverrides } from '../../interfaces';
 
 /**
  * Manages pull-based message consumption from JetStream consumers.
@@ -43,6 +50,7 @@ export class MessageProvider {
   public constructor(
     private readonly connection: ConnectionProvider,
     private readonly eventBus: EventBus,
+    private readonly consumeOptionsMap: Map<StreamKind, Partial<ConsumeOptions>> = new Map(),
   ) {}
 
   /** Observable stream of workqueue event messages. */
@@ -93,6 +101,7 @@ export class MessageProvider {
    *
    * @param streamName - JetStream stream to consume from.
    * @param filterSubjects - NATS subjects to filter on.
+   * @param orderedConfig - Optional overrides for ordered consumer options.
    */
   public async startOrdered(
     streamName: string,
@@ -139,6 +148,13 @@ export class MessageProvider {
 
   /** Stop all consumer flows and reinitialize subjects for potential restart. */
   public destroy(): void {
+    // Reject pending ordered consumer ready promise to unblock listen()
+    if (this.orderedReadyReject) {
+      this.orderedReadyReject(new Error('Destroyed before ordered consumer connected'));
+      this.orderedReadyResolve = null;
+      this.orderedReadyReject = null;
+    }
+
     this.destroy$.next();
     this.destroy$.complete();
 
@@ -164,47 +180,28 @@ export class MessageProvider {
   /** Create a self-healing consumer flow for a specific kind. */
   private createFlow(kind: StreamKind, info: ConsumerInfo): Observable<void> {
     const target$ = this.getTargetSubject(kind);
-    let consecutiveFailures = 0;
-    let lastRunFailed = false;
 
-    return defer(() => this.consumeOnce(info, target$)).pipe(
-      tap(() => {
-        lastRunFailed = false;
-      }),
-      catchError((err) => {
-        consecutiveFailures++;
-        lastRunFailed = true;
-        this.logger.error(`Consumer ${info.name} error, will restart:`, err);
-        this.eventBus.emit(
-          TransportEvent.Error,
-          err instanceof Error ? err : new Error(String(err)),
-          'message-provider',
-        );
-        return EMPTY;
-      }),
-      repeat({
-        delay: () => {
-          if (!lastRunFailed) {
-            consecutiveFailures = 0;
-          }
-
-          const delay = Math.min(100 * Math.pow(2, consecutiveFailures), 30_000);
-
-          this.logger.warn(`Consumer ${info.name} stream ended, restarting in ${delay}ms...`);
-          return timer(delay);
-        },
-      }),
-      takeUntil(this.destroy$),
-    );
+    return this.createSelfHealingFlow(() => this.consumeOnce(kind, info, target$), info.name);
   }
 
   /** Single iteration: get consumer -> pull messages -> emit to subject. */
-  private async consumeOnce(info: ConsumerInfo, target$: Subject<JsMsg>): Promise<void> {
-    const js = (await this.connection.getConnection()).jetstream();
+  private async consumeOnce(
+    kind: StreamKind,
+    info: ConsumerInfo,
+    target$: Subject<JsMsg>,
+  ): Promise<void> {
+    const js = this.connection.getJetStreamClient();
     const consumer: Consumer = await js.consumers.get(info.stream_name, info.name);
-    const messages = await consumer.consume();
+
+    /* eslint-disable @typescript-eslint/naming-convention -- NATS API uses snake_case */
+    const defaults: Partial<ConsumeOptions> = { idle_heartbeat: 5_000 };
+    /* eslint-enable @typescript-eslint/naming-convention */
+    const userOptions = this.consumeOptionsMap.get(kind) ?? {};
+
+    const messages = await consumer.consume({ ...defaults, ...userOptions } as ConsumeOptions);
 
     this.activeIterators.add(messages);
+    this.monitorConsumerHealth(messages, info.name);
 
     try {
       for await (const msg of messages) {
@@ -218,15 +215,40 @@ export class MessageProvider {
   /** Get the target subject for a consumer kind. */
   private getTargetSubject(kind: StreamKind): Subject<JsMsg> {
     switch (kind) {
-      case 'ev':
+      case StreamKind.Event:
         return this.eventMessages$;
-      case 'cmd':
+      case StreamKind.Command:
         return this.commandMessages$;
-      case 'broadcast':
+      case StreamKind.Broadcast:
         return this.broadcastMessages$;
-      case 'ordered':
+      case StreamKind.Ordered:
         return this.orderedMessages$;
+      default: {
+        const _exhaustive: never = kind;
+        throw new Error(`Unknown stream kind: ${_exhaustive}`);
+      }
     }
+  }
+
+  /** Monitor heartbeats and restart the consumer iterator on prolonged silence. */
+  private monitorConsumerHealth(messages: ConsumerMessages, name: string): void {
+    (async (): Promise<void> => {
+      for await (const status of await messages.status()) {
+        // Threshold: 2 consecutive missed heartbeats triggers restart.
+        // One missed heartbeat can happen during normal GC pauses or brief network blips.
+        // Two consecutive misses strongly indicate a stale consumer.
+        if (status.type === ConsumerEvents.HeartbeatsMissed && (status.data as number) >= 2) {
+          this.logger.warn(`Consumer ${name}: ${status.data} heartbeats missed, restarting`);
+          messages.stop();
+          break;
+        }
+      }
+    })().catch((err: unknown) => {
+      // Iterator closed on destroy is expected; log anything else
+      if (err) {
+        this.logger.debug(`Consumer ${name} health monitor ended:`, err);
+      }
+    });
   }
 
   /** Create a self-healing ordered consumer flow. */
@@ -234,23 +256,10 @@ export class MessageProvider {
     streamName: string,
     consumerOpts: Partial<OrderedConsumerOptions>,
   ): Observable<void> {
-    let consecutiveFailures = 0;
-    let lastRunFailed = false;
-
-    return defer(() => this.consumeOrderedOnce(streamName, consumerOpts)).pipe(
-      tap(() => {
-        lastRunFailed = false;
-      }),
-      catchError((err) => {
-        consecutiveFailures++;
-        lastRunFailed = true;
-        this.logger.error('Ordered consumer error, will restart:', err);
-        this.eventBus.emit(
-          TransportEvent.Error,
-          err instanceof Error ? err : new Error(String(err)),
-          'message-provider',
-        );
-
+    return this.createSelfHealingFlow(
+      () => this.consumeOrderedOnce(streamName, consumerOpts),
+      StreamKind.Ordered,
+      (err) => {
         // Fail fast on first error so listen() propagates the failure.
         // Subsequent errors (after retry) are handled by the self-healing loop.
         if (this.orderedReadyReject) {
@@ -258,18 +267,39 @@ export class MessageProvider {
           this.orderedReadyReject = null;
           this.orderedReadyResolve = null;
         }
+      },
+    );
+  }
 
+  /** Shared self-healing flow: defer -> retry with exponential backoff on error/completion. */
+  private createSelfHealingFlow(
+    source: () => Promise<void>,
+    label: string,
+    onFirstError?: (err: unknown) => void,
+  ): Observable<void> {
+    let consecutiveFailures = 0;
+
+    return defer(source).pipe(
+      tap(() => {
+        consecutiveFailures = 0;
+      }),
+      catchError((err) => {
+        consecutiveFailures++;
+        this.logger.error(`Consumer ${label} error, will restart:`, err);
+        this.eventBus.emit(
+          TransportEvent.Error,
+          err instanceof Error ? err : new Error(String(err)),
+          'message-provider',
+        );
+        onFirstError?.(err);
+        onFirstError = undefined;
         return EMPTY;
       }),
       repeat({
         delay: () => {
-          if (!lastRunFailed) {
-            consecutiveFailures = 0;
-          }
-
           const delay = Math.min(100 * Math.pow(2, consecutiveFailures), 30_000);
 
-          this.logger.warn(`Ordered consumer stream ended, restarting in ${delay}ms...`);
+          this.logger.warn(`Consumer ${label} stream ended, restarting in ${delay}ms...`);
           return timer(delay);
         },
       }),
@@ -281,7 +311,7 @@ export class MessageProvider {
     streamName: string,
     consumerOpts: Partial<OrderedConsumerOptions>,
   ): Promise<void> {
-    const js = (await this.connection.getConnection()).jetstream();
+    const js = this.connection.getJetStreamClient();
     const consumer = await js.consumers.get(streamName, consumerOpts);
     const messages = await consumer.consume();
 

@@ -6,10 +6,15 @@ import { catchError, defer, EMPTY, from, mergeMap, Observable, Subscription } fr
 import { ConnectionProvider } from '../../connection';
 import { RpcContext } from '../../context';
 import { EventBus } from '../../hooks';
-import { TransportEvent } from '../../interfaces';
-import type { Codec } from '../../interfaces';
+import { MessageKind, StreamKind, TransportEvent } from '../../interfaces';
+import type { Codec, RpcRouterOptions } from '../../interfaces';
 import { DEFAULT_JETSTREAM_RPC_TIMEOUT, JetstreamHeader } from '../../jetstream.constants';
-import { serializeError, unwrapResult } from '../../utils';
+import {
+  resolveAckExtensionInterval,
+  serializeError,
+  startAckExtensionTimer,
+  unwrapResult,
+} from '../../utils';
 
 import { MessageProvider } from '../infrastructure';
 import { PatternRegistry } from './pattern-registry';
@@ -29,6 +34,8 @@ import { PatternRegistry } from './pattern-registry';
 export class RpcRouter {
   private readonly logger = new Logger('Jetstream:RpcRouter');
   private readonly timeout: number;
+  private readonly concurrency: number | undefined;
+  private resolvedAckExtensionInterval: number | null | undefined;
   private subscription: Subscription | null = null;
 
   public constructor(
@@ -37,22 +44,36 @@ export class RpcRouter {
     private readonly connection: ConnectionProvider,
     private readonly codec: Codec,
     private readonly eventBus: EventBus,
-    timeout?: number,
+    private readonly rpcOptions?: RpcRouterOptions,
+    private readonly ackWaitMap?: Map<StreamKind, number>,
   ) {
-    this.timeout = timeout ?? DEFAULT_JETSTREAM_RPC_TIMEOUT;
+    this.timeout = rpcOptions?.timeout ?? DEFAULT_JETSTREAM_RPC_TIMEOUT;
+    this.concurrency = rpcOptions?.concurrency;
+  }
+
+  /** Lazily resolve the ack extension interval (needs ackWaitMap populated at runtime). */
+  private get ackExtensionInterval(): number | null {
+    if (this.resolvedAckExtensionInterval !== undefined) return this.resolvedAckExtensionInterval;
+    this.resolvedAckExtensionInterval = resolveAckExtensionInterval(
+      this.rpcOptions?.ackExtension,
+      this.ackWaitMap?.get(StreamKind.Command),
+    );
+    return this.resolvedAckExtensionInterval;
   }
 
   /** Start routing command messages to handlers. */
   public start(): void {
     this.subscription = this.messageProvider.commands$
       .pipe(
-        mergeMap((msg) =>
-          defer(() => this.handle(msg)).pipe(
-            catchError((err) => {
-              this.logger.error('Unexpected error in RPC router', err);
-              return EMPTY;
-            }),
-          ),
+        mergeMap(
+          (msg) =>
+            defer(() => this.handle(msg)).pipe(
+              catchError((err) => {
+                this.logger.error('Unexpected error in RPC router', err);
+                return EMPTY;
+              }),
+            ),
+          this.concurrency,
         ),
       )
       .subscribe();
@@ -93,7 +114,7 @@ export class RpcRouter {
       return EMPTY;
     }
 
-    this.eventBus.emit(TransportEvent.MessageRouted, msg.subject, 'rpc');
+    this.eventBus.emit(TransportEvent.MessageRouted, msg.subject, MessageKind.Rpc);
 
     return from(this.executeHandler(handler, data, msg, replyTo, correlationId));
   }
@@ -115,10 +136,14 @@ export class RpcRouter {
 
     let settled = false;
 
+    // Ack extension: keep NATS happy while handler runs
+    const stopAckExtension = startAckExtensionTimer(msg, this.ackExtensionInterval);
+
     // Race handler against timeout
     const timeoutId = setTimeout(() => {
       if (settled) return;
       settled = true;
+      stopAckExtension?.();
       this.logger.error(`RPC timeout (${this.timeout}ms): ${msg.subject}`);
       this.eventBus.emit(TransportEvent.RpcTimeout, msg.subject, correlationId);
       msg.term('Handler timeout');
@@ -132,6 +157,7 @@ export class RpcRouter {
       if (settled) return;
       settled = true;
       clearTimeout(timeoutId);
+      stopAckExtension?.();
 
       // Ack first — handler succeeded, message is processed regardless of
       // whether we can deliver the response back to the caller.
@@ -146,6 +172,7 @@ export class RpcRouter {
       if (settled) return;
       settled = true;
       clearTimeout(timeoutId);
+      stopAckExtension?.();
 
       // Publish error response with x-error header
       try {

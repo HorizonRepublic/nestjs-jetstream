@@ -52,13 +52,13 @@ describe(JetstreamClient, () => {
     });
 
     mockNc = createMock<NatsConnection>({
-      jetstream: vi.fn().mockReturnValue(mockJs),
       request: vi.fn(),
       subscribe: vi.fn().mockReturnValue(createMock<Subscription>()),
     });
 
     connection = createMock<ConnectionProvider>({
       getConnection: vi.fn().mockResolvedValue(mockNc),
+      getJetStreamClient: vi.fn().mockReturnValue(mockJs),
       unwrap: mockNc,
       status$: statusSubject.asObservable(),
     });

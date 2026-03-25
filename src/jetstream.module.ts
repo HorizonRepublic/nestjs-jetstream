@@ -9,13 +9,18 @@ import {
   Provider,
 } from '@nestjs/common';
 
+import type { ConsumeOptions } from 'nats';
+
 import { JetstreamClient } from './client';
 import { JsonCodec } from './codec';
 import { ConnectionProvider } from './connection';
 import { EventBus } from './hooks';
 import { JetstreamHealthIndicator } from './health';
+import { StreamKind } from './interfaces';
 import type {
   Codec,
+  DeadLetterConfig,
+  EventProcessingConfig,
   JetstreamFeatureOptions,
   JetstreamModuleAsyncOptions,
   JetstreamModuleOptions,
@@ -38,8 +43,10 @@ import {
   RpcRouter,
   StreamProvider,
 } from './server';
-import type { DeadLetterConfig } from './server';
 import { ShutdownManager } from './shutdown';
+
+/** DI token for the shared ackWaitMap instance (populated at runtime by strategy). */
+const JETSTREAM_ACK_WAIT_MAP = Symbol('JETSTREAM_ACK_WAIT_MAP');
 
 /**
  * Root module for the NestJS JetStream transport.
@@ -306,6 +313,12 @@ export class JetstreamModule implements OnApplicationShutdown {
         },
       },
 
+      // Shared ack_wait map — populated by strategy after ensureConsumers()
+      {
+        provide: JETSTREAM_ACK_WAIT_MAP,
+        useFactory: (): Map<StreamKind, number> => new Map(),
+      },
+
       // MessageProvider — pull-based message consumption
       {
         provide: MessageProvider,
@@ -317,7 +330,18 @@ export class JetstreamModule implements OnApplicationShutdown {
         ): MessageProvider | null => {
           if (options.consumer === false) return null;
 
-          return new MessageProvider(connection, eventBus);
+          const consumeOptionsMap = new Map<StreamKind, Partial<ConsumeOptions>>();
+
+          if (options.events?.consume)
+            consumeOptionsMap.set(StreamKind.Event, options.events.consume);
+          if (options.broadcast?.consume)
+            consumeOptionsMap.set(StreamKind.Broadcast, options.broadcast.consume);
+
+          if (options.rpc?.mode === 'jetstream' && options.rpc.consume) {
+            consumeOptionsMap.set(StreamKind.Command, options.rpc.consume);
+          }
+
+          return new MessageProvider(connection, eventBus, consumeOptionsMap);
         },
       },
 
@@ -330,6 +354,7 @@ export class JetstreamModule implements OnApplicationShutdown {
           PatternRegistry,
           JETSTREAM_CODEC,
           JETSTREAM_EVENT_BUS,
+          JETSTREAM_ACK_WAIT_MAP,
         ],
         useFactory: (
           options: JetstreamModuleOptions,
@@ -337,6 +362,7 @@ export class JetstreamModule implements OnApplicationShutdown {
           patternRegistry: PatternRegistry,
           codec: Codec,
           eventBus: EventBus,
+          ackWaitMap: Map<StreamKind, number>,
         ): EventRouter | null => {
           if (options.consumer === false) return null;
 
@@ -347,12 +373,25 @@ export class JetstreamModule implements OnApplicationShutdown {
               }
             : undefined;
 
+          const processingConfig: EventProcessingConfig = {
+            events: {
+              concurrency: options.events?.concurrency,
+              ackExtension: options.events?.ackExtension,
+            },
+            broadcast: {
+              concurrency: options.broadcast?.concurrency,
+              ackExtension: options.broadcast?.ackExtension,
+            },
+          };
+
           return new EventRouter(
             messageProvider,
             patternRegistry,
             codec,
             eventBus,
             deadLetterConfig,
+            processingConfig,
+            ackWaitMap,
           );
         },
       },
@@ -367,6 +406,7 @@ export class JetstreamModule implements OnApplicationShutdown {
           JETSTREAM_CONNECTION,
           JETSTREAM_CODEC,
           JETSTREAM_EVENT_BUS,
+          JETSTREAM_ACK_WAIT_MAP,
         ],
         useFactory: (
           options: JetstreamModuleOptions,
@@ -375,10 +415,18 @@ export class JetstreamModule implements OnApplicationShutdown {
           connection: ConnectionProvider,
           codec: Codec,
           eventBus: EventBus,
+          ackWaitMap: Map<StreamKind, number>,
         ): RpcRouter | null => {
           if (options.consumer === false) return null;
 
-          const timeout = options.rpc?.mode === 'jetstream' ? options.rpc.timeout : undefined;
+          const rpcOptions =
+            options.rpc?.mode === 'jetstream'
+              ? {
+                  timeout: options.rpc.timeout,
+                  concurrency: options.rpc.concurrency,
+                  ackExtension: options.rpc.ackExtension,
+                }
+              : undefined;
 
           return new RpcRouter(
             messageProvider,
@@ -386,7 +434,8 @@ export class JetstreamModule implements OnApplicationShutdown {
             connection,
             codec,
             eventBus,
-            timeout,
+            rpcOptions,
+            ackWaitMap,
           );
         },
       },
@@ -427,6 +476,7 @@ export class JetstreamModule implements OnApplicationShutdown {
           EventRouter,
           RpcRouter,
           CoreRpcServer,
+          JETSTREAM_ACK_WAIT_MAP,
         ],
         useFactory: (
           options: JetstreamModuleOptions,
@@ -438,6 +488,7 @@ export class JetstreamModule implements OnApplicationShutdown {
           eventRouter: EventRouter,
           rpcRouter: RpcRouter,
           coreRpcServer: CoreRpcServer,
+          ackWaitMap: Map<StreamKind, number>,
         ): JetstreamStrategy | null => {
           if (options.consumer === false) return null;
 
@@ -451,6 +502,7 @@ export class JetstreamModule implements OnApplicationShutdown {
             eventRouter,
             rpcRouter,
             coreRpcServer,
+            ackWaitMap,
           );
         },
       },

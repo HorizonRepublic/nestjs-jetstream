@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Controller } from '@nestjs/common';
 import { EventPattern, MessagePattern } from '@nestjs/microservices';
-import { NatsConnection, RetentionPolicy } from 'nats';
+import { NatsConnection, RetentionPolicy, StoreCompression } from 'nats';
 
 import { toNanos } from '../../src';
 
@@ -49,6 +49,23 @@ describe('Stream & Consumer Lifecycle', () => {
         expect(info.config.name).toBe(`${internalName}_ev-stream`);
         expect(info.config.subjects).toEqual([`${internalName}.ev.>`]);
         expect(info.config.retention).toBe(RetentionPolicy.Workqueue);
+      } finally {
+        await app.close();
+        await cleanupStreams(nc, serviceName);
+      }
+    });
+
+    it('should create event stream with S2 compression by default', async () => {
+      const serviceName = uniqueServiceName();
+
+      const { app } = await createTestApp({ name: serviceName }, [InfraEventController]);
+
+      try {
+        const jsm = await nc.jetstreamManager();
+        const internalName = `${serviceName}__microservice`;
+        const info = await jsm.streams.info(`${internalName}_ev-stream`);
+
+        expect(info.config.compression).toBe(StoreCompression.S2);
       } finally {
         await app.close();
         await cleanupStreams(nc, serviceName);
