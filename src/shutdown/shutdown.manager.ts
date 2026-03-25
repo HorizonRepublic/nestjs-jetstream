@@ -3,7 +3,11 @@ import { Logger } from '@nestjs/common';
 import { ConnectionProvider } from '../connection';
 import { EventBus } from '../hooks';
 import { TransportEvent } from '../interfaces';
-import { JetstreamStrategy } from '../server/strategy';
+
+/** Minimal interface for anything that can be stopped during shutdown. */
+export interface Stoppable {
+  close(): void;
+}
 
 /**
  * Orchestrates graceful transport shutdown.
@@ -27,9 +31,9 @@ export class ShutdownManager {
   /**
    * Execute the full shutdown sequence.
    *
-   * @param strategy Optional strategy to close (stops consumers and subscriptions).
+   * @param strategy Optional stoppable to close (stops consumers and subscriptions).
    */
-  public async shutdown(strategy?: JetstreamStrategy): Promise<void> {
+  public async shutdown(strategy?: Stoppable): Promise<void> {
     this.eventBus.emit(TransportEvent.ShutdownStart);
     this.logger.log(`Graceful shutdown started (timeout: ${this.timeout}ms)`);
 

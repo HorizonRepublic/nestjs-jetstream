@@ -9,7 +9,8 @@ import {
 } from 'nats';
 import type { ConsumerConfig, StreamConfig } from 'nats';
 
-import type { StreamKind, SubjectKind } from './interfaces';
+import { StreamKind } from './interfaces';
+import type { RpcConfig, SubjectKind } from './interfaces';
 
 // ---------------------------------------------------------------------------
 // Injection Tokens
@@ -267,7 +268,7 @@ export const buildBroadcastSubject = (pattern: string): string => `broadcast.${p
  * @returns Stream name (e.g. `orders__microservice_ev-stream` or `broadcast-stream`).
  */
 export const streamName = (serviceName: string, kind: StreamKind): string => {
-  if (kind === 'broadcast') return 'broadcast-stream';
+  if (kind === StreamKind.Broadcast) return 'broadcast-stream';
   return `${internalName(serviceName)}_${kind}-stream`;
 };
 
@@ -279,6 +280,33 @@ export const streamName = (serviceName: string, kind: StreamKind): string => {
  * @returns Consumer name (e.g. `orders__microservice_ev-consumer`).
  */
 export const consumerName = (serviceName: string, kind: StreamKind): string => {
-  if (kind === 'broadcast') return `${internalName(serviceName)}_broadcast-consumer`;
+  if (kind === StreamKind.Broadcast) return `${internalName(serviceName)}_broadcast-consumer`;
   return `${internalName(serviceName)}_${kind}-consumer`;
 };
+
+// ---------------------------------------------------------------------------
+// Pattern Prefixes
+// ---------------------------------------------------------------------------
+
+/**
+ * Prefixes used in event patterns to route to specific stream types.
+ * Applied by the user when emitting events (e.g. `client.emit('broadcast:config.updated', data)`).
+ */
+export enum PatternPrefix {
+  /** Route to the shared broadcast stream. */
+  Broadcast = 'broadcast:',
+  /** Route to the ordered stream. */
+  Ordered = 'ordered:',
+}
+
+// ---------------------------------------------------------------------------
+// RPC Mode Helpers
+// ---------------------------------------------------------------------------
+
+/** Check if the RPC config specifies JetStream mode. */
+export const isJetStreamRpcMode = (rpc: RpcConfig | undefined): boolean =>
+  rpc?.mode === 'jetstream';
+
+/** Check if the RPC config specifies Core mode (default). */
+export const isCoreRpcMode = (rpc: RpcConfig | undefined): boolean =>
+  !rpc || rpc.mode === 'core';

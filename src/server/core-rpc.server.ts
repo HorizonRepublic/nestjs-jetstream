@@ -4,7 +4,7 @@ import { headers as natsHeaders, Msg, Subscription } from 'nats';
 import { ConnectionProvider } from '../connection';
 import { RpcContext } from '../context';
 import { EventBus } from '../hooks';
-import { TransportEvent } from '../interfaces';
+import { MessageKind, TransportEvent } from '../interfaces';
 import type { Codec, JetstreamModuleOptions } from '../interfaces';
 import { internalName, JetstreamHeader } from '../jetstream.constants';
 import { serializeError, unwrapResult } from '../utils';
@@ -78,7 +78,7 @@ export class CoreRpcServer {
       return;
     }
 
-    this.eventBus.emit(TransportEvent.MessageRouted, msg.subject, 'rpc');
+    this.eventBus.emit(TransportEvent.MessageRouted, msg.subject, MessageKind.Rpc);
 
     let data: unknown;
 

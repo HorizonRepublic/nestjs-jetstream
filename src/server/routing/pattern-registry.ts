@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { MessageHandler } from '@nestjs/microservices';
 
+import { StreamKind } from '../../interfaces';
 import type { JetstreamModuleOptions, PatternsByKind, RegisteredHandler } from '../../interfaces';
 import { buildBroadcastSubject, buildSubject, internalName } from '../../jetstream.constants';
 
@@ -44,11 +45,11 @@ export class PatternRegistry {
       if (isBroadcast) {
         fullSubject = buildBroadcastSubject(pattern);
       } else if (isOrdered) {
-        fullSubject = buildSubject(serviceName, 'ordered', pattern);
+        fullSubject = buildSubject(serviceName, StreamKind.Ordered, pattern);
       } else if (isEvent) {
-        fullSubject = buildSubject(serviceName, 'ev', pattern);
+        fullSubject = buildSubject(serviceName, StreamKind.Event, pattern);
       } else {
-        fullSubject = buildSubject(serviceName, 'cmd', pattern);
+        fullSubject = buildSubject(serviceName, StreamKind.Command, pattern);
       }
 
       this.registry.set(fullSubject, {

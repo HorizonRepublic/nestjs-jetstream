@@ -16,8 +16,8 @@ import {
 
 import { ConnectionProvider } from '../../connection';
 import { EventBus } from '../../hooks';
-import type { OrderedEventOverrides, StreamKind } from '../../interfaces';
-import { TransportEvent } from '../../interfaces';
+import { StreamKind, TransportEvent } from '../../interfaces';
+import type { OrderedEventOverrides } from '../../interfaces';
 
 /**
  * Manages pull-based message consumption from JetStream consumers.
@@ -235,13 +235,13 @@ export class MessageProvider {
   /** Get the target subject for a consumer kind. */
   private getTargetSubject(kind: StreamKind): Subject<JsMsg> {
     switch (kind) {
-      case 'ev':
+      case StreamKind.Event:
         return this.eventMessages$;
-      case 'cmd':
+      case StreamKind.Command:
         return this.commandMessages$;
-      case 'broadcast':
+      case StreamKind.Broadcast:
         return this.broadcastMessages$;
-      case 'ordered':
+      case StreamKind.Ordered:
         return this.orderedMessages$;
     }
   }

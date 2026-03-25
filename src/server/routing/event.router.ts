@@ -13,29 +13,12 @@ import {
 
 import { RpcContext } from '../../context';
 import { EventBus } from '../../hooks';
-import { TransportEvent } from '../../interfaces';
-import type { Codec, DeadLetterInfo } from '../../interfaces';
-import { unwrapResult } from '../../utils';
+import { MessageKind, StreamKind, TransportEvent } from '../../interfaces';
+import type { Codec, DeadLetterConfig, DeadLetterInfo, EventProcessingConfig } from '../../interfaces';
+import { resolveAckExtensionInterval, startAckExtensionTimer, unwrapResult } from '../../utils';
 
 import { MessageProvider } from '../infrastructure';
 import { PatternRegistry } from './pattern-registry';
-
-/** Options for configuring event/broadcast processing behavior. */
-export interface EventProcessingConfig {
-  events?: { concurrency?: number; ackExtension?: boolean | number };
-  broadcast?: { concurrency?: number; ackExtension?: boolean | number };
-}
-
-/** Options for dead letter queue handling. */
-export interface DeadLetterConfig {
-  /**
-   * Map of stream name -> max_deliver value.
-   * Used to detect when a message from a given stream has exhausted all delivery attempts.
-   */
-  maxDeliverByStream: Map<string, number>;
-  /** Async callback invoked when a message exhausts all deliveries. */
-  onDeadLetter(info: DeadLetterInfo): Promise<void>;
-}
 
 /**
  * Routes incoming event messages (workqueue, broadcast, and ordered) to NestJS handlers.
@@ -135,7 +118,7 @@ export class EventRouter {
       return EMPTY;
     }
 
-    this.eventBus.emit(TransportEvent.MessageRouted, msg.subject, 'event');
+    this.eventBus.emit(TransportEvent.MessageRouted, msg.subject, MessageKind.Event);
 
     const ctx = new RpcContext([msg]);
 
@@ -150,16 +133,12 @@ export class EventRouter {
     msg: JsMsg,
     label: string,
   ): Promise<void> {
-    const interval = this.resolveAckExtensionInterval(label);
-    const timer = interval
-      ? setInterval(() => {
-          try {
-            msg.working();
-          } catch {
-            // Connection degraded — handler will settle soon
-          }
-        }, interval)
-      : null;
+    const ackExtConfig = this.getAckExtensionConfig(label);
+    const ackWaitNanos = this.getAckWaitNanos(label);
+    const stopAckExtension = startAckExtensionTimer(
+      msg,
+      resolveAckExtensionInterval(ackExtConfig, ackWaitNanos),
+    );
 
     try {
       await unwrapResult(handler(data, ctx));
@@ -173,7 +152,7 @@ export class EventRouter {
         msg.nak();
       }
     } finally {
-      if (timer) clearInterval(timer);
+      stopAckExtension?.();
     }
   }
 
@@ -195,7 +174,7 @@ export class EventRouter {
       return EMPTY;
     }
 
-    this.eventBus.emit(TransportEvent.MessageRouted, msg.subject, 'event');
+    this.eventBus.emit(TransportEvent.MessageRouted, msg.subject, MessageKind.Event);
 
     const ctx = new RpcContext([msg]);
 
@@ -206,31 +185,20 @@ export class EventRouter {
     ) as Observable<void>;
   }
 
-  private resolveAckExtensionInterval(label: string): number | null {
-    const config =
-      label === 'workqueue'
-        ? this.processingConfig?.events?.ackExtension
-        : label === 'broadcast'
-          ? this.processingConfig?.broadcast?.ackExtension
-          : undefined;
-
-    if (config === false || config === undefined) return null;
-    if (typeof config === 'number') return config;
-
-    // true -> auto-calculate from ack_wait
-    return this.getDefaultAckExtensionInterval(label);
+  private getAckExtensionConfig(label: string): boolean | number | undefined {
+    if (label === 'workqueue') return this.processingConfig?.events?.ackExtension;
+    if (label === 'broadcast') return this.processingConfig?.broadcast?.ackExtension;
+    return undefined;
   }
 
-  private getDefaultAckExtensionInterval(label: string): number {
-    const kind = label === 'workqueue' ? 'ev' : label === 'broadcast' ? 'broadcast' : undefined;
-    const ackWaitNanos = kind ? this.ackWaitMap?.get(kind) : undefined;
-
-    if (!ackWaitNanos) return 5_000; // fallback: 5s
-
-    // IMPORTANT: ConsumerInfo.config.ack_wait is in NANOSECONDS.
-    // Convert to ms, then halve for the extension interval.
-    const interval = Math.floor(ackWaitNanos / 1_000_000 / 2);
-    return Math.max(interval, 500);
+  private getAckWaitNanos(label: string): number | undefined {
+    const kind =
+      label === 'workqueue'
+        ? StreamKind.Event
+        : label === 'broadcast'
+          ? StreamKind.Broadcast
+          : undefined;
+    return kind ? this.ackWaitMap?.get(kind) : undefined;
   }
 
   /** Check if the message has exhausted all delivery attempts. */

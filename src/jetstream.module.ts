@@ -16,12 +16,14 @@ import { JsonCodec } from './codec';
 import { ConnectionProvider } from './connection';
 import { EventBus } from './hooks';
 import { JetstreamHealthIndicator } from './health';
+import { StreamKind } from './interfaces';
 import type {
   Codec,
+  DeadLetterConfig,
+  EventProcessingConfig,
   JetstreamFeatureOptions,
   JetstreamModuleAsyncOptions,
   JetstreamModuleOptions,
-  StreamKind,
 } from './interfaces';
 import {
   DEFAULT_SHUTDOWN_TIMEOUT,
@@ -41,7 +43,6 @@ import {
   RpcRouter,
   StreamProvider,
 } from './server';
-import type { DeadLetterConfig, EventProcessingConfig } from './server';
 import { ShutdownManager } from './shutdown';
 
 /** DI token for the shared ackWaitMap instance (populated at runtime by strategy). */
@@ -331,11 +332,12 @@ export class JetstreamModule implements OnApplicationShutdown {
 
           const consumeOptionsMap = new Map<StreamKind, Partial<ConsumeOptions>>();
 
-          if (options.events?.consume) consumeOptionsMap.set('ev', options.events.consume);
-          if (options.broadcast?.consume) consumeOptionsMap.set('broadcast', options.broadcast.consume);
+          if (options.events?.consume) consumeOptionsMap.set(StreamKind.Event, options.events.consume);
+          if (options.broadcast?.consume)
+            consumeOptionsMap.set(StreamKind.Broadcast, options.broadcast.consume);
 
           if (options.rpc?.mode === 'jetstream' && options.rpc.consume) {
-            consumeOptionsMap.set('cmd', options.rpc.consume);
+            consumeOptionsMap.set(StreamKind.Command, options.rpc.consume);
           }
 
           return new MessageProvider(connection, eventBus, consumeOptionsMap);

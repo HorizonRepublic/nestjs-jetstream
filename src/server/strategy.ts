@@ -2,7 +2,9 @@ import { CustomTransportStrategy, Server } from '@nestjs/microservices';
 import type { ConsumerInfo } from 'nats';
 
 import { ConnectionProvider } from '../connection';
-import type { JetstreamModuleOptions, StreamKind } from '../interfaces';
+import { StreamKind } from '../interfaces';
+import type { JetstreamModuleOptions } from '../interfaces';
+import { isCoreRpcMode, isJetStreamRpcMode } from '../jetstream.constants';
 
 import { CoreRpcServer } from './core-rpc.server';
 import { ConsumerProvider, MessageProvider, StreamProvider } from './infrastructure';
@@ -81,7 +83,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
 
       // 8. Start ordered consumer if handlers are registered
       if (this.patternRegistry.hasOrderedHandlers()) {
-        const orderedStreamName = this.streamProvider.getStreamName('ordered');
+        const orderedStreamName = this.streamProvider.getStreamName(StreamKind.Ordered);
 
         await this.messageProvider.startOrdered(
           orderedStreamName,
@@ -100,13 +102,13 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
       }
 
       // 10. Start RPC router if JetStream mode
-      if (this.isJetStreamRpcMode() && this.patternRegistry.hasRpcHandlers()) {
+      if (isJetStreamRpcMode(this.options.rpc) && this.patternRegistry.hasRpcHandlers()) {
         this.rpcRouter.start();
       }
     }
 
     // 11. Start Core RPC server if core mode
-    if (this.isCoreRpcMode() && this.patternRegistry.hasRpcHandlers()) {
+    if (isCoreRpcMode(this.options.rpc) && this.patternRegistry.hasRpcHandlers()) {
       await this.coreRpcServer.start();
     }
 
@@ -161,19 +163,19 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     const kinds: StreamKind[] = [];
 
     if (this.patternRegistry.hasEventHandlers()) {
-      kinds.push('ev');
+      kinds.push(StreamKind.Event);
     }
 
     if (this.patternRegistry.hasOrderedHandlers()) {
-      kinds.push('ordered');
+      kinds.push(StreamKind.Ordered);
     }
 
-    if (this.isJetStreamRpcMode() && this.patternRegistry.hasRpcHandlers()) {
-      kinds.push('cmd');
+    if (isJetStreamRpcMode(this.options.rpc) && this.patternRegistry.hasRpcHandlers()) {
+      kinds.push(StreamKind.Command);
     }
 
     if (this.patternRegistry.hasBroadcastHandlers()) {
-      kinds.push('broadcast');
+      kinds.push(StreamKind.Broadcast);
     }
 
     return kinds;
@@ -184,15 +186,15 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     const kinds: StreamKind[] = [];
 
     if (this.patternRegistry.hasEventHandlers()) {
-      kinds.push('ev');
+      kinds.push(StreamKind.Event);
     }
 
-    if (this.isJetStreamRpcMode() && this.patternRegistry.hasRpcHandlers()) {
-      kinds.push('cmd');
+    if (isJetStreamRpcMode(this.options.rpc) && this.patternRegistry.hasRpcHandlers()) {
+      kinds.push(StreamKind.Command);
     }
 
     if (this.patternRegistry.hasBroadcastHandlers()) {
-      kinds.push('broadcast');
+      kinds.push(StreamKind.Broadcast);
     }
 
     return kinds;
@@ -223,11 +225,4 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     return map;
   }
 
-  private isCoreRpcMode(): boolean {
-    return !this.options.rpc || this.options.rpc.mode === 'core';
-  }
-
-  private isJetStreamRpcMode(): boolean {
-    return this.options.rpc?.mode === 'jetstream';
-  }
 }

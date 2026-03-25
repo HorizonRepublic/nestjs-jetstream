@@ -6,20 +6,18 @@ import { catchError, defer, EMPTY, from, mergeMap, Observable, Subscription } fr
 import { ConnectionProvider } from '../../connection';
 import { RpcContext } from '../../context';
 import { EventBus } from '../../hooks';
-import { TransportEvent } from '../../interfaces';
-import type { Codec } from '../../interfaces';
+import { MessageKind, StreamKind, TransportEvent } from '../../interfaces';
+import type { Codec, RpcRouterOptions } from '../../interfaces';
 import { DEFAULT_JETSTREAM_RPC_TIMEOUT, JetstreamHeader } from '../../jetstream.constants';
-import { serializeError, unwrapResult } from '../../utils';
+import {
+  resolveAckExtensionInterval,
+  serializeError,
+  startAckExtensionTimer,
+  unwrapResult,
+} from '../../utils';
 
 import { MessageProvider } from '../infrastructure';
 import { PatternRegistry } from './pattern-registry';
-
-/** Options for configuring RPC processing behavior. */
-export interface RpcRouterOptions {
-  timeout?: number;
-  concurrency?: number;
-  ackExtension?: boolean | number;
-}
 
 /**
  * Routes RPC command messages in JetStream mode.
@@ -56,7 +54,10 @@ export class RpcRouter {
   /** Lazily resolve the ack extension interval (needs ackWaitMap populated at runtime). */
   private get ackExtensionInterval(): number | null {
     if (this.resolvedAckExtensionInterval !== undefined) return this.resolvedAckExtensionInterval;
-    this.resolvedAckExtensionInterval = this.resolveAckExtension(this.rpcOptions?.ackExtension);
+    this.resolvedAckExtensionInterval = resolveAckExtensionInterval(
+      this.rpcOptions?.ackExtension,
+      this.ackWaitMap?.get(StreamKind.Command),
+    );
     return this.resolvedAckExtensionInterval;
   }
 
@@ -113,7 +114,7 @@ export class RpcRouter {
       return EMPTY;
     }
 
-    this.eventBus.emit(TransportEvent.MessageRouted, msg.subject, 'rpc');
+    this.eventBus.emit(TransportEvent.MessageRouted, msg.subject, MessageKind.Rpc);
 
     return from(this.executeHandler(handler, data, msg, replyTo, correlationId));
   }
@@ -136,21 +137,13 @@ export class RpcRouter {
     let settled = false;
 
     // Ack extension: keep NATS happy while handler runs
-    const ackTimer = this.ackExtensionInterval
-      ? setInterval(() => {
-          try {
-            msg.working();
-          } catch {
-            // Connection degraded — handler will settle soon
-          }
-        }, this.ackExtensionInterval)
-      : null;
+    const stopAckExtension = startAckExtensionTimer(msg, this.ackExtensionInterval);
 
     // Race handler against timeout
     const timeoutId = setTimeout(() => {
       if (settled) return;
       settled = true;
-      if (ackTimer) clearInterval(ackTimer);
+      stopAckExtension?.();
       this.logger.error(`RPC timeout (${this.timeout}ms): ${msg.subject}`);
       this.eventBus.emit(TransportEvent.RpcTimeout, msg.subject, correlationId);
       msg.term('Handler timeout');
@@ -164,7 +157,7 @@ export class RpcRouter {
       if (settled) return;
       settled = true;
       clearTimeout(timeoutId);
-      if (ackTimer) clearInterval(ackTimer);
+      stopAckExtension?.();
 
       // Ack first — handler succeeded, message is processed regardless of
       // whether we can deliver the response back to the caller.
@@ -179,7 +172,7 @@ export class RpcRouter {
       if (settled) return;
       settled = true;
       clearTimeout(timeoutId);
-      if (ackTimer) clearInterval(ackTimer);
+      stopAckExtension?.();
 
       // Publish error response with x-error header
       try {
@@ -191,20 +184,5 @@ export class RpcRouter {
 
       msg.term(`Handler error: ${msg.subject}`);
     }
-  }
-
-  private resolveAckExtension(config?: boolean | number): number | null {
-    if (config === false || config === undefined) return null;
-    if (typeof config === 'number') return config;
-
-    // true -> auto-calculate from ack_wait (nanos -> ms / 2)
-    const ackWaitNanos = this.ackWaitMap?.get('cmd');
-
-    if (ackWaitNanos) {
-      const interval = Math.floor(ackWaitNanos / 1_000_000 / 2);
-      return Math.max(interval, 500);
-    }
-
-    return 5_000; // fallback
   }
 }
