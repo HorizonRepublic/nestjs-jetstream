@@ -1,6 +1,6 @@
 import { Logger } from '@nestjs/common';
-import { Consumer, ConsumerInfo, ConsumerMessages, DeliverPolicy, JsMsg } from 'nats';
-import type { OrderedConsumerOptions } from 'nats';
+import { Consumer, ConsumerEvents, ConsumerInfo, ConsumerMessages, DeliverPolicy, JsMsg } from 'nats';
+import type { ConsumeOptions, OrderedConsumerOptions } from 'nats';
 import {
   catchError,
   defer,
@@ -43,6 +43,7 @@ export class MessageProvider {
   public constructor(
     private readonly connection: ConnectionProvider,
     private readonly eventBus: EventBus,
+    private readonly consumeOptionsMap: Map<StreamKind, Partial<ConsumeOptions>> = new Map(),
   ) {}
 
   /** Observable stream of workqueue event messages. */
@@ -167,7 +168,7 @@ export class MessageProvider {
     let consecutiveFailures = 0;
     let lastRunFailed = false;
 
-    return defer(() => this.consumeOnce(info, target$)).pipe(
+    return defer(() => this.consumeOnce(kind, info, target$)).pipe(
       tap(() => {
         lastRunFailed = false;
       }),
@@ -199,12 +200,21 @@ export class MessageProvider {
   }
 
   /** Single iteration: get consumer -> pull messages -> emit to subject. */
-  private async consumeOnce(info: ConsumerInfo, target$: Subject<JsMsg>): Promise<void> {
-    const js = (await this.connection.getConnection()).jetstream();
+  private async consumeOnce(
+    kind: StreamKind,
+    info: ConsumerInfo,
+    target$: Subject<JsMsg>,
+  ): Promise<void> {
+    const js = this.connection.getJetStreamClient();
     const consumer: Consumer = await js.consumers.get(info.stream_name, info.name);
-    const messages = await consumer.consume();
+
+    const defaults: Partial<ConsumeOptions> = { idle_heartbeat: 5_000 };
+    const userOptions = this.consumeOptionsMap.get(kind) ?? {};
+
+    const messages = await consumer.consume({ ...defaults, ...userOptions } as ConsumeOptions);
 
     this.activeIterators.add(messages);
+    this.monitorConsumerHealth(messages, info.name);
 
     try {
       for await (const msg of messages) {
@@ -227,6 +237,24 @@ export class MessageProvider {
       case 'ordered':
         return this.orderedMessages$;
     }
+  }
+
+  /** Monitor heartbeats and restart the consumer iterator on prolonged silence. */
+  private monitorConsumerHealth(messages: ConsumerMessages, name: string): void {
+    (async () => {
+      for await (const status of await messages.status()) {
+        if (
+          status.type === ConsumerEvents.HeartbeatsMissed &&
+          (status.data as number) >= 2
+        ) {
+          this.logger.warn(`Consumer ${name}: ${status.data} heartbeats missed, restarting`);
+          messages.stop();
+          break;
+        }
+      }
+    })().catch(() => {
+      // Iterator closed on destroy — expected
+    });
   }
 
   /** Create a self-healing ordered consumer flow. */
@@ -281,7 +309,7 @@ export class MessageProvider {
     streamName: string,
     consumerOpts: Partial<OrderedConsumerOptions>,
   ): Promise<void> {
-    const js = (await this.connection.getConnection()).jetstream();
+    const js = this.connection.getJetStreamClient();
     const consumer = await js.consumers.get(streamName, consumerOpts);
     const messages = await consumer.consume();
 
