@@ -33,11 +33,10 @@ export { JetstreamHealthIndicator } from './health';
 
 // Constants (selective — only what users need)
 export {
-  buildBroadcastSubject,
+  streamName,
   buildSubject,
   consumerName,
   getClientToken,
-  internalName,
   isCoreRpcMode,
   isJetStreamRpcMode,
   JetstreamHeader,
@@ -46,7 +45,6 @@ export {
   JETSTREAM_EVENT_BUS,
   JETSTREAM_OPTIONS,
   PatternPrefix,
-  streamName,
   toNanos,
 } from './jetstream.constants';
 
