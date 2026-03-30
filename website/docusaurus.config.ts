@@ -5,7 +5,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 const config: Config = {
   title: '@horizon-republic/nestjs-jetstream',
   tagline: 'Ship reliable microservices with NATS JetStream and NestJS',
-  favicon: 'img/favicon.ico',
+  favicon: 'img/favicon.svg',
   url: 'https://horizonrepublic.github.io',
   baseUrl: '/nestjs-jetstream/',
   organizationName: 'HorizonRepublic',
