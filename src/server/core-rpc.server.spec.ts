@@ -6,7 +6,6 @@ import type { Msg, NatsConnection, Subscription } from 'nats';
 import { ConnectionProvider } from '../connection';
 import { EventBus } from '../hooks';
 import type { Codec, JetstreamModuleOptions } from '../interfaces';
-import { TransportEvent } from '../interfaces';
 
 import { CoreRpcServer } from './core-rpc.server';
 import { PatternRegistry } from './routing/pattern-registry';
@@ -131,10 +130,7 @@ describe(CoreRpcServer, () => {
 
           // Then: response sent, event emitted
           expect(msg.respond).toHaveBeenCalledWith(codec.encode(responseData));
-          expect(eventBus.emitMessageRouted).toHaveBeenCalledWith(
-            msg.subject,
-            'rpc',
-          );
+          expect(eventBus.emitMessageRouted).toHaveBeenCalledWith(msg.subject, 'rpc');
         });
       });
     });

@@ -99,10 +99,7 @@ describe(EventRouter, () => {
           // Then: handler called, message acked, event emitted
           expect(handler).toHaveBeenCalled();
           expect(msg.ack).toHaveBeenCalled();
-          expect(eventBus.emitMessageRouted).toHaveBeenCalledWith(
-            msg.subject,
-            'event',
-          );
+          expect(eventBus.emitMessageRouted).toHaveBeenCalledWith(msg.subject, 'event');
         });
       });
     });
@@ -296,6 +293,32 @@ describe(EventRouter, () => {
 
         // Then: message terminated with reason
         expect(msg.term).toHaveBeenCalledWith(reason);
+      });
+    });
+
+    describe('mutual exclusivity in handler', () => {
+      it('should nak when handler calls both retry() and terminate()', async () => {
+        // Given: handler that calls retry then terminate (terminate throws)
+        const handler = vi.fn().mockImplementation((_data: unknown, ctx: RpcContext) => {
+          ctx.retry();
+          ctx.terminate(); // throws — becomes handler error → nak
+        });
+
+        patternRegistry.getHandler.mockReturnValue(handler);
+
+        const msg = createMock<JsMsg>({
+          ack: vi.fn(),
+          subject: faker.lorem.word(),
+          data: new TextEncoder().encode(JSON.stringify({})),
+        });
+
+        // When: message arrives
+        events$.next(msg);
+        await new Promise(process.nextTick);
+
+        // Then: treated as handler error — nak'd for retry
+        expect(msg.nak).toHaveBeenCalled();
+        expect(msg.ack).not.toHaveBeenCalled();
       });
     });
   });

@@ -224,7 +224,8 @@ export class MessageProvider {
       case StreamKind.Ordered:
         return this.orderedMessages$;
       default: {
-        throw new Error(`Unknown stream kind: ${kind}`);
+        const _exhaustive: never = kind;
+        throw new Error(`Unknown stream kind: ${_exhaustive}`);
       }
     }
   }

@@ -181,6 +181,7 @@ describe('Handler Context', () => {
       await waitForCondition(() => controller.received.length === 1, 15_000);
 
       expect(controller.attempts).toBe(2);
+      expect(controller.attemptTimestamps).toHaveLength(2);
 
       const [first, second] = controller.attemptTimestamps;
       const gap = second! - first!;

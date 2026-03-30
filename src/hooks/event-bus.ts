@@ -37,12 +37,6 @@ export class EventBus {
    * @param event - The {@link TransportEvent} to emit.
    * @param args - Arguments matching the hook signature for this event.
    */
-  /**
-   * Emit a lifecycle event. Dispatches to custom hook if registered, otherwise no-op.
-   *
-   * @param event - The {@link TransportEvent} to emit.
-   * @param args - Arguments matching the hook signature for this event.
-   */
   public emit<K extends keyof TransportHooks>(
     event: K,
     ...args: Parameters<TransportHooks[K]>
@@ -63,7 +57,12 @@ export class EventBus {
 
     if (!hook) return;
 
-    this.callHook(TransportEvent.MessageRouted, hook as (...a: unknown[]) => unknown, subject, kind);
+    this.callHook(
+      TransportEvent.MessageRouted,
+      hook as (...a: unknown[]) => unknown,
+      subject,
+      kind,
+    );
   }
 
   private callHook(event: string, hook: (...a: unknown[]) => unknown, ...args: unknown[]): void {

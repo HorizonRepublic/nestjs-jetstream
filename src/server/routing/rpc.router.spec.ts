@@ -121,10 +121,7 @@ describe(RpcRouter, () => {
             expect.objectContaining({ headers: expect.anything() }),
           );
           expect(msg.ack).toHaveBeenCalled();
-          expect(eventBus.emitMessageRouted).toHaveBeenCalledWith(
-            msg.subject,
-            'rpc',
-          );
+          expect(eventBus.emitMessageRouted).toHaveBeenCalledWith(msg.subject, 'rpc');
         });
       });
     });

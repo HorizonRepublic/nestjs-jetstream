@@ -123,7 +123,7 @@ export class RpcRouter {
     replyTo: string,
     correlationId: string,
   ): Promise<void> {
-    const nc = this.cachedNc ?? await this.connection.getConnection();
+    const nc = this.cachedNc ?? (await this.connection.getConnection());
     const ctx = new RpcContext([msg]);
 
     let settled = false;

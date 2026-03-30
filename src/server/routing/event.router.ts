@@ -80,7 +80,9 @@ export class EventRouter {
     const concurrency = this.getConcurrency(kind);
 
     const route = (msg: JsMsg): Observable<void> =>
-      from(isOrdered ? this.handleOrderedSafe(msg) : this.handleSafe(msg, ackExtensionInterval, kind));
+      from(
+        isOrdered ? this.handleOrderedSafe(msg) : this.handleSafe(msg, ackExtensionInterval, kind),
+      );
 
     const subscription = stream$
       .pipe(isOrdered ? concatMap(route) : mergeMap(route, concurrency))
@@ -102,13 +104,23 @@ export class EventRouter {
   }
 
   /** Handle a single event message with error isolation. */
-  private async handleSafe(msg: JsMsg, ackExtensionInterval: number | null, kind: StreamKind): Promise<void> {
+  private async handleSafe(
+    msg: JsMsg,
+    ackExtensionInterval: number | null,
+    kind: StreamKind,
+  ): Promise<void> {
     try {
       const resolved = this.decodeMessage(msg);
 
       if (!resolved) return;
 
-      await this.executeHandler(resolved.handler, resolved.data, resolved.ctx, msg, ackExtensionInterval);
+      await this.executeHandler(
+        resolved.handler,
+        resolved.data,
+        resolved.ctx,
+        msg,
+        ackExtensionInterval,
+      );
     } catch (err) {
       this.logger.error(`Unexpected error in ${kind} event router`, err);
     }

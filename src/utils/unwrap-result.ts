@@ -1,6 +1,7 @@
 import { isObservable, Observable, Subscription } from 'rxjs';
 
 const RESOLVED_VOID = Promise.resolve(undefined);
+const RESOLVED_NULL = Promise.resolve(null);
 
 /**
  * Unwrap a handler result that may be a Promise, Observable, or nested combination.
@@ -21,7 +22,7 @@ const RESOLVED_VOID = Promise.resolve(undefined);
 export const unwrapResult = (result: unknown): Promise<unknown> => {
   // Fast path: void handlers (most common case)
   if (result === undefined) return RESOLVED_VOID;
-  if (result === null) return Promise.resolve(null);
+  if (result === null) return RESOLVED_NULL;
 
   // Direct Observable — subscribe immediately (no microtask yield)
   if (isObservable(result)) {
