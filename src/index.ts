@@ -33,6 +33,10 @@ export { JetstreamHealthIndicator } from './health';
 
 // Constants (selective — only what users need)
 export {
+  streamName,
+  buildSubject,
+  consumerName,
+  internalName,
   getClientToken,
   isCoreRpcMode,
   isJetStreamRpcMode,
