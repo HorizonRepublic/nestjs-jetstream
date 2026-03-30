@@ -36,6 +36,7 @@ export {
   streamName,
   buildSubject,
   consumerName,
+  internalName,
   getClientToken,
   isCoreRpcMode,
   isJetStreamRpcMode,
