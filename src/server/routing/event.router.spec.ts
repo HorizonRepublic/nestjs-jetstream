@@ -99,8 +99,7 @@ describe(EventRouter, () => {
           // Then: handler called, message acked, event emitted
           expect(handler).toHaveBeenCalled();
           expect(msg.ack).toHaveBeenCalled();
-          expect(eventBus.emit).toHaveBeenCalledWith(
-            TransportEvent.MessageRouted,
+          expect(eventBus.emitMessageRouted).toHaveBeenCalledWith(
             msg.subject,
             'event',
           );

@@ -131,8 +131,7 @@ describe(CoreRpcServer, () => {
 
           // Then: response sent, event emitted
           expect(msg.respond).toHaveBeenCalledWith(codec.encode(responseData));
-          expect(eventBus.emit).toHaveBeenCalledWith(
-            TransportEvent.MessageRouted,
+          expect(eventBus.emitMessageRouted).toHaveBeenCalledWith(
             msg.subject,
             'rpc',
           );

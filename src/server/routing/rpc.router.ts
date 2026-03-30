@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { MessageHandler } from '@nestjs/microservices';
-import { headers, JsMsg } from 'nats';
-import { catchError, defer, EMPTY, from, mergeMap, Observable, Subscription } from 'rxjs';
+import { headers, JsMsg, NatsConnection } from 'nats';
+import { from, mergeMap, Subscription } from 'rxjs';
 
 import { ConnectionProvider } from '../../connection';
 import { RpcContext } from '../../context';
@@ -37,6 +37,7 @@ export class RpcRouter {
   private readonly concurrency: number | undefined;
   private resolvedAckExtensionInterval: number | null | undefined;
   private subscription: Subscription | null = null;
+  private cachedNc: NatsConnection | null = null;
 
   public constructor(
     private readonly messageProvider: MessageProvider,
@@ -62,20 +63,10 @@ export class RpcRouter {
   }
 
   /** Start routing command messages to handlers. */
-  public start(): void {
+  public async start(): Promise<void> {
+    this.cachedNc = await this.connection.getConnection();
     this.subscription = this.messageProvider.commands$
-      .pipe(
-        mergeMap(
-          (msg) =>
-            defer(() => this.handle(msg)).pipe(
-              catchError((err) => {
-                this.logger.error('Unexpected error in RPC router', err);
-                return EMPTY;
-              }),
-            ),
-          this.concurrency,
-        ),
-      )
+      .pipe(mergeMap((msg) => from(this.handleSafe(msg)), this.concurrency))
       .subscribe();
   }
 
@@ -85,38 +76,43 @@ export class RpcRouter {
     this.subscription = null;
   }
 
-  /** Handle a single RPC command message. */
-  private handle(msg: JsMsg): Observable<void> {
-    const handler = this.patternRegistry.getHandler(msg.subject);
-
-    if (!handler) {
-      msg.term(`No handler for RPC: ${msg.subject}`);
-      this.logger.error(`No handler for RPC subject: ${msg.subject}`);
-      return EMPTY;
-    }
-
-    const replyTo = msg.headers?.get(JetstreamHeader.ReplyTo);
-    const correlationId = msg.headers?.get(JetstreamHeader.CorrelationId);
-
-    if (!replyTo || !correlationId) {
-      msg.term('Missing required headers (reply-to or correlation-id)');
-      this.logger.error(`Missing headers for RPC: ${msg.subject}`);
-      return EMPTY;
-    }
-
-    let data: unknown;
-
+  /** Handle a single RPC command message with error isolation. */
+  private async handleSafe(msg: JsMsg): Promise<void> {
     try {
-      data = this.codec.decode(msg.data);
+      const handler = this.patternRegistry.getHandler(msg.subject);
+
+      if (!handler) {
+        msg.term(`No handler for RPC: ${msg.subject}`);
+        this.logger.error(`No handler for RPC subject: ${msg.subject}`);
+        return;
+      }
+
+      const { headers: msgHeaders } = msg;
+      const replyTo = msgHeaders?.get(JetstreamHeader.ReplyTo);
+      const correlationId = msgHeaders?.get(JetstreamHeader.CorrelationId);
+
+      if (!replyTo || !correlationId) {
+        msg.term('Missing required headers (reply-to or correlation-id)');
+        this.logger.error(`Missing headers for RPC: ${msg.subject}`);
+        return;
+      }
+
+      let data: unknown;
+
+      try {
+        data = this.codec.decode(msg.data);
+      } catch (err) {
+        msg.term('Decode error');
+        this.logger.error(`Decode error for RPC ${msg.subject}:`, err);
+        return;
+      }
+
+      this.eventBus.emitMessageRouted(msg.subject, MessageKind.Rpc);
+
+      await this.executeHandler(handler, data, msg, replyTo, correlationId);
     } catch (err) {
-      msg.term('Decode error');
-      this.logger.error(`Decode error for RPC ${msg.subject}:`, err);
-      return EMPTY;
+      this.logger.error('Unexpected error in RPC router', err);
     }
-
-    this.eventBus.emit(TransportEvent.MessageRouted, msg.subject, MessageKind.Rpc);
-
-    return from(this.executeHandler(handler, data, msg, replyTo, correlationId));
   }
 
   /** Execute handler, publish response, settle message. */
@@ -127,12 +123,8 @@ export class RpcRouter {
     replyTo: string,
     correlationId: string,
   ): Promise<void> {
-    const nc = await this.connection.getConnection();
+    const nc = this.cachedNc ?? await this.connection.getConnection();
     const ctx = new RpcContext([msg]);
-
-    const hdrs = headers();
-
-    hdrs.set(JetstreamHeader.CorrelationId, correlationId);
 
     let settled = false;
 
@@ -159,11 +151,12 @@ export class RpcRouter {
       clearTimeout(timeoutId);
       stopAckExtension?.();
 
-      // Ack first — handler succeeded, message is processed regardless of
-      // whether we can deliver the response back to the caller.
       msg.ack();
 
       try {
+        const hdrs = headers();
+
+        hdrs.set(JetstreamHeader.CorrelationId, correlationId);
         nc.publish(replyTo, this.codec.encode(result), { headers: hdrs });
       } catch (publishErr) {
         this.logger.error(`Failed to publish RPC response for ${msg.subject}`, publishErr);
@@ -174,8 +167,10 @@ export class RpcRouter {
       clearTimeout(timeoutId);
       stopAckExtension?.();
 
-      // Publish error response with x-error header
       try {
+        const hdrs = headers();
+
+        hdrs.set(JetstreamHeader.CorrelationId, correlationId);
         hdrs.set(JetstreamHeader.Error, 'true');
         nc.publish(replyTo, this.codec.encode(serializeError(err)), { headers: hdrs });
       } catch (encodeErr) {

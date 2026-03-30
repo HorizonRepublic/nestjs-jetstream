@@ -75,16 +75,16 @@ describe(RpcRouter, () => {
 
   describe('start() / destroy()', () => {
     describe('happy path', () => {
-      it('should subscribe to commands stream', () => {
-        sut.start();
+      it('should subscribe to commands stream', async () => {
+        await sut.start();
 
         expect(commands$.observed).toBe(true);
       });
     });
 
     describe('when destroyed', () => {
-      it('should unsubscribe from commands stream', () => {
-        sut.start();
+      it('should unsubscribe from commands stream', async () => {
+        await sut.start();
         sut.destroy();
 
         expect(commands$.observed).toBe(false);
@@ -93,8 +93,8 @@ describe(RpcRouter, () => {
   });
 
   describe('message handling', () => {
-    beforeEach(() => {
-      sut.start();
+    beforeEach(async () => {
+      await sut.start();
     });
 
     describe('happy path', () => {
@@ -121,8 +121,7 @@ describe(RpcRouter, () => {
             expect.objectContaining({ headers: expect.anything() }),
           );
           expect(msg.ack).toHaveBeenCalled();
-          expect(eventBus.emit).toHaveBeenCalledWith(
-            TransportEvent.MessageRouted,
+          expect(eventBus.emitMessageRouted).toHaveBeenCalledWith(
             msg.subject,
             'rpc',
           );
@@ -282,7 +281,7 @@ describe(RpcRouter, () => {
         sut = new RpcRouter(messageProvider, patternRegistry, connection, codec, eventBus, {
           timeout: customTimeout,
         });
-        sut.start();
+        await sut.start();
 
         const handler = vi.fn().mockReturnValue(new Promise(() => {}));
 
@@ -311,7 +310,7 @@ describe(RpcRouter, () => {
 
     describe('when handle() throws an unexpected error', () => {
       it('should catch via catchError and keep the subscription alive', async () => {
-        sut.start();
+        await sut.start();
 
         // Given: getHandler throws synchronously (unexpected)
         patternRegistry.getHandler.mockImplementation(() => {
@@ -365,7 +364,7 @@ describe(RpcRouter, () => {
       sut = new RpcRouter(messageProvider, patternRegistry, connection, codec, eventBus, {
         concurrency: 1,
       });
-      sut.start();
+      await sut.start();
 
       let concurrentCount = 0;
       let maxConcurrent = 0;
@@ -397,7 +396,7 @@ describe(RpcRouter, () => {
 
     it('should allow unlimited concurrency when no config is set', async () => {
       // Given: default sut (no options)
-      sut.start();
+      await sut.start();
 
       let concurrentCount = 0;
       let maxConcurrent = 0;
@@ -434,7 +433,7 @@ describe(RpcRouter, () => {
       sut = new RpcRouter(messageProvider, patternRegistry, connection, codec, eventBus, {
         ackExtension: 50,
       });
-      sut.start();
+      await sut.start();
 
       let resolveHandler!: () => void;
       const handlerPromise = new Promise<void>((r) => {
@@ -468,7 +467,7 @@ describe(RpcRouter, () => {
       sut = new RpcRouter(messageProvider, patternRegistry, connection, codec, eventBus, {
         ackExtension: 30,
       });
-      sut.start();
+      await sut.start();
 
       const handler = vi.fn().mockResolvedValue({ ok: true });
 
@@ -498,7 +497,7 @@ describe(RpcRouter, () => {
         timeout: 200,
         ackExtension: 50,
       });
-      sut.start();
+      await sut.start();
 
       const handler = vi.fn().mockReturnValue(new Promise(() => {}));
 
@@ -528,7 +527,7 @@ describe(RpcRouter, () => {
 
     it('should not call working() when ackExtension is disabled', async () => {
       // Given: default sut (no ackExtension)
-      sut.start();
+      await sut.start();
 
       const handler = vi.fn().mockResolvedValue({ ok: true });
 
@@ -560,7 +559,7 @@ describe(RpcRouter, () => {
         { ackExtension: true },
         ackWaitMap,
       );
-      sut.start();
+      await sut.start();
 
       let resolveHandler!: () => void;
       const handlerPromise = new Promise<void>((r) => {
@@ -593,7 +592,7 @@ describe(RpcRouter, () => {
       sut = new RpcRouter(messageProvider, patternRegistry, connection, codec, eventBus, {
         ackExtension: true,
       });
-      sut.start();
+      await sut.start();
 
       const handler = vi.fn().mockResolvedValue({ ok: true });
 
@@ -616,7 +615,7 @@ describe(RpcRouter, () => {
       sut = new RpcRouter(messageProvider, patternRegistry, connection, codec, eventBus, {
         ackExtension: 30,
       });
-      sut.start();
+      await sut.start();
 
       const handler = vi.fn().mockRejectedValue(new Error('handler failed'));
 

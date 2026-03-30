@@ -102,7 +102,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
 
       // 10. Start RPC router if JetStream mode
       if (isJetStreamRpcMode(this.options.rpc) && this.patternRegistry.hasRpcHandlers()) {
-        this.rpcRouter.start();
+        await this.rpcRouter.start();
       }
     }
 

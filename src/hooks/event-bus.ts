@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 
-import type { TransportHooks } from '../interfaces';
+import type { MessageKind, TransportHooks } from '../interfaces';
+import { TransportEvent } from '../interfaces';
 
 /**
  * Central event bus for transport lifecycle notifications.
@@ -36,6 +37,12 @@ export class EventBus {
    * @param event - The {@link TransportEvent} to emit.
    * @param args - Arguments matching the hook signature for this event.
    */
+  /**
+   * Emit a lifecycle event. Dispatches to custom hook if registered, otherwise no-op.
+   *
+   * @param event - The {@link TransportEvent} to emit.
+   * @param args - Arguments matching the hook signature for this event.
+   */
   public emit<K extends keyof TransportHooks>(
     event: K,
     ...args: Parameters<TransportHooks[K]>
@@ -44,10 +51,25 @@ export class EventBus {
 
     if (!hook) return;
 
-    try {
-      const result = (hook as (...a: unknown[]) => unknown)(...args);
+    this.callHook(event, hook as (...a: unknown[]) => unknown, ...args);
+  }
 
-      // Catch async hook rejections that would otherwise go to unhandledRejection
+  /**
+   * Hot-path optimized emit for MessageRouted events.
+   * Avoids rest/spread overhead of the generic `emit()`.
+   */
+  public emitMessageRouted(subject: string, kind: MessageKind): void {
+    const hook = this.hooks[TransportEvent.MessageRouted];
+
+    if (!hook) return;
+
+    this.callHook(TransportEvent.MessageRouted, hook as (...a: unknown[]) => unknown, subject, kind);
+  }
+
+  private callHook(event: string, hook: (...a: unknown[]) => unknown, ...args: unknown[]): void {
+    try {
+      const result = hook(...args);
+
       if (result && typeof (result as Promise<unknown>).catch === 'function') {
         (result as Promise<unknown>).catch((err: unknown) => {
           this.logger.error(

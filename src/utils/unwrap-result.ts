@@ -1,5 +1,7 @@
 import { isObservable, Observable, Subscription } from 'rxjs';
 
+const RESOLVED_VOID = Promise.resolve(undefined);
+
 /**
  * Unwrap a handler result that may be a Promise, Observable, or nested combination.
  *
@@ -9,26 +11,32 @@ import { isObservable, Observable, Subscription } from 'rxjs';
  * - `Observable` — subscribe immediately (no await — preserves sync emissions)
  * - `Promise<Observable>` — await Promise, then subscribe
  * - `Promise<value>` — await
- * - Plain value — return as-is
+ * - `undefined` / `null` — fast path, no microtask
+ *
+ * Non-async to avoid an extra microtask tick on the hot path.
  *
  * @param result - The raw handler return value.
  * @returns The resolved value after unwrapping all layers.
  */
-export const unwrapResult = async (result: unknown): Promise<unknown> => {
+export const unwrapResult = (result: unknown): Promise<unknown> => {
+  // Fast path: void handlers (most common case)
+  if (result === undefined) return RESOLVED_VOID;
+  if (result === null) return Promise.resolve(null);
+
   // Direct Observable — subscribe immediately (no microtask yield)
   if (isObservable(result)) {
     return subscribeToFirst(result as Observable<unknown>);
   }
 
-  // Await Promise, then check if it resolved to an Observable
-  // (NestJS-wrapped handlers return Promise<Observable> when exception filters fire)
-  const resolved = await result;
-
-  if (isObservable(resolved)) {
-    return subscribeToFirst(resolved as Observable<unknown>);
+  // Thenable (Promise) — check if it resolves to an Observable
+  if (typeof (result as Promise<unknown>).then === 'function') {
+    return (result as Promise<unknown>).then((resolved) =>
+      isObservable(resolved) ? subscribeToFirst(resolved as Observable<unknown>) : resolved,
+    );
   }
 
-  return resolved;
+  // Sync non-null value
+  return Promise.resolve(result);
 };
 
 /** Subscribe to an Observable and resolve with its first emitted value. */
@@ -42,7 +50,6 @@ const subscribeToFirst = (obs: Observable<unknown>): Promise<unknown> =>
         if (!done) {
           done = true;
           resolve(val);
-          // Unsubscribe if subscribe() has already returned; otherwise deferred below
           subscription?.unsubscribe();
         }
       },

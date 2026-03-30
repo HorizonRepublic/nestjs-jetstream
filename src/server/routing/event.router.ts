@@ -1,16 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { MessageHandler } from '@nestjs/microservices';
 import { JsMsg } from 'nats';
-import {
-  catchError,
-  concatMap,
-  defer,
-  EMPTY,
-  from,
-  mergeMap,
-  Observable,
-  Subscription,
-} from 'rxjs';
+import { concatMap, from, mergeMap, Observable, Subscription } from 'rxjs';
 
 import { RpcContext } from '../../context';
 import { EventBus } from '../../hooks';
@@ -89,17 +80,8 @@ export class EventRouter {
     const concurrency = this.getConcurrency(kind);
 
     const route = (msg: JsMsg): Observable<void> =>
-      defer(() =>
-        isOrdered ? this.handleOrdered(msg) : this.handle(msg, ackExtensionInterval),
-      ).pipe(
-        catchError((err) => {
-          this.logger.error(`Unexpected error in ${kind} event router`, err);
-          return EMPTY;
-        }),
-      );
+      from(isOrdered ? this.handleOrderedSafe(msg) : this.handleSafe(msg, ackExtensionInterval, kind));
 
-    // Ordered streams use concatMap for strict sequential processing;
-    // workqueue/broadcast use mergeMap for parallel handler execution.
     const subscription = stream$
       .pipe(isOrdered ? concatMap(route) : mergeMap(route, concurrency))
       .subscribe();
@@ -119,28 +101,30 @@ export class EventRouter {
     return undefined;
   }
 
-  /** Handle a single event message: decode -> execute handler -> ack/nak. */
-  private handle(msg: JsMsg, ackExtensionInterval: number | null): Observable<void> {
-    const resolved = this.decodeMessage(msg);
+  /** Handle a single event message with error isolation. */
+  private async handleSafe(msg: JsMsg, ackExtensionInterval: number | null, kind: StreamKind): Promise<void> {
+    try {
+      const resolved = this.decodeMessage(msg);
 
-    if (!resolved) return EMPTY;
+      if (!resolved) return;
 
-    return from(
-      this.executeHandler(resolved.handler, resolved.data, resolved.ctx, msg, ackExtensionInterval),
-    );
+      await this.executeHandler(resolved.handler, resolved.data, resolved.ctx, msg, ackExtensionInterval);
+    } catch (err) {
+      this.logger.error(`Unexpected error in ${kind} event router`, err);
+    }
   }
 
-  /** Handle an ordered message: decode -> execute handler -> no ack/nak. */
-  private handleOrdered(msg: JsMsg): Observable<void> {
-    const resolved = this.decodeMessage(msg, true);
+  /** Handle an ordered message with error isolation. */
+  private async handleOrderedSafe(msg: JsMsg): Promise<void> {
+    try {
+      const resolved = this.decodeMessage(msg, true);
 
-    if (!resolved) return EMPTY;
+      if (!resolved) return;
 
-    return from(
-      unwrapResult(resolved.handler(resolved.data, resolved.ctx)).catch((err: unknown) => {
-        this.logger.error(`Ordered handler error (${msg.subject}):`, err);
-      }),
-    ) as Observable<void>;
+      await unwrapResult(resolved.handler(resolved.data, resolved.ctx));
+    } catch (err) {
+      this.logger.error(`Ordered handler error (${msg.subject}):`, err);
+    }
   }
 
   /** Resolve handler, decode payload, and build context. Returns null on failure. */
@@ -166,7 +150,7 @@ export class EventRouter {
       return null;
     }
 
-    this.eventBus.emit(TransportEvent.MessageRouted, msg.subject, MessageKind.Event);
+    this.eventBus.emitMessageRouted(msg.subject, MessageKind.Event);
 
     return { handler, data, ctx: new RpcContext([msg]) };
   }
