@@ -134,6 +134,12 @@ export class EventRouter {
       if (!resolved) return;
 
       await unwrapResult(resolved.handler(resolved.data, resolved.ctx));
+
+      if (resolved.ctx.shouldRetry || resolved.ctx.shouldTerminate) {
+        this.logger.warn(
+          `retry()/terminate() ignored for ordered message ${msg.subject} — ordered consumers auto-acknowledge`,
+        );
+      }
     } catch (err) {
       this.logger.error(`Ordered handler error (${msg.subject}):`, err);
     }

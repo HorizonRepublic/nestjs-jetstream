@@ -129,3 +129,14 @@ JetstreamModule.forRoot({
 ```
 
 See [Ordered Events](/docs/patterns/ordered-events) for the full ordered consumer configuration.
+
+## Nanosecond precision loss
+
+NATS JetStream uses nanosecond timestamps internally (`int64` in Go), but the nats.js SDK represents them as JavaScript `number` (IEEE 754 float64). Since `Number.MAX_SAFE_INTEGER` is ~9×10¹⁵ and current timestamps in nanos are ~1.7×10¹⁸, **arithmetic on nanosecond values loses ±1ms precision**.
+
+This affects:
+- `ctx.getTimestamp()` — returns `Date` (millisecond precision), accurate to ±1ms
+- `toNanos()` helper — output is accurate for typical config values (seconds, minutes), but sub-millisecond precision is not guaranteed
+- `msg.info.timestampNanos` — raw value from nats.js, already truncated before reaching this library
+
+This is a fundamental limitation of the nats.js SDK, not this library. Using `BigInt` internally would not help — nats.js converts to/from `number` at the SDK boundary. For ordering and deduplication, NATS uses stream sequence numbers (integers, always safe) rather than timestamps.

@@ -130,8 +130,9 @@ describe(RpcContext, () => {
       });
 
       it('should return timestamp as Date', () => {
-        const timestampMs = Date.now();
-        const timestampNanos = timestampMs * 1_000_000;
+        // Nanos exceed Number.MAX_SAFE_INTEGER, so division to ms may lose ±1ms precision.
+        const nowMs = Date.now();
+        const timestampNanos = nowMs * 1_000_000;
         const sut = createJsContext({
           info: { timestampNanos } as DeliveryInfo,
         });
@@ -139,7 +140,7 @@ describe(RpcContext, () => {
         const result = sut.getTimestamp();
 
         expect(result).toBeInstanceOf(Date);
-        expect(result!.getTime()).toBe(timestampMs);
+        expect(Math.abs(result!.getTime() - nowMs)).toBeLessThanOrEqual(1);
       });
 
       it('should return caller name from header', () => {

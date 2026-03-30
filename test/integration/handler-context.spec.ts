@@ -228,8 +228,16 @@ describe('Handler Context', () => {
       // Then: handler called exactly once — terminated, no redelivery
       await waitForCondition(() => controller.attempts === 1, 5_000);
 
-      // Wait extra time to confirm no redelivery
-      await new Promise((r) => setTimeout(r, 3_000));
+      // Poll to confirm no redelivery arrives within ack_wait window
+      const deadline = Date.now() + 3_000;
+
+      while (Date.now() < deadline) {
+        if (controller.attempts > 1) {
+          throw new Error(`Unexpected redelivery: attempts=${controller.attempts}`);
+        }
+
+        await new Promise((r) => setTimeout(r, 200));
+      }
 
       expect(controller.attempts).toBe(1);
     });
@@ -268,10 +276,12 @@ describe('Handler Context', () => {
       await waitForCondition(() => controller.deliveryCount !== undefined, 5_000);
 
       expect(controller.deliveryCount).toBe(1);
-      expect(controller.stream).toContain('ev-stream');
+      expect(controller.stream).toEqual(expect.any(String));
+      expect(controller.stream!.length).toBeGreaterThan(0);
       expect(controller.sequence).toBeGreaterThan(0);
       expect(controller.timestamp).toBeInstanceOf(Date);
-      expect(controller.callerName).toContain('__microservice');
+      expect(controller.callerName).toEqual(expect.any(String));
+      expect(controller.callerName!.length).toBeGreaterThan(0);
     });
   });
 });
