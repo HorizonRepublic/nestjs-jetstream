@@ -9,6 +9,7 @@ import type { Codec } from '../../interfaces';
 import { TransportEvent } from '../../interfaces';
 import { MessageProvider } from '../infrastructure';
 
+import { RpcContext } from '../../context';
 import { StreamKind } from '../../interfaces';
 import type { DeadLetterConfig, EventProcessingConfig } from '../../interfaces';
 import { EventRouter } from './event.router';
@@ -198,6 +199,104 @@ describe(EventRouter, () => {
           expect(handler).toHaveBeenCalled();
           expect(msg.ack).toHaveBeenCalled();
         });
+      });
+    });
+
+    describe('handler-controlled retry', () => {
+      it('should nak when handler calls ctx.retry()', async () => {
+        // Given: handler that requests retry
+        const handler = vi.fn().mockImplementation((_data: unknown, ctx: RpcContext) => {
+          ctx.retry();
+        });
+
+        patternRegistry.getHandler.mockReturnValue(handler);
+
+        const msg = createMock<JsMsg>({
+          ack: vi.fn(),
+          subject: faker.lorem.word(),
+          data: new TextEncoder().encode(JSON.stringify({})),
+        });
+
+        // When: message arrives
+        events$.next(msg);
+        await new Promise(process.nextTick);
+
+        // Then: message nak'd, not acked
+        expect(msg.nak).toHaveBeenCalledWith(undefined);
+        expect(msg.ack).not.toHaveBeenCalled();
+        expect(msg.term).not.toHaveBeenCalled();
+      });
+
+      it('should nak with delay when handler calls ctx.retry({ delayMs })', async () => {
+        // Given: handler that requests delayed retry
+        const handler = vi.fn().mockImplementation((_data: unknown, ctx: RpcContext) => {
+          ctx.retry({ delayMs: 5_000 });
+        });
+
+        patternRegistry.getHandler.mockReturnValue(handler);
+
+        const msg = createMock<JsMsg>({
+          ack: vi.fn(),
+          subject: faker.lorem.word(),
+          data: new TextEncoder().encode(JSON.stringify({})),
+        });
+
+        // When: message arrives
+        events$.next(msg);
+        await new Promise(process.nextTick);
+
+        // Then: message nak'd with delay
+        expect(msg.nak).toHaveBeenCalledWith(5_000);
+        expect(msg.ack).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('handler-controlled terminate', () => {
+      it('should term when handler calls ctx.terminate()', async () => {
+        // Given: handler that terminates the message
+        const handler = vi.fn().mockImplementation((_data: unknown, ctx: RpcContext) => {
+          ctx.terminate();
+        });
+
+        patternRegistry.getHandler.mockReturnValue(handler);
+
+        const msg = createMock<JsMsg>({
+          ack: vi.fn(),
+          subject: faker.lorem.word(),
+          data: new TextEncoder().encode(JSON.stringify({})),
+        });
+
+        // When: message arrives
+        events$.next(msg);
+        await new Promise(process.nextTick);
+
+        // Then: message terminated, not acked
+        expect(msg.term).toHaveBeenCalledWith(undefined);
+        expect(msg.ack).not.toHaveBeenCalled();
+        expect(msg.nak).not.toHaveBeenCalled();
+      });
+
+      it('should term with reason when handler calls ctx.terminate(reason)', async () => {
+        // Given: handler that terminates with reason
+        const reason = 'Order already cancelled';
+        const handler = vi.fn().mockImplementation((_data: unknown, ctx: RpcContext) => {
+          ctx.terminate(reason);
+        });
+
+        patternRegistry.getHandler.mockReturnValue(handler);
+
+        const msg = createMock<JsMsg>({
+          ack: vi.fn(),
+          subject: faker.lorem.word(),
+          data: new TextEncoder().encode(JSON.stringify({})),
+        });
+
+        // When: message arrives
+        events$.next(msg);
+        await new Promise(process.nextTick);
+
+        // Then: message terminated with reason
+        expect(msg.term).toHaveBeenCalledWith(reason);
       });
     });
   });

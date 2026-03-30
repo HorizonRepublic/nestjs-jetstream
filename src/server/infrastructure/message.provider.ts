@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import type { ConsumeOptions, OrderedConsumerOptions } from 'nats';
 import {
   Consumer,
   ConsumerEvents,
@@ -7,7 +8,6 @@ import {
   DeliverPolicy,
   JsMsg,
 } from 'nats';
-import type { ConsumeOptions, OrderedConsumerOptions } from 'nats';
 import {
   catchError,
   defer,
@@ -23,8 +23,8 @@ import {
 
 import { ConnectionProvider } from '../../connection';
 import { EventBus } from '../../hooks';
-import { StreamKind, TransportEvent } from '../../interfaces';
 import type { OrderedEventOverrides } from '../../interfaces';
+import { StreamKind, TransportEvent } from '../../interfaces';
 
 /**
  * Manages pull-based message consumption from JetStream consumers.
@@ -224,8 +224,7 @@ export class MessageProvider {
       case StreamKind.Ordered:
         return this.orderedMessages$;
       default: {
-        const _exhaustive: never = kind;
-        throw new Error(`Unknown stream kind: ${_exhaustive}`);
+        throw new Error(`Unknown stream kind: ${kind}`);
       }
     }
   }

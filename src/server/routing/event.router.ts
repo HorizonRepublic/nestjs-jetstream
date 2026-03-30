@@ -183,7 +183,14 @@ export class EventRouter {
 
     try {
       await unwrapResult(handler(data, ctx));
-      msg.ack();
+
+      if (ctx.shouldTerminate) {
+        msg.term(ctx.terminateReason);
+      } else if (ctx.shouldRetry) {
+        msg.nak(ctx.retryDelay);
+      } else {
+        msg.ack();
+      }
     } catch (err) {
       this.logger.error(`Event handler error (${msg.subject}):`, err);
 

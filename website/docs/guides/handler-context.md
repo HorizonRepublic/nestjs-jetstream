@@ -5,7 +5,7 @@ title: "Handler Context"
 
 # Handler Context
 
-Every `@EventPattern` and `@MessagePattern` handler can inject `RpcContext` to access message metadata: the NATS subject, headers, and the raw underlying message. This works identically for both event and RPC handlers.
+Every `@EventPattern` and `@MessagePattern` handler can inject `RpcContext` to access message metadata, JetStream delivery info, and control message settlement. This works identically for both event and RPC handlers.
 
 ## Injecting the context
 
@@ -32,6 +32,8 @@ export class OrdersController {
 
 ## Methods reference
 
+### Message accessors
+
 | Method | Return type | Description |
 |---|---|---|
 | `getSubject()` | `string` | The NATS subject this message was published to |
@@ -39,6 +41,125 @@ export class OrdersController {
 | `getHeaders()` | `MsgHdrs \| undefined` | All NATS message headers (the raw nats.js `MsgHdrs` object) |
 | `isJetStream()` | `boolean` | Type guard — returns `true` when the message is a JetStream message |
 | `getMessage()` | `JsMsg \| Msg` | The raw NATS message (type depends on transport mode) |
+
+### JetStream metadata
+
+These return `undefined` for Core NATS messages — no type guard needed.
+
+| Method | Return type | Description |
+|---|---|---|
+| `getDeliveryCount()` | `number \| undefined` | How many times this message has been delivered |
+| `getStream()` | `string \| undefined` | The JetStream stream name |
+| `getSequence()` | `number \| undefined` | Stream sequence number |
+| `getTimestamp()` | `Date \| undefined` | Message publish timestamp |
+| `getCallerName()` | `string \| undefined` | Name of the service that sent the message |
+
+### Settlement actions
+
+Control how the transport acknowledges the message — without throwing errors.
+
+| Method | Effect | Use case |
+|---|---|---|
+| `ctx.retry({ delayMs? })` | `msg.nak(delayMs)` — redeliver | Business-level retry (external service unavailable, resource locked) |
+| `ctx.terminate(reason?)` | `msg.term(reason)` — permanent reject | Message no longer relevant (order cancelled, entity deleted) |
+| *(no action)* | `msg.ack()` — acknowledge | Successful processing (default) |
+
+## JetStream metadata
+
+Access delivery info directly without type narrowing:
+
+```typescript
+@EventPattern('order.created')
+async handle(@Payload() data: OrderCreatedDto, @Ctx() ctx: RpcContext) {
+  console.log('Attempt:', ctx.getDeliveryCount());    // 1, 2, 3...
+  console.log('Stream:', ctx.getStream());             // 'orders__microservice_ev-stream'
+  console.log('Sequence:', ctx.getSequence());         // 42
+  console.log('Published:', ctx.getTimestamp());       // Date object
+  console.log('From:', ctx.getCallerName());           // 'api-gateway__microservice'
+}
+```
+
+Use `getDeliveryCount()` for fallback logic on retries:
+
+```typescript
+@EventPattern('payment.process')
+async handle(@Payload() data: PaymentDto, @Ctx() ctx: RpcContext) {
+  if (ctx.getDeliveryCount()! >= 3) {
+    // 3rd attempt — try a different payment provider
+    await this.fallbackProvider.process(data);
+    return;
+  }
+
+  await this.primaryProvider.process(data);
+}
+```
+
+## Controlling message settlement
+
+By default, the transport automatically acks on success and naks on error. Use `retry()` and `terminate()` to override this without throwing:
+
+### Business retry
+
+When conditions aren't right to process the message now, but will be later:
+
+```typescript
+@EventPattern('order.fulfill')
+async handle(@Payload() data: FulfillDto, @Ctx() ctx: RpcContext) {
+  if (!await this.inventoryService.isAvailable()) {
+    ctx.retry({ delayMs: 30_000 }); // try again in 30 seconds
+    return;
+  }
+
+  await this.fulfillOrder(data);
+  // auto-ack — no flags set
+}
+```
+
+Without `delayMs`, the message is redelivered immediately:
+
+```typescript
+ctx.retry(); // immediate redelivery
+```
+
+### Terminate
+
+When the message is no longer relevant and should not be retried or sent to DLQ:
+
+```typescript
+@EventPattern('order.process')
+async handle(@Payload() data: OrderDto, @Ctx() ctx: RpcContext) {
+  const order = await this.orderService.find(data.orderId);
+
+  if (order.status === 'cancelled') {
+    ctx.terminate('Order already cancelled');
+    return;
+  }
+
+  await this.process(order);
+}
+```
+
+### Settlement decision flow
+
+```mermaid
+flowchart TD
+    A[Handler returns] --> B{ctx.shouldTerminate?}
+    B -->|yes| C[msg.term — permanent reject]
+    B -->|no| D{ctx.shouldRetry?}
+    D -->|yes| E[msg.nak — redeliver]
+    D -->|no| F[msg.ack — done]
+    G[Handler throws] --> H{Dead letter?}
+    H -->|yes| I[onDeadLetter → msg.term]
+    H -->|no| J[msg.nak — retry]
+```
+
+:::warning Mutual exclusivity
+`retry()` and `terminate()` cannot both be called in the same handler — the second call throws an `Error`. Choose one intent per message.
+:::
+
+:::info Scope
+Settlement actions only affect **JetStream event handlers** (workqueue and broadcast). They have no effect on ordered events (auto-acknowledged) or RPC handlers (separate settlement logic).
+:::
 
 ## Extracting custom headers
 
@@ -55,102 +176,47 @@ await lastValueFrom(this.client.emit('order.created', record));
 
 ```typescript title="Handler"
 @EventPattern('order.created')
-async handleOrderCreated(
-  @Payload() data: OrderCreatedDto,
-  @Ctx() ctx: RpcContext,
-) {
+async handle(@Payload() data: OrderCreatedDto, @Ctx() ctx: RpcContext) {
   const tenant = ctx.getHeader('x-tenant');     // 'acme'
   const traceId = ctx.getHeader('x-trace-id');  // uuid string
   const missing = ctx.getHeader('x-unknown');    // undefined
 }
 ```
 
-The transport-managed headers are also accessible:
-
-```typescript
-const subject = ctx.getHeader('x-subject');       // original NATS subject
-const caller = ctx.getHeader('x-caller-name');    // sending service name
-```
-
 ## The `isJetStream()` type guard
 
-`RpcContext` can wrap either a JetStream message (`JsMsg`) or a Core NATS message (`Msg`), depending on how the handler was invoked. The `isJetStream()` method is a TypeScript type guard that narrows the return type of `getMessage()`:
+`RpcContext` can wrap either a JetStream message (`JsMsg`) or a Core NATS message (`Msg`). The `isJetStream()` method narrows the return type of `getMessage()`:
 
 ```typescript
-@EventPattern('order.created')
-async handleOrderCreated(
-  @Payload() data: OrderCreatedDto,
-  @Ctx() ctx: RpcContext,
-) {
-  if (ctx.isJetStream()) {
-    // TypeScript knows getMessage() returns JsMsg here
-    const msg = ctx.getMessage();
-
-    console.log('Stream:', msg.info.stream);
-    console.log('Sequence:', msg.seq);
-    console.log('Redelivered:', msg.redelivered);
-    console.log('Delivery count:', msg.info.redeliveryCount);
-  }
+if (ctx.isJetStream()) {
+  const msg = ctx.getMessage(); // TypeScript knows this is JsMsg
+  console.log('Redelivered:', msg.redelivered);
 }
 ```
-
-Without the guard, `getMessage()` returns `JsMsg | Msg` and JetStream-specific properties are not available.
 
 :::info When is it not JetStream?
-The `isJetStream()` check is primarily useful when writing code that must work across both Core RPC mode (where handlers receive `Msg`) and JetStream mode (where handlers receive `JsMsg`). If your application uses JetStream exclusively, the check is still good practice for type safety.
+This check is useful when writing code that works across both Core RPC mode (`Msg`) and JetStream mode (`JsMsg`). The new metadata getters (`getDeliveryCount()`, etc.) already handle this internally — they return `undefined` for Core messages.
 :::
-
-## Available on both pattern types
-
-The context works identically for events and RPC:
-
-```typescript
-// Event handler
-@EventPattern('order.created')
-async handleEvent(@Payload() data: any, @Ctx() ctx: RpcContext) {
-  const subject = ctx.getSubject();
-  const tenant = ctx.getHeader('x-tenant');
-}
-
-// RPC handler
-@MessagePattern('get.order')
-async handleRpc(@Payload() data: any, @Ctx() ctx: RpcContext) {
-  const subject = ctx.getSubject();
-  const tenant = ctx.getHeader('x-tenant');
-  return this.orderService.findOne(data.id);
-}
-```
 
 ## Accessing the raw NATS message
 
-For advanced use cases, `getMessage()` gives you direct access to the underlying nats.js message object. This is an escape hatch — prefer the typed accessors when possible.
+For advanced use cases, `getMessage()` gives direct access to the underlying nats.js message object. Prefer the typed accessors when possible.
 
 ```typescript
-@EventPattern('order.created')
-async handleOrderCreated(
-  @Payload() data: OrderCreatedDto,
-  @Ctx() ctx: RpcContext,
-) {
-  if (ctx.isJetStream()) {
-    const msg = ctx.getMessage();
-
-    // Access JetStream delivery metadata
-    console.log('Stream sequence:', msg.seq);
-    console.log('Consumer sequence:', msg.info.streamSequence);
-    console.log('Pending messages:', msg.info.pending);
-
-    // Manual ack/nak (normally handled by the transport)
-    // Only use this if you need to override default behavior
-    msg.ack();
-  }
+if (ctx.isJetStream()) {
+  const msg = ctx.getMessage();
+  console.log('Pending:', msg.info.pending);
+  console.log('Consumer sequence:', msg.info.streamSequence);
 }
 ```
 
 :::warning Manual acknowledgment
-The transport automatically acknowledges messages after successful handler execution and naks on failure. Calling `msg.ack()` or `msg.nak()` manually can interfere with the transport's delivery guarantees. Only do this if you fully understand the implications.
+Calling `msg.ack()`, `msg.nak()`, or `msg.term()` directly bypasses the transport's settlement logic. Use `ctx.retry()` and `ctx.terminate()` instead — they integrate with ack extension, dead letter handling, and observability hooks.
 :::
 
-## Next steps
+## See also
 
 - [Record Builder & Deduplication](./record-builder.md) — set custom headers and message IDs on the publisher side
 - [Custom Codec](./custom-codec.md) — control how the `@Payload()` data is serialized and deserialized
+- [Dead Letter Queue](./dead-letter-queue.md) — what happens when retries are exhausted
+- [Troubleshooting](./troubleshooting.md) — common issues with message delivery
