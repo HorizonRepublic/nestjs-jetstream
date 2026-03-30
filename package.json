@@ -6,7 +6,7 @@
     "type": "git",
     "url": "git+https://github.com/HorizonRepublic/nestjs-jetstream.git"
   },
-  "homepage": "https://github.com/HorizonRepublic/nestjs-jetstream#readme",
+  "homepage": "https://horizonrepublic.github.io/nestjs-jetstream/",
   "bugs": {
     "url": "https://github.com/HorizonRepublic/nestjs-jetstream/issues"
   },
@@ -94,7 +94,7 @@
     "prettier": "^3.8.1",
     "tsup": "^8.5.1",
     "tsx": "^4.21.0",
-    "typescript": "~5.9.3",
+    "typescript": "~5.9.0",
     "typescript-eslint": "^8.57.2",
     "vitest": "^4.1.2"
   }
