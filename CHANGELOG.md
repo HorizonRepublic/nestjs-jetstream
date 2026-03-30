@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.7.1](https://github.com/HorizonRepublic/nestjs-jetstream/compare/v2.7.0...v2.7.1) (2026-03-30)
+
+
+### Bug Fixes
+
+* Add Export Essential Naming and Subject Helpers ([#96](https://github.com/HorizonRepublic/nestjs-jetstream/issues/96)) ([1cf5e2c](https://github.com/HorizonRepublic/nestjs-jetstream/commit/1cf5e2c7ebdb565d12777acd12c0eda857dea87f))
+
 ## [2.7.0](https://github.com/HorizonRepublic/nestjs-jetstream/compare/v2.6.1...v2.7.0) (2026-03-30)
 
 
