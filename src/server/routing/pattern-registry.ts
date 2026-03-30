@@ -32,6 +32,10 @@ export class PatternRegistry {
 
   // Cached after registerHandlers() — the registry is immutable from that point
   private cachedPatterns: PatternsByKind | null = null;
+  private _hasEvents = false;
+  private _hasCommands = false;
+  private _hasBroadcasts = false;
+  private _hasOrdered = false;
 
   public constructor(private readonly options: JetstreamModuleOptions) {}
 
@@ -79,6 +83,10 @@ export class PatternRegistry {
     }
 
     this.cachedPatterns = this.buildPatternsByKind();
+    this._hasEvents = this.cachedPatterns.events.length > 0;
+    this._hasCommands = this.cachedPatterns.commands.length > 0;
+    this._hasBroadcasts = this.cachedPatterns.broadcasts.length > 0;
+    this._hasOrdered = this.cachedPatterns.ordered.length > 0;
     this.logSummary();
   }
 
@@ -93,19 +101,19 @@ export class PatternRegistry {
   }
 
   public hasBroadcastHandlers(): boolean {
-    return this.getPatternsByKind().broadcasts.length > 0;
+    return this._hasBroadcasts;
   }
 
   public hasRpcHandlers(): boolean {
-    return this.getPatternsByKind().commands.length > 0;
+    return this._hasCommands;
   }
 
   public hasEventHandlers(): boolean {
-    return this.getPatternsByKind().events.length > 0;
+    return this._hasEvents;
   }
 
   public hasOrderedHandlers(): boolean {
-    return this.getPatternsByKind().ordered.length > 0;
+    return this._hasOrdered;
   }
 
   /** Get fully-qualified NATS subjects for ordered handlers. */

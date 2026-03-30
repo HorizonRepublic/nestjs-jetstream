@@ -169,7 +169,7 @@ export default [
           selector: 'variable',
         },
         {format: ['camelCase'], selector: 'variableLike'},
-        {format: ['camelCase'], selector: 'memberLike'},
+        {format: ['camelCase'], leadingUnderscore: 'allow', selector: 'memberLike'},
         {format: ['PascalCase'], selector: 'typeLike'},
         {format: ['PascalCase'], selector: 'enumMember'},
         {format: ['PascalCase'], selector: 'interface'},
