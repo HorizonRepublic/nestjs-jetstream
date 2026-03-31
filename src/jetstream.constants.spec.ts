@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { faker } from '@faker-js/faker';
 import { StoreCompression } from 'nats';
 
-import type { StreamKind } from './interfaces';
+import { StreamKind } from './interfaces';
 import {
   buildBroadcastSubject,
   buildSubject,
@@ -54,20 +54,35 @@ describe('jetstream.constants', () => {
       serviceName = faker.lorem.word();
     });
 
-    it('should build cmd subject', () => {
+    it('should build command subject', () => {
       const pattern = faker.lorem.word();
 
-      expect(buildSubject(serviceName, 'cmd', pattern)).toBe(
+      expect(buildSubject(serviceName, StreamKind.Command, pattern)).toBe(
         `${serviceName}__microservice.cmd.${pattern}`,
       );
     });
 
-    it('should build ev subject', () => {
+    it('should build event subject', () => {
       const pattern = faker.lorem.word();
 
-      expect(buildSubject(serviceName, 'ev', pattern)).toBe(
+      expect(buildSubject(serviceName, StreamKind.Event, pattern)).toBe(
         `${serviceName}__microservice.ev.${pattern}`,
       );
+    });
+
+    it('should build ordered subject', () => {
+      const pattern = faker.lorem.word();
+
+      expect(buildSubject(serviceName, StreamKind.Ordered, pattern)).toBe(
+        `${serviceName}__microservice.ordered.${pattern}`,
+      );
+    });
+
+    it('should produce incorrect subject for arbitrary string', () => {
+      const pattern = faker.lorem.word();
+      const invalidKind = 'invalid-kind' as never;
+
+      expect(buildSubject(serviceName, invalidKind, pattern)).not.toMatch(/\.(ev|cmd|ordered)\./);
     });
   });
 
@@ -87,14 +102,23 @@ describe('jetstream.constants', () => {
     });
 
     it.each<[StreamKind, string]>([
-      ['ev', 'ev-stream'],
-      ['cmd', 'cmd-stream'],
+      [StreamKind.Event, 'ev-stream'],
+      [StreamKind.Command, 'cmd-stream'],
+      [StreamKind.Ordered, 'ordered-stream'],
     ])('should build %s stream name with service prefix', (kind, suffix) => {
       expect(streamName(serviceName, kind)).toBe(`${serviceName}__microservice_${suffix}`);
     });
 
     it('should return fixed name for broadcast', () => {
-      expect(streamName(serviceName, 'broadcast')).toBe('broadcast-stream');
+      expect(streamName(serviceName, StreamKind.Broadcast)).toBe('broadcast-stream');
+    });
+
+    it('should produce incorrect stream name for arbitrary string', () => {
+      const invalidKind = 'invalid-kind' as never;
+
+      expect(streamName(serviceName, invalidKind)).not.toMatch(
+        /_(ev|cmd|ordered|broadcast)-stream$/,
+      );
     });
   });
 
@@ -126,15 +150,23 @@ describe('jetstream.constants', () => {
     });
 
     it.each<[StreamKind, string]>([
-      ['ev', 'ev-consumer'],
-      ['cmd', 'cmd-consumer'],
+      [StreamKind.Event, 'ev-consumer'],
+      [StreamKind.Command, 'cmd-consumer'],
     ])('should build %s consumer name with service prefix', (kind, suffix) => {
       expect(consumerName(serviceName, kind)).toBe(`${serviceName}__microservice_${suffix}`);
     });
 
     it('should include service prefix for broadcast consumer', () => {
-      expect(consumerName(serviceName, 'broadcast')).toBe(
+      expect(consumerName(serviceName, StreamKind.Broadcast)).toBe(
         `${serviceName}__microservice_broadcast-consumer`,
+      );
+    });
+
+    it('should produce incorrect consumer name for arbitrary string', () => {
+      const invalidKind = 'invalid-kind' as never;
+
+      expect(consumerName(serviceName, invalidKind)).not.toMatch(
+        /_(ev|cmd|ordered|broadcast)-consumer$/,
       );
     });
   });

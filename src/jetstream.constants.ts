@@ -245,7 +245,7 @@ export const internalName = (name: string): string => `${name}__microservice`;
  * Build a fully-qualified NATS subject for workqueue events, RPC commands, or ordered events.
  *
  * @param serviceName - Target service name.
- * @param kind - Subject kind (`'ev'`, `'cmd'`, or `'ordered'`).
+ * @param kind - Subject kind ({@link StreamKind.Event}, {@link StreamKind.Command}, or {@link StreamKind.Ordered}).
  * @param pattern - The message pattern (e.g. `'user.created'`).
  * @returns `{serviceName}__microservice.{kind}.{pattern}`
  */
@@ -264,7 +264,7 @@ export const buildBroadcastSubject = (pattern: string): string => `broadcast.${p
  * Build the JetStream stream name for a given service and kind.
  *
  * @param serviceName - Service name from `forRoot({ name })`.
- * @param kind - Stream kind (`'ev'`, `'cmd'`, or `'broadcast'`).
+ * @param kind - Stream kind ({@link StreamKind}).
  * @returns Stream name (e.g. `orders__microservice_ev-stream` or `broadcast-stream`).
  */
 export const streamName = (serviceName: string, kind: StreamKind): string => {
@@ -276,7 +276,7 @@ export const streamName = (serviceName: string, kind: StreamKind): string => {
  * Build the JetStream consumer name for a given service and kind.
  *
  * @param serviceName - Service name from `forRoot({ name })`.
- * @param kind - Stream kind (`'ev'`, `'cmd'`, or `'broadcast'`).
+ * @param kind - Stream kind ({@link StreamKind}).
  * @returns Consumer name (e.g. `orders__microservice_ev-consumer`).
  */
 export const consumerName = (serviceName: string, kind: StreamKind): string => {
