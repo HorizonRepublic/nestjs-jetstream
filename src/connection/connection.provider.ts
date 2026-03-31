@@ -217,7 +217,7 @@ export class ConnectionProvider {
           case 'update':
           case 'ldm':
           case 'reconnecting':
-          case 'pingTimer':
+          case 'ping':
           case 'staleConnection':
           case 'forceReconnect':
             break;
