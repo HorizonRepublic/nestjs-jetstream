@@ -80,7 +80,7 @@ describe('jetstream.constants', () => {
 
     it('should produce incorrect subject for arbitrary string', () => {
       const pattern = faker.lorem.word();
-      const invalidKind = 'invalid-kind' as any;
+      const invalidKind = 'invalid-kind' as never;
 
       expect(buildSubject(serviceName, invalidKind, pattern)).not.toMatch(/\.(ev|cmd|ordered)\./);
     });
