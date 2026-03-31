@@ -86,35 +86,39 @@ describe('Self-Healing Consumer Flow', () => {
       await nc.drain().catch(() => {});
     });
 
-    it('should recover consumption after consumer is deleted and re-created', { timeout: 30_000 }, async () => {
-      // Given: event is delivered successfully
-      await firstValueFrom(client.emit('healing.check', { seq: 1 }));
+    it(
+      'should recover consumption after consumer is deleted and re-created',
+      { timeout: 30_000 },
+      async () => {
+        // Given: event is delivered successfully
+        await firstValueFrom(client.emit('healing.check', { seq: 1 }));
 
-      await waitForCondition(() => controller.received.length >= 1, 5_000);
+        await waitForCondition(() => controller.received.length >= 1, 5_000);
 
-      expect(controller.received[0]).toEqual({ seq: 1 });
+        expect(controller.received[0]).toEqual({ seq: 1 });
 
-      // When: delete the consumer via JetStream Management API
-      // This breaks the consumer iterator → self-healing catchError → repeat with backoff
-      const jsm = await nc.jetstreamManager();
-      const stream = streamName(serviceName, StreamKind.Event);
-      const consumer = consumerName(serviceName, StreamKind.Event);
-      const info = await jsm.consumers.info(stream, consumer);
+        // When: delete the consumer via JetStream Management API
+        // This breaks the consumer iterator → self-healing catchError → repeat with backoff
+        const jsm = await nc.jetstreamManager();
+        const stream = streamName(serviceName, StreamKind.Event);
+        const consumer = consumerName(serviceName, StreamKind.Event);
+        const info = await jsm.consumers.info(stream, consumer);
 
-      await jsm.consumers.delete(stream, consumer);
+        await jsm.consumers.delete(stream, consumer);
 
-      // Self-healing retries with backoff (100ms, 200ms, 400ms...) but consumer is gone.
-      // Re-create the consumer so the next retry succeeds.
-      await new Promise((r) => setTimeout(r, 500));
-      await jsm.consumers.add(stream, info.config);
+        // Self-healing retries with backoff (100ms, 200ms, 400ms...) but consumer is gone.
+        // Re-create the consumer so the next retry succeeds.
+        await new Promise((r) => setTimeout(r, 500));
+        await jsm.consumers.add(stream, info.config);
 
-      // Then: self-healing retry finds the re-created consumer and resumes consumption
-      await firstValueFrom(client.emit('healing.check', { seq: 2 }));
+        // Then: self-healing retry finds the re-created consumer and resumes consumption
+        await firstValueFrom(client.emit('healing.check', { seq: 2 }));
 
-      await waitForCondition(() => controller.received.length >= 2, 15_000);
+        await waitForCondition(() => controller.received.length >= 2, 15_000);
 
-      expect(controller.received[1]).toEqual({ seq: 2 });
-    });
+        expect(controller.received[1]).toEqual({ seq: 2 });
+      },
+    );
   });
 
   describe('destroy and restart lifecycle', () => {

@@ -272,10 +272,9 @@ describe('Stream & Consumer Lifecycle', () => {
     it('should re-create streams after explicit deletion and re-bootstrap', async () => {
       const serviceName = uniqueServiceName();
 
-      const { app: app1 } = await createTestApp(
-        { name: serviceName, port },
-        [InfraEventController],
-      );
+      const { app: app1 } = await createTestApp({ name: serviceName, port }, [
+        InfraEventController,
+      ]);
 
       await app1.close();
 
@@ -285,10 +284,9 @@ describe('Stream & Consumer Lifecycle', () => {
 
       await jsm.streams.delete(`${internal}_ev-stream`);
 
-      const { app: app2 } = await createTestApp(
-        { name: serviceName, port },
-        [InfraEventController],
-      );
+      const { app: app2 } = await createTestApp({ name: serviceName, port }, [
+        InfraEventController,
+      ]);
 
       try {
         const streamInfo = await jsm.streams.info(`${internal}_ev-stream`);
