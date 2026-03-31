@@ -10,8 +10,10 @@ import {
 } from 'vitest';
 import { createMock } from '@golevelup/ts-vitest';
 import { faker } from '@faker-js/faker';
-import type { JetStreamClient, JetStreamManager, NatsConnection, Status } from 'nats';
-import { connect, Events, NatsError } from 'nats';
+import type { NatsConnection, Status } from '@nats-io/transport-node';
+import { connect } from '@nats-io/transport-node';
+import type { JetStreamClient, JetStreamManager } from '@nats-io/jetstream';
+import { jetstream, jetstreamManager } from '@nats-io/jetstream';
 
 import { EventBus } from '../hooks';
 import type { JetstreamModuleOptions } from '../interfaces';
@@ -19,9 +21,15 @@ import { TransportEvent } from '../interfaces';
 
 import { ConnectionProvider } from './connection.provider';
 
-vi.mock('nats', async () => ({
-  ...(await vi.importActual('nats')),
+vi.mock('@nats-io/transport-node', async () => ({
+  ...(await vi.importActual('@nats-io/transport-node')),
   connect: vi.fn(),
+}));
+
+vi.mock('@nats-io/jetstream', async () => ({
+  ...(await vi.importActual('@nats-io/jetstream')),
+  jetstream: vi.fn(),
+  jetstreamManager: vi.fn(),
 }));
 
 const mockConnect = connect as MockedFunction<typeof connect>;
@@ -36,6 +44,9 @@ describe(ConnectionProvider, () => {
   const emptyStatusStream = (): AsyncIterable<Status> =>
     (async function* (): AsyncGenerator<Status> {})();
 
+  const mockJetstream = jetstream as MockedFunction<typeof jetstream>;
+  const mockJetstreamManager = jetstreamManager as MockedFunction<typeof jetstreamManager>;
+
   const createNc = (overrides?: Partial<Mocked<NatsConnection>>): Mocked<NatsConnection> =>
     createMock<NatsConnection>({
       isClosed: vi.fn().mockReturnValue(false),
@@ -43,7 +54,6 @@ describe(ConnectionProvider, () => {
       status: vi.fn().mockReturnValue(emptyStatusStream()),
       drain: vi.fn().mockResolvedValue(undefined),
       closed: vi.fn().mockResolvedValue(undefined),
-      jetstream: vi.fn().mockReturnValue(createMock<JetStreamClient>()),
       ...overrides,
     });
 
@@ -56,6 +66,7 @@ describe(ConnectionProvider, () => {
     eventBus = createMock<EventBus>();
     mockNc = createNc();
     mockConnect.mockResolvedValue(mockNc);
+    mockJetstream.mockReturnValue(createMock<JetStreamClient>());
 
     sut = new ConnectionProvider(options, eventBus);
   });
@@ -108,7 +119,7 @@ describe(ConnectionProvider, () => {
     describe('error paths', () => {
       it('should throw RuntimeException on CONNECTION_REFUSED', async () => {
         // Given: connection refused
-        mockConnect.mockRejectedValue(new NatsError('refused', 'CONNECTION_REFUSED'));
+        mockConnect.mockRejectedValue(new Error('CONNECTION_REFUSED'));
 
         // When/Then: throws RuntimeException with server list
         await expect(sut.getConnection()).rejects.toThrow('NATS connection refused');
@@ -145,7 +156,7 @@ describe(ConnectionProvider, () => {
         // Given: jsm available
         const mockJsm = createMock<JetStreamManager>();
 
-        mockNc.jetstreamManager.mockResolvedValue(mockJsm);
+        mockJetstreamManager.mockResolvedValue(mockJsm);
 
         // When: requested
         const jsm = await sut.getJetStreamManager();
@@ -158,14 +169,14 @@ describe(ConnectionProvider, () => {
         // Given: jsm available
         const mockJsm = createMock<JetStreamManager>();
 
-        mockNc.jetstreamManager.mockResolvedValue(mockJsm);
+        mockJetstreamManager.mockResolvedValue(mockJsm);
 
         // When: called twice
         await sut.getJetStreamManager();
         await sut.getJetStreamManager();
 
         // Then: only one jsm created
-        expect(mockNc.jetstreamManager).toHaveBeenCalledTimes(1);
+        expect(mockJetstreamManager).toHaveBeenCalledTimes(1);
       });
     });
   });
@@ -268,7 +279,7 @@ describe(ConnectionProvider, () => {
       const nc = createNc({
         status: vi.fn().mockReturnValue(
           (async function* (): AsyncGenerator<Status> {
-            yield { type: Events.Disconnect, data: '' } as Status;
+            yield { type: 'disconnect', data: '' } as Status;
           })(),
         ),
       });
@@ -288,7 +299,7 @@ describe(ConnectionProvider, () => {
       const nc = createNc({
         status: vi.fn().mockReturnValue(
           (async function* (): AsyncGenerator<Status> {
-            yield { type: Events.Reconnect, data: '' } as Status;
+            yield { type: 'reconnect', data: '' } as Status;
           })(),
         ),
       });
@@ -308,7 +319,7 @@ describe(ConnectionProvider, () => {
       const nc = createNc({
         status: vi.fn().mockReturnValue(
           (async function* (): AsyncGenerator<Status> {
-            yield { type: Events.Error, data: 'test error' } as Status;
+            yield { type: 'error', error: new Error('test error') } as unknown as Status;
           })(),
         ),
       });
@@ -375,7 +386,7 @@ describe(ConnectionProvider, () => {
 
       // Then: same instance, jetstream() called once
       expect(js1).toBe(js2);
-      expect(mockNc.jetstream).toHaveBeenCalledTimes(1);
+      expect(mockJetstream).toHaveBeenCalledTimes(1);
     });
 
     it('should throw if not connected', () => {
@@ -387,7 +398,8 @@ describe(ConnectionProvider, () => {
       // Given: connected, jetstream() returns different objects on each call.
       // Use a gate to delay the Reconnect event until after the first getJetStreamClient() call.
       let callCount = 0;
-      const jetstreamFn = vi.fn().mockImplementation(() => {
+
+      mockJetstream.mockImplementation(() => {
         return { id: ++callCount } as unknown as JetStreamClient;
       });
 
@@ -397,11 +409,10 @@ describe(ConnectionProvider, () => {
       });
 
       const nc = createNc({
-        jetstream: jetstreamFn,
         status: vi.fn().mockReturnValue(
           (async function* (): AsyncGenerator<Status> {
             await reconnectGate;
-            yield { type: Events.Reconnect, data: '' } as Status;
+            yield { type: 'reconnect', data: '' } as Status;
           })(),
         ),
       });
@@ -413,7 +424,7 @@ describe(ConnectionProvider, () => {
       // When: get client before reconnect
       const js1 = sut.getJetStreamClient();
 
-      expect(jetstreamFn).toHaveBeenCalledTimes(1);
+      expect(mockJetstream).toHaveBeenCalledTimes(1);
 
       // Trigger reconnect event and let it propagate
       emitReconnect();
@@ -422,7 +433,7 @@ describe(ConnectionProvider, () => {
       // Then: cache was invalidated, new instance returned
       const js2 = sut.getJetStreamClient();
 
-      expect(jetstreamFn).toHaveBeenCalledTimes(2);
+      expect(mockJetstream).toHaveBeenCalledTimes(2);
       expect(js1).not.toBe(js2);
     });
   });

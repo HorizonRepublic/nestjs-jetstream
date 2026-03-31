@@ -1,15 +1,16 @@
 import { Logger } from '@nestjs/common';
 import {
   connect,
-  ConnectionOptions,
-  DebugEvents,
-  Events,
+  type ConnectionOptions,
+  type NatsConnection,
+  type Status,
+} from '@nats-io/transport-node';
+import {
+  jetstream,
+  jetstreamManager,
   type JetStreamClient,
-  JetStreamManager,
-  NatsConnection,
-  NatsError,
-  Status,
-} from 'nats';
+  type JetStreamManager,
+} from '@nats-io/jetstream';
 import { defer, from, Observable, share, shareReplay, switchMap } from 'rxjs';
 
 import { EventBus } from '../hooks';
@@ -96,7 +97,7 @@ export class ConnectionProvider {
     this.jsmPromise = (async (): Promise<JetStreamManager> => {
       const nc = await this.getConnection();
 
-      this.jsmInstance = await nc.jetstreamManager();
+      this.jsmInstance = await jetstreamManager(nc);
       this.logger.log('JetStream manager initialized');
       return this.jsmInstance;
     })().finally(() => {
@@ -120,7 +121,7 @@ export class ConnectionProvider {
       throw new Error('Not connected — call getConnection() before getJetStreamClient()');
     }
 
-    this.jsClient ??= this.connection.jetstream();
+    this.jsClient ??= jetstream(this.connection);
     return this.jsClient;
   }
 
@@ -184,7 +185,7 @@ export class ConnectionProvider {
 
       return nc;
     } catch (err) {
-      if (err instanceof NatsError && err.code === 'CONNECTION_REFUSED') {
+      if (err instanceof Error && err.message.includes('REFUSED')) {
         throw new Error(`NATS connection refused: ${this.options.servers.join(', ')}`);
       }
 
@@ -197,24 +198,28 @@ export class ConnectionProvider {
     (async (): Promise<void> => {
       for await (const status of nc.status()) {
         switch (status.type) {
-          case Events.Disconnect:
+          case 'disconnect':
             this.eventBus.emit(TransportEvent.Disconnect);
             break;
-          case Events.Reconnect:
+          case 'reconnect':
             this.jsClient = null;
             this.jsmInstance = null;
             this.jsmPromise = null;
             this.eventBus.emit(TransportEvent.Reconnect, nc.getServer());
             break;
-          case Events.Error:
-            this.eventBus.emit(TransportEvent.Error, new Error(String(status.data)), 'connection');
+          case 'error':
+            this.eventBus.emit(
+              TransportEvent.Error,
+              new Error(String((status as { type: 'error'; error: Error }).error)),
+              'connection',
+            );
             break;
-          case Events.Update:
-          case Events.LDM:
-          case DebugEvents.Reconnecting:
-          case DebugEvents.PingTimer:
-          case DebugEvents.StaleConnection:
-          case DebugEvents.ClientInitiatedReconnect:
+          case 'update':
+          case 'ldm':
+          case 'reconnecting':
+          case 'pingTimer':
+          case 'staleConnection':
+          case 'forceReconnect':
             break;
         }
       }
