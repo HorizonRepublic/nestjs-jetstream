@@ -4,10 +4,12 @@ import { ClientProxy, Ctx, MessagePattern, Payload, RpcException } from '@nestjs
 import { TestingModule } from '@nestjs/testing';
 import { NatsConnection } from 'nats';
 import { firstValueFrom } from 'rxjs';
+import type { StartedTestContainer } from 'testcontainers';
 
 import { getClientToken, JetstreamRecordBuilder, RpcContext } from '../../src';
 
 import { cleanupStreams, createNatsConnection, createTestApp, uniqueServiceName } from './helpers';
+import { startNatsContainer } from './nats-container';
 
 // ---------------------------------------------------------------------------
 // Test Controllers
@@ -44,20 +46,24 @@ describe('Core RPC Round-Trip', () => {
   let module: TestingModule;
   let client: ClientProxy;
   let serviceName: string;
+  let container: StartedTestContainer;
+  let port: number;
 
   beforeAll(async () => {
-    nc = await createNatsConnection();
+    ({ container, port } = await startNatsContainer());
+    nc = await createNatsConnection(port);
   });
 
   afterAll(async () => {
     await nc.drain();
+    await container.stop();
   });
 
   beforeEach(async () => {
     serviceName = uniqueServiceName();
 
     ({ app, module } = await createTestApp(
-      { name: serviceName },
+      { name: serviceName, port },
       [RpcController],
       [serviceName], // register forFeature client for the same service
     ));

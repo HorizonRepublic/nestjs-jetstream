@@ -2,11 +2,13 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Controller } from '@nestjs/common';
 import { EventPattern, MessagePattern, Payload } from '@nestjs/microservices';
 import { NatsConnection } from 'nats';
+import type { StartedTestContainer } from 'testcontainers';
 
 import { JETSTREAM_CONNECTION } from '../../src';
 import { ConnectionProvider } from '../../src/connection';
 
 import { cleanupStreams, createNatsConnection, createTestApp, uniqueServiceName } from './helpers';
+import { startNatsContainer } from './nats-container';
 
 // ---------------------------------------------------------------------------
 // Test Controllers
@@ -32,18 +34,22 @@ class ShutdownRpcController {
 
 describe('Graceful Shutdown', () => {
   let nc: NatsConnection;
+  let container: StartedTestContainer;
+  let port: number;
 
   beforeAll(async () => {
-    nc = await createNatsConnection();
+    ({ container, port } = await startNatsContainer());
+    nc = await createNatsConnection(port);
   });
 
   afterAll(async () => {
     await nc.drain();
+    await container.stop();
   });
 
   it('should drain NATS connection on app.close()', async () => {
     const serviceName = uniqueServiceName();
-    const { app, module } = await createTestApp({ name: serviceName }, [ShutdownEventController]);
+    const { app, module } = await createTestApp({ name: serviceName, port }, [ShutdownEventController]);
 
     try {
       const connection = module.get<ConnectionProvider>(JETSTREAM_CONNECTION);
@@ -63,7 +69,7 @@ describe('Graceful Shutdown', () => {
   it('should not create streams when no handlers registered', async () => {
     const serviceName = uniqueServiceName();
     const { app } = await createTestApp(
-      { name: serviceName },
+      { name: serviceName, port },
       [], // no controllers
     );
 
@@ -84,7 +90,7 @@ describe('Graceful Shutdown', () => {
 
   it('should close cleanly with both event and RPC handlers', async () => {
     const serviceName = uniqueServiceName();
-    const { app, module } = await createTestApp({ name: serviceName }, [
+    const { app, module } = await createTestApp({ name: serviceName, port }, [
       ShutdownEventController,
       ShutdownRpcController,
     ]);

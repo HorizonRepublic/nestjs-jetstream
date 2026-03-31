@@ -11,6 +11,7 @@ export interface NatsContainerResult {
 /**
  * Start a NATS container with JetStream enabled.
  * Returns the started container and the mapped host port.
+ * Includes a TCP-level readiness probe to handle port-forwarding lag on Docker Desktop.
  */
 export const startNatsContainer = async (): Promise<NatsContainerResult> => {
   const container = await new GenericContainer(NATS_IMAGE)
@@ -21,7 +22,23 @@ export const startNatsContainer = async (): Promise<NatsContainerResult> => {
 
   const port = container.getMappedPort(4222);
 
-  return { container, port };
+  // Docker Desktop on macOS can lag on port forwarding after container start.
+  // Poll until we can establish a real NATS connection.
+  const deadline = Date.now() + 15_000;
+
+  while (Date.now() < deadline) {
+    try {
+      const nc = await connect({ servers: [`nats://localhost:${port}`], timeout: 1_000 });
+
+      await nc.drain();
+
+      return { container, port };
+    } catch {
+      await new Promise((r) => setTimeout(r, 100));
+    }
+  }
+
+  throw new Error(`NATS container on port ${port} not reachable within 15s`);
 };
 
 /**
