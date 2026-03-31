@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import { NatsError, StreamConfig, StreamInfo } from 'nats';
+import { JetStreamApiError, type StreamConfig, type StreamInfo } from '@nats-io/jetstream';
 
 import { ConnectionProvider } from '../../connection';
 import { StreamKind } from '../../interfaces';
@@ -83,7 +83,7 @@ export class StreamProvider {
       this.logger.debug(`Stream exists, updating: ${config.name}`);
       return await jsm.streams.update(config.name, config);
     } catch (err) {
-      if (err instanceof NatsError && err.api_error?.err_code === STREAM_NOT_FOUND) {
+      if (err instanceof JetStreamApiError && err.code === STREAM_NOT_FOUND) {
         this.logger.log(`Creating stream: ${config.name}`);
         return await jsm.streams.add(config as StreamConfig);
       }

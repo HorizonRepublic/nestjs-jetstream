@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 import { createMock } from '@golevelup/ts-vitest';
 import { faker } from '@faker-js/faker';
-import type { Consumer, ConsumerInfo, ConsumerMessages, JsMsg } from 'nats';
-import { ConsumerEvents } from 'nats';
+import type { Consumer, ConsumerInfo, ConsumerMessages, JsMsg } from '@nats-io/jetstream';
 
 import { ConnectionProvider } from '../../connection';
 import { EventBus } from '../../hooks';
@@ -24,13 +23,13 @@ interface AsyncIteratorLike<T> {
  * Yields events from the array, then blocks until stopped.
  */
 const createStatusIterator = (
-  events: { type: string; data: unknown }[],
+  events: { type: string; count: number }[],
   isStopped: () => boolean,
   onBlock: (unblock: () => void) => void,
-): (() => Promise<MockIteratorResult<{ type: string; data: unknown }>>) => {
+): (() => Promise<MockIteratorResult<{ type: string; count: number }>>) => {
   let i = 0;
 
-  return async (): Promise<MockIteratorResult<{ type: string; data: unknown }>> => {
+  return async (): Promise<MockIteratorResult<{ type: string; count: number }>> => {
     if (i < events.length) {
       return { done: false, value: events[i++] };
     }
@@ -55,7 +54,7 @@ const createStatusIterator = (
  */
 const createMockMessages = (
   msgs: JsMsg[] = [],
-  statusEvents: { type: string; data: unknown }[] = [],
+  statusEvents: { type: string; count: number }[] = [],
 ): ConsumerMessages => {
   let stopped = false;
   let resolveWait: (() => void) | null = null;
@@ -278,7 +277,7 @@ describe(MessageProvider, () => {
     describe('when 2+ heartbeats are missed', () => {
       it('should stop the consumer messages iterator', async () => {
         // Given: consumer with status that emits HeartbeatsMissed with data >= 2
-        const statusEvents = [{ type: ConsumerEvents.HeartbeatsMissed, data: 2 }];
+        const statusEvents = [{ type: 'heartbeats_missed', count: 2 }];
 
         const mockMessages = createMockMessages([], statusEvents);
 
@@ -318,7 +317,7 @@ describe(MessageProvider, () => {
     describe('when only 1 heartbeat is missed', () => {
       it('should not stop the consumer messages iterator', async () => {
         // Given: consumer with status that emits HeartbeatsMissed with data = 1
-        const statusEvents = [{ type: ConsumerEvents.HeartbeatsMissed, data: 1 }];
+        const statusEvents = [{ type: 'heartbeats_missed', count: 1 }];
 
         const mockMessages = createMockMessages([], statusEvents);
 
