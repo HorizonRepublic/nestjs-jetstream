@@ -94,15 +94,7 @@ export class ConnectionProvider {
     if (this.jsmInstance) return this.jsmInstance;
     if (this.jsmPromise) return this.jsmPromise;
 
-    this.jsmPromise = (async (): Promise<JetStreamManager> => {
-      const nc = await this.getConnection();
-
-      this.jsmInstance = await jetstreamManager(nc);
-      this.logger.log('JetStream manager initialized');
-      return this.jsmInstance;
-    })().finally(() => {
-      this.jsmPromise = null;
-    });
+    this.jsmPromise = this.initJetStreamManager();
 
     return this.jsmPromise;
   }
@@ -165,6 +157,19 @@ export class ConnectionProvider {
     }
   }
 
+  private async initJetStreamManager(): Promise<JetStreamManager> {
+    try {
+      const nc = await this.getConnection();
+
+      this.jsmInstance = await jetstreamManager(nc);
+      this.logger.log('JetStream manager initialized');
+
+      return this.jsmInstance;
+    } finally {
+      this.jsmPromise = null;
+    }
+  }
+
   /** Internal: establish the physical connection with reconnect monitoring. */
   private async establish(): Promise<NatsConnection> {
     const name = internalName(this.options.name);
@@ -195,7 +200,7 @@ export class ConnectionProvider {
 
   /** Subscribe to connection status events and emit hooks. */
   private monitorStatus(nc: NatsConnection): void {
-    (async (): Promise<void> => {
+    void (async (): Promise<void> => {
       for await (const status of nc.status()) {
         switch (status.type) {
           case 'disconnect':

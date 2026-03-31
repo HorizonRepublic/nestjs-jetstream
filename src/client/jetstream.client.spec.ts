@@ -756,7 +756,7 @@ describe(JetstreamClient, () => {
       await vi.advanceTimersByTimeAsync(0);
 
       // When: disconnect event fires
-      statusSubject.next({ type: 'disconnect', data: '' });
+      statusSubject.next({ type: 'disconnect', server: '' });
 
       // Then: both reject with Error('Connection lost')
       await expect(result1).rejects.toThrow('Connection lost');
@@ -769,7 +769,7 @@ describe(JetstreamClient, () => {
       await vi.advanceTimersByTimeAsync(0);
 
       // When: disconnect
-      statusSubject.next({ type: 'disconnect', data: '' });
+      statusSubject.next({ type: 'disconnect', server: '' });
 
       // Then: advancing past timeout should NOT trigger RpcTimeout (already cleaned up)
       vi.advanceTimersByTime(DEFAULT_JETSTREAM_RPC_TIMEOUT);
@@ -785,7 +785,7 @@ describe(JetstreamClient, () => {
       expect(mockNc.subscribe).toHaveBeenCalledTimes(1);
 
       // When: disconnect
-      statusSubject.next({ type: 'disconnect', data: '' });
+      statusSubject.next({ type: 'disconnect', server: '' });
 
       // Then: next connect() should set up inbox again
       await sut.connect();
@@ -800,7 +800,7 @@ describe(JetstreamClient, () => {
       await vi.advanceTimersByTimeAsync(0);
 
       // When: disconnect event fires
-      statusSubject.next({ type: 'disconnect', data: '' });
+      statusSubject.next({ type: 'disconnect', server: '' });
 
       // Then: clearTimeout was called for the pending RPC timeout
       expect(clearTimeoutSpy).toHaveBeenCalled();
@@ -816,7 +816,7 @@ describe(JetstreamClient, () => {
 
       // When/Then: disconnect fires — no crash
       expect(() => {
-        statusSubject.next({ type: 'disconnect', data: '' });
+        statusSubject.next({ type: 'disconnect', server: '' });
       }).not.toThrow();
 
       await coreClient.close();

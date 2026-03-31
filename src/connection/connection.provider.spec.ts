@@ -279,7 +279,7 @@ describe(ConnectionProvider, () => {
       const nc = createNc({
         status: vi.fn().mockReturnValue(
           (async function* (): AsyncGenerator<Status> {
-            yield { type: 'disconnect', data: '' } as Status;
+            yield { type: 'disconnect', server: '' } as Status;
           })(),
         ),
       });
@@ -299,7 +299,7 @@ describe(ConnectionProvider, () => {
       const nc = createNc({
         status: vi.fn().mockReturnValue(
           (async function* (): AsyncGenerator<Status> {
-            yield { type: 'reconnect', data: '' } as Status;
+            yield { type: 'reconnect', server: '' } as Status;
           })(),
         ),
       });
@@ -412,7 +412,7 @@ describe(ConnectionProvider, () => {
         status: vi.fn().mockReturnValue(
           (async function* (): AsyncGenerator<Status> {
             await reconnectGate;
-            yield { type: 'reconnect', data: '' } as Status;
+            yield { type: 'reconnect', server: '' } as Status;
           })(),
         ),
       });
