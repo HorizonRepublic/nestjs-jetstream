@@ -37,7 +37,7 @@ We welcome contributions from the community. The full contribution guidelines li
 
 - Node.js >= 20.0.0
 - pnpm 10.x or higher
-- Docker (for integration tests — runs a NATS container)
+- Docker (integration tests use [Testcontainers](https://testcontainers.com/) to start NATS automatically)
 
 ## Development Commands
 

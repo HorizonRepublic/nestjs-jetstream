@@ -4,6 +4,7 @@ import { ClientProxy, EventPattern, Payload } from '@nestjs/microservices';
 import { TestingModule } from '@nestjs/testing';
 import { DeliverPolicy, NatsConnection } from 'nats';
 import { firstValueFrom } from 'rxjs';
+import type { StartedTestContainer } from 'testcontainers';
 
 import { getClientToken } from '../../src';
 
@@ -14,6 +15,7 @@ import {
   uniqueServiceName,
   waitForCondition,
 } from './helpers';
+import { startNatsContainer } from './nats-container';
 
 // ---------------------------------------------------------------------------
 // Test Controllers
@@ -96,13 +98,20 @@ class OrderedWithDlqController {
 
 describe('Ordered Event Delivery', () => {
   let nc: NatsConnection;
+  let container: StartedTestContainer;
+  let port: number;
 
   beforeAll(async () => {
-    nc = await createNatsConnection();
+    ({ container, port } = await startNatsContainer());
+    nc = await createNatsConnection(port);
   });
 
   afterAll(async () => {
-    await nc.drain();
+    try {
+      await nc.drain();
+    } finally {
+      await container.stop();
+    }
   });
 
   describe('basic ordered delivery', () => {
@@ -116,7 +125,7 @@ describe('Ordered Event Delivery', () => {
       serviceName = uniqueServiceName();
 
       ({ app, module } = await createTestApp(
-        { name: serviceName },
+        { name: serviceName, port },
         [OrderedController],
         [serviceName],
       ));
@@ -162,7 +171,7 @@ describe('Ordered Event Delivery', () => {
       serviceName = uniqueServiceName();
 
       ({ app, module } = await createTestApp(
-        { name: serviceName },
+        { name: serviceName, port },
         [MixedController],
         [serviceName],
       ));
@@ -201,7 +210,7 @@ describe('Ordered Event Delivery', () => {
       serviceName = uniqueServiceName();
 
       ({ app, module } = await createTestApp(
-        { name: serviceName, ordered: { deliverPolicy: DeliverPolicy.All } },
+        { name: serviceName, port, ordered: { deliverPolicy: DeliverPolicy.All } },
         [OrderedController],
         [serviceName],
       ));
@@ -235,7 +244,7 @@ describe('Ordered Event Delivery', () => {
       serviceName = uniqueServiceName();
 
       ({ app, module } = await createTestApp(
-        { name: serviceName, ordered: { deliverPolicy: DeliverPolicy.New } },
+        { name: serviceName, port, ordered: { deliverPolicy: DeliverPolicy.New } },
         [OrderedController],
         [serviceName],
       ));
@@ -269,7 +278,7 @@ describe('Ordered Event Delivery', () => {
 
       // Step 1: start app with default policy to create stream and publish messages
       let { app, module } = await createTestApp(
-        { name: serviceName },
+        { name: serviceName, port },
         [OrderedController],
         [serviceName],
       );
@@ -283,7 +292,7 @@ describe('Ordered Event Delivery', () => {
 
       // Step 2: restart with DeliverPolicy.Last — should get only the last message
       ({ app, module } = await createTestApp(
-        { name: serviceName, ordered: { deliverPolicy: DeliverPolicy.Last } },
+        { name: serviceName, port, ordered: { deliverPolicy: DeliverPolicy.Last } },
         [OrderedController],
         [serviceName],
       ));
@@ -305,7 +314,7 @@ describe('Ordered Event Delivery', () => {
 
       // Step 1: publish to two different ordered subjects
       let { app, module } = await createTestApp(
-        { name: serviceName },
+        { name: serviceName, port },
         [MultiPatternOrderedController],
         [serviceName],
       );
@@ -320,7 +329,7 @@ describe('Ordered Event Delivery', () => {
 
       // Step 2: restart with DeliverPolicy.LastPerSubject
       ({ app, module } = await createTestApp(
-        { name: serviceName, ordered: { deliverPolicy: DeliverPolicy.LastPerSubject } },
+        { name: serviceName, port, ordered: { deliverPolicy: DeliverPolicy.LastPerSubject } },
         [MultiPatternOrderedController],
         [serviceName],
       ));
@@ -347,7 +356,7 @@ describe('Ordered Event Delivery', () => {
 
       // Step 1: publish 3 messages
       let { app, module } = await createTestApp(
-        { name: serviceName },
+        { name: serviceName, port },
         [OrderedController],
         [serviceName],
       );
@@ -363,6 +372,7 @@ describe('Ordered Event Delivery', () => {
       ({ app, module } = await createTestApp(
         {
           name: serviceName,
+          port,
           ordered: { deliverPolicy: DeliverPolicy.StartSequence, optStartSeq: 2 },
         },
         [OrderedController],
@@ -386,7 +396,7 @@ describe('Ordered Event Delivery', () => {
 
       // Step 1: publish a message, record time, publish another
       let { app, module } = await createTestApp(
-        { name: serviceName },
+        { name: serviceName, port },
         [OrderedController],
         [serviceName],
       );
@@ -406,6 +416,7 @@ describe('Ordered Event Delivery', () => {
       ({ app, module } = await createTestApp(
         {
           name: serviceName,
+          port,
           ordered: { deliverPolicy: DeliverPolicy.StartTime, optStartTime: startTime },
         },
         [OrderedController],
@@ -414,13 +425,13 @@ describe('Ordered Event Delivery', () => {
 
       const controller = module.get(OrderedController);
 
-      await waitForCondition(() => controller.received.length > 0, 5_000);
+      await waitForCondition(() => controller.received.length > 0, 10_000);
 
       expect(controller.received[0]).toEqual({ status: 'after' });
 
       await app.close();
       await cleanupStreams(nc, serviceName);
-    }, 15_000);
+    }, 20_000);
   });
 
   describe('ordered handler error', () => {
@@ -434,7 +445,7 @@ describe('Ordered Event Delivery', () => {
       serviceName = uniqueServiceName();
 
       ({ app, module } = await createTestApp(
-        { name: serviceName },
+        { name: serviceName, port },
         [FailingOrderedController],
         [serviceName],
       ));
@@ -472,7 +483,7 @@ describe('Ordered Event Delivery', () => {
       serviceName = uniqueServiceName();
 
       ({ app, module } = await createTestApp(
-        { name: serviceName },
+        { name: serviceName, port },
         [MultiPatternOrderedController],
         [serviceName],
       ));
@@ -515,6 +526,7 @@ describe('Ordered Event Delivery', () => {
       ({ app, module } = await createTestApp(
         {
           name: serviceName,
+          port,
           onDeadLetter: async (info) => {
             deadLetters.push(info);
           },
@@ -565,7 +577,7 @@ describe('Ordered Event Delivery', () => {
 
       // Step 1: start a consumer service to create the stream and listen
       const { app: consumerApp, module: consumerModule } = await createTestApp(
-        { name: serviceName },
+        { name: serviceName, port },
         [OrderedController],
         [serviceName],
       );
@@ -574,7 +586,7 @@ describe('Ordered Event Delivery', () => {
 
       // Step 2: start a publisher-only service
       const { app: publisherApp, module: publisherModule } = await createTestApp(
-        { name: serviceName, consumer: false },
+        { name: serviceName, port, consumer: false },
         [],
         [serviceName],
       );
