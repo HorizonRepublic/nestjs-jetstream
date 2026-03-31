@@ -63,7 +63,9 @@ describe(ConsumerProvider, () => {
         mockJsm.consumers.info.mockRejectedValue(authError);
 
         // When/Then: propagates the error
-        await expect(sut.ensureConsumers([StreamKind.Event])).rejects.toThrow('authorization violation');
+        await expect(sut.ensureConsumers([StreamKind.Event])).rejects.toThrow(
+          'authorization violation',
+        );
         expect(mockJsm.consumers.add).not.toHaveBeenCalled();
       });
     });
@@ -160,7 +162,9 @@ describe(ConsumerProvider, () => {
         mockJsm.consumers.info.mockResolvedValue(createMock<ConsumerInfo>());
 
         // When/Then: ensureConsumers throws
-        await expect(sut.ensureConsumers([StreamKind.Broadcast])).rejects.toThrow(/no broadcast patterns/i);
+        await expect(sut.ensureConsumers([StreamKind.Broadcast])).rejects.toThrow(
+          /no broadcast patterns/i,
+        );
         expect(mockJsm.consumers.add).not.toHaveBeenCalled();
         expect(mockJsm.consumers.update).not.toHaveBeenCalled();
       });
