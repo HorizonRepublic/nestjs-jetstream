@@ -24,7 +24,7 @@ export const startNatsContainer = async (): Promise<NatsContainerResult> => {
 
   // Docker Desktop on macOS can lag on port forwarding after container start.
   // Poll until we can establish a real NATS connection.
-  const deadline = Date.now() + 15_000;
+  const deadline = Date.now() + 30_000;
 
   while (Date.now() < deadline) {
     try {
@@ -38,7 +38,7 @@ export const startNatsContainer = async (): Promise<NatsContainerResult> => {
     }
   }
 
-  throw new Error(`NATS container on port ${port} not reachable within 15s`);
+  throw new Error(`NATS container on port ${port} not reachable within 30s`);
 };
 
 /**
@@ -55,7 +55,7 @@ export const startNatsContainerWithFixedPort = async (
     .withWaitStrategy(Wait.forLogMessage(/Server is ready/))
     .start();
 
-  const deadline = Date.now() + 15_000;
+  const deadline = Date.now() + 30_000;
 
   while (Date.now() < deadline) {
     try {
@@ -69,7 +69,7 @@ export const startNatsContainerWithFixedPort = async (
     }
   }
 
-  throw new Error(`NATS container on fixed port ${hostPort} not reachable within 15s`);
+  throw new Error(`NATS container on fixed port ${hostPort} not reachable within 30s`);
 };
 
 /**
@@ -82,7 +82,7 @@ export const restartNatsContainer = async (container: StartedTestContainer): Pro
   await container.restart();
 
   const newPort = container.getMappedPort(4222);
-  const deadline = Date.now() + 15_000;
+  const deadline = Date.now() + 30_000;
 
   while (Date.now() < deadline) {
     try {
