@@ -69,9 +69,9 @@ const deleteStreamIfExists = async (
   try {
     await jsm.streams.delete(name);
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : '';
+    const isStreamNotFound = err instanceof Error && err.message.includes('stream not found');
 
-    if (!msg.includes('stream not found')) throw err;
+    if (!isStreamNotFound) throw err;
   }
 };
 

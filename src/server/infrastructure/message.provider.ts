@@ -234,7 +234,7 @@ export class MessageProvider {
 
   /** Monitor heartbeats and restart the consumer iterator on prolonged silence. */
   private monitorConsumerHealth(messages: ConsumerMessages, name: string): void {
-    (async (): Promise<void> => {
+    void (async (): Promise<void> => {
       for await (const status of await messages.status()) {
         // Threshold: 2 consecutive missed heartbeats triggers restart.
         // One missed heartbeat can happen during normal GC pauses or brief network blips.

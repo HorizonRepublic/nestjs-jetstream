@@ -51,9 +51,9 @@ describe('Graceful Shutdown', () => {
 
   afterAll(async () => {
     try {
-      await nc?.drain();
+      await nc.drain();
     } finally {
-      await container?.stop();
+      await container.stop();
     }
   });
 
@@ -133,7 +133,7 @@ describe('Graceful Shutdown', () => {
     });
 
     afterAll(async () => {
-      await reconnectContainer?.stop();
+      await reconnectContainer.stop();
     });
 
     it('should close cleanly while transport is reconnecting', { timeout: 60_000 }, async () => {
