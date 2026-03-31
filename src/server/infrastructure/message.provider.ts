@@ -224,7 +224,9 @@ export class MessageProvider {
       case StreamKind.Ordered:
         return this.orderedMessages$;
       default: {
+        // eslint-disable-next-line @typescript-eslint/naming-convention
         const _exhaustive: never = kind;
+
         throw new Error(`Unknown stream kind: ${_exhaustive}`);
       }
     }
@@ -245,6 +247,7 @@ export class MessageProvider {
       }
     })().catch((err: unknown) => {
       // Iterator closed on destroy is expected; log anything else
+      /* v8 ignore next 3 -- debug-only observability, no business logic */
       if (err) {
         this.logger.debug(`Consumer ${name} health monitor ended:`, err);
       }
