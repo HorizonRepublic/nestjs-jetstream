@@ -92,23 +92,23 @@ describe('Self-Healing Consumer Flow', () => {
       await nc.drain().catch(() => {});
     });
 
-    it('should recover consumer after NATS container restart', { timeout: 60_000 }, async () => {
-      // Given: event is delivered before restart
+    it('should recover consumer after prolonged NATS outage', { timeout: 90_000 }, async () => {
+      // Given: event is delivered before outage
       await firstValueFrom(client.emit('healing.check', { seq: 1 }));
 
       await waitForCondition(() => controller.received.length >= 1, 5_000);
 
       expect(controller.received[0]).toEqual({ seq: 1 });
 
-      // When: NATS container restarts (simulates network partition / server crash)
-      await restartNatsContainer(container);
+      // When: freeze NATS process for 12s (>2 heartbeat intervals at idle_heartbeat: 5s)
+      // This triggers: health monitor detects 2 missed heartbeats → messages.stop()
+      //   → self-healing catchError → repeat with exponential backoff
+      await container.exec(['kill', '-STOP', '1']);
+      await new Promise((r) => setTimeout(r, 12_000));
+      await container.exec(['kill', '-CONT', '1']);
 
-      // The test's own NATS connection is broken by the restart — recreate it
-      await nc.drain().catch(() => {});
-      nc = await createNatsConnection(port);
-
-      // Then: retry sending until the client's internal connection auto-reconnects
-      const deadline = Date.now() + 20_000;
+      // Then: retry sending until the self-healing flow re-establishes the consumer
+      const deadline = Date.now() + 30_000;
       let sent = false;
 
       while (Date.now() < deadline) {
@@ -124,7 +124,7 @@ describe('Self-Healing Consumer Flow', () => {
       expect(sent).toBe(true);
 
       // Verify the self-healing flow re-established the consumer and delivered the event
-      await waitForCondition(() => controller.received.length >= 2, 20_000);
+      await waitForCondition(() => controller.received.length >= 2, 30_000);
 
       expect(controller.received[1]).toEqual({ seq: 2 });
     });

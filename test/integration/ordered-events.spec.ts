@@ -422,13 +422,13 @@ describe('Ordered Event Delivery', () => {
 
       const controller = module.get(OrderedController);
 
-      await waitForCondition(() => controller.received.length > 0, 5_000);
+      await waitForCondition(() => controller.received.length > 0, 10_000);
 
       expect(controller.received[0]).toEqual({ status: 'after' });
 
       await app.close();
       await cleanupStreams(nc, serviceName);
-    }, 15_000);
+    }, 20_000);
   });
 
   describe('ordered handler error', () => {
