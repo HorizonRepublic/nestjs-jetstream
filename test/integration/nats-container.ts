@@ -89,7 +89,9 @@ export const startNatsContainerWithFixedPort = async (
  * Restart a NATS container and wait for JetStream readiness.
  * Container filesystem (including JetStream store) persists across restarts.
  *
- * Uses the current mapped port from the container (stable for fixed port bindings).
+ * @returns The mapped host port after restart. Dynamic ports may change on restart;
+ *   callers using fixed port bindings (via `startNatsContainerWithFixedPort`) can
+ *   safely ignore the return value since the port is stable.
  */
 export const restartNatsContainer = async (container: StartedTestContainer): Promise<number> => {
   await container.restart();

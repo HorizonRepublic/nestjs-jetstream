@@ -30,14 +30,14 @@ export const createTestApp = async (
   controllers: Type[] = [],
   clientTargets: string[] = [],
 ): Promise<{ app: INestApplication; module: TestingModule }> => {
-  const { port, servers: _servers, ...moduleOptions } = options;
+  const { port, ...moduleOptions } = options;
   const featureImports = clientTargets.map((name) => JetstreamModule.forFeature({ name }));
 
   const module = await Test.createTestingModule({
     imports: [
       JetstreamModule.forRoot({
-        servers: [`nats://localhost:${port}`],
         ...moduleOptions,
+        servers: [`nats://localhost:${port}`],
       }),
       ...featureImports,
     ],

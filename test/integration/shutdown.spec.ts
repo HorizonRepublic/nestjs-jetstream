@@ -74,6 +74,7 @@ describe('Graceful Shutdown', () => {
       // After close, connection should be cleaned up
       expect(connection.unwrap).toBeNull();
     } finally {
+      await app.close().catch(() => {});
       await cleanupStreams(nc, serviceName);
     }
   });
@@ -119,6 +120,7 @@ describe('Graceful Shutdown', () => {
       // Connection drained
       expect(connection.unwrap).toBeNull();
     } finally {
+      await app.close().catch(() => {});
       await cleanupStreams(nc, serviceName);
     }
   });
@@ -146,7 +148,7 @@ describe('Graceful Shutdown', () => {
       await restartNatsContainer(reconnectContainer);
 
       // Close app during reconnection — should not throw or hang
-      await expect(app.close()).resolves.not.toThrow();
+      await app.close();
     });
   });
 });
