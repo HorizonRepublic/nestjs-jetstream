@@ -5,8 +5,7 @@ import { TestingModule } from '@nestjs/testing';
 import { NatsConnection } from 'nats';
 import type { StartedTestContainer } from 'testcontainers';
 
-import { JsonCodec } from '../../src';
-import { internalName } from '../../src/jetstream.constants';
+import { internalName, JsonCodec } from '../../src';
 
 import { cleanupStreams, createNatsConnection, createTestApp, uniqueServiceName } from './helpers';
 import { startNatsContainer } from './nats-container';

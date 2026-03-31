@@ -6,9 +6,7 @@ import { NatsConnection } from 'nats';
 import { firstValueFrom } from 'rxjs';
 import type { StartedTestContainer } from 'testcontainers';
 
-import { getClientToken } from '../../src';
-import { consumerName, streamName } from '../../src/jetstream.constants';
-import { StreamKind } from '../../src/interfaces';
+import { consumerName, getClientToken, StreamKind, streamName } from '../../src';
 
 import {
   cleanupStreams,

@@ -3,9 +3,8 @@ import { MicroserviceOptions } from '@nestjs/microservices';
 import { Test, TestingModule } from '@nestjs/testing';
 import { connect, NatsConnection } from 'nats';
 
-import { JetstreamModule, JetstreamStrategy } from '../../src';
-import type { JetstreamModuleOptions } from '../../src/interfaces';
-import { streamName } from '../../src/jetstream.constants';
+import { JetstreamModule, JetstreamStrategy, StreamKind, streamName } from '../../src';
+import type { JetstreamModuleOptions } from '../../src';
 
 /**
  * Create a unique service name per test to avoid stream/consumer collisions.
@@ -83,11 +82,11 @@ const deleteStreamIfExists = async (
 export const cleanupStreams = async (nc: NatsConnection, serviceName: string): Promise<void> => {
   const jsm = await nc.jetstreamManager();
 
-  for (const kind of ['ev', 'cmd', 'ordered'] as const) {
+  for (const kind of [StreamKind.Event, StreamKind.Command, StreamKind.Ordered] as const) {
     await deleteStreamIfExists(jsm, streamName(serviceName, kind));
   }
 
-  await deleteStreamIfExists(jsm, streamName(serviceName, 'broadcast'));
+  await deleteStreamIfExists(jsm, streamName(serviceName, StreamKind.Broadcast));
 };
 
 /**
