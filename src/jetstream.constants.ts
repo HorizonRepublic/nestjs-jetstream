@@ -6,8 +6,8 @@ import {
   RetentionPolicy,
   StorageType,
   StoreCompression,
-} from 'nats';
-import type { ConsumerConfig, StreamConfig } from 'nats';
+} from '@nats-io/jetstream';
+import type { ConsumerConfig, StreamConfig } from '@nats-io/jetstream';
 
 import { StreamKind } from './interfaces';
 import type { RpcConfig, SubjectKind } from './interfaces';

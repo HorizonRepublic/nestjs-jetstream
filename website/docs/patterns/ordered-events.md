@@ -249,7 +249,7 @@ With `All` policy, a service that restarts after running for 7 days will replay 
 **Scenario:** A real-time dashboard that shows live order activity. Historical data is loaded from a database on startup — you only need events published *after* the service starts.
 
 ```typescript
-import { DeliverPolicy } from 'nats';
+import { DeliverPolicy } from '@nats-io/jetstream';
 
 JetstreamModule.forRoot({
   name: 'dashboard',
@@ -273,7 +273,7 @@ If your service restarts and messages were published during downtime, those mess
 **Scenario:** A configuration cache service that needs the latest config value on startup, then listens for updates. The stream contains configuration snapshots — you only need the most recent one to initialize, then you track changes going forward.
 
 ```typescript
-import { DeliverPolicy } from 'nats';
+import { DeliverPolicy } from '@nats-io/jetstream';
 
 JetstreamModule.forRoot({
   name: 'config-cache',
@@ -297,7 +297,7 @@ JetstreamModule.forRoot({
 **Scenario:** An in-memory status map that tracks the latest state of every entity. The stream contains per-entity subjects like `order.status.123`, `order.status.456`. On startup, you need the latest status for *each* order, then you track updates in real time.
 
 ```typescript
-import { DeliverPolicy } from 'nats';
+import { DeliverPolicy } from '@nats-io/jetstream';
 
 JetstreamModule.forRoot({
   name: 'status-tracker',
@@ -321,7 +321,7 @@ The "per subject" grouping is based on the full NATS subject. If you publish to 
 **Scenario:** A resumable projection that stores its last-processed sequence number in an external database. On restart, it reads the stored offset and resumes from exactly that point — no re-processing, no gaps.
 
 ```typescript
-import { DeliverPolicy } from 'nats';
+import { DeliverPolicy } from '@nats-io/jetstream';
 import { ConfigService } from '@nestjs/config';
 
 JetstreamModule.forRootAsync({
@@ -369,7 +369,7 @@ async handleOrderStatus(
 **Scenario:** Debugging a production issue. You know the bug was introduced around 14:00 UTC and you want to replay the last 2 hours of events against a fixed handler to verify the fix.
 
 ```typescript
-import { DeliverPolicy } from 'nats';
+import { DeliverPolicy } from '@nats-io/jetstream';
 
 JetstreamModule.forRoot({
   name: 'debug-replay',
@@ -457,7 +457,7 @@ The `replayPolicy` controls how fast historical messages are delivered:
 `Instant` is almost always what you want. `Original` is useful for testing or simulation scenarios where you want to faithfully reproduce the original timing of events.
 
 ```typescript
-import { DeliverPolicy, ReplayPolicy } from 'nats';
+import { DeliverPolicy, ReplayPolicy } from '@nats-io/jetstream';
 
 ordered: {
   deliverPolicy: DeliverPolicy.All,

@@ -289,7 +289,7 @@ When a handler throws, the transport automatically `nak`'s the message for redel
 import { Controller, Logger } from '@nestjs/common';
 import { Ctx, EventPattern, Payload } from '@nestjs/microservices';
 import { RpcContext } from '@horizon-republic/nestjs-jetstream';
-import type { JsMsg } from 'nats';
+import type { JsMsg } from '@nats-io/jetstream';
 
 @Controller()
 export class OrdersController {

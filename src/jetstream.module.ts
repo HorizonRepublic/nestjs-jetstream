@@ -9,7 +9,7 @@ import {
   Provider,
 } from '@nestjs/common';
 
-import type { ConsumeOptions } from 'nats';
+import type { ConsumeOptions } from '@nats-io/jetstream';
 
 import { JetstreamClient } from './client';
 import { JsonCodec } from './codec';

@@ -1,5 +1,6 @@
 import { GenericContainer, StartedTestContainer, Wait } from 'testcontainers';
-import { connect } from 'nats';
+import { connect } from '@nats-io/transport-node';
+import { jetstreamManager } from '@nats-io/jetstream';
 
 export const NATS_IMAGE = 'nats:2.12.6';
 
@@ -33,7 +34,7 @@ const waitForJetStreamReady = async (port: number, timeoutMs = 30_000): Promise<
     try {
       const nc = await connect({ servers: [`nats://localhost:${port}`], timeout: 1_000 });
 
-      await nc.jetstreamManager();
+      await jetstreamManager(nc);
       await nc.drain();
 
       return;

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 import { createMock } from '@golevelup/ts-vitest';
-import type { NatsConnection } from 'nats';
+import type { NatsConnection } from '@nats-io/transport-node';
 
 import { ConnectionProvider } from '../connection';
 import type { JetstreamModuleOptions } from '../interfaces';

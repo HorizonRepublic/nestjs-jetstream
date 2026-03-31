@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Controller } from '@nestjs/common';
 import { EventPattern, MessagePattern, Payload } from '@nestjs/microservices';
-import { NatsConnection } from 'nats';
+import type { NatsConnection } from '@nats-io/transport-node';
+import { jetstreamManager } from '@nats-io/jetstream';
 import type { StartedTestContainer } from 'testcontainers';
 
 import { JETSTREAM_CONNECTION } from '../../src';
@@ -87,7 +88,7 @@ describe('Graceful Shutdown', () => {
     );
 
     try {
-      const jsm = await nc.jetstreamManager();
+      const jsm = await jetstreamManager(nc);
       const internalName = `${serviceName}__microservice`;
 
       // No event stream should exist

@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { Controller, INestApplication } from '@nestjs/common';
 import { MessagePattern } from '@nestjs/microservices';
 import { TestingModule } from '@nestjs/testing';
-import { NatsConnection } from 'nats';
+import type { NatsConnection } from '@nats-io/transport-node';
 import type { StartedTestContainer } from 'testcontainers';
 
 import { internalName, JsonCodec } from '../../src';

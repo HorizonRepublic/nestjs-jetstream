@@ -2,7 +2,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { Controller, INestApplication } from '@nestjs/common';
 import { ClientProxy, Ctx, MessagePattern, Payload, RpcException } from '@nestjs/microservices';
 import { TestingModule } from '@nestjs/testing';
-import { NatsConnection } from 'nats';
+import type { NatsConnection } from '@nats-io/transport-node';
+import { jetstreamManager } from '@nats-io/jetstream';
 import { firstValueFrom } from 'rxjs';
 import type { StartedTestContainer } from 'testcontainers';
 
@@ -108,7 +109,7 @@ describe('JetStream RPC Round-Trip', () => {
   });
 
   it('should create command stream and consumer', async () => {
-    const jsm = await nc.jetstreamManager();
+    const jsm = await jetstreamManager(nc);
     const internalName = `${serviceName}__microservice`;
 
     const streamInfo = await jsm.streams.info(`${internalName}_cmd-stream`);

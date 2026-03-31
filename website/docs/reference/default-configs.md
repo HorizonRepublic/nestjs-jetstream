@@ -186,7 +186,7 @@ The transport waits up to 10 seconds for in-flight messages to be processed befo
 All stream and consumer defaults can be overridden in `forRoot()` options. User-provided values are merged on top of the defaults — you only need to specify the properties you want to change.
 
 ```typescript
-import { RetentionPolicy, StorageType } from 'nats';
+import { RetentionPolicy, StorageType } from '@nats-io/jetstream';
 
 JetstreamModule.forRoot({
   name: 'orders',

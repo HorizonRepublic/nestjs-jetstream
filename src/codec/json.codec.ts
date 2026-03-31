@@ -1,12 +1,13 @@
-import { JSONCodec as NatsJSONCodec } from 'nats';
-
 import type { Codec } from '../interfaces';
 
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+
 /**
- * Default JSON codec wrapping the nats.js JSONCodec.
+ * Default JSON codec using native `TextEncoder`/`TextDecoder`.
  *
- * Serializes to/from JSON using the native NATS implementation
- * which handles `TextEncoder`/`TextDecoder` internally.
+ * Serializes values to JSON via `JSON.stringify` and encodes the
+ * resulting string into a `Uint8Array`. Decoding reverses the process.
  *
  * @example
  * ```typescript
@@ -16,13 +17,11 @@ import type { Codec } from '../interfaces';
  * ```
  */
 export class JsonCodec implements Codec {
-  private readonly inner = NatsJSONCodec();
-
   public encode(data: unknown): Uint8Array {
-    return this.inner.encode(data);
+    return encoder.encode(JSON.stringify(data));
   }
 
   public decode(data: Uint8Array): unknown {
-    return this.inner.decode(data);
+    return JSON.parse(decoder.decode(data));
   }
 }

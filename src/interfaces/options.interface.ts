@@ -1,6 +1,7 @@
 import { FactoryProvider, ModuleMetadata, Type } from '@nestjs/common';
-import { ConnectionOptions, ConsumerConfig, DeliverPolicy, ReplayPolicy, StreamConfig } from 'nats';
-import type { ConsumeOptions } from 'nats';
+import type { ConnectionOptions } from '@nats-io/transport-node';
+import { DeliverPolicy, ReplayPolicy } from '@nats-io/jetstream';
+import type { ConsumerConfig, ConsumeOptions, StreamConfig } from '@nats-io/jetstream';
 
 import { Codec } from './codec.interface';
 import type { DeadLetterInfo } from './hooks.interface';

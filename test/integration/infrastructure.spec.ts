@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Controller } from '@nestjs/common';
 import { EventPattern, MessagePattern } from '@nestjs/microservices';
-import { NatsConnection, RetentionPolicy, StoreCompression } from 'nats';
+import type { NatsConnection } from '@nats-io/transport-node';
+import { jetstreamManager, RetentionPolicy, StoreCompression } from '@nats-io/jetstream';
 import type { StartedTestContainer } from 'testcontainers';
 
 import { toNanos } from '../../src';
@@ -51,7 +52,7 @@ describe('Stream & Consumer Lifecycle', () => {
       const { app } = await createTestApp({ name: serviceName, port }, [InfraEventController]);
 
       try {
-        const jsm = await nc.jetstreamManager();
+        const jsm = await jetstreamManager(nc);
         const internalName = `${serviceName}__microservice`;
         const info = await jsm.streams.info(`${internalName}_ev-stream`);
 
@@ -70,7 +71,7 @@ describe('Stream & Consumer Lifecycle', () => {
       const { app } = await createTestApp({ name: serviceName, port }, [InfraEventController]);
 
       try {
-        const jsm = await nc.jetstreamManager();
+        const jsm = await jetstreamManager(nc);
         const internalName = `${serviceName}__microservice`;
         const info = await jsm.streams.info(`${internalName}_ev-stream`);
 
@@ -87,7 +88,7 @@ describe('Stream & Consumer Lifecycle', () => {
       const { app } = await createTestApp({ name: serviceName, port }, [InfraEventController]);
 
       try {
-        const jsm = await nc.jetstreamManager();
+        const jsm = await jetstreamManager(nc);
         const info = await jsm.streams.info('broadcast-stream');
 
         expect(info.config.subjects).toEqual(['broadcast.>']);
@@ -106,7 +107,7 @@ describe('Stream & Consumer Lifecycle', () => {
       ]);
 
       try {
-        const jsm = await nc.jetstreamManager();
+        const jsm = await jetstreamManager(nc);
         const internalName = `${serviceName}__microservice`;
         const info = await jsm.streams.info(`${internalName}_cmd-stream`);
 
@@ -124,7 +125,7 @@ describe('Stream & Consumer Lifecycle', () => {
       const { app } = await createTestApp({ name: serviceName, port }, [InfraRpcController]);
 
       try {
-        const jsm = await nc.jetstreamManager();
+        const jsm = await jetstreamManager(nc);
         const internalName = `${serviceName}__microservice`;
 
         await expect(jsm.streams.info(`${internalName}_cmd-stream`)).rejects.toThrow();
@@ -148,7 +149,7 @@ describe('Stream & Consumer Lifecycle', () => {
       );
 
       try {
-        const jsm = await nc.jetstreamManager();
+        const jsm = await jetstreamManager(nc);
         const internalName = `${serviceName}__microservice`;
         const info = await jsm.streams.info(`${internalName}_ev-stream`);
 
@@ -167,7 +168,7 @@ describe('Stream & Consumer Lifecycle', () => {
       const { app } = await createTestApp({ name: serviceName, port }, [InfraEventController]);
 
       try {
-        const jsm = await nc.jetstreamManager();
+        const jsm = await jetstreamManager(nc);
         const internalName = `${serviceName}__microservice`;
         const info = await jsm.consumers.info(
           `${internalName}_ev-stream`,
@@ -187,7 +188,7 @@ describe('Stream & Consumer Lifecycle', () => {
       const { app } = await createTestApp({ name: serviceName, port }, [InfraEventController]);
 
       try {
-        const jsm = await nc.jetstreamManager();
+        const jsm = await jetstreamManager(nc);
         const internalName = `${serviceName}__microservice`;
         const info = await jsm.consumers.info(
           'broadcast-stream',
@@ -217,7 +218,7 @@ describe('Stream & Consumer Lifecycle', () => {
       );
 
       try {
-        const jsm = await nc.jetstreamManager();
+        const jsm = await jetstreamManager(nc);
         const internalName = `${serviceName}__microservice`;
         const info = await jsm.consumers.info(
           `${internalName}_ev-stream`,
@@ -247,7 +248,7 @@ describe('Stream & Consumer Lifecycle', () => {
       ]);
 
       try {
-        const jsm = await nc.jetstreamManager();
+        const jsm = await jetstreamManager(nc);
         const internalName = `${serviceName}__microservice`;
 
         // Stream and consumer should still exist (no error)
@@ -279,7 +280,7 @@ describe('Stream & Consumer Lifecycle', () => {
       await app1.close();
 
       // Explicitly delete the stream — proving re-bootstrap recreates it
-      const jsm = await nc.jetstreamManager();
+      const jsm = await jetstreamManager(nc);
       const internal = `${serviceName}__microservice`;
 
       await jsm.streams.delete(`${internal}_ev-stream`);

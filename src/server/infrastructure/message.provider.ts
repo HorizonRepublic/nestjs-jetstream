@@ -1,13 +1,13 @@
 import { Logger } from '@nestjs/common';
-import type { ConsumeOptions, OrderedConsumerOptions } from 'nats';
-import {
+import type {
+  ConsumeOptions,
   Consumer,
-  ConsumerEvents,
   ConsumerInfo,
   ConsumerMessages,
-  DeliverPolicy,
   JsMsg,
-} from 'nats';
+  OrderedConsumerOptions,
+} from '@nats-io/jetstream';
+import { DeliverPolicy } from '@nats-io/jetstream';
 import {
   catchError,
   defer,
@@ -108,7 +108,8 @@ export class MessageProvider {
     filterSubjects: string[],
     orderedConfig?: OrderedEventOverrides,
   ): Promise<void> {
-    const consumerOpts: Partial<OrderedConsumerOptions> = { filterSubjects };
+    // eslint-disable-next-line @typescript-eslint/naming-convention -- NATS API uses snake_case
+    const consumerOpts: Partial<OrderedConsumerOptions> = { filter_subjects: filterSubjects };
 
     // Workaround: in nats.js (v2.29.x), explicitly passing DeliverPolicy.All to an
     // ordered consumer leaves opt_start_seq in the config, causing consume() to hang.
@@ -235,12 +236,12 @@ export class MessageProvider {
   /** Monitor heartbeats and restart the consumer iterator on prolonged silence. */
   private monitorConsumerHealth(messages: ConsumerMessages, name: string): void {
     void (async (): Promise<void> => {
-      for await (const status of await messages.status()) {
+      for await (const status of messages.status()) {
         // Threshold: 2 consecutive missed heartbeats triggers restart.
         // One missed heartbeat can happen during normal GC pauses or brief network blips.
         // Two consecutive misses strongly indicate a stale consumer.
-        if (status.type === ConsumerEvents.HeartbeatsMissed && (status.data as number) >= 2) {
-          this.logger.warn(`Consumer ${name}: ${status.data} heartbeats missed, restarting`);
+        if (status.type === 'heartbeats_missed' && status.count >= 2) {
+          this.logger.warn(`Consumer ${name}: ${status.count} heartbeats missed, restarting`);
           messages.stop();
           break;
         }
