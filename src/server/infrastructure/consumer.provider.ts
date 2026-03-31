@@ -75,7 +75,7 @@ export class ConsumerProvider {
       this.logger.debug(`Consumer exists, updating: ${name}`);
       return await jsm.consumers.update(stream, name, config);
     } catch (err) {
-      if (err instanceof JetStreamApiError && err.code === CONSUMER_NOT_FOUND) {
+      if (err instanceof JetStreamApiError && err.apiError().err_code === CONSUMER_NOT_FOUND) {
         this.logger.log(`Creating consumer: ${name}`);
         return await jsm.consumers.add(stream, config);
       }

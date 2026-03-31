@@ -83,7 +83,7 @@ export class StreamProvider {
       this.logger.debug(`Stream exists, updating: ${config.name}`);
       return await jsm.streams.update(config.name, config);
     } catch (err) {
-      if (err instanceof JetStreamApiError && err.code === STREAM_NOT_FOUND) {
+      if (err instanceof JetStreamApiError && err.apiError().err_code === STREAM_NOT_FOUND) {
         this.logger.log(`Creating stream: ${config.name}`);
         return await jsm.streams.add(config as StreamConfig);
       }

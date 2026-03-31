@@ -215,7 +215,7 @@ export class ConnectionProvider {
           case 'error':
             this.eventBus.emit(
               TransportEvent.Error,
-              new Error(String((status as { type: 'error'; error: Error }).error)),
+              (status as { type: 'error'; error: Error }).error,
               'connection',
             );
             break;
