@@ -71,7 +71,12 @@ describe('Self-Healing Consumer Flow', () => {
       serviceName = uniqueServiceName();
 
       ({ app, module } = await createTestApp(
-        { name: serviceName, port },
+        {
+          name: serviceName,
+          port,
+          // Short heartbeat so consumer deletion is detected faster in tests
+          events: { consume: { idle_heartbeat: 1_000 } },
+        },
         [SelfHealingController],
         [serviceName],
       ));
@@ -106,9 +111,7 @@ describe('Self-Healing Consumer Flow', () => {
 
         await jsm.consumers.delete(stream, consumer);
 
-        // Self-healing retries with backoff (100ms, 200ms, 400ms...) but consumer is gone.
-        // Re-create the consumer so the next retry succeeds.
-        await new Promise((r) => setTimeout(r, 500));
+        // Re-create immediately — self-healing retry will find it after backoff
         await jsm.consumers.add(stream, info.config);
 
         // Then: self-healing retry finds the re-created consumer and resumes consumption
