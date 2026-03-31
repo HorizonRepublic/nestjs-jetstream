@@ -2,13 +2,13 @@ import { Logger } from '@nestjs/common';
 import { ClientProxy, ReadPacket, WritePacket } from '@nestjs/microservices';
 import {
   createInbox,
-  Events,
   headers as natsHeaders,
-  Msg,
-  MsgHdrs,
-  NatsConnection,
-  Subscription,
-} from 'nats';
+  type Msg,
+  type MsgHdrs,
+  type NatsConnection,
+  type Subscription,
+} from '@nats-io/transport-node';
+import { nuid } from '@nats-io/nuid';
 import { Subscription as RxSubscription } from 'rxjs';
 
 import { ConnectionProvider } from '../connection';
@@ -97,7 +97,7 @@ export class JetstreamClient extends ClientProxy {
     }
 
     this.statusSubscription ??= this.connection.status$.subscribe((status) => {
-      if (status.type === Events.Disconnect) {
+      if (status.type === 'disconnect') {
         this.handleDisconnect();
       }
     });
@@ -146,7 +146,7 @@ export class JetstreamClient extends ClientProxy {
       .getJetStreamClient()
       .publish(subject, this.codec.encode(data), {
         headers: msgHeaders,
-        msgID: messageId ?? crypto.randomUUID(),
+        msgID: messageId ?? nuid.next(),
       });
 
     if (ack.duplicate) {
@@ -177,7 +177,7 @@ export class JetstreamClient extends ClientProxy {
     if (isCoreRpcMode(this.rootOptions.rpc)) {
       this.publishCoreRpc(subject, data, hdrs, timeout, callback).catch(onUnhandled);
     } else {
-      jetStreamCorrelationId = crypto.randomUUID();
+      jetStreamCorrelationId = nuid.next();
       this.publishJetStreamRpc(subject, data, callback, {
         headers: hdrs,
         timeout,
@@ -290,7 +290,7 @@ export class JetstreamClient extends ClientProxy {
 
       await this.connection.getJetStreamClient().publish(subject, this.codec.encode(data), {
         headers: hdrs,
-        msgID: messageId ?? crypto.randomUUID(),
+        msgID: messageId ?? nuid.next(),
       });
     } catch (err) {
       const existingTimeout = this.pendingTimeouts.get(correlationId);

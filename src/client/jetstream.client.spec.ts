@@ -1,16 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 import { createMock } from '@golevelup/ts-vitest';
 import { faker } from '@faker-js/faker';
-import type {
-  JetStreamClient as NatsJsClient,
-  Msg,
-  MsgHdrs,
-  NatsConnection,
-  PubAck,
-  Subscription,
-} from 'nats';
-import { Events, headers as natsHeaders } from 'nats';
-import type { Status } from 'nats';
+import type { Msg, MsgHdrs, NatsConnection, Status, Subscription } from '@nats-io/transport-node';
+import { headers as natsHeaders } from '@nats-io/transport-node';
+import type { JetStreamClient as NatsJsClient, PubAck } from '@nats-io/jetstream';
 import { firstValueFrom, Subject } from 'rxjs';
 
 import { ConnectionProvider } from '../connection';
@@ -763,7 +756,7 @@ describe(JetstreamClient, () => {
       await vi.advanceTimersByTimeAsync(0);
 
       // When: disconnect event fires
-      statusSubject.next({ type: Events.Disconnect, data: '' });
+      statusSubject.next({ type: 'disconnect', data: '' });
 
       // Then: both reject with Error('Connection lost')
       await expect(result1).rejects.toThrow('Connection lost');
@@ -776,7 +769,7 @@ describe(JetstreamClient, () => {
       await vi.advanceTimersByTimeAsync(0);
 
       // When: disconnect
-      statusSubject.next({ type: Events.Disconnect, data: '' });
+      statusSubject.next({ type: 'disconnect', data: '' });
 
       // Then: advancing past timeout should NOT trigger RpcTimeout (already cleaned up)
       vi.advanceTimersByTime(DEFAULT_JETSTREAM_RPC_TIMEOUT);
@@ -792,7 +785,7 @@ describe(JetstreamClient, () => {
       expect(mockNc.subscribe).toHaveBeenCalledTimes(1);
 
       // When: disconnect
-      statusSubject.next({ type: Events.Disconnect, data: '' });
+      statusSubject.next({ type: 'disconnect', data: '' });
 
       // Then: next connect() should set up inbox again
       await sut.connect();
@@ -807,7 +800,7 @@ describe(JetstreamClient, () => {
       await vi.advanceTimersByTimeAsync(0);
 
       // When: disconnect event fires
-      statusSubject.next({ type: Events.Disconnect, data: '' });
+      statusSubject.next({ type: 'disconnect', data: '' });
 
       // Then: clearTimeout was called for the pending RPC timeout
       expect(clearTimeoutSpy).toHaveBeenCalled();
@@ -823,7 +816,7 @@ describe(JetstreamClient, () => {
 
       // When/Then: disconnect fires — no crash
       expect(() => {
-        statusSubject.next({ type: Events.Disconnect, data: '' });
+        statusSubject.next({ type: 'disconnect', data: '' });
       }).not.toThrow();
 
       await coreClient.close();
