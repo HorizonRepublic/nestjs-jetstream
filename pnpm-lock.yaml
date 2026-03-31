@@ -26,9 +26,6 @@ importers:
       '@nestjs/microservices':
         specifier: ^10.2.0 || ^11.0.0
         version: 11.1.17(@grpc/grpc-js@1.14.3)(@nestjs/common@11.1.17(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.17)(nats@2.29.3)(reflect-metadata@0.2.2)(rxjs@7.8.2)
-      nats:
-        specifier: ^2.0.0
-        version: 2.29.3
       reflect-metadata:
         specifier: ^0.2.0
         version: 0.2.2
@@ -14155,6 +14152,7 @@ snapshots:
   nats@2.29.3:
     dependencies:
       nkeys.js: 1.1.0
+    optional: true
 
   natural-compare@1.4.0: {}
 
@@ -14169,6 +14167,7 @@ snapshots:
   nkeys.js@1.1.0:
     dependencies:
       tweetnacl: 1.0.3
+    optional: true
 
   no-case@3.0.4:
     dependencies:
