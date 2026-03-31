@@ -58,6 +58,7 @@ describe(ConsumerProvider, () => {
           code: 403,
           description: 'authorization violation',
         });
+
         mockJsm.consumers.info.mockRejectedValue(authError);
 
         // When/Then: propagates the error
@@ -126,6 +127,7 @@ describe(ConsumerProvider, () => {
           code: 404,
           description: 'consumer not found',
         });
+
         mockJsm.consumers.info.mockRejectedValue(notFoundError);
 
         const patterns = ['broadcast.a', 'broadcast.b'];

@@ -63,10 +63,7 @@ export const createTestApp = async (
  * Silently delete a stream if it exists. Only suppresses "stream not found"
  * errors — auth/connection failures will propagate.
  */
-const deleteStreamIfExists = async (
-  jsm: JetStreamManager,
-  name: string,
-): Promise<void> => {
+const deleteStreamIfExists = async (jsm: JetStreamManager, name: string): Promise<void> => {
   try {
     await jsm.streams.delete(name);
   } catch (err: unknown) {

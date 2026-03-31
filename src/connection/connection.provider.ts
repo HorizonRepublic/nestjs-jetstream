@@ -220,6 +220,8 @@ export class ConnectionProvider {
           case 'ping':
           case 'staleConnection':
           case 'forceReconnect':
+          case 'slowConsumer':
+          case 'close':
             break;
         }
       }
