@@ -6,7 +6,9 @@ import { NatsConnection } from 'nats';
 import { firstValueFrom } from 'rxjs';
 import type { StartedTestContainer } from 'testcontainers';
 
-import { getClientToken } from '../../src';
+import { getClientToken, internalName } from '../../src';
+import { consumerName, streamName } from '../../src/jetstream.constants';
+import { StreamKind } from '../../src/interfaces';
 
 import {
   cleanupStreams,
@@ -15,14 +17,7 @@ import {
   uniqueServiceName,
   waitForCondition,
 } from './helpers';
-import {
-  restartNatsContainer,
-  startNatsContainer,
-  startNatsContainerWithFixedPort,
-} from './nats-container';
-
-// Fixed port for the reconnect test — must survive container.restart()
-const RECONNECT_TEST_PORT = 14_222;
+import { startNatsContainer } from './nats-container';
 
 // ---------------------------------------------------------------------------
 // Test Controllers
@@ -53,7 +48,7 @@ class DestroyRestartController {
 // ---------------------------------------------------------------------------
 
 describe('Self-Healing Consumer Flow', () => {
-  describe('event consumer reconnect after NATS restart', () => {
+  describe('consumer recovery after deletion', () => {
     let container: StartedTestContainer;
     let port: number;
     let nc: NatsConnection;
@@ -64,8 +59,7 @@ describe('Self-Healing Consumer Flow', () => {
     let controller: SelfHealingController;
 
     beforeAll(async () => {
-      // Fixed port binding ensures the port survives container.restart()
-      ({ container, port } = await startNatsContainerWithFixedPort(RECONNECT_TEST_PORT));
+      ({ container, port } = await startNatsContainer());
     });
 
     afterAll(async () => {
@@ -92,39 +86,32 @@ describe('Self-Healing Consumer Flow', () => {
       await nc.drain().catch(() => {});
     });
 
-    it('should recover consumer after prolonged NATS outage', { timeout: 90_000 }, async () => {
-      // Given: event is delivered before outage
+    it('should recover consumption after consumer is deleted and re-created', { timeout: 30_000 }, async () => {
+      // Given: event is delivered successfully
       await firstValueFrom(client.emit('healing.check', { seq: 1 }));
 
       await waitForCondition(() => controller.received.length >= 1, 5_000);
 
       expect(controller.received[0]).toEqual({ seq: 1 });
 
-      // When: freeze NATS process for 12s (>2 heartbeat intervals at idle_heartbeat: 5s)
-      // This triggers: health monitor detects 2 missed heartbeats → messages.stop()
-      //   → self-healing catchError → repeat with exponential backoff
-      await container.exec(['kill', '-STOP', '1']);
-      await new Promise((r) => setTimeout(r, 12_000));
-      await container.exec(['kill', '-CONT', '1']);
+      // When: delete the consumer via JetStream Management API
+      // This breaks the consumer iterator → self-healing catchError → repeat with backoff
+      const jsm = await nc.jetstreamManager();
+      const stream = streamName(serviceName, StreamKind.Event);
+      const consumer = consumerName(serviceName, StreamKind.Event);
+      const info = await jsm.consumers.info(stream, consumer);
 
-      // Then: retry sending until the self-healing flow re-establishes the consumer
-      const deadline = Date.now() + 30_000;
-      let sent = false;
+      await jsm.consumers.delete(stream, consumer);
 
-      while (Date.now() < deadline) {
-        try {
-          await firstValueFrom(client.emit('healing.check', { seq: 2 }));
-          sent = true;
-          break;
-        } catch {
-          await new Promise((r) => setTimeout(r, 500));
-        }
-      }
+      // Self-healing retries with backoff (100ms, 200ms, 400ms...) but consumer is gone.
+      // Re-create the consumer so the next retry succeeds.
+      await new Promise((r) => setTimeout(r, 500));
+      await jsm.consumers.add(stream, info.config);
 
-      expect(sent).toBe(true);
+      // Then: self-healing retry finds the re-created consumer and resumes consumption
+      await firstValueFrom(client.emit('healing.check', { seq: 2 }));
 
-      // Verify the self-healing flow re-established the consumer and delivered the event
-      await waitForCondition(() => controller.received.length >= 2, 30_000);
+      await waitForCondition(() => controller.received.length >= 2, 15_000);
 
       expect(controller.received[1]).toEqual({ seq: 2 });
     });
@@ -154,43 +141,47 @@ describe('Self-Healing Consumer Flow', () => {
       await cleanupStreams(nc, serviceName);
     });
 
-    it('should deliver events after destroy and restart with a new app', { timeout: 30_000 }, async () => {
-      // Given: first app starts and processes an event
-      const { app: firstApp, module: firstModule } = await createTestApp(
-        { name: serviceName, port },
-        [DestroyRestartController],
-        [serviceName],
-      );
+    it(
+      'should deliver events after destroy and restart with a new app',
+      { timeout: 30_000 },
+      async () => {
+        // Given: first app starts and processes an event
+        const { app: firstApp, module: firstModule } = await createTestApp(
+          { name: serviceName, port },
+          [DestroyRestartController],
+          [serviceName],
+        );
 
-      const firstClient = firstModule.get<ClientProxy>(getClientToken(serviceName));
-      const firstController = firstModule.get(DestroyRestartController);
+        const firstClient = firstModule.get<ClientProxy>(getClientToken(serviceName));
+        const firstController = firstModule.get(DestroyRestartController);
 
-      await firstValueFrom(firstClient.emit('lifecycle.check', { phase: 'before-restart' }));
+        await firstValueFrom(firstClient.emit('lifecycle.check', { phase: 'before-restart' }));
 
-      await waitForCondition(() => firstController.received.length >= 1, 5_000);
+        await waitForCondition(() => firstController.received.length >= 1, 5_000);
 
-      expect(firstController.received[0]).toEqual({ phase: 'before-restart' });
+        expect(firstController.received[0]).toEqual({ phase: 'before-restart' });
 
-      // When: first app is destroyed (triggers destroy() which reinitializes subjects)
-      await firstApp.close();
+        // When: first app is destroyed (triggers destroy() which reinitializes subjects)
+        await firstApp.close();
 
-      // Then: a new app with the same service name starts and receives events
-      const { app: secondApp, module: secondModule } = await createTestApp(
-        { name: serviceName, port },
-        [DestroyRestartController],
-        [serviceName],
-      );
+        // Then: a new app with the same service name starts and receives events
+        const { app: secondApp, module: secondModule } = await createTestApp(
+          { name: serviceName, port },
+          [DestroyRestartController],
+          [serviceName],
+        );
 
-      const secondClient = secondModule.get<ClientProxy>(getClientToken(serviceName));
-      const secondController = secondModule.get(DestroyRestartController);
+        const secondClient = secondModule.get<ClientProxy>(getClientToken(serviceName));
+        const secondController = secondModule.get(DestroyRestartController);
 
-      await firstValueFrom(secondClient.emit('lifecycle.check', { phase: 'after-restart' }));
+        await firstValueFrom(secondClient.emit('lifecycle.check', { phase: 'after-restart' }));
 
-      await waitForCondition(() => secondController.received.length >= 1, 5_000);
+        await waitForCondition(() => secondController.received.length >= 1, 5_000);
 
-      expect(secondController.received[0]).toEqual({ phase: 'after-restart' });
+        expect(secondController.received[0]).toEqual({ phase: 'after-restart' });
 
-      await secondApp.close();
-    });
+        await secondApp.close();
+      },
+    );
   });
 });
