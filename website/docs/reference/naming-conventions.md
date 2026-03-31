@@ -76,15 +76,15 @@ internalName('orders'); // 'orders__microservice'
 Builds a fully-qualified NATS subject for workqueue events, RPC commands, or ordered events.
 
 ```typescript
-import { buildSubject } from '@horizon-republic/nestjs-jetstream';
+import { buildSubject, StreamKind } from '@horizon-republic/nestjs-jetstream';
 
-buildSubject('orders', 'ev', 'order.created');
+buildSubject('orders', StreamKind.Event, 'order.created');
 // 'orders__microservice.ev.order.created'
 
-buildSubject('orders', 'cmd', 'get-order');
+buildSubject('orders', StreamKind.Command, 'get-order');
 // 'orders__microservice.cmd.get-order'
 
-buildSubject('orders', 'ordered', 'order.updated');
+buildSubject('orders', StreamKind.Ordered, 'order.updated');
 // 'orders__microservice.ordered.order.updated'
 ```
 
@@ -104,12 +104,12 @@ buildBroadcastSubject('config.updated');
 Builds the JetStream stream name for a given service and stream kind.
 
 ```typescript
-import { streamName } from '@horizon-republic/nestjs-jetstream';
+import { streamName, StreamKind } from '@horizon-republic/nestjs-jetstream';
 
-streamName('orders', 'ev');        // 'orders__microservice_ev-stream'
-streamName('orders', 'cmd');       // 'orders__microservice_cmd-stream'
-streamName('orders', 'ordered');   // 'orders__microservice_ordered-stream'
-streamName('orders', 'broadcast'); // 'broadcast-stream'
+streamName('orders', StreamKind.Event);     // 'orders__microservice_ev-stream'
+streamName('orders', StreamKind.Command);   // 'orders__microservice_cmd-stream'
+streamName('orders', StreamKind.Ordered);   // 'orders__microservice_ordered-stream'
+streamName('orders', StreamKind.Broadcast); // 'broadcast-stream'
 ```
 
 ### `consumerName(serviceName, kind)`
@@ -117,11 +117,11 @@ streamName('orders', 'broadcast'); // 'broadcast-stream'
 Builds the JetStream consumer name for a given service and stream kind.
 
 ```typescript
-import { consumerName } from '@horizon-republic/nestjs-jetstream';
+import { consumerName, StreamKind } from '@horizon-republic/nestjs-jetstream';
 
-consumerName('orders', 'ev');        // 'orders__microservice_ev-consumer'
-consumerName('orders', 'cmd');       // 'orders__microservice_cmd-consumer'
-consumerName('orders', 'broadcast'); // 'orders__microservice_broadcast-consumer'
+consumerName('orders', StreamKind.Event);     // 'orders__microservice_ev-consumer'
+consumerName('orders', StreamKind.Command);   // 'orders__microservice_cmd-consumer'
+consumerName('orders', StreamKind.Broadcast); // 'orders__microservice_broadcast-consumer'
 ```
 
 ## Stream Subject Wildcards
