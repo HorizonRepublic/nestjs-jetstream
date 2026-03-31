@@ -30,7 +30,7 @@ export default defineConfig({
           environment: 'node',
           include: ['test/**/*.spec.ts'],
           testTimeout: 30_000,
-          fileParallelism: false,
+          fileParallelism: true,
         },
       },
     ],
