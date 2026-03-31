@@ -406,6 +406,58 @@ describe(EventRouter, () => {
       });
     });
 
+    describe('when ordered handler calls ctx.retry()', () => {
+      it('should log warning but NOT retry (ordered consumers auto-acknowledge)', async () => {
+        // Given: handler that requests retry on an ordered message
+        const handler = vi.fn().mockImplementation((_data: unknown, ctx: RpcContext) => {
+          ctx.retry();
+        });
+
+        patternRegistry.getHandler.mockReturnValue(handler);
+
+        const msg = createMock<JsMsg>({
+          ack: vi.fn(),
+          subject: faker.lorem.word(),
+          data: new TextEncoder().encode(JSON.stringify({})),
+        });
+
+        // When: ordered message arrives
+        ordered$.next(msg);
+        await new Promise(process.nextTick);
+
+        // Then: no nak/term — retry() is ignored for ordered consumers
+        expect(msg.nak).not.toHaveBeenCalled();
+        expect(msg.term).not.toHaveBeenCalled();
+        expect(msg.ack).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('when ordered handler calls ctx.terminate()', () => {
+      it('should log warning but NOT terminate (ordered consumers auto-acknowledge)', async () => {
+        // Given: handler that requests terminate on an ordered message
+        const handler = vi.fn().mockImplementation((_data: unknown, ctx: RpcContext) => {
+          ctx.terminate();
+        });
+
+        patternRegistry.getHandler.mockReturnValue(handler);
+
+        const msg = createMock<JsMsg>({
+          ack: vi.fn(),
+          subject: faker.lorem.word(),
+          data: new TextEncoder().encode(JSON.stringify({})),
+        });
+
+        // When: ordered message arrives
+        ordered$.next(msg);
+        await new Promise(process.nextTick);
+
+        // Then: no term/nak — terminate() is ignored for ordered consumers
+        expect(msg.term).not.toHaveBeenCalled();
+        expect(msg.nak).not.toHaveBeenCalled();
+        expect(msg.ack).not.toHaveBeenCalled();
+      });
+    });
+
     describe('when decode fails for ordered message', () => {
       it('should skip without ack/nak/term', async () => {
         // Given: handler exists but decode throws

@@ -150,5 +150,17 @@ describe(ConsumerProvider, () => {
         await expect(sut.ensureConsumers(['ordered'])).rejects.toThrow(/ephemeral/i);
       });
     });
+
+    describe('when broadcast has zero patterns', () => {
+      it('should throw because a broadcast consumer requires at least one pattern', async () => {
+        // Given: registry returns empty broadcast patterns
+        patternRegistry.getBroadcastPatterns.mockReturnValue([]);
+
+        mockJsm.consumers.info.mockResolvedValue(createMock<ConsumerInfo>());
+
+        // When/Then: ensureConsumers throws
+        await expect(sut.ensureConsumers(['broadcast'])).rejects.toThrow(/no broadcast patterns/i);
+      });
+    });
   });
 });
