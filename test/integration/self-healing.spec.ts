@@ -3,6 +3,7 @@ import { Controller, INestApplication } from '@nestjs/common';
 import { ClientProxy, EventPattern, Payload } from '@nestjs/microservices';
 import { TestingModule } from '@nestjs/testing';
 import type { NatsConnection } from '@nats-io/transport-node';
+import { jetstreamManager } from '@nats-io/jetstream';
 import { firstValueFrom } from 'rxjs';
 import type { StartedTestContainer } from 'testcontainers';
 
@@ -102,7 +103,7 @@ describe('Self-Healing Consumer Flow', () => {
 
         // When: delete the consumer via JetStream Management API
         // This breaks the consumer iterator → self-healing catchError → repeat with backoff
-        const jsm = await nc.jetstreamManager();
+        const jsm = await jetstreamManager(nc);
         const stream = streamName(serviceName, StreamKind.Event);
         const consumer = consumerName(serviceName, StreamKind.Event);
         const info = await jsm.consumers.info(stream, consumer);

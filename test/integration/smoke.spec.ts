@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { connect } from '@nats-io/transport-node';
+import { jetstreamManager } from '@nats-io/jetstream';
 import type { StartedTestContainer } from 'testcontainers';
 
 import { startNatsContainer } from './nats-container';
@@ -25,7 +26,7 @@ describe('NATS connectivity', () => {
 
   it('should have JetStream enabled', async () => {
     const nc = await connect({ servers: [`nats://localhost:${port}`] });
-    const jsm = await nc.jetstreamManager();
+    const jsm = await jetstreamManager(nc);
     const info = await jsm.getAccountInfo();
 
     expect(info).toBeDefined();

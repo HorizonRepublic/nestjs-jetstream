@@ -2,6 +2,7 @@ import { INestApplication, Type } from '@nestjs/common';
 import { MicroserviceOptions } from '@nestjs/microservices';
 import { Test, TestingModule } from '@nestjs/testing';
 import { connect, type NatsConnection } from '@nats-io/transport-node';
+import { jetstreamManager, type JetStreamManager } from '@nats-io/jetstream';
 
 import { JetstreamModule, JetstreamStrategy, StreamKind, streamName } from '../../src';
 import type { JetstreamModuleOptions } from '../../src';
@@ -63,7 +64,7 @@ export const createTestApp = async (
  * errors — auth/connection failures will propagate.
  */
 const deleteStreamIfExists = async (
-  jsm: Awaited<ReturnType<NatsConnection['jetstreamManager']>>,
+  jsm: JetStreamManager,
   name: string,
 ): Promise<void> => {
   try {
@@ -80,7 +81,7 @@ const deleteStreamIfExists = async (
  * Uses the same naming helpers as production code to stay in sync.
  */
 export const cleanupStreams = async (nc: NatsConnection, serviceName: string): Promise<void> => {
-  const jsm = await nc.jetstreamManager();
+  const jsm = await jetstreamManager(nc);
 
   for (const kind of [StreamKind.Event, StreamKind.Command, StreamKind.Ordered] as const) {
     await deleteStreamIfExists(jsm, streamName(serviceName, kind));
