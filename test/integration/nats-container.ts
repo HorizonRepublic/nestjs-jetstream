@@ -42,28 +42,59 @@ export const startNatsContainer = async (): Promise<NatsContainerResult> => {
 };
 
 /**
- * Restart a NATS container and wait for JetStream readiness.
- * Container filesystem (including JetStream store) persists across restarts.
+ * Start a NATS container with a fixed host port binding.
+ * Required for restart tests — Docker Desktop may reassign dynamic ports on restart,
+ * but fixed bindings survive `container.restart()`.
  */
-export const restartNatsContainer = async (
-  container: StartedTestContainer,
-  port: number,
-): Promise<void> => {
-  await container.restart();
+export const startNatsContainerWithFixedPort = async (
+  hostPort: number,
+): Promise<NatsContainerResult> => {
+  const container = await new GenericContainer(NATS_IMAGE)
+    .withCommand(['--js', '--store_dir', '/data'])
+    .withExposedPorts({ container: 4222, host: hostPort })
+    .withWaitStrategy(Wait.forLogMessage(/Server is ready/))
+    .start();
 
   const deadline = Date.now() + 15_000;
 
   while (Date.now() < deadline) {
     try {
+      const nc = await connect({ servers: [`nats://localhost:${hostPort}`], timeout: 1_000 });
+
+      await nc.drain();
+
+      return { container, port: hostPort };
+    } catch {
+      await new Promise((r) => setTimeout(r, 100));
+    }
+  }
+
+  throw new Error(`NATS container on fixed port ${hostPort} not reachable within 15s`);
+};
+
+/**
+ * Restart a NATS container and wait for JetStream readiness.
+ * Container filesystem (including JetStream store) persists across restarts.
+ *
+ * Uses the current mapped port from the container (stable for fixed port bindings).
+ */
+export const restartNatsContainer = async (container: StartedTestContainer): Promise<number> => {
+  await container.restart();
+
+  const newPort = container.getMappedPort(4222);
+  const deadline = Date.now() + 15_000;
+
+  while (Date.now() < deadline) {
+    try {
       const nc = await connect({
-        servers: [`nats://localhost:${port}`],
+        servers: [`nats://localhost:${newPort}`],
         timeout: 1_000,
       });
 
       await nc.jetstreamManager();
       await nc.drain();
 
-      return;
+      return newPort;
     } catch {
       await new Promise((r) => setTimeout(r, 250));
     }
