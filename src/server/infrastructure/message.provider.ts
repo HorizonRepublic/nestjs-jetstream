@@ -224,7 +224,9 @@ export class MessageProvider {
       case StreamKind.Ordered:
         return this.orderedMessages$;
       default: {
+        // eslint-disable-next-line @typescript-eslint/naming-convention
         const _exhaustive: never = kind;
+
         throw new Error(`Unknown stream kind: ${_exhaustive}`);
       }
     }
@@ -232,7 +234,7 @@ export class MessageProvider {
 
   /** Monitor heartbeats and restart the consumer iterator on prolonged silence. */
   private monitorConsumerHealth(messages: ConsumerMessages, name: string): void {
-    (async (): Promise<void> => {
+    void (async (): Promise<void> => {
       for await (const status of await messages.status()) {
         // Threshold: 2 consecutive missed heartbeats triggers restart.
         // One missed heartbeat can happen during normal GC pauses or brief network blips.
@@ -245,6 +247,7 @@ export class MessageProvider {
       }
     })().catch((err: unknown) => {
       // Iterator closed on destroy is expected; log anything else
+      /* v8 ignore next 3 -- debug-only observability, no business logic */
       if (err) {
         this.logger.debug(`Consumer ${name} health monitor ended:`, err);
       }

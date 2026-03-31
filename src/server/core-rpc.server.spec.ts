@@ -230,6 +230,79 @@ describe(CoreRpcServer, () => {
           );
         });
       });
+
+      describe('when handleRequest throws unhandled error', () => {
+        it('should catch via .catch() callback without crashing', async () => {
+          // Given: patternRegistry.getHandler throws synchronously
+          patternRegistry.getHandler.mockImplementation(() => {
+            throw new Error('registry exploded');
+          });
+
+          const msg = createMock<Msg>({
+            subject: `${serviceName}__microservice.cmd.test`,
+            reply: 'reply.subject',
+            data: codec.encode({}),
+          });
+
+          // When: message arrives — handleRequest throws, caught by .catch()
+          subscriptionCallback(null, msg);
+          await new Promise(process.nextTick);
+
+          // Then: no crash — the outer .catch() handles it silently
+          expect(msg.respond).not.toHaveBeenCalled();
+        });
+      });
+
+      describe('when codec.encode fails in error response', () => {
+        it('should not crash when respondWithError fails internally', async () => {
+          // Given: handler throws, AND codec.encode also throws when encoding the error
+          const handler = vi.fn().mockRejectedValue(new Error('handler failed'));
+
+          patternRegistry.getHandler.mockReturnValue(handler);
+          codec.decode.mockReturnValue({});
+
+          const msg = createMock<Msg>({
+            subject: `${serviceName}__microservice.cmd.test`,
+            reply: 'reply.subject',
+            data: new TextEncoder().encode('{}'),
+          });
+
+          // Make encode throw when encoding the error response
+          codec.encode.mockImplementation(() => {
+            throw new Error('encode failed');
+          });
+
+          // When: message arrives
+          subscriptionCallback(null, msg);
+          await new Promise(process.nextTick);
+
+          // Then: no crash, msg.respond NOT called (encode failed in respondWithError)
+          expect(msg.respond).not.toHaveBeenCalled();
+        });
+      });
+
+      describe('when message has no reply subject (fire-and-forget)', () => {
+        it('should ignore the message and not invoke handler', async () => {
+          // Given: handler registered
+          const handler = vi.fn();
+
+          patternRegistry.getHandler.mockReturnValue(handler);
+
+          const msg = createMock<Msg>({
+            subject: `${serviceName}__microservice.cmd.test`,
+            reply: '', // empty reply = fire-and-forget
+            data: codec.encode({}),
+          });
+
+          // When: message arrives
+          subscriptionCallback(null, msg);
+          await new Promise(process.nextTick);
+
+          // Then: handler not invoked, no response sent
+          expect(handler).not.toHaveBeenCalled();
+          expect(msg.respond).not.toHaveBeenCalled();
+        });
+      });
     });
   });
 });

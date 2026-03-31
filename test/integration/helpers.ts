@@ -3,11 +3,8 @@ import { MicroserviceOptions } from '@nestjs/microservices';
 import { Test, TestingModule } from '@nestjs/testing';
 import { connect, NatsConnection } from 'nats';
 
-import { JetstreamModule, JetstreamStrategy } from '../../src';
-import type { JetstreamModuleOptions } from '../../src/interfaces';
-import { streamName } from '../../src/jetstream.constants';
-
-const NATS_URL = 'nats://localhost:4222';
+import { JetstreamModule, JetstreamStrategy, StreamKind, streamName } from '../../src';
+import type { JetstreamModuleOptions } from '../../src';
 
 /**
  * Create a unique service name per test to avoid stream/consumer collisions.
@@ -17,29 +14,30 @@ export const uniqueServiceName = (): string => `test-${Math.random().toString(36
 /**
  * Create a standalone NATS connection for test assertions.
  */
-export const createNatsConnection = async (): Promise<NatsConnection> =>
-  connect({ servers: [NATS_URL] });
+export const createNatsConnection = async (port: number): Promise<NatsConnection> =>
+  connect({ servers: [`nats://localhost:${port}`] });
 
 /**
  * Bootstrap a full NestJS app with JetStream microservice transport.
  * Returns the app (with strategy started) and the compiled module.
  *
- * @param options Module options (name is required).
+ * @param options Module options (name and port are required).
  * @param controllers Controllers to register with the module.
  * @param clientTargets Service names to register as forFeature clients.
  */
 export const createTestApp = async (
-  options: Partial<JetstreamModuleOptions> & { name: string },
+  options: Partial<JetstreamModuleOptions> & { name: string; port: number },
   controllers: Type[] = [],
   clientTargets: string[] = [],
 ): Promise<{ app: INestApplication; module: TestingModule }> => {
+  const { port, ...moduleOptions } = options;
   const featureImports = clientTargets.map((name) => JetstreamModule.forFeature({ name }));
 
   const module = await Test.createTestingModule({
     imports: [
       JetstreamModule.forRoot({
-        servers: [NATS_URL],
-        ...options,
+        ...moduleOptions,
+        servers: [`nats://localhost:${port}`],
       }),
       ...featureImports,
     ],
@@ -71,9 +69,9 @@ const deleteStreamIfExists = async (
   try {
     await jsm.streams.delete(name);
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : '';
+    const isStreamNotFound = err instanceof Error && err.message.includes('stream not found');
 
-    if (!msg.includes('stream not found')) throw err;
+    if (!isStreamNotFound) throw err;
   }
 };
 
@@ -84,11 +82,11 @@ const deleteStreamIfExists = async (
 export const cleanupStreams = async (nc: NatsConnection, serviceName: string): Promise<void> => {
   const jsm = await nc.jetstreamManager();
 
-  for (const kind of ['ev', 'cmd', 'ordered'] as const) {
+  for (const kind of [StreamKind.Event, StreamKind.Command, StreamKind.Ordered] as const) {
     await deleteStreamIfExists(jsm, streamName(serviceName, kind));
   }
 
-  await deleteStreamIfExists(jsm, streamName(serviceName, 'broadcast'));
+  await deleteStreamIfExists(jsm, streamName(serviceName, StreamKind.Broadcast));
 };
 
 /**
