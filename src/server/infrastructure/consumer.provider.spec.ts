@@ -160,6 +160,8 @@ describe(ConsumerProvider, () => {
 
         // When/Then: ensureConsumers throws
         await expect(sut.ensureConsumers(['broadcast'])).rejects.toThrow(/no broadcast patterns/i);
+        expect(mockJsm.consumers.add).not.toHaveBeenCalled();
+        expect(mockJsm.consumers.update).not.toHaveBeenCalled();
       });
     });
   });

@@ -6,7 +6,7 @@ import { NatsConnection } from 'nats';
 import { firstValueFrom } from 'rxjs';
 import type { StartedTestContainer } from 'testcontainers';
 
-import { getClientToken, internalName } from '../../src';
+import { getClientToken } from '../../src';
 import { consumerName, streamName } from '../../src/jetstream.constants';
 import { StreamKind } from '../../src/interfaces';
 
@@ -63,7 +63,7 @@ describe('Self-Healing Consumer Flow', () => {
     });
 
     afterAll(async () => {
-      await container.stop();
+      await container?.stop();
     });
 
     beforeEach(async () => {
@@ -129,8 +129,11 @@ describe('Self-Healing Consumer Flow', () => {
     });
 
     afterAll(async () => {
-      await nc.drain();
-      await container.stop();
+      try {
+        await nc?.drain();
+      } finally {
+        await container?.stop();
+      }
     });
 
     beforeEach(() => {

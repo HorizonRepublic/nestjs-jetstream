@@ -8,6 +8,43 @@ export interface NatsContainerResult {
   port: number;
 }
 
+const waitForNatsReady = async (port: number, timeoutMs = 30_000): Promise<void> => {
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    try {
+      const nc = await connect({ servers: [`nats://localhost:${port}`], timeout: 1_000 });
+
+      await nc.drain();
+
+      return;
+    } catch {
+      await new Promise((r) => setTimeout(r, 100));
+    }
+  }
+
+  throw new Error(`NATS on port ${port} not reachable within ${timeoutMs / 1_000}s`);
+};
+
+const waitForJetStreamReady = async (port: number, timeoutMs = 30_000): Promise<void> => {
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    try {
+      const nc = await connect({ servers: [`nats://localhost:${port}`], timeout: 1_000 });
+
+      await nc.jetstreamManager();
+      await nc.drain();
+
+      return;
+    } catch {
+      await new Promise((r) => setTimeout(r, 250));
+    }
+  }
+
+  throw new Error(`NATS JetStream on port ${port} not ready within ${timeoutMs / 1_000}s`);
+};
+
 /**
  * Start a NATS container with JetStream enabled.
  * Returns the started container and the mapped host port.
@@ -24,21 +61,9 @@ export const startNatsContainer = async (): Promise<NatsContainerResult> => {
 
   // Docker Desktop on macOS can lag on port forwarding after container start.
   // Poll until we can establish a real NATS connection.
-  const deadline = Date.now() + 30_000;
+  await waitForNatsReady(port);
 
-  while (Date.now() < deadline) {
-    try {
-      const nc = await connect({ servers: [`nats://localhost:${port}`], timeout: 1_000 });
-
-      await nc.drain();
-
-      return { container, port };
-    } catch {
-      await new Promise((r) => setTimeout(r, 100));
-    }
-  }
-
-  throw new Error(`NATS container on port ${port} not reachable within 30s`);
+  return { container, port };
 };
 
 /**
@@ -55,21 +80,9 @@ export const startNatsContainerWithFixedPort = async (
     .withWaitStrategy(Wait.forLogMessage(/Server is ready/))
     .start();
 
-  const deadline = Date.now() + 30_000;
+  await waitForNatsReady(hostPort);
 
-  while (Date.now() < deadline) {
-    try {
-      const nc = await connect({ servers: [`nats://localhost:${hostPort}`], timeout: 1_000 });
-
-      await nc.drain();
-
-      return { container, port: hostPort };
-    } catch {
-      await new Promise((r) => setTimeout(r, 100));
-    }
-  }
-
-  throw new Error(`NATS container on fixed port ${hostPort} not reachable within 30s`);
+  return { container, port: hostPort };
 };
 
 /**
@@ -82,23 +95,8 @@ export const restartNatsContainer = async (container: StartedTestContainer): Pro
   await container.restart();
 
   const newPort = container.getMappedPort(4222);
-  const deadline = Date.now() + 30_000;
 
-  while (Date.now() < deadline) {
-    try {
-      const nc = await connect({
-        servers: [`nats://localhost:${newPort}`],
-        timeout: 1_000,
-      });
+  await waitForJetStreamReady(newPort);
 
-      await nc.jetstreamManager();
-      await nc.drain();
-
-      return newPort;
-    } catch {
-      await new Promise((r) => setTimeout(r, 250));
-    }
-  }
-
-  throw new Error('NATS not ready after container restart');
+  return newPort;
 };

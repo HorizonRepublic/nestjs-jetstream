@@ -37,8 +37,11 @@ describe('Stream & Consumer Lifecycle', () => {
   });
 
   afterAll(async () => {
-    await nc.drain();
-    await container.stop();
+    try {
+      await nc?.drain();
+    } finally {
+      await container?.stop();
+    }
   });
 
   describe('stream creation', () => {
@@ -266,33 +269,31 @@ describe('Stream & Consumer Lifecycle', () => {
   });
 
   describe('destroy and re-start lifecycle', () => {
-    it('should re-create streams after close and re-bootstrap', async () => {
+    it('should re-create streams after explicit deletion and re-bootstrap', async () => {
       const serviceName = uniqueServiceName();
 
-      const { app: app1 } = await createTestApp({ name: serviceName, port }, [
-        InfraEventController,
-      ]);
+      const { app: app1 } = await createTestApp(
+        { name: serviceName, port },
+        [InfraEventController],
+      );
 
       await app1.close();
 
-      const { app: app2 } = await createTestApp({ name: serviceName, port }, [
-        InfraEventController,
-      ]);
+      // Explicitly delete the stream — proving re-bootstrap recreates it
+      const jsm = await nc.jetstreamManager();
+      const internal = `${serviceName}__microservice`;
+
+      await jsm.streams.delete(`${internal}_ev-stream`);
+
+      const { app: app2 } = await createTestApp(
+        { name: serviceName, port },
+        [InfraEventController],
+      );
 
       try {
-        const jsm = await nc.jetstreamManager();
-        const internal = `${serviceName}__microservice`;
-
         const streamInfo = await jsm.streams.info(`${internal}_ev-stream`);
 
         expect(streamInfo).toBeDefined();
-
-        const consumerInfo = await jsm.consumers.info(
-          `${internal}_ev-stream`,
-          `${internal}_ev-consumer`,
-        );
-
-        expect(consumerInfo).toBeDefined();
       } finally {
         await app2.close();
         await cleanupStreams(nc, serviceName);

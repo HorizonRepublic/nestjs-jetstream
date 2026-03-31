@@ -56,8 +56,11 @@ describe('Broadcast Event Delivery', () => {
   });
 
   afterAll(async () => {
-    await nc.drain();
-    await container.stop();
+    try {
+      await nc?.drain();
+    } finally {
+      await container?.stop();
+    }
   });
 
   describe('fan-out to multiple services', () => {

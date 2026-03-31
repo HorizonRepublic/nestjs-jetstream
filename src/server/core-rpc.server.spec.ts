@@ -267,7 +267,7 @@ describe(CoreRpcServer, () => {
             data: new TextEncoder().encode('{}'),
           });
 
-          // Make encode throw on the second call (error response encoding)
+          // Make encode throw when encoding the error response
           codec.encode.mockImplementation(() => {
             throw new Error('encode failed');
           });

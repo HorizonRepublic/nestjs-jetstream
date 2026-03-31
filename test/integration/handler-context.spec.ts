@@ -103,8 +103,11 @@ describe('Handler Context', () => {
   });
 
   afterAll(async () => {
-    await nc.drain();
-    await container.stop();
+    try {
+      await nc?.drain();
+    } finally {
+      await container?.stop();
+    }
   });
 
   describe('ctx.retry()', () => {

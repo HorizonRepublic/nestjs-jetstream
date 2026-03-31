@@ -31,7 +31,7 @@ export const createTestApp = async (
   controllers: Type[] = [],
   clientTargets: string[] = [],
 ): Promise<{ app: INestApplication; module: TestingModule }> => {
-  const { port, ...moduleOptions } = options;
+  const { port, servers: _servers, ...moduleOptions } = options;
   const featureImports = clientTargets.map((name) => JetstreamModule.forFeature({ name }));
 
   const module = await Test.createTestingModule({

@@ -50,8 +50,11 @@ describe('Graceful Shutdown', () => {
   });
 
   afterAll(async () => {
-    await nc.drain();
-    await container.stop();
+    try {
+      await nc?.drain();
+    } finally {
+      await container?.stop();
+    }
   });
 
   it('should drain NATS connection on app.close()', async () => {
@@ -130,7 +133,7 @@ describe('Graceful Shutdown', () => {
     });
 
     afterAll(async () => {
-      await reconnectContainer.stop();
+      await reconnectContainer?.stop();
     });
 
     it('should close cleanly while transport is reconnecting', { timeout: 60_000 }, async () => {

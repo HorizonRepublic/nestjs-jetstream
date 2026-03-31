@@ -55,8 +55,11 @@ describe('Core RPC Round-Trip', () => {
   });
 
   afterAll(async () => {
-    await nc.drain();
-    await container.stop();
+    try {
+      await nc?.drain();
+    } finally {
+      await container?.stop();
+    }
   });
 
   beforeEach(async () => {

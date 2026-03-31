@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { Controller } from '@nestjs/common';
+import { Controller, INestApplication } from '@nestjs/common';
 import { MessagePattern } from '@nestjs/microservices';
+import { TestingModule } from '@nestjs/testing';
 import { NatsConnection } from 'nats';
 import type { StartedTestContainer } from 'testcontainers';
 
@@ -41,14 +42,20 @@ describe('Error Paths', () => {
   });
 
   afterAll(async () => {
-    await nc.drain();
-    await container.stop();
+    try {
+      await nc?.drain();
+    } finally {
+      await container?.stop();
+    }
   });
 
   describe('Core RPC fire-and-forget', () => {
+    let app: INestApplication;
+    let module: TestingModule;
     let serviceName: string;
 
     afterEach(async () => {
+      await app?.close();
       await cleanupStreams(nc, serviceName);
     });
 
@@ -56,9 +63,9 @@ describe('Error Paths', () => {
       // Given: an app with a Core RPC handler
       serviceName = uniqueServiceName();
 
-      const { app, module } = await createTestApp({ name: serviceName, port }, [
+      ({ app, module } = await createTestApp({ name: serviceName, port }, [
         ErrorPathRpcController,
-      ]);
+      ]));
 
       const controller = module.get(ErrorPathRpcController);
 
@@ -73,9 +80,6 @@ describe('Error Paths', () => {
 
       // Then: handler was NOT invoked
       expect(controller.callCount).toBe(0);
-
-      // And: app closes without throwing
-      await expect(app.close()).resolves.not.toThrow();
     });
   });
 });

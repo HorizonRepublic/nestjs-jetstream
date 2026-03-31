@@ -217,7 +217,7 @@ describe(MessageProvider, () => {
         // Then: error event emitted
         expect(eventBus.emit).toHaveBeenCalledWith(
           TransportEvent.Error,
-          expect.any(Error),
+          connectionError,
           'message-provider',
         );
 

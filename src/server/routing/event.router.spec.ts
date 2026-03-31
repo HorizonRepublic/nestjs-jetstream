@@ -407,7 +407,7 @@ describe(EventRouter, () => {
     });
 
     describe('when ordered handler calls ctx.retry()', () => {
-      it('should log warning but NOT retry (ordered consumers auto-acknowledge)', async () => {
+      it('should NOT retry (ordered consumers auto-acknowledge)', async () => {
         // Given: handler that requests retry on an ordered message
         const handler = vi.fn().mockImplementation((_data: unknown, ctx: RpcContext) => {
           ctx.retry();
@@ -433,7 +433,7 @@ describe(EventRouter, () => {
     });
 
     describe('when ordered handler calls ctx.terminate()', () => {
-      it('should log warning but NOT terminate (ordered consumers auto-acknowledge)', async () => {
+      it('should NOT terminate (ordered consumers auto-acknowledge)', async () => {
         // Given: handler that requests terminate on an ordered message
         const handler = vi.fn().mockImplementation((_data: unknown, ctx: RpcContext) => {
           ctx.terminate();
