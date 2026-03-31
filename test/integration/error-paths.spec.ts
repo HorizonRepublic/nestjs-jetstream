@@ -42,9 +42,9 @@ describe('Error Paths', () => {
 
   afterAll(async () => {
     try {
-      await nc?.drain();
+      await nc.drain();
     } finally {
-      await container?.stop();
+      await container.stop();
     }
   });
 
@@ -54,7 +54,7 @@ describe('Error Paths', () => {
     let serviceName: string;
 
     afterEach(async () => {
-      await app?.close();
+      await app.close();
       await cleanupStreams(nc, serviceName);
     });
 

@@ -56,9 +56,9 @@ describe('JetStream RPC Round-Trip', () => {
 
   afterAll(async () => {
     try {
-      await nc?.drain();
+      await nc.drain();
     } finally {
-      await container?.stop();
+      await container.stop();
     }
   });
 

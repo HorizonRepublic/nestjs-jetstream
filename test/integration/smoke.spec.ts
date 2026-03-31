@@ -13,7 +13,7 @@ describe('NATS connectivity', () => {
   });
 
   afterAll(async () => {
-    await container?.stop();
+    await container.stop();
   });
 
   it('should connect to NATS server', async () => {

@@ -104,9 +104,9 @@ describe('Handler Context', () => {
 
   afterAll(async () => {
     try {
-      await nc?.drain();
+      await nc.drain();
     } finally {
-      await container?.stop();
+      await container.stop();
     }
   });
 
@@ -137,7 +137,7 @@ describe('Handler Context', () => {
     });
 
     afterEach(async () => {
-      await app?.close();
+      await app.close();
       await cleanupStreams(nc, serviceName);
     });
 
@@ -180,7 +180,7 @@ describe('Handler Context', () => {
     });
 
     afterEach(async () => {
-      await app?.close();
+      await app.close();
       await cleanupStreams(nc, serviceName);
     });
 
@@ -229,7 +229,7 @@ describe('Handler Context', () => {
     });
 
     afterEach(async () => {
-      await app?.close();
+      await app.close();
       await cleanupStreams(nc, serviceName);
     });
 
@@ -276,7 +276,7 @@ describe('Handler Context', () => {
     });
 
     afterEach(async () => {
-      await app?.close();
+      await app.close();
       await cleanupStreams(nc, serviceName);
     });
 
