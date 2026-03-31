@@ -1,6 +1,7 @@
+# Local development only — integration tests use Testcontainers.
 services:
   nats:
-    image: nats:latest
+    image: nats:2.12.6
     container_name: nestjs_jetstream_nats
     ports:
       - '4222:4222'
