@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type Mocked } from 'vitest';
 import { createMock } from '@golevelup/ts-vitest';
 import { faker } from '@faker-js/faker';
-import type { DeliveryInfo, JsMsg } from 'nats';
+import type { DeliveryInfo, JsMsg } from '@nats-io/jetstream';
 import { Subject } from 'rxjs';
 
 import { EventBus } from '../../hooks';

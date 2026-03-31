@@ -289,7 +289,7 @@ NATS JetStream uses nanoseconds for all time-based configuration. The library ex
 Ordered events use a separate stream with Limits retention and deliver messages in strict sequential order. The configuration is simpler than workqueue/broadcast because ordered consumers are ephemeral and auto-managed by nats.js.
 
 ```typescript
-import { DeliverPolicy } from 'nats';
+import { DeliverPolicy } from '@nats-io/jetstream';
 
 JetstreamModule.forRoot({
   name: 'orders',

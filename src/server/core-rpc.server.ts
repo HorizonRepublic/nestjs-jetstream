@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import { headers as natsHeaders, Msg, Subscription } from 'nats';
+import { headers as natsHeaders, type Msg, type Subscription } from '@nats-io/transport-node';
 
 import { ConnectionProvider } from '../connection';
 import { RpcContext } from '../context';

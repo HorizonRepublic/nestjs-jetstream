@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 import { createMock } from '@golevelup/ts-vitest';
 import { faker } from '@faker-js/faker';
-import type { ConsumerInfo } from 'nats';
-import { NatsError } from 'nats';
+import type { ConsumerInfo } from '@nats-io/jetstream';
+import { JetStreamApiError } from '@nats-io/jetstream';
 
 import { ConnectionProvider } from '../../connection';
 import { StreamKind } from '../../interfaces';
@@ -53,13 +53,12 @@ describe(ConsumerProvider, () => {
     describe('when consumer info throws a non-CONSUMER_NOT_FOUND error', () => {
       it('should rethrow the error', async () => {
         // Given: jsm.consumers.info throws auth error
-        const authError = new Error('authorization violation') as NatsError;
-
-        authError.api_error = {
+        const authError = new JetStreamApiError({
           err_code: 10100,
           code: 403,
           description: 'authorization violation',
-        };
+        });
+
         mockJsm.consumers.info.mockRejectedValue(authError);
 
         // When/Then: propagates the error
@@ -123,9 +122,12 @@ describe(ConsumerProvider, () => {
     describe('when consumer does not exist', () => {
       it('should create it with correct config for multiple broadcast patterns', async () => {
         // Given: consumer not found, registry has multiple patterns
-        const notFoundError = new NatsError('consumer not found', 'UNKNOWN_ERROR');
+        const notFoundError = new JetStreamApiError({
+          err_code: 10014,
+          code: 404,
+          description: 'consumer not found',
+        });
 
-        notFoundError.api_error = { err_code: 10014, code: 404, description: 'consumer not found' };
         mockJsm.consumers.info.mockRejectedValue(notFoundError);
 
         const patterns = ['broadcast.a', 'broadcast.b'];
