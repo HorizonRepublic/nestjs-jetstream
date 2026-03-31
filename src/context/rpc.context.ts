@@ -1,5 +1,6 @@
 import { BaseRpcContext } from '@nestjs/microservices';
-import { JsMsg, MsgHdrs, Msg } from 'nats';
+import type { Msg, MsgHdrs } from '@nats-io/transport-node';
+import type { JsMsg } from '@nats-io/jetstream';
 
 import { JetstreamHeader } from '../jetstream.constants';
 
