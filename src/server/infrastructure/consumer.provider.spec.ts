@@ -5,6 +5,7 @@ import type { ConsumerInfo } from 'nats';
 import { NatsError } from 'nats';
 
 import { ConnectionProvider } from '../../connection';
+import { StreamKind } from '../../interfaces';
 import type { JetstreamModuleOptions } from '../../interfaces';
 import { PatternRegistry } from '../routing';
 
@@ -62,7 +63,7 @@ describe(ConsumerProvider, () => {
         mockJsm.consumers.info.mockRejectedValue(authError);
 
         // When/Then: propagates the error
-        await expect(sut.ensureConsumers(['ev'])).rejects.toThrow('authorization violation');
+        await expect(sut.ensureConsumers([StreamKind.Event])).rejects.toThrow('authorization violation');
         expect(mockJsm.consumers.add).not.toHaveBeenCalled();
       });
     });
@@ -83,7 +84,7 @@ describe(ConsumerProvider, () => {
         mockJsm.consumers.update.mockResolvedValue(updated);
 
         // When: ensure broadcast consumer
-        await sut.ensureConsumers(['broadcast']);
+        await sut.ensureConsumers([StreamKind.Broadcast]);
 
         // Then: consumer updated with filter_subjects
         expect(mockJsm.consumers.update).toHaveBeenCalledWith(
@@ -106,7 +107,7 @@ describe(ConsumerProvider, () => {
         mockJsm.consumers.update.mockResolvedValue(updated);
 
         // When: ensure broadcast consumer
-        await sut.ensureConsumers(['broadcast']);
+        await sut.ensureConsumers([StreamKind.Broadcast]);
 
         // Then: consumer updated with filter_subject
         expect(mockJsm.consumers.update).toHaveBeenCalledWith(
@@ -134,7 +135,7 @@ describe(ConsumerProvider, () => {
         mockJsm.consumers.add.mockResolvedValue(created);
 
         // When: ensure broadcast consumer
-        await sut.ensureConsumers(['broadcast']);
+        await sut.ensureConsumers([StreamKind.Broadcast]);
 
         // Then: created with filter_subjects
         expect(mockJsm.consumers.add).toHaveBeenCalledWith(
@@ -147,7 +148,7 @@ describe(ConsumerProvider, () => {
     describe('when ordered kind is passed', () => {
       it('should throw because ordered consumers are ephemeral', async () => {
         // When/Then: getDefaults('ordered') throws synchronously before any NATS call
-        await expect(sut.ensureConsumers(['ordered'])).rejects.toThrow(/ephemeral/i);
+        await expect(sut.ensureConsumers([StreamKind.Ordered])).rejects.toThrow(/ephemeral/i);
       });
     });
 
@@ -159,7 +160,7 @@ describe(ConsumerProvider, () => {
         mockJsm.consumers.info.mockResolvedValue(createMock<ConsumerInfo>());
 
         // When/Then: ensureConsumers throws
-        await expect(sut.ensureConsumers(['broadcast'])).rejects.toThrow(/no broadcast patterns/i);
+        await expect(sut.ensureConsumers([StreamKind.Broadcast])).rejects.toThrow(/no broadcast patterns/i);
         expect(mockJsm.consumers.add).not.toHaveBeenCalled();
         expect(mockJsm.consumers.update).not.toHaveBeenCalled();
       });
