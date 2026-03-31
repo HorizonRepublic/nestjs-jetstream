@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { MessageHandler } from '@nestjs/microservices';
-import { headers, JsMsg, NatsConnection } from 'nats';
+import { headers, type NatsConnection } from '@nats-io/transport-node';
+import type { JsMsg } from '@nats-io/jetstream';
 import { from, mergeMap, Subscription } from 'rxjs';
 
 import { ConnectionProvider } from '../../connection';
