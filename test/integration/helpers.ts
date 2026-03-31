@@ -1,7 +1,7 @@
 import { INestApplication, Type } from '@nestjs/common';
 import { MicroserviceOptions } from '@nestjs/microservices';
 import { Test, TestingModule } from '@nestjs/testing';
-import { connect, NatsConnection } from 'nats';
+import { connect, type NatsConnection } from '@nats-io/transport-node';
 
 import { JetstreamModule, JetstreamStrategy, StreamKind, streamName } from '../../src';
 import type { JetstreamModuleOptions } from '../../src';

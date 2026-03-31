@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Controller } from '@nestjs/common';
 import { EventPattern, MessagePattern } from '@nestjs/microservices';
-import { NatsConnection, RetentionPolicy, StoreCompression } from 'nats';
+import type { NatsConnection } from '@nats-io/transport-node';
+import { RetentionPolicy, StoreCompression } from '@nats-io/jetstream';
 import type { StartedTestContainer } from 'testcontainers';
 
 import { toNanos } from '../../src';

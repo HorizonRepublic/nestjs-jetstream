@@ -1,5 +1,5 @@
 import { GenericContainer, StartedTestContainer, Wait } from 'testcontainers';
-import { connect } from 'nats';
+import { connect } from '@nats-io/transport-node';
 
 export const NATS_IMAGE = 'nats:2.12.6';
 

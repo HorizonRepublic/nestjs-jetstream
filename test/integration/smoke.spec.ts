@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { connect } from 'nats';
+import { connect } from '@nats-io/transport-node';
 import type { StartedTestContainer } from 'testcontainers';
 
 import { startNatsContainer } from './nats-container';
