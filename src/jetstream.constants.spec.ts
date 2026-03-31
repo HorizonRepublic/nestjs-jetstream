@@ -165,7 +165,9 @@ describe('jetstream.constants', () => {
     it('should produce incorrect consumer name for arbitrary string', () => {
       const invalidKind = 'invalid-kind' as never;
 
-      expect(consumerName(serviceName, invalidKind)).not.toMatch(/_(ev|cmd|broadcast)-consumer$/);
+      expect(consumerName(serviceName, invalidKind)).not.toMatch(
+        /_(ev|cmd|ordered|broadcast)-consumer$/,
+      );
     });
   });
 });
