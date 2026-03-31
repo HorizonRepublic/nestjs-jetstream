@@ -232,12 +232,16 @@ describe('Stream & Consumer Lifecycle', () => {
       const serviceName = uniqueServiceName();
 
       // First bootstrap
-      const { app: app1 } = await createTestApp({ name: serviceName, port }, [InfraEventController]);
+      const { app: app1 } = await createTestApp({ name: serviceName, port }, [
+        InfraEventController,
+      ]);
 
       await app1.close();
 
       // Second bootstrap — same service name
-      const { app: app2 } = await createTestApp({ name: serviceName, port }, [InfraEventController]);
+      const { app: app2 } = await createTestApp({ name: serviceName, port }, [
+        InfraEventController,
+      ]);
 
       try {
         const jsm = await nc.jetstreamManager();
@@ -251,6 +255,41 @@ describe('Stream & Consumer Lifecycle', () => {
         const consumerInfo = await jsm.consumers.info(
           `${internalName}_ev-stream`,
           `${internalName}_ev-consumer`,
+        );
+
+        expect(consumerInfo).toBeDefined();
+      } finally {
+        await app2.close();
+        await cleanupStreams(nc, serviceName);
+      }
+    });
+  });
+
+  describe('destroy and re-start lifecycle', () => {
+    it('should re-create streams after close and re-bootstrap', async () => {
+      const serviceName = uniqueServiceName();
+
+      const { app: app1 } = await createTestApp({ name: serviceName, port }, [
+        InfraEventController,
+      ]);
+
+      await app1.close();
+
+      const { app: app2 } = await createTestApp({ name: serviceName, port }, [
+        InfraEventController,
+      ]);
+
+      try {
+        const jsm = await nc.jetstreamManager();
+        const internal = `${serviceName}__microservice`;
+
+        const streamInfo = await jsm.streams.info(`${internal}_ev-stream`);
+
+        expect(streamInfo).toBeDefined();
+
+        const consumerInfo = await jsm.consumers.info(
+          `${internal}_ev-stream`,
+          `${internal}_ev-consumer`,
         );
 
         expect(consumerInfo).toBeDefined();
