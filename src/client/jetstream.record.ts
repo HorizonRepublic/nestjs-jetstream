@@ -138,6 +138,10 @@ export class JetstreamRecordBuilder<TData = unknown> {
    * @throws Error if the date is not in the future.
    */
   public scheduleAt(date: Date): this {
+    if (Number.isNaN(date.getTime())) {
+      throw new Error('Schedule date is invalid');
+    }
+
     if (date.getTime() <= Date.now()) {
       throw new Error('Schedule date must be in the future');
     }

@@ -316,6 +316,31 @@ describe(JetstreamClient, () => {
         );
       });
 
+      it('should publish ordered schedule to _sch subject with ordered target', async () => {
+        // Given: ordered event with schedule
+        const data = { status: faker.lorem.word() };
+        const futureDate = new Date(Date.now() + 60_000);
+        const record = new JetstreamRecordBuilder(data).scheduleAt(futureDate).build();
+
+        // When: ordered event emitted with schedule
+        await firstValueFrom(sut.emit('ordered:order.status', record));
+
+        // Then: published to _sch namespace with ordered target
+        const expectedScheduleSubject = `${targetName}__microservice._sch.order.status`;
+        const expectedOrderedTarget = `${targetName}__microservice.ordered.order.status`;
+
+        expect(mockJs.publish).toHaveBeenCalledWith(
+          expectedScheduleSubject,
+          codec.encode(data),
+          expect.objectContaining({
+            schedule: {
+              specification: futureDate,
+              target: expectedOrderedTarget,
+            },
+          }),
+        );
+      });
+
       it('should NOT include schedule in publish options when not set', async () => {
         // Given: record without schedule
         const data = { orderId: faker.number.int() };
@@ -506,10 +531,13 @@ describe(JetstreamClient, () => {
         const loggerWarnSpy = vi.spyOn(sut['logger'], 'warn');
 
         // When: RPC sent with scheduled record
-        await firstValueFrom(sut.send('get.user', record));
+        const result = await firstValueFrom(sut.send('get.user', record));
 
         // Then: warning logged
         expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('scheduleAt()'));
+
+        // Then: RPC still completes successfully
+        expect(result).toEqual({ ok: true });
       });
     });
   });

@@ -23,19 +23,7 @@ describe(JetstreamRecord, () => {
         expect(sut.timeout).toBe(timeout);
       });
     });
-  });
 
-  describe('edge cases', () => {
-    describe('when timeout is omitted', () => {
-      it('should be undefined', () => {
-        const sut = new JetstreamRecord('data', new Map());
-
-        expect(sut.timeout).toBeUndefined();
-      });
-    });
-  });
-
-  describe('happy path', () => {
     describe('when constructed with schedule', () => {
       it('should store schedule options', () => {
         // Given: schedule options
@@ -46,6 +34,16 @@ describe(JetstreamRecord, () => {
 
         // Then: schedule accessible
         expect(sut.schedule).toEqual(schedule);
+      });
+    });
+  });
+
+  describe('edge cases', () => {
+    describe('when timeout is omitted', () => {
+      it('should be undefined', () => {
+        const sut = new JetstreamRecord('data', new Map());
+
+        expect(sut.timeout).toBeUndefined();
       });
     });
   });
@@ -191,12 +189,25 @@ describe(JetstreamRecordBuilder, () => {
         it('should throw an error', () => {
           // Given: current date (use vi.useFakeTimers for determinism)
           vi.useFakeTimers();
-          const now = new Date();
 
-          // When/Then: throws (now is not in the future)
-          expect(() => sut.scheduleAt(now)).toThrow(/future/i);
+          try {
+            const now = new Date();
 
-          vi.useRealTimers();
+            // When/Then: throws (now is not in the future)
+            expect(() => sut.scheduleAt(now)).toThrow(/future/i);
+          } finally {
+            vi.useRealTimers();
+          }
+        });
+      });
+
+      describe('when date is invalid', () => {
+        it('should throw an error', () => {
+          // Given: an invalid date
+          const invalidDate = new Date('invalid');
+
+          // When/Then: throws
+          expect(() => sut.scheduleAt(invalidDate)).toThrow(/invalid/i);
         });
       });
     });

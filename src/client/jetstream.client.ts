@@ -508,13 +508,23 @@ export class JetstreamClient extends ClientProxy {
 
     // For event/ordered subjects: {svc}__microservice.{kind}.{pattern}
     // Replace the kind segment with _sch: {svc}__microservice._sch.{pattern}
-    const callerPrefix = `${internalName(this.targetName)}.`;
-    const withoutPrefix = eventSubject.slice(callerPrefix.length);
+    const targetPrefix = `${internalName(this.targetName)}.`;
+
+    if (!eventSubject.startsWith(targetPrefix)) {
+      throw new Error(`Unexpected event subject format: ${eventSubject}`);
+    }
+
+    const withoutPrefix = eventSubject.slice(targetPrefix.length);
     // withoutPrefix is "{kind}.{pattern}" — strip the kind segment
     const dotIndex = withoutPrefix.indexOf('.');
+
+    if (dotIndex === -1) {
+      throw new Error(`Event subject missing pattern segment: ${eventSubject}`);
+    }
+
     const pattern = withoutPrefix.slice(dotIndex + 1);
 
-    return `${callerPrefix}_sch.${pattern}`;
+    return `${targetPrefix}_sch.${pattern}`;
   }
 
   private getRpcTimeout(): number {

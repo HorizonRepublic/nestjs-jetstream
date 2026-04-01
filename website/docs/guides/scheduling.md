@@ -63,7 +63,7 @@ handleReminder(@Payload() data: OrderReminder) {
 1. `scheduleAt(date)` stores the delivery time in the record
 2. On publish, the library routes to a special `_sch` subject within the event stream
 3. NATS holds the message until the scheduled time
-4. At delivery time, NATS publishes a new message to the original event subject
+4. At delivery time, the NATS server automatically publishes a new message to the original event subject
 5. The event consumer processes it normally
 
 ```
