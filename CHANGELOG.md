@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.8.0](https://github.com/HorizonRepublic/nestjs-jetstream/compare/v2.7.1...v2.8.0) (2026-04-01)
+
+
+### Features
+
+* message scheduling (delayed jobs) ([#114](https://github.com/HorizonRepublic/nestjs-jetstream/issues/114)) ([c7f2a0a](https://github.com/HorizonRepublic/nestjs-jetstream/commit/c7f2a0a1a2f648fdffbf62ec73b35f1b4e0fb29e))
+* migrate from nats to @nats-io/* scoped packages (v3.x) ([#112](https://github.com/HorizonRepublic/nestjs-jetstream/issues/112)) ([9cf1054](https://github.com/HorizonRepublic/nestjs-jetstream/commit/9cf1054bcbd0afeec146f6e8dc54bf103063500e))
+
+
+### Bug Fixes
+
+* add scheduling guide to sidebar navigation ([723f94f](https://github.com/HorizonRepublic/nestjs-jetstream/commit/723f94f19a1e456139dbfcafc4cbac6a744089fd))
+
 ## [2.7.1](https://github.com/HorizonRepublic/nestjs-jetstream/compare/v2.7.0...v2.7.1) (2026-03-30)
 
 
