@@ -66,19 +66,19 @@ handleReminder(@Payload() data: OrderReminder) {
 4. At delivery time, the NATS server automatically publishes a new message to the original event subject
 5. The event consumer processes it normally
 
-```
-Event stream (subjects: {svc}.ev.> + {svc}._sch.>)
-┌──────────────────────────────────────────┐
-│                                          │
-│  {svc}._sch.order.reminder               │
-│  (held by NATS until scheduled time)     │
-│           │                              │
-│           │  at scheduled time           │
-│           ▼                              │
-│  {svc}.ev.order.reminder                 │
-│  (delivered to consumer)                 │
-│                                          │
-└──────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph stream["Event stream"]
+        sch["{svc}._sch.order.reminder"]
+        ev["{svc}.ev.order.reminder"]
+    end
+
+    sch -- "at scheduled time" --> ev
+    ev --> handler["@EventPattern handler"]
+
+    style sch fill:#f9f0ff,stroke:#7c3aed
+    style ev fill:#ecfdf5,stroke:#059669
+    style handler fill:#eff6ff,stroke:#2563eb
 ```
 
 ## Important: `max_age` consideration
@@ -109,4 +109,4 @@ Setting `max_age: 0` disables automatic cleanup for **all** messages in the even
 | **Future dates only** | `scheduleAt()` throws if the date is not in the future |
 | **NATS >= 2.12** | `allow_msg_schedules` is not supported by older server versions |
 | **`max_age` constraint** | Schedule delay must not exceed the stream's `max_age` |
-| **Per-stream opt-in** | Broadcast/ordered scheduling requires `allow_msg_schedules: true` on the respective stream config separately |
+| **Per-stream opt-in** | Broadcast scheduling requires `allow_msg_schedules: true` on the broadcast stream config separately |

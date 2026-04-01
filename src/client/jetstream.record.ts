@@ -1,10 +1,5 @@
+import type { ScheduleRecordOptions } from '../interfaces';
 import { RESERVED_HEADERS } from '../jetstream.constants';
-
-/** Options for one-shot delayed delivery via NATS 2.12 message scheduling. */
-export interface ScheduleRecordOptions {
-  /** When to deliver the message. Must be in the future. */
-  at: Date;
-}
 
 /**
  * Immutable message record for JetStream transport.
@@ -138,15 +133,17 @@ export class JetstreamRecordBuilder<TData = unknown> {
    * @throws Error if the date is not in the future.
    */
   public scheduleAt(date: Date): this {
-    if (Number.isNaN(date.getTime())) {
+    const ts = date.getTime();
+
+    if (Number.isNaN(ts)) {
       throw new Error('Schedule date is invalid');
     }
 
-    if (date.getTime() <= Date.now()) {
+    if (ts <= Date.now()) {
       throw new Error('Schedule date must be in the future');
     }
 
-    this.scheduleOptions = { at: date };
+    this.scheduleOptions = { at: new Date(ts) };
 
     return this;
   }
@@ -157,12 +154,16 @@ export class JetstreamRecordBuilder<TData = unknown> {
    * @returns A frozen record ready to pass to `client.send()` or `client.emit()`.
    */
   public build(): JetstreamRecord<TData> {
+    const schedule = this.scheduleOptions
+      ? { at: new Date(this.scheduleOptions.at.getTime()) }
+      : undefined;
+
     return new JetstreamRecord(
       this.data as TData,
       new Map(this.headers),
       this.timeout,
       this.messageId,
-      this.scheduleOptions,
+      schedule,
     );
   }
 

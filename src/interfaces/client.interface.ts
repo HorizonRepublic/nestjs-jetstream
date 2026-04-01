@@ -1,4 +1,8 @@
-import type { ScheduleRecordOptions } from '../client/jetstream.record';
+/** Options for one-shot delayed delivery via NATS 2.12 message scheduling. */
+export interface ScheduleRecordOptions {
+  /** When to deliver the message. Must be in the future. */
+  at: Date;
+}
 
 /** @internal Options for transport-controlled headers on outbound messages. */
 export interface TransportHeaderOptions {

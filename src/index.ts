@@ -13,6 +13,7 @@ export type {
   JetstreamModuleOptions,
   OrderedEventOverrides,
   RpcConfig,
+  ScheduleRecordOptions,
   StreamConsumerOverrides,
   TransportHooks,
 } from './interfaces';
@@ -21,8 +22,6 @@ export type {
 export { JetstreamClient } from './client';
 
 export { JetstreamRecord, JetstreamRecordBuilder } from './client';
-
-export type { ScheduleRecordOptions } from './client';
 
 // Codec
 export { JsonCodec } from './codec';
