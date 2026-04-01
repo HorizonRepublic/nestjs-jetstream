@@ -152,4 +152,4 @@ When [message scheduling](/docs/guides/scheduling) is enabled (`allow_msg_schedu
 | Event | `{name}__microservice._sch.>` |
 | Broadcast | `broadcast._sch.>` |
 
-These `_sch` subjects are used internally by NATS to hold scheduled messages until their delivery time. When the scheduled time arrives, NATS republishes the message to the original subject. You don't interact with `_sch` subjects directly — they are managed by NATS Server >= 2.12.
+The `_sch` subjects are a library convention to separate scheduled messages from regular events within the same stream. NATS scheduling itself works via headers (`Nats-Schedule`, `Nats-Schedule-Target` per [ADR-51](https://github.com/nats-io/nats-architecture-and-design/blob/main/adr/ADR-51.md)), not special subjects. You don't interact with `_sch` subjects directly — the library manages them automatically.
