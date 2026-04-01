@@ -49,6 +49,10 @@ Workqueue retention — each message is removed after being acknowledged by a co
 | `max_age` | `7 days` | 604,800,000 ms |
 | `duplicate_window` | `2 minutes` | 120,000 ms |
 
+:::tip Scheduling
+To enable [message scheduling](/docs/guides/scheduling), add `allow_msg_schedules: true` to the event stream config. This requires NATS Server >= 2.12.
+:::
+
 ### Command Stream
 
 Short-lived RPC commands (JetStream RPC mode only).

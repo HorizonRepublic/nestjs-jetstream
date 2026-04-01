@@ -23,6 +23,19 @@ describe(JetstreamRecord, () => {
         expect(sut.timeout).toBe(timeout);
       });
     });
+
+    describe('when constructed with schedule', () => {
+      it('should store schedule options', () => {
+        // Given: schedule options
+        const schedule = { at: new Date(Date.now() + 60_000) };
+
+        // When: created with schedule
+        const sut = new JetstreamRecord({ id: 1 }, new Map(), undefined, undefined, schedule);
+
+        // Then: schedule accessible
+        expect(sut.schedule).toEqual(schedule);
+      });
+    });
   });
 
   describe('edge cases', () => {
@@ -131,6 +144,71 @@ describe(JetstreamRecordBuilder, () => {
 
         // Then: record is unaffected
         expect(record.headers.has('x-b')).toBe(false);
+      });
+    });
+  });
+
+  describe('scheduleAt()', () => {
+    describe('happy path', () => {
+      describe('when scheduling a future date', () => {
+        it('should include schedule in built record', () => {
+          // Given: a future date
+          const futureDate = new Date(Date.now() + 60_000);
+
+          // When: built with scheduleAt
+          const record = sut.setData({ id: 1 }).scheduleAt(futureDate).build();
+
+          // Then: record contains schedule
+          expect(record.schedule).toEqual({ at: futureDate });
+        });
+      });
+
+      describe('when scheduleAt is not called', () => {
+        it('should have undefined schedule in built record', () => {
+          // When: built without scheduleAt
+          const record = sut.setData({ id: 1 }).build();
+
+          // Then: no schedule
+          expect(record.schedule).toBeUndefined();
+        });
+      });
+    });
+
+    describe('error paths', () => {
+      describe('when date is in the past', () => {
+        it('should throw an error', () => {
+          // Given: a past date
+          const pastDate = new Date(Date.now() - 60_000);
+
+          // When/Then: throws
+          expect(() => sut.scheduleAt(pastDate)).toThrow(/future/i);
+        });
+      });
+
+      describe('when date is exactly now', () => {
+        it('should throw an error', () => {
+          // Given: current date (use vi.useFakeTimers for determinism)
+          vi.useFakeTimers();
+
+          try {
+            const now = new Date();
+
+            // When/Then: throws (now is not in the future)
+            expect(() => sut.scheduleAt(now)).toThrow(/future/i);
+          } finally {
+            vi.useRealTimers();
+          }
+        });
+      });
+
+      describe('when date is invalid', () => {
+        it('should throw an error', () => {
+          // Given: an invalid date
+          const invalidDate = new Date('invalid');
+
+          // When/Then: throws
+          expect(() => sut.scheduleAt(invalidDate)).toThrow(/invalid/i);
+        });
       });
     });
   });
