@@ -82,9 +82,10 @@ flowchart LR
     sch -- "at scheduled time" --> ev
     ev --> handler["@EventPattern handler"]
 
-    style sch fill:#f9f0ff,stroke:#7c3aed
-    style ev fill:#ecfdf5,stroke:#059669
-    style handler fill:#eff6ff,stroke:#2563eb
+    style stream fill:#0B1120,stroke:#1E293B,color:#E2E8F0
+    style sch fill:#1E1338,stroke:#8B5CF6,color:#E2E8F0
+    style ev fill:#0D2818,stroke:#10B981,color:#E2E8F0
+    style handler fill:#111827,stroke:#3B82F6,color:#E2E8F0
 ```
 
 ## Important: `max_age` consideration
