@@ -44,7 +44,7 @@ export class OrdersController {
 |---|---|---|
 | `getSubject()` | `string` | The NATS subject this message was published to |
 | `getHeader(key)` | `string \| undefined` | Value of a single header, or `undefined` if missing |
-| `getHeaders()` | `MsgHdrs \| undefined` | All NATS message headers (the raw nats.js `MsgHdrs` object) |
+| `getHeaders()` | `MsgHdrs \| undefined` | All NATS message headers (the raw NATS `MsgHdrs` object from `@nats-io/transport-node`) |
 | `isJetStream()` | `boolean` | Type guard — returns `true` when the message is a JetStream message |
 | `getMessage()` | `JsMsg \| Msg` | The raw NATS message (type depends on transport mode) |
 
@@ -206,13 +206,13 @@ This check is useful when writing code that works across both Core RPC mode (`Ms
 
 ## Accessing the raw NATS message
 
-For advanced use cases, `getMessage()` gives direct access to the underlying nats.js message object. Prefer the typed accessors when possible.
+For advanced use cases, `getMessage()` gives direct access to the underlying NATS message object. Prefer the typed accessors when possible.
 
 ```typescript
 if (ctx.isJetStream()) {
   const msg = ctx.getMessage();
   console.log('Pending:', msg.info.pending);
-  console.log('Consumer sequence:', msg.info.streamSequence);
+  console.log('Stream sequence:', msg.info.streamSequence);
 }
 ```
 

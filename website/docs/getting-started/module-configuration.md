@@ -293,7 +293,7 @@ NATS JetStream uses nanoseconds for all time-based configuration. The library ex
 
 <Since version="2.2.0" />
 
-Ordered events use a separate stream with Limits retention and deliver messages in strict sequential order. The configuration is simpler than workqueue/broadcast because ordered consumers are ephemeral and auto-managed by nats.js.
+Ordered events use a separate stream with Limits retention and deliver messages in strict sequential order. The configuration is simpler than workqueue/broadcast because ordered consumers are ephemeral and auto-managed by the `@nats-io/jetstream` client.
 
 ```typescript
 import { DeliverPolicy } from '@nats-io/jetstream';
@@ -322,7 +322,7 @@ See [Ordered Events](/docs/patterns/ordered-events) for detailed usage.
 
 ## connectionOptions
 
-The `connectionOptions` field passes raw NATS `ConnectionOptions` directly to the nats.js client. Use it for TLS, authentication, and reconnection configuration.
+The `connectionOptions` field passes raw NATS `ConnectionOptions` (from `@nats-io/transport-node`) directly to the NATS client. Use it for TLS, authentication, and reconnection configuration.
 
 :::warning Precedence
 The `name` and `servers` fields from the top-level options take precedence over anything set in `connectionOptions`. Don't duplicate them.

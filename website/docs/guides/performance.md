@@ -32,20 +32,20 @@ The primary flow control knob is `max_ack_pending` on the consumer. It limits ho
 | `consumer.max_ack_pending` | 100 | Max in-flight unacked messages |
 | `consumer.ack_wait` | 10s (events) / 5min (RPC) | Ack deadline before redelivery |
 | `concurrency` | unlimited | Limits parallel handler execution |
-| `consume.max_messages` | nats.js default | Internal prefetch buffer size |
+| `consume.max_messages` | `@nats-io/jetstream` default | Internal prefetch buffer size |
 | `consume.threshold_messages` | 75% of max_messages | Auto-refill trigger |
 
 ### How these interact
 
 - **`max_ack_pending`** is the ceiling. The server will never deliver more than this many unacked messages.
 - **`concurrency`** controls how many messages are processed in parallel by your handlers. If `concurrency` is lower than `max_ack_pending`, excess messages wait in the internal buffer.
-- **`consume.max_messages`** and **`consume.threshold_messages`** control the prefetch buffer — how many messages the nats.js client requests from the server in a single batch and when it requests more.
+- **`consume.max_messages`** and **`consume.threshold_messages`** control the prefetch buffer — how many messages the `@nats-io/jetstream` client requests from the server in a single batch and when it requests more.
 
 For most workloads, tuning `max_ack_pending` and `concurrency` is sufficient.
 
 ## Consume options
 
-The `consume` field controls the internal prefetch buffer used by the nats.js `consume()` call. These options determine how aggressively the client pulls messages from the server.
+The `consume` field controls the internal prefetch buffer used by the `@nats-io/jetstream` `consume()` call. These options determine how aggressively the client pulls messages from the server.
 
 ```typescript
 events: {

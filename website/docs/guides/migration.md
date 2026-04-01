@@ -112,6 +112,34 @@ After migration, you get for free:
 
 ## Upgrading between versions
 
+### v2.7 → v2.8
+
+**New features:**
+- [Message scheduling](/docs/guides/scheduling) — one-shot delayed delivery via `scheduleAt()` (requires NATS >= 2.12)
+- `allow_msg_schedules` stream config option
+
+No breaking changes.
+
+### v2.6 → v2.7
+
+**Breaking change:** migrated from `nats` package to `@nats-io/*` scoped packages (v3.x).
+
+This is an internal change — the library re-exports everything users need. If you import types directly from `nats` in your own code, update them:
+
+```diff
+- import { JsMsg, NatsConnection } from 'nats';
++ import { JsMsg } from '@nats-io/jetstream';
++ import { NatsConnection } from '@nats-io/transport-node';
+```
+
+### v2.5 → v2.6
+
+**New features:**
+- Dead letter queue support via `onDeadLetter` callback
+- `DeadLetterInfo` interface with full message context
+
+No breaking changes.
+
 ### v2.4 → v2.5
 
 **Breaking change:** `nanos()` renamed to `toNanos()`.

@@ -194,7 +194,7 @@ The `TransportEvent.DeadLetter` **hook** is synchronous and fire-and-forget — 
 Dead letter detection applies to **workqueue** and **broadcast** events only. It does not apply to:
 
 - **RPC messages** — RPC uses a request/reply pattern with its own timeout mechanism. Failed RPC handlers return error responses to the caller rather than entering a dead letter flow.
-- **Ordered events** — Ordered consumers are ephemeral and auto-acknowledged by nats.js. There is no ack/nak cycle, so there is no concept of delivery exhaustion.
+- **Ordered events** — Ordered consumers are ephemeral and auto-acknowledged by the NATS client. There is no ack/nak cycle, so there is no concept of delivery exhaustion.
 
 ## What's next?
 

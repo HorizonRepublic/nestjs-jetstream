@@ -30,6 +30,8 @@ All streams share a common base configuration:
 All streams default to [Snappy S2 compression](https://github.com/nats-io/nats-server). This reduces disk I/O and storage with negligible CPU overhead (~1-3%). Requires NATS Server >= 2.10 (see [runtime requirements](/docs/getting-started/installation#runtime-requirements)). Override per stream kind:
 
 ```typescript
+import { StoreCompression } from '@nats-io/jetstream';
+
 events: {
   stream: { compression: StoreCompression.None }, // disable for event streams
 }
@@ -119,7 +121,7 @@ Limits retention for strict sequential delivery. Ordered consumers are ephemeral
 
 | Property | Value | Notes |
 |----------|-------|-------|
-| `ack_wait` | `10 seconds` | 10,000 ms (10s) |
+| `ack_wait` | `10 seconds` | `toNanos(10, 'seconds')` |
 | `max_deliver` | `3` | Message moves to dead-letter after 3 failed attempts |
 | `max_ack_pending` | `100` | |
 | `ack_policy` | `Explicit` | |
@@ -130,7 +132,7 @@ Limits retention for strict sequential delivery. Ordered consumers are ephemeral
 
 | Property | Value | Notes |
 |----------|-------|-------|
-| `ack_wait` | `5 minutes` | 300,000 ms (5min) |
+| `ack_wait` | `5 minutes` | `toNanos(5, 'minutes')` |
 | `max_deliver` | `1` | No retries — RPC failures propagate immediately |
 | `max_ack_pending` | `100` | |
 | `ack_policy` | `Explicit` | |
@@ -141,7 +143,7 @@ Limits retention for strict sequential delivery. Ordered consumers are ephemeral
 
 | Property | Value | Notes |
 |----------|-------|-------|
-| `ack_wait` | `10 seconds` | 10,000 ms (10s) |
+| `ack_wait` | `10 seconds` | `toNanos(10, 'seconds')` |
 | `max_deliver` | `3` | |
 | `max_ack_pending` | `100` | |
 | `ack_policy` | `Explicit` | |
@@ -149,7 +151,7 @@ Limits retention for strict sequential delivery. Ordered consumers are ephemeral
 | `replay_policy` | `Instant` | |
 
 :::note
-Ordered consumers do not have a durable consumer configuration. They are ephemeral and managed entirely by the nats.js client library.
+Ordered consumers do not have a durable consumer configuration. They are ephemeral and managed entirely by the `@nats-io/jetstream` client library.
 :::
 
 ## Connection Defaults

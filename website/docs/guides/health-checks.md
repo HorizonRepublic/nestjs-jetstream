@@ -89,7 +89,7 @@ export class HealthController {
 {
   "jetstream": {
     "status": "down",
-    "server": "nats://localhost:4222",
+    "server": null,
     "latency": null
   }
 }

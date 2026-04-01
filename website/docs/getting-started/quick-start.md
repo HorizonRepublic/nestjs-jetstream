@@ -135,6 +135,7 @@ export class OrdersController {
 |---|---|---|---|
 | `@EventPattern('...')` | _(none)_ | One instance (workqueue) | Ignored |
 | `@EventPattern('...', { broadcast: true })` | _(none)_ | All instances (fan-out) | Ignored |
+| `@EventPattern('...', { ordered: true })` | _(none)_ | Strict sequential replay | Ignored |
 | `@MessagePattern('...')` | _(none)_ | One instance (load-balanced) | Sent as response |
 
 ## 4. Send messages

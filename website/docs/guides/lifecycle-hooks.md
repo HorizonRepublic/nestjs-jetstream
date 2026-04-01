@@ -24,7 +24,7 @@ All 9 events are defined in the `TransportEvent` enum:
 | `Reconnect` | `(server: string) => void` | NATS connection re-established after a disconnect |
 | `Error` | `(error: Error, context?: string) => void` | Any transport-level error |
 | `RpcTimeout` | `(subject: string, correlationId: string) => void` | An RPC handler exceeds its timeout |
-| `MessageRouted` | `(subject: string, kind: 'rpc' \| 'event') => void` | A message is successfully routed to its handler |
+| `MessageRouted` | `(subject: string, kind: MessageKind) => void` | A message is successfully routed to its handler |
 | `ShutdownStart` | `() => void` | Graceful shutdown sequence begins |
 | `ShutdownComplete` | `() => void` | Graceful shutdown sequence finishes |
 | `DeadLetter` | `(info: DeadLetterInfo) => void` | A message exhausts all delivery attempts |

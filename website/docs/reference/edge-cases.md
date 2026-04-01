@@ -60,11 +60,11 @@ See [Broadcast Events](/docs/patterns/broadcast) for usage details.
 
 The transport **throws immediately** on startup if the initial connection fails. This is intentional — your NestJS application will fail to bootstrap, which lets orchestrators (Kubernetes, Docker Compose) detect and restart the service.
 
-**After a successful initial connection**, the nats.js client handles automatic reconnection transparently. The transport monitors connection status events and emits lifecycle hooks (`Disconnect`, `Reconnect`) so your application can react. See [Lifecycle Hooks](/docs/guides/lifecycle-hooks) for details.
+**After a successful initial connection**, the NATS client handles automatic reconnection transparently. The transport monitors connection status events and emits lifecycle hooks (`Disconnect`, `Reconnect`) so your application can react. See [Lifecycle Hooks](/docs/guides/lifecycle-hooks) for details.
 
 ```typescript
 // Connection refused at startup → throws, app fails to start
-// Connection lost after startup → auto-reconnect with nats.js built-in logic
+// Connection lost after startup → auto-reconnect with NATS client built-in logic
 ```
 
 ## Observable Return Values in Handlers
@@ -114,13 +114,13 @@ When using `JetstreamRecordBuilder.setHeader()`, keep in mind:
 
 See [Record Builder](/docs/guides/record-builder) for custom header usage.
 
-## nats.js DeliverPolicy.All Workaround
+## DeliverPolicy.All Workaround
 
 **Q: Why does the ordered consumer not pass `DeliverPolicy.All` explicitly?**
 
-There is a known issue in nats.js (v2.29.x) where explicitly passing `DeliverPolicy.All` to an ordered consumer leaves `opt_start_seq` in the consumer configuration, which causes `consume()` to hang indefinitely.
+There is a known issue in the NATS JavaScript SDK where explicitly passing `DeliverPolicy.All` to an ordered consumer leaves `opt_start_seq` in the consumer configuration, which causes `consume()` to hang indefinitely. This was originally observed in the `nats` package v2.29.x and the workaround is retained for safety in `@nats-io/jetstream` v3.x.
 
-The transport works around this by **omitting** the `deliver_policy` field when it would be `DeliverPolicy.All` (the default). Since nats.js uses `All` as its internal default anyway, the behavior is identical — but the workaround avoids the hanging bug.
+The transport works around this by **omitting** the `deliver_policy` field when it would be `DeliverPolicy.All` (the default). Since the SDK uses `All` as its internal default anyway, the behavior is identical — but the workaround avoids the hanging bug.
 
 If you configure a custom `deliverPolicy` on the ordered consumer (e.g., `DeliverPolicy.Last` or `DeliverPolicy.New`), it will be passed through explicitly:
 
@@ -138,11 +138,11 @@ See [Ordered Events](/docs/patterns/ordered-events) for the full ordered consume
 
 ## Nanosecond precision loss
 
-NATS JetStream uses nanosecond timestamps internally (`int64` in Go), but the nats.js SDK represents them as JavaScript `number` (IEEE 754 float64). Since `Number.MAX_SAFE_INTEGER` is ~9×10¹⁵ and current timestamps in nanos are ~1.7×10¹⁸, **arithmetic on nanosecond values loses ±1ms precision**.
+NATS JetStream uses nanosecond timestamps internally (`int64` in Go), but the `@nats-io/transport-node` SDK represents them as JavaScript `number` (IEEE 754 float64). Since `Number.MAX_SAFE_INTEGER` is ~9x10^15 and current timestamps in nanos are ~1.7x10^18, **arithmetic on nanosecond values loses +/-1ms precision**.
 
 This affects:
-- `ctx.getTimestamp()` — returns `Date` (millisecond precision), accurate to ±1ms
+- `ctx.getTimestamp()` — returns `Date` (millisecond precision), accurate to +/-1ms
 - `toNanos()` helper — output is accurate for typical config values (seconds, minutes), but sub-millisecond precision is not guaranteed
-- `msg.info.timestampNanos` — raw value from nats.js, already truncated before reaching this library
+- `msg.info.timestampNanos` — raw value from the SDK, already truncated before reaching this library
 
-This is a fundamental limitation of the nats.js SDK, not this library. Using `BigInt` internally would not help — nats.js converts to/from `number` at the SDK boundary. For ordering and deduplication, NATS uses stream sequence numbers (integers, always safe) rather than timestamps.
+This is a fundamental limitation of the NATS JavaScript SDK, not this library. Using `BigInt` internally would not help — the SDK converts to/from `number` at the boundary. For ordering and deduplication, NATS uses stream sequence numbers (integers, always safe) rather than timestamps.

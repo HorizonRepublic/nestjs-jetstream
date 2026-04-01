@@ -40,17 +40,27 @@ yarn add @horizon-republic/nestjs-jetstream
   </TabItem>
 </Tabs>
 
+## Peer dependencies
+
+The library requires the following NestJS packages as peer dependencies (they are part of any standard NestJS project):
+
+- `@nestjs/common` ^10.2.0 || ^11.0.0
+- `@nestjs/core` ^10.2.0 || ^11.0.0
+- `@nestjs/microservices` ^10.2.0 || ^11.0.0
+- `reflect-metadata` ^0.1.13 || ^0.2.0
+- `rxjs` ^7.8.0
+
 ## Runtime requirements
 
-- **Node.js** >= 22.0.0
-- **NATS Server** >= 2.10 with JetStream enabled
+- **Node.js** >= 20.0.0
+- **NATS Server** >= 2.10 with JetStream enabled (>= 2.12 for [message scheduling](/docs/guides/scheduling))
 
 ## Run NATS locally
 
 The fastest way to get a JetStream-enabled NATS server running is with Docker:
 
 ```bash
-docker run -d --name nats -p 4222:4222 nats:latest -js
+docker run -d --name nats -p 4222:4222 nats:2.12 -js
 ```
 
 This starts NATS on `localhost:4222` with JetStream enabled (`-js` flag).
@@ -67,7 +77,7 @@ For development, you can add NATS to your `docker-compose.yml`:
 ```yaml title="docker-compose.yml"
 services:
   nats:
-    image: nats:latest
+    image: nats:2.12
     command: -js
     ports:
       - "4222:4222"

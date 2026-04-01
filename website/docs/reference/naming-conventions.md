@@ -56,7 +56,7 @@ Given `name: 'orders'`, the transport generates the following names:
 | Broadcast consumer | `{name}__microservice_broadcast-consumer` | `orders__microservice_broadcast-consumer` |
 
 :::note
-Ordered consumers are **ephemeral** — they are created and managed by nats.js at consumption time and do not have a durable consumer name.
+Ordered consumers are **ephemeral** — they are created and managed by the `@nats-io/jetstream` client at consumption time and do not have a durable consumer name.
 :::
 
 :::info

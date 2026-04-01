@@ -11,7 +11,7 @@ schema:
 
 # Custom Codec
 
-The transport uses a `Codec` to serialize and deserialize message payloads. By default, `JsonCodec` handles everything using the native nats.js JSON implementation. You can replace it globally or per-client with any binary format.
+The transport uses a `Codec` to serialize and deserialize message payloads. By default, `JsonCodec` handles everything using the native `TextEncoder`/`TextDecoder` with `JSON.stringify`/`JSON.parse`. You can replace it globally or per-client with any binary format.
 
 ## The Codec interface
 
@@ -31,7 +31,7 @@ Both methods work with `Uint8Array` — the binary format that NATS uses on the 
 
 ## Default: JsonCodec
 
-The built-in `JsonCodec` wraps the nats.js `JSONCodec` and is used automatically when no codec is specified:
+The built-in `JsonCodec` uses the native `TextEncoder`/`TextDecoder` with `JSON.stringify`/`JSON.parse` and is used automatically when no codec is specified:
 
 ```typescript
 import { JsonCodec } from '@horizon-republic/nestjs-jetstream';

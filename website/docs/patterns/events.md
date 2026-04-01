@@ -175,7 +175,7 @@ async handleOrderCreated(@Payload() data: OrderCreatedEvent): Promise<void> {
 ```typescript
 @EventPattern('payment.completed')
 async handlePayment(@Payload() data: PaymentEvent, @Ctx() ctx: RpcContext): Promise<void> {
-  const msg = ctx.getMessage();
+  const msg = ctx.getMessage() as JsMsg;
   const dedupKey = `payment:${msg.info.stream}:${msg.info.streamSequence}`;
 
   if (await this.cache.exists(dedupKey)) {
@@ -306,7 +306,7 @@ export class OrdersController {
     @Payload() data: OrderPayload,
     @Ctx() ctx: RpcContext,
   ): Promise<void> {
-    const msg = ctx.getMessage<JsMsg>();
+    const msg = ctx.getMessage() as JsMsg;
 
     try {
       await this.ordersService.process(data);
