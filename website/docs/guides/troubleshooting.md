@@ -1,6 +1,12 @@
 ---
 sidebar_position: 9
 title: "Troubleshooting"
+schema:
+  type: Article
+  headline: "Troubleshooting"
+  description: "Common issues and how to resolve them."
+  datePublished: "2026-03-26"
+  dateModified: "2026-03-26"
 ---
 
 # Troubleshooting

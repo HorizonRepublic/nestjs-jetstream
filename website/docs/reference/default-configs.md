@@ -1,6 +1,12 @@
 ---
 sidebar_position: 2
 title: Default Configs
+schema:
+  type: Article
+  headline: Default Configs
+  description: "Default stream and consumer configurations for every StreamKind."
+  datePublished: "2026-03-21"
+  dateModified: "2026-04-01"
 ---
 
 # Default Configs

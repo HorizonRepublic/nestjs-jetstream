@@ -1,6 +1,12 @@
 ---
 sidebar_position: 3
 title: "Custom Codec"
+schema:
+  type: Article
+  headline: "Custom Codec"
+  description: "Replace the default JSON codec with MsgPack, Protobuf, or any custom binary format."
+  datePublished: "2026-03-21"
+  dateModified: "2026-03-21"
 ---
 
 # Custom Codec

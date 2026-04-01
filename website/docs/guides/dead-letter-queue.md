@@ -1,6 +1,12 @@
 ---
 sidebar_position: 4
 title: "Dead Letter Queue"
+schema:
+  type: Article
+  headline: "Dead Letter Queue"
+  description: "Handle messages that exhaust all delivery attempts via onDeadLetter callback."
+  datePublished: "2026-03-21"
+  dateModified: "2026-03-21"
 ---
 
 import Since from '@site/src/components/Since';

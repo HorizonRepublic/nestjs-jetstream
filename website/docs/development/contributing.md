@@ -1,6 +1,12 @@
 ---
 sidebar_position: 2
 title: Contributing
+schema:
+  type: Article
+  headline: "Contributing"
+  description: "How to contribute to the project."
+  datePublished: "2026-03-21"
+  dateModified: "2026-03-31"
 ---
 
 # Contributing

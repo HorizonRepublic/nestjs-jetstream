@@ -1,6 +1,12 @@
 ---
 sidebar_position: 4
 title: Ordered Events
+schema:
+  type: Article
+  headline: "Ordered Events"
+  description: "Strict sequential event delivery with ephemeral consumers and replay policies."
+  datePublished: "2026-03-21"
+  dateModified: "2026-04-01"
 ---
 
 import Since from '@site/src/components/Since';

@@ -1,6 +1,12 @@
 ---
 sidebar_position: 2
 title: "Handler Context"
+schema:
+  type: Article
+  headline: "Handler Context"
+  description: "Access message metadata, headers, and control settlement actions via RpcContext."
+  datePublished: "2026-03-21"
+  dateModified: "2026-03-30"
 ---
 
 # Handler Context

@@ -1,6 +1,12 @@
 ---
 sidebar_position: 3
 title: "Broadcast Events"
+schema:
+  type: Article
+  headline: "Broadcast Events"
+  description: "Fan-out event delivery to every subscribing service instance."
+  datePublished: "2026-03-21"
+  dateModified: "2026-03-26"
 ---
 
 # Broadcast Events

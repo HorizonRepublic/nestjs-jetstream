@@ -1,6 +1,12 @@
 ---
 sidebar_position: 5
 title: "Health Checks"
+schema:
+  type: Article
+  headline: "Health Checks"
+  description: "JetstreamHealthIndicator for NestJS Terminus integration with connection status and latency."
+  datePublished: "2026-03-21"
+  dateModified: "2026-03-26"
 ---
 
 # Health Checks

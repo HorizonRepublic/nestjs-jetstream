@@ -2,6 +2,12 @@
 slug: /
 sidebar_position: 1
 title: Introduction
+schema:
+  type: Article
+  headline: "Introduction"
+  description: "Production-grade NestJS transport for NATS JetStream with durable delivery, retry, replay, and dead letter handling."
+  datePublished: "2026-03-21"
+  dateModified: "2026-04-01"
 ---
 
 # Introduction

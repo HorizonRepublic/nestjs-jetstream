@@ -1,6 +1,12 @@
 ---
 sidebar_position: 2
 title: "Scheduling (Delayed Jobs)"
+schema:
+  type: Article
+  headline: "Scheduling (Delayed Jobs)"
+  description: "One-shot delayed message delivery powered by NATS 2.12 message scheduling."
+  datePublished: "2026-04-01"
+  dateModified: "2026-04-01"
 ---
 
 import Since from '@site/src/components/Since';

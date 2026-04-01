@@ -1,6 +1,12 @@
 ---
 sidebar_position: 3
 title: Module Configuration
+schema:
+  type: Article
+  headline: "Module Configuration"
+  description: "forRoot(), forRootAsync(), and forFeature() registration methods with stream, consumer, and connection options."
+  datePublished: "2026-03-21"
+  dateModified: "2026-04-01"
 ---
 
 import Since from '@site/src/components/Since';

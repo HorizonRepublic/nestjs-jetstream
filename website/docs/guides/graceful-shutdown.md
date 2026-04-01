@@ -1,6 +1,12 @@
 ---
 sidebar_position: 7
 title: "Graceful Shutdown"
+schema:
+  type: Article
+  headline: "Graceful Shutdown"
+  description: "Automatic shutdown handling with in-flight message completion and NATS connection drain."
+  datePublished: "2026-03-21"
+  dateModified: "2026-03-21"
 ---
 
 # Graceful Shutdown

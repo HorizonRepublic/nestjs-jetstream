@@ -1,6 +1,12 @@
 ---
 sidebar_position: 10
 title: "Migration Guide"
+schema:
+  type: Article
+  headline: "Migration Guide"
+  description: "Migrate from the built-in NestJS NATS transport to JetStream with durable delivery."
+  datePublished: "2026-03-26"
+  dateModified: "2026-03-26"
 ---
 
 # Migration Guide

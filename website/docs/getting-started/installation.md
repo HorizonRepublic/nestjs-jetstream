@@ -1,6 +1,12 @@
 ---
 sidebar_position: 1
 title: Installation
+schema:
+  type: Article
+  headline: "Installation"
+  description: "Install the package, set up NATS with Docker, and configure peer dependencies."
+  datePublished: "2026-03-21"
+  dateModified: "2026-03-26"
 ---
 
 # Installation

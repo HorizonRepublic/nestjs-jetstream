@@ -1,6 +1,12 @@
 ---
 sidebar_position: 2
 title: "Events (Workqueue)"
+schema:
+  type: Article
+  headline: "Events (Workqueue)"
+  description: "Workqueue events with at-least-once delivery, automatic retry, deduplication, and dead letter handling."
+  datePublished: "2026-03-21"
+  dateModified: "2026-04-01"
 ---
 
 # Events (Workqueue)

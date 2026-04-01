@@ -1,6 +1,12 @@
 ---
 sidebar_position: 3
 title: Edge Cases & FAQ
+schema:
+  type: Article
+  headline: Edge Cases & FAQ
+  description: "Common questions and non-obvious behaviors of the transport."
+  datePublished: "2026-03-21"
+  dateModified: "2026-03-30"
 ---
 
 # Edge Cases & FAQ

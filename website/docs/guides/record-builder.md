@@ -1,6 +1,12 @@
 ---
 sidebar_position: 1
 title: "Record Builder & Deduplication"
+schema:
+  type: Article
+  headline: "Record Builder & Deduplication"
+  description: "Build messages with custom headers, message IDs, and deduplication via JetstreamRecordBuilder."
+  datePublished: "2026-03-21"
+  dateModified: "2026-04-01"
 ---
 
 import Since from '@site/src/components/Since';

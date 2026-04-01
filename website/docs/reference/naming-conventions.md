@@ -1,6 +1,12 @@
 ---
 sidebar_position: 1
 title: Naming Conventions
+schema:
+  type: Article
+  headline: Naming Conventions
+  description: "Stream, consumer, and subject naming patterns derived from the service name."
+  datePublished: "2026-03-21"
+  dateModified: "2026-03-31"
 ---
 
 # Naming Conventions
