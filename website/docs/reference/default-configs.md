@@ -49,6 +49,10 @@ Workqueue retention — each message is removed after being acknowledged by a co
 | `max_age` | `7 days` | 604,800,000 ms |
 | `duplicate_window` | `2 minutes` | 120,000 ms |
 
+:::tip Scheduling
+To enable [message scheduling](/docs/guides/scheduling), add `allow_msg_schedules: true` to the event stream config. This requires NATS Server >= 2.12.
+:::
+
 ### Command Stream
 
 Short-lived RPC commands (JetStream RPC mode only).
@@ -186,7 +190,7 @@ The transport waits up to 10 seconds for in-flight messages to be processed befo
 All stream and consumer defaults can be overridden in `forRoot()` options. User-provided values are merged on top of the defaults — you only need to specify the properties you want to change.
 
 ```typescript
-import { RetentionPolicy, StorageType } from 'nats';
+import { RetentionPolicy, StorageType } from '@nats-io/jetstream';
 
 JetstreamModule.forRoot({
   name: 'orders',

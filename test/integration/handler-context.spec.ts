@@ -2,8 +2,9 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { Controller, INestApplication } from '@nestjs/common';
 import { ClientProxy, Ctx, EventPattern, Payload } from '@nestjs/microservices';
 import { TestingModule } from '@nestjs/testing';
-import { NatsConnection } from 'nats';
+import type { NatsConnection } from '@nats-io/transport-node';
 import { firstValueFrom } from 'rxjs';
+import type { StartedTestContainer } from 'testcontainers';
 
 import { getClientToken, RpcContext, toNanos } from '../../src';
 
@@ -14,6 +15,7 @@ import {
   uniqueServiceName,
   waitForCondition,
 } from './helpers';
+import { startNatsContainer } from './nats-container';
 
 // ---------------------------------------------------------------------------
 // Test Controllers
@@ -92,13 +94,20 @@ class MetadataController {
 
 describe('Handler Context', () => {
   let nc: NatsConnection;
+  let container: StartedTestContainer;
+  let port: number;
 
   beforeAll(async () => {
-    nc = await createNatsConnection();
+    ({ container, port } = await startNatsContainer());
+    nc = await createNatsConnection(port);
   });
 
   afterAll(async () => {
-    await nc.drain();
+    try {
+      await nc.drain();
+    } finally {
+      await container.stop();
+    }
   });
 
   describe('ctx.retry()', () => {
@@ -114,6 +123,7 @@ describe('Handler Context', () => {
       ({ app, module } = await createTestApp(
         {
           name: serviceName,
+          port,
           events: {
             consumer: { ack_wait: toNanos(2, 'seconds'), max_deliver: 5 },
           },
@@ -127,7 +137,7 @@ describe('Handler Context', () => {
     });
 
     afterEach(async () => {
-      await app?.close();
+      await app.close();
       await cleanupStreams(nc, serviceName);
     });
 
@@ -156,6 +166,7 @@ describe('Handler Context', () => {
       ({ app, module } = await createTestApp(
         {
           name: serviceName,
+          port,
           events: {
             consumer: { ack_wait: toNanos(5, 'seconds'), max_deliver: 5 },
           },
@@ -169,7 +180,7 @@ describe('Handler Context', () => {
     });
 
     afterEach(async () => {
-      await app?.close();
+      await app.close();
       await cleanupStreams(nc, serviceName);
     });
 
@@ -204,6 +215,7 @@ describe('Handler Context', () => {
       ({ app, module } = await createTestApp(
         {
           name: serviceName,
+          port,
           events: {
             consumer: { ack_wait: toNanos(2, 'seconds'), max_deliver: 5 },
           },
@@ -217,7 +229,7 @@ describe('Handler Context', () => {
     });
 
     afterEach(async () => {
-      await app?.close();
+      await app.close();
       await cleanupStreams(nc, serviceName);
     });
 
@@ -254,7 +266,7 @@ describe('Handler Context', () => {
       serviceName = uniqueServiceName();
 
       ({ app, module } = await createTestApp(
-        { name: serviceName },
+        { name: serviceName, port },
         [MetadataController],
         [serviceName],
       ));
@@ -264,7 +276,7 @@ describe('Handler Context', () => {
     });
 
     afterEach(async () => {
-      await app?.close();
+      await app.close();
       await cleanupStreams(nc, serviceName);
     });
 

@@ -2,8 +2,9 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { Controller, INestApplication } from '@nestjs/common';
 import { ClientProxy, EventPattern, Payload } from '@nestjs/microservices';
 import { TestingModule } from '@nestjs/testing';
-import { NatsConnection } from 'nats';
+import type { NatsConnection } from '@nats-io/transport-node';
 import { firstValueFrom } from 'rxjs';
+import type { StartedTestContainer } from 'testcontainers';
 
 import { getClientToken } from '../../src';
 
@@ -14,6 +15,7 @@ import {
   uniqueServiceName,
   waitForCondition,
 } from './helpers';
+import { startNatsContainer } from './nats-container';
 
 // ---------------------------------------------------------------------------
 // Test Controllers (one per "service")
@@ -45,13 +47,20 @@ class BroadcastControllerB {
 
 describe('Broadcast Event Delivery', () => {
   let nc: NatsConnection;
+  let container: StartedTestContainer;
+  let port: number;
 
   beforeAll(async () => {
-    nc = await createNatsConnection();
+    ({ container, port } = await startNatsContainer());
+    nc = await createNatsConnection(port);
   });
 
   afterAll(async () => {
-    await nc.drain();
+    try {
+      await nc.drain();
+    } finally {
+      await container.stop();
+    }
   });
 
   describe('fan-out to multiple services', () => {
@@ -71,13 +80,13 @@ describe('Broadcast Event Delivery', () => {
 
       // Two independent services sharing the broadcast stream
       ({ app: appA, module: moduleA } = await createTestApp(
-        { name: serviceA },
+        { name: serviceA, port },
         [BroadcastControllerA],
         [serviceA],
       ));
 
       ({ app: appB, module: moduleB } = await createTestApp(
-        { name: serviceB },
+        { name: serviceB, port },
         [BroadcastControllerB],
         [serviceB],
       ));

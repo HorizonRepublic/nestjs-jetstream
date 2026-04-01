@@ -1,6 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { MessageHandler } from '@nestjs/microservices';
-import { JsMsg } from 'nats';
+import type { JsMsg } from '@nats-io/jetstream';
 import { concatMap, from, mergeMap, Observable, Subscription } from 'rxjs';
 
 import { RpcContext } from '../../context';

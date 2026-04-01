@@ -220,6 +220,7 @@ Below is every field in `JetstreamModuleOptions` with its type, default value, a
 | `events` | `StreamConsumerOverrides` | _(production defaults)_ | Overrides for workqueue event stream and consumer config. |
 | `broadcast` | `StreamConsumerOverrides` | _(production defaults)_ | Overrides for broadcast event stream and consumer config. |
 | `ordered` | `OrderedEventOverrides` | _(production defaults)_ | Configuration for ordered event consumers. <Since version="2.2.0" /> |
+| `events.stream.allow_msg_schedules` | `boolean` | `false` | Enable [message scheduling](/docs/guides/scheduling) on the event stream. Requires NATS >= 2.12. <Since version="2.8.0" /> |
 | `hooks` | `Partial<TransportHooks>` | _(none)_ | Transport lifecycle hook handlers. Unset hooks are silently ignored. |
 | `onDeadLetter` | `(info: DeadLetterInfo) => Promise<void>` | _(none)_ | Async callback for dead letter handling. Called when a message exhausts all delivery attempts. <Since version="2.1.0" /> |
 | `shutdownTimeout` | `number` | `10_000` (10s) | Graceful shutdown timeout in milliseconds. Handlers exceeding this are abandoned. |
@@ -289,7 +290,7 @@ NATS JetStream uses nanoseconds for all time-based configuration. The library ex
 Ordered events use a separate stream with Limits retention and deliver messages in strict sequential order. The configuration is simpler than workqueue/broadcast because ordered consumers are ephemeral and auto-managed by nats.js.
 
 ```typescript
-import { DeliverPolicy } from 'nats';
+import { DeliverPolicy } from '@nats-io/jetstream';
 
 JetstreamModule.forRoot({
   name: 'orders',
@@ -391,5 +392,6 @@ void bootstrap();
 
 - [**RPC Patterns**](/docs/patterns/rpc) — Core vs JetStream mode, error handling, and timeouts
 - [**Events & Broadcast**](/docs/patterns/events) — workqueue events and fan-out delivery
+- [**Scheduling (Delayed Jobs)**](/docs/guides/scheduling) — one-shot delayed delivery via NATS 2.12
 - [**Lifecycle Hooks**](/docs/guides/lifecycle-hooks) — monitor connection state and transport events
 - [**Default Configs**](/docs/reference/default-configs) — full list of production-ready stream and consumer defaults

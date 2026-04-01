@@ -2,8 +2,9 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { Controller, INestApplication } from '@nestjs/common';
 import { ClientProxy, EventPattern, Payload } from '@nestjs/microservices';
 import { TestingModule } from '@nestjs/testing';
-import { NatsConnection } from 'nats';
+import type { NatsConnection } from '@nats-io/transport-node';
 import { firstValueFrom } from 'rxjs';
+import type { StartedTestContainer } from 'testcontainers';
 
 import { getClientToken, JetstreamRecordBuilder } from '../../src';
 
@@ -14,6 +15,7 @@ import {
   uniqueServiceName,
   waitForCondition,
 } from './helpers';
+import { startNatsContainer } from './nats-container';
 
 // ---------------------------------------------------------------------------
 // Test Controllers
@@ -52,13 +54,20 @@ class FailingEventController {
 
 describe('Workqueue Event Delivery', () => {
   let nc: NatsConnection;
+  let container: StartedTestContainer;
+  let port: number;
 
   beforeAll(async () => {
-    nc = await createNatsConnection();
+    ({ container, port } = await startNatsContainer());
+    nc = await createNatsConnection(port);
   });
 
   afterAll(async () => {
-    await nc.drain();
+    try {
+      await nc.drain();
+    } finally {
+      await container.stop();
+    }
   });
 
   describe('happy path', () => {
@@ -72,7 +81,7 @@ describe('Workqueue Event Delivery', () => {
       serviceName = uniqueServiceName();
 
       ({ app, module } = await createTestApp(
-        { name: serviceName },
+        { name: serviceName, port },
         [EventController],
         [serviceName],
       ));
@@ -116,7 +125,7 @@ describe('Workqueue Event Delivery', () => {
       serviceName = uniqueServiceName();
 
       ({ app, module } = await createTestApp(
-        { name: serviceName },
+        { name: serviceName, port },
         [EventController],
         [serviceName],
       ));
@@ -160,7 +169,7 @@ describe('Workqueue Event Delivery', () => {
       serviceName = uniqueServiceName();
 
       ({ app, module } = await createTestApp(
-        { name: serviceName },
+        { name: serviceName, port },
         [FailingEventController],
         [serviceName],
       ));

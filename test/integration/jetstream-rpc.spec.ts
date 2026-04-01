@@ -2,12 +2,15 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { Controller, INestApplication } from '@nestjs/common';
 import { ClientProxy, Ctx, MessagePattern, Payload, RpcException } from '@nestjs/microservices';
 import { TestingModule } from '@nestjs/testing';
-import { NatsConnection } from 'nats';
+import type { NatsConnection } from '@nats-io/transport-node';
+import { jetstreamManager } from '@nats-io/jetstream';
 import { firstValueFrom } from 'rxjs';
+import type { StartedTestContainer } from 'testcontainers';
 
 import { getClientToken, JetstreamRecordBuilder, RpcContext } from '../../src';
 
 import { cleanupStreams, createNatsConnection, createTestApp, uniqueServiceName } from './helpers';
+import { startNatsContainer } from './nats-container';
 
 // ---------------------------------------------------------------------------
 // Test Controllers
@@ -44,20 +47,27 @@ describe('JetStream RPC Round-Trip', () => {
   let module: TestingModule;
   let client: ClientProxy;
   let serviceName: string;
+  let container: StartedTestContainer;
+  let port: number;
 
   beforeAll(async () => {
-    nc = await createNatsConnection();
+    ({ container, port } = await startNatsContainer());
+    nc = await createNatsConnection(port);
   });
 
   afterAll(async () => {
-    await nc.drain();
+    try {
+      await nc.drain();
+    } finally {
+      await container.stop();
+    }
   });
 
   beforeEach(async () => {
     serviceName = uniqueServiceName();
 
     ({ app, module } = await createTestApp(
-      { name: serviceName, rpc: { mode: 'jetstream', timeout: 5_000 } },
+      { name: serviceName, port, rpc: { mode: 'jetstream', timeout: 5_000 } },
       [JsRpcController],
       [serviceName],
     ));
@@ -99,7 +109,7 @@ describe('JetStream RPC Round-Trip', () => {
   });
 
   it('should create command stream and consumer', async () => {
-    const jsm = await nc.jetstreamManager();
+    const jsm = await jetstreamManager(nc);
     const internalName = `${serviceName}__microservice`;
 
     const streamInfo = await jsm.streams.info(`${internalName}_cmd-stream`);

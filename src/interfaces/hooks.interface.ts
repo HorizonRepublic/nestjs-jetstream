@@ -1,4 +1,4 @@
-import type { MsgHdrs } from 'nats';
+import type { MsgHdrs } from '@nats-io/transport-node';
 
 /** Discriminates the kind of message routed through the transport. */
 export enum MessageKind {

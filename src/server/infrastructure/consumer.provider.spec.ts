@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 import { createMock } from '@golevelup/ts-vitest';
 import { faker } from '@faker-js/faker';
-import type { ConsumerInfo } from 'nats';
-import { NatsError } from 'nats';
+import type { ConsumerInfo } from '@nats-io/jetstream';
+import { JetStreamApiError } from '@nats-io/jetstream';
 
 import { ConnectionProvider } from '../../connection';
+import { StreamKind } from '../../interfaces';
 import type { JetstreamModuleOptions } from '../../interfaces';
 import { PatternRegistry } from '../routing';
 
@@ -52,17 +53,18 @@ describe(ConsumerProvider, () => {
     describe('when consumer info throws a non-CONSUMER_NOT_FOUND error', () => {
       it('should rethrow the error', async () => {
         // Given: jsm.consumers.info throws auth error
-        const authError = new Error('authorization violation') as NatsError;
-
-        authError.api_error = {
+        const authError = new JetStreamApiError({
           err_code: 10100,
           code: 403,
           description: 'authorization violation',
-        };
+        });
+
         mockJsm.consumers.info.mockRejectedValue(authError);
 
         // When/Then: propagates the error
-        await expect(sut.ensureConsumers(['ev'])).rejects.toThrow('authorization violation');
+        await expect(sut.ensureConsumers([StreamKind.Event])).rejects.toThrow(
+          'authorization violation',
+        );
         expect(mockJsm.consumers.add).not.toHaveBeenCalled();
       });
     });
@@ -83,7 +85,7 @@ describe(ConsumerProvider, () => {
         mockJsm.consumers.update.mockResolvedValue(updated);
 
         // When: ensure broadcast consumer
-        await sut.ensureConsumers(['broadcast']);
+        await sut.ensureConsumers([StreamKind.Broadcast]);
 
         // Then: consumer updated with filter_subjects
         expect(mockJsm.consumers.update).toHaveBeenCalledWith(
@@ -106,7 +108,7 @@ describe(ConsumerProvider, () => {
         mockJsm.consumers.update.mockResolvedValue(updated);
 
         // When: ensure broadcast consumer
-        await sut.ensureConsumers(['broadcast']);
+        await sut.ensureConsumers([StreamKind.Broadcast]);
 
         // Then: consumer updated with filter_subject
         expect(mockJsm.consumers.update).toHaveBeenCalledWith(
@@ -120,9 +122,12 @@ describe(ConsumerProvider, () => {
     describe('when consumer does not exist', () => {
       it('should create it with correct config for multiple broadcast patterns', async () => {
         // Given: consumer not found, registry has multiple patterns
-        const notFoundError = new NatsError('consumer not found', 'UNKNOWN_ERROR');
+        const notFoundError = new JetStreamApiError({
+          err_code: 10014,
+          code: 404,
+          description: 'consumer not found',
+        });
 
-        notFoundError.api_error = { err_code: 10014, code: 404, description: 'consumer not found' };
         mockJsm.consumers.info.mockRejectedValue(notFoundError);
 
         const patterns = ['broadcast.a', 'broadcast.b'];
@@ -134,7 +139,7 @@ describe(ConsumerProvider, () => {
         mockJsm.consumers.add.mockResolvedValue(created);
 
         // When: ensure broadcast consumer
-        await sut.ensureConsumers(['broadcast']);
+        await sut.ensureConsumers([StreamKind.Broadcast]);
 
         // Then: created with filter_subjects
         expect(mockJsm.consumers.add).toHaveBeenCalledWith(
@@ -147,7 +152,23 @@ describe(ConsumerProvider, () => {
     describe('when ordered kind is passed', () => {
       it('should throw because ordered consumers are ephemeral', async () => {
         // When/Then: getDefaults('ordered') throws synchronously before any NATS call
-        await expect(sut.ensureConsumers(['ordered'])).rejects.toThrow(/ephemeral/i);
+        await expect(sut.ensureConsumers([StreamKind.Ordered])).rejects.toThrow(/ephemeral/i);
+      });
+    });
+
+    describe('when broadcast has zero patterns', () => {
+      it('should throw because a broadcast consumer requires at least one pattern', async () => {
+        // Given: registry returns empty broadcast patterns
+        patternRegistry.getBroadcastPatterns.mockReturnValue([]);
+
+        mockJsm.consumers.info.mockResolvedValue(createMock<ConsumerInfo>());
+
+        // When/Then: ensureConsumers throws
+        await expect(sut.ensureConsumers([StreamKind.Broadcast])).rejects.toThrow(
+          /no broadcast patterns/i,
+        );
+        expect(mockJsm.consumers.add).not.toHaveBeenCalled();
+        expect(mockJsm.consumers.update).not.toHaveBeenCalled();
       });
     });
   });

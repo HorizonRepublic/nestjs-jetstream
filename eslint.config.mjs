@@ -16,6 +16,8 @@ export default [
       ...sonarjs.configs.recommended.rules,
       'sonarjs/todo-tag': 'off',
       'sonarjs/no-duplicate-string': 'off',
+      'sonarjs/function-return-type': 'off',
+      'sonarjs/null-dereference': 'off',
     },
   },
 
@@ -26,6 +28,7 @@ export default [
       '**/dist-example/**',
       '**/docs/**',
       '**/tmp/**',
+      'website/**',
       'tsup.config.ts',
       'vitest.config.ts',
     ],
@@ -99,7 +102,7 @@ export default [
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {
-        project: ['./tsconfig.json', './examples/tsconfig.json', './test/tsconfig.json'],
+        projectService: true,
         tsconfigRootDir: import.meta.dirname,
       },
     },

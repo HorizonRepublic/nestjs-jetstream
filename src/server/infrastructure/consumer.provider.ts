@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import { ConsumerConfig, ConsumerInfo, NatsError } from 'nats';
+import { JetStreamApiError, type ConsumerConfig, type ConsumerInfo } from '@nats-io/jetstream';
 
 import { ConnectionProvider } from '../../connection';
 import { StreamKind } from '../../interfaces';
@@ -75,7 +75,7 @@ export class ConsumerProvider {
       this.logger.debug(`Consumer exists, updating: ${name}`);
       return await jsm.consumers.update(stream, name, config);
     } catch (err) {
-      if (err instanceof NatsError && err.api_error?.err_code === CONSUMER_NOT_FOUND) {
+      if (err instanceof JetStreamApiError && err.apiError().err_code === CONSUMER_NOT_FOUND) {
         this.logger.log(`Creating consumer: ${name}`);
         return await jsm.consumers.add(stream, config);
       }
@@ -147,6 +147,12 @@ export class ConsumerProvider {
         return DEFAULT_BROADCAST_CONSUMER_CONFIG;
       case StreamKind.Ordered:
         throw new Error('Ordered consumers are ephemeral and should not use durable config');
+      default: {
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        const _exhaustive: never = kind;
+
+        throw new Error(`Unexpected StreamKind: ${_exhaustive}`);
+      }
     }
   }
 
@@ -161,6 +167,12 @@ export class ConsumerProvider {
         return this.options.broadcast?.consumer ?? {};
       case StreamKind.Ordered:
         throw new Error('Ordered consumers are ephemeral and should not use durable config');
+      default: {
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        const _exhaustive: never = kind;
+
+        throw new Error(`Unexpected StreamKind: ${_exhaustive}`);
+      }
     }
   }
 }

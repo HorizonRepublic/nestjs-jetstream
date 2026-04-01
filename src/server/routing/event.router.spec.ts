@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type Mocked } from 'vitest';
 import { createMock } from '@golevelup/ts-vitest';
 import { faker } from '@faker-js/faker';
-import type { DeliveryInfo, JsMsg } from 'nats';
+import type { DeliveryInfo, JsMsg } from '@nats-io/jetstream';
 import { Subject } from 'rxjs';
 
 import { EventBus } from '../../hooks';
@@ -403,6 +403,58 @@ describe(EventRouter, () => {
         // Then: no term/nak
         expect(msg.term).not.toHaveBeenCalled();
         expect(msg.nak).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('when ordered handler calls ctx.retry()', () => {
+      it('should NOT retry (ordered consumers auto-acknowledge)', async () => {
+        // Given: handler that requests retry on an ordered message
+        const handler = vi.fn().mockImplementation((_data: unknown, ctx: RpcContext) => {
+          ctx.retry();
+        });
+
+        patternRegistry.getHandler.mockReturnValue(handler);
+
+        const msg = createMock<JsMsg>({
+          ack: vi.fn(),
+          subject: faker.lorem.word(),
+          data: new TextEncoder().encode(JSON.stringify({})),
+        });
+
+        // When: ordered message arrives
+        ordered$.next(msg);
+        await new Promise(process.nextTick);
+
+        // Then: no nak/term — retry() is ignored for ordered consumers
+        expect(msg.nak).not.toHaveBeenCalled();
+        expect(msg.term).not.toHaveBeenCalled();
+        expect(msg.ack).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('when ordered handler calls ctx.terminate()', () => {
+      it('should NOT terminate (ordered consumers auto-acknowledge)', async () => {
+        // Given: handler that requests terminate on an ordered message
+        const handler = vi.fn().mockImplementation((_data: unknown, ctx: RpcContext) => {
+          ctx.terminate();
+        });
+
+        patternRegistry.getHandler.mockReturnValue(handler);
+
+        const msg = createMock<JsMsg>({
+          ack: vi.fn(),
+          subject: faker.lorem.word(),
+          data: new TextEncoder().encode(JSON.stringify({})),
+        });
+
+        // When: ordered message arrives
+        ordered$.next(msg);
+        await new Promise(process.nextTick);
+
+        // Then: no term/nak — terminate() is ignored for ordered consumers
+        expect(msg.term).not.toHaveBeenCalled();
+        expect(msg.nak).not.toHaveBeenCalled();
+        expect(msg.ack).not.toHaveBeenCalled();
       });
     });
 

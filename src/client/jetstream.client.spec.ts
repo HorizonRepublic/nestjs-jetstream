@@ -1,16 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 import { createMock } from '@golevelup/ts-vitest';
 import { faker } from '@faker-js/faker';
-import type {
-  JetStreamClient as NatsJsClient,
-  Msg,
-  MsgHdrs,
-  NatsConnection,
-  PubAck,
-  Subscription,
-} from 'nats';
-import { Events, headers as natsHeaders } from 'nats';
-import type { Status } from 'nats';
+import type { Msg, MsgHdrs, NatsConnection, Status, Subscription } from '@nats-io/transport-node';
+import { headers as natsHeaders } from '@nats-io/transport-node';
+import type { JetStreamClient as NatsJsClient, PubAck } from '@nats-io/jetstream';
 import { firstValueFrom, Subject } from 'rxjs';
 
 import { ConnectionProvider } from '../connection';
@@ -271,6 +264,96 @@ describe(JetstreamClient, () => {
         expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Duplicate'));
       });
     });
+
+    describe('when using scheduleAt()', () => {
+      it('should publish to _sch subject in event stream with target set to event subject', async () => {
+        // Given: record with schedule
+        const data = { orderId: faker.number.int() };
+        const futureDate = new Date(Date.now() + 60_000);
+        const record = new JetstreamRecordBuilder(data).scheduleAt(futureDate).build();
+
+        // When: event emitted with schedule
+        await firstValueFrom(sut.emit('order.reminder', record));
+
+        // Then: published to _sch namespace (not matched by consumer)
+        const expectedScheduleSubject = `${targetName}__microservice._sch.order.reminder`;
+        const expectedEventSubject = `${targetName}__microservice.ev.order.reminder`;
+
+        expect(mockJs.publish).toHaveBeenCalledWith(
+          expectedScheduleSubject,
+          codec.encode(data),
+          expect.objectContaining({
+            schedule: {
+              specification: futureDate,
+              target: expectedEventSubject,
+            },
+          }),
+        );
+      });
+
+      it('should publish broadcast schedule to _sch subject with broadcast target', async () => {
+        // Given: broadcast event with schedule
+        const data = { config: faker.lorem.word() };
+        const futureDate = new Date(Date.now() + 60_000);
+        const record = new JetstreamRecordBuilder(data).scheduleAt(futureDate).build();
+
+        // When: broadcast event emitted with schedule
+        await firstValueFrom(sut.emit('broadcast:config.updated', record));
+
+        // Then: published to broadcast._sch namespace
+        const expectedScheduleSubject = 'broadcast._sch.config.updated';
+        const expectedBroadcastTarget = 'broadcast.config.updated';
+
+        expect(mockJs.publish).toHaveBeenCalledWith(
+          expectedScheduleSubject,
+          codec.encode(data),
+          expect.objectContaining({
+            schedule: {
+              specification: futureDate,
+              target: expectedBroadcastTarget,
+            },
+          }),
+        );
+      });
+
+      it('should publish ordered schedule to _sch subject with ordered target', async () => {
+        // Given: ordered event with schedule
+        const data = { status: faker.lorem.word() };
+        const futureDate = new Date(Date.now() + 60_000);
+        const record = new JetstreamRecordBuilder(data).scheduleAt(futureDate).build();
+
+        // When: ordered event emitted with schedule
+        await firstValueFrom(sut.emit('ordered:order.status', record));
+
+        // Then: published to _sch namespace with ordered target
+        const expectedScheduleSubject = `${targetName}__microservice._sch.order.status`;
+        const expectedOrderedTarget = `${targetName}__microservice.ordered.order.status`;
+
+        expect(mockJs.publish).toHaveBeenCalledWith(
+          expectedScheduleSubject,
+          codec.encode(data),
+          expect.objectContaining({
+            schedule: {
+              specification: futureDate,
+              target: expectedOrderedTarget,
+            },
+          }),
+        );
+      });
+
+      it('should NOT include schedule in publish options when not set', async () => {
+        // Given: record without schedule
+        const data = { orderId: faker.number.int() };
+
+        // When: event emitted without schedule
+        await firstValueFrom(sut.emit('order.created', data));
+
+        // Then: no schedule in publish opts
+        const publishOpts = mockJs.publish.mock.calls[0]![2]!;
+
+        expect(publishOpts.schedule).toBeUndefined();
+      });
+    });
   });
 
   describe('send() / publish() — core RPC mode', () => {
@@ -429,6 +512,32 @@ describe(JetstreamClient, () => {
           expect.any(Error),
           'client-rpc',
         );
+      });
+    });
+
+    describe('when record has scheduleAt()', () => {
+      it('should log warning and ignore schedule', async () => {
+        // Given: record with schedule, successful RPC response
+        const futureDate = new Date(Date.now() + 60_000);
+        const record = new JetstreamRecordBuilder({ test: true }).scheduleAt(futureDate).build();
+
+        mockNc.request.mockResolvedValue(
+          createMock<Msg>({
+            data: codec.encode({ ok: true }),
+            headers: natsHeaders(),
+          }),
+        );
+
+        const loggerWarnSpy = vi.spyOn(sut['logger'], 'warn');
+
+        // When: RPC sent with scheduled record
+        const result = await firstValueFrom(sut.send('get.user', record));
+
+        // Then: warning logged
+        expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('scheduleAt()'));
+
+        // Then: RPC still completes successfully
+        expect(result).toEqual({ ok: true });
       });
     });
   });
@@ -763,7 +872,7 @@ describe(JetstreamClient, () => {
       await vi.advanceTimersByTimeAsync(0);
 
       // When: disconnect event fires
-      statusSubject.next({ type: Events.Disconnect, data: '' });
+      statusSubject.next({ type: 'disconnect', server: '' });
 
       // Then: both reject with Error('Connection lost')
       await expect(result1).rejects.toThrow('Connection lost');
@@ -776,7 +885,7 @@ describe(JetstreamClient, () => {
       await vi.advanceTimersByTimeAsync(0);
 
       // When: disconnect
-      statusSubject.next({ type: Events.Disconnect, data: '' });
+      statusSubject.next({ type: 'disconnect', server: '' });
 
       // Then: advancing past timeout should NOT trigger RpcTimeout (already cleaned up)
       vi.advanceTimersByTime(DEFAULT_JETSTREAM_RPC_TIMEOUT);
@@ -792,7 +901,7 @@ describe(JetstreamClient, () => {
       expect(mockNc.subscribe).toHaveBeenCalledTimes(1);
 
       // When: disconnect
-      statusSubject.next({ type: Events.Disconnect, data: '' });
+      statusSubject.next({ type: 'disconnect', server: '' });
 
       // Then: next connect() should set up inbox again
       await sut.connect();
@@ -807,7 +916,7 @@ describe(JetstreamClient, () => {
       await vi.advanceTimersByTimeAsync(0);
 
       // When: disconnect event fires
-      statusSubject.next({ type: Events.Disconnect, data: '' });
+      statusSubject.next({ type: 'disconnect', server: '' });
 
       // Then: clearTimeout was called for the pending RPC timeout
       expect(clearTimeoutSpy).toHaveBeenCalled();
@@ -823,7 +932,7 @@ describe(JetstreamClient, () => {
 
       // When/Then: disconnect fires — no crash
       expect(() => {
-        statusSubject.next({ type: Events.Disconnect, data: '' });
+        statusSubject.next({ type: 'disconnect', server: '' });
       }).not.toThrow();
 
       await coreClient.close();

@@ -1,5 +1,5 @@
 import { CustomTransportStrategy, Server } from '@nestjs/microservices';
-import type { ConsumerInfo } from 'nats';
+import type { ConsumerInfo } from '@nats-io/jetstream';
 
 import { ConnectionProvider } from '../connection';
 import { StreamKind } from '../interfaces';

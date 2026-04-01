@@ -2,8 +2,9 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { Controller, INestApplication } from '@nestjs/common';
 import { ClientProxy, EventPattern, MessagePattern, Payload } from '@nestjs/microservices';
 import { TestingModule } from '@nestjs/testing';
-import { NatsConnection } from 'nats';
+import type { NatsConnection } from '@nats-io/transport-node';
 import { firstValueFrom } from 'rxjs';
+import type { StartedTestContainer } from 'testcontainers';
 
 import { getClientToken } from '../../src';
 import type { Codec } from '../../src';
@@ -15,6 +16,7 @@ import {
   uniqueServiceName,
   waitForCondition,
 } from './helpers';
+import { startNatsContainer } from './nats-container';
 
 // ---------------------------------------------------------------------------
 // Custom test codec: Base64-encoded JSON
@@ -65,13 +67,20 @@ class CodecEventController {
 
 describe('Codec Round-Trip', () => {
   let nc: NatsConnection;
+  let container: StartedTestContainer;
+  let port: number;
 
   beforeAll(async () => {
-    nc = await createNatsConnection();
+    ({ container, port } = await startNatsContainer());
+    nc = await createNatsConnection(port);
   });
 
   afterAll(async () => {
-    await nc.drain();
+    try {
+      await nc.drain();
+    } finally {
+      await container.stop();
+    }
   });
 
   describe('global codec (forRoot)', () => {
@@ -84,7 +93,7 @@ describe('Codec Round-Trip', () => {
       serviceName = uniqueServiceName();
 
       ({ app, module } = await createTestApp(
-        { name: serviceName, codec: new Base64JsonCodec() },
+        { name: serviceName, port, codec: new Base64JsonCodec() },
         [CodecRpcController, CodecEventController],
         [serviceName],
       ));

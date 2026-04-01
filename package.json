@@ -1,6 +1,6 @@
 {
   "name": "@horizon-republic/nestjs-jetstream",
-  "version": "2.7.1",
+  "version": "2.8.0",
   "description": "A NestJS transport for NATS with JetStream events, broadcast fan-out, and Core/JetStream RPC.",
   "repository": {
     "type": "git",
@@ -74,7 +74,6 @@
     "@nestjs/common": "^10.2.0 || ^11.0.0",
     "@nestjs/core": "^10.2.0 || ^11.0.0",
     "@nestjs/microservices": "^10.2.0 || ^11.0.0",
-    "nats": "^2.0.0",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.0"
   },
@@ -92,10 +91,16 @@
     "eslint-plugin-sonarjs": "^4.0.2",
     "eslint-plugin-unused-imports": "^4.4.1",
     "prettier": "^3.8.1",
+    "testcontainers": "^11.13.0",
     "tsup": "^8.5.1",
     "tsx": "^4.21.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.58.0",
     "vitest": "^4.1.2"
+  },
+  "dependencies": {
+    "@nats-io/jetstream": "^3.3.1",
+    "@nats-io/nuid": "^2.0.3",
+    "@nats-io/transport-node": "^3.3.1"
   }
 }

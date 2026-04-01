@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import { NatsError, StreamConfig, StreamInfo } from 'nats';
+import { JetStreamApiError, type StreamConfig, type StreamInfo } from '@nats-io/jetstream';
 
 import { ConnectionProvider } from '../../connection';
 import { StreamKind } from '../../interfaces';
@@ -56,12 +56,31 @@ export class StreamProvider {
     const name = internalName(this.options.name);
 
     switch (kind) {
-      case StreamKind.Event:
-        return [`${name}.${StreamKind.Event}.>`];
+      case StreamKind.Event: {
+        const subjects = [`${name}.${StreamKind.Event}.>`];
+
+        // When scheduling is enabled, add a schedule-holder subject namespace
+        // so scheduled messages reside in the same stream but are NOT matched
+        // by the event consumer's filter (which only matches {svc}.ev.>).
+        if (this.isSchedulingEnabled(kind)) {
+          subjects.push(`${name}._sch.>`);
+        }
+
+        return subjects;
+      }
+
       case StreamKind.Command:
         return [`${name}.${StreamKind.Command}.>`];
-      case StreamKind.Broadcast:
-        return ['broadcast.>'];
+      case StreamKind.Broadcast: {
+        const subjects = ['broadcast.>'];
+
+        if (this.isSchedulingEnabled(kind)) {
+          subjects.push('broadcast._sch.>');
+        }
+
+        return subjects;
+      }
+
       case StreamKind.Ordered:
         return [`${name}.${StreamKind.Ordered}.>`];
     }
@@ -83,7 +102,7 @@ export class StreamProvider {
       this.logger.debug(`Stream exists, updating: ${config.name}`);
       return await jsm.streams.update(config.name, config);
     } catch (err) {
-      if (err instanceof NatsError && err.api_error?.err_code === STREAM_NOT_FOUND) {
+      if (err instanceof JetStreamApiError && err.apiError().err_code === STREAM_NOT_FOUND) {
         this.logger.log(`Creating stream: ${config.name}`);
         return await jsm.streams.add(config as StreamConfig);
       }
@@ -124,6 +143,13 @@ export class StreamProvider {
       case StreamKind.Ordered:
         return DEFAULT_ORDERED_STREAM_CONFIG;
     }
+  }
+
+  /** Check if scheduling is enabled for a stream kind via `allow_msg_schedules` override. */
+  private isSchedulingEnabled(kind: StreamKind): boolean {
+    const overrides = this.getOverrides(kind);
+
+    return overrides.allow_msg_schedules === true;
   }
 
   /** Get user-provided overrides for a stream kind. */
