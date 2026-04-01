@@ -58,7 +58,13 @@ app.connectMicroservice({
 export class AppModule {}
 ```
 
-The transport connects automatically — no `connectMicroservice()` call needed.
+Then connect the transport in your bootstrap file, just like in the [Quick Start](/docs/getting-started/quick-start#2-connect-the-transport):
+
+```typescript
+const app = await NestFactory.create(AppModule);
+app.connectMicroservice({ strategy: app.get(JetstreamStrategy) }, { inheritAppConfig: true });
+await app.startAllMicroservices();
+```
 
 ### Step 3 — Keep your handlers
 

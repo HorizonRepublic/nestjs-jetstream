@@ -77,11 +77,11 @@ You interact with standard NestJS abstractions (`ClientProxy`, `@Payload()`, `@C
 
 This documentation is organized into sections that progressively build on each other:
 
-- [**Getting Started**](/docs/getting-started/installation) — install, configure, and run your first handler in minutes
-- [**Messaging Patterns**](/docs/patterns/rpc) — deep dive into RPC, Events, Broadcast, and Ordered Events
-- [**Guides**](/docs/guides/record-builder) — Record Builder, Scheduling, Custom Codec, Handler Context, DLQ, Health Checks, Lifecycle Hooks, Graceful Shutdown, Performance Tuning, Troubleshooting
-- [**Migration**](/docs/guides/migration) — upgrading from the built-in NATS transport or between library versions
-- [**Reference**](/docs/reference/naming-conventions) — naming conventions, default configs, edge cases, and full API reference
+- [**Getting Started**](/docs/getting-started/installation) — install and run your first handler in minutes
+- [**Core Concepts**](/docs/patterns/events) — events, RPC, record builder, and handler context — what you'll use daily
+- [**Advanced Patterns**](/docs/patterns/broadcast) — broadcast, ordered events, and message scheduling
+- [**Going to Production**](/docs/getting-started/module-configuration) — full configuration, DLQ, health checks, lifecycle hooks, graceful shutdown, and performance tuning
+- [**Reference**](/docs/reference/naming-conventions) — naming conventions, default configs, edge cases, custom codec, migration, and troubleshooting
 
 :::tip Ready to start?
 Head to [Installation](/docs/getting-started/installation) to add the library to your project, or jump straight to the [Quick Start](/docs/getting-started/quick-start) if you already have NATS running.

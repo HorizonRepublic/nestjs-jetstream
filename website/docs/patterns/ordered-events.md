@@ -11,7 +11,7 @@ schema:
 
 import Since from '@site/src/components/Since';
 
-<Since version="2.3.0" />
+<Since version="2.4.0" />
 
 # Ordered Events
 
@@ -356,7 +356,7 @@ async handleOrderStatus(
   @Payload() data: OrderStatusDto,
   @Ctx() ctx: RpcContext,
 ) {
-  const msg = ctx.getMessage();
+  const msg = ctx.getMessage() as JsMsg;
 
   // Process the event
   await this.projectionService.apply(data);

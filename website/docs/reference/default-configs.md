@@ -54,8 +54,8 @@ Workqueue retention — each message is removed after being acknowledged by a co
 | `max_msgs_per_subject` | `5,000,000` | |
 | `max_msgs` | `50,000,000` | |
 | `max_bytes` | `5 GB` | 5,368,709,120 bytes |
-| `max_age` | `7 days` | 604,800,000 ms |
-| `duplicate_window` | `2 minutes` | 120,000 ms |
+| `max_age` | `7 days` | `toNanos(7, 'days')` |
+| `duplicate_window` | `2 minutes` | `toNanos(2, 'minutes')` |
 
 :::tip Scheduling
 To enable [message scheduling](/docs/guides/scheduling), add `allow_msg_schedules: true` to the event stream config. This requires NATS Server >= 2.12.
@@ -76,8 +76,8 @@ Short-lived RPC commands (JetStream RPC mode only).
 | `max_msgs_per_subject` | `100,000` | |
 | `max_msgs` | `1,000,000` | |
 | `max_bytes` | `100 MB` | 104,857,600 bytes |
-| `max_age` | `3 minutes` | 180,000 ms |
-| `duplicate_window` | `30 seconds` | 30,000 ms |
+| `max_age` | `3 minutes` | `toNanos(3, 'minutes')` |
+| `duplicate_window` | `30 seconds` | `toNanos(30, 'seconds')` |
 
 ### Broadcast Stream
 
@@ -94,8 +94,8 @@ Limits retention — messages persist until the configured limits are reached. S
 | `max_msgs_per_subject` | `1,000,000` | |
 | `max_msgs` | `10,000,000` | |
 | `max_bytes` | `2 GB` | 2,147,483,648 bytes |
-| `max_age` | `1 day` | 86,400,000 ms |
-| `duplicate_window` | `2 minutes` | 120,000 ms |
+| `max_age` | `1 day` | `toNanos(1, 'days')` |
+| `duplicate_window` | `2 minutes` | `toNanos(2, 'minutes')` |
 
 ### Ordered Stream
 
@@ -112,8 +112,8 @@ Limits retention for strict sequential delivery. Ordered consumers are ephemeral
 | `max_msgs_per_subject` | `5,000,000` | |
 | `max_msgs` | `50,000,000` | |
 | `max_bytes` | `5 GB` | 5,368,709,120 bytes |
-| `max_age` | `1 day` | 86,400,000 ms |
-| `duplicate_window` | `2 minutes` | 120,000 ms |
+| `max_age` | `1 day` | `toNanos(1, 'days')` |
+| `duplicate_window` | `2 minutes` | `toNanos(2, 'minutes')` |
 
 ## Consumer Defaults
 
