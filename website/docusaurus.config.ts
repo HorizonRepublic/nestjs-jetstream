@@ -60,6 +60,21 @@ const config: Config = {
         },
       },
     ],
+    'docusaurus-plugin-llms',
+    [
+      '@coffeecup_tech/docusaurus-plugin-structured-data',
+      {
+        verbose: true,
+        docsDir: 'docs',
+        baseSchema: {
+          organization: {
+            '@type': 'Organization',
+            name: 'Horizon Republic',
+            url: '${DOCUSAURUS_CONFIG_URL}',
+          },
+        },
+      },
+    ],
   ],
   headTags: [
     { tagName: 'meta', attributes: { name: 'keywords', content: 'NestJS, NATS, JetStream, microservices, message queue, event-driven, Node.js, TypeScript' } },

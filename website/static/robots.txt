@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://horizonrepublic.github.io/nestjs-jetstream/sitemap.xml
