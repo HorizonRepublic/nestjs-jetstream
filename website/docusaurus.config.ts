@@ -129,8 +129,8 @@ const config: Config = {
           title: 'Docs',
           items: [
             { label: 'Getting Started', to: '/docs/getting-started/installation' },
-            { label: 'Messaging Patterns', to: '/docs/patterns/rpc' },
-            { label: 'Guides', to: '/docs/guides/record-builder' },
+            { label: 'Core Concepts', to: '/docs/patterns/events' },
+            { label: 'Going to Production', to: '/docs/getting-started/module-configuration' },
           ],
         },
         {

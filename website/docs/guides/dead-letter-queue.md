@@ -1,5 +1,5 @@
 ---
-sidebar_position: 4
+sidebar_position: 2
 title: "Dead Letter Queue"
 schema:
   type: Article

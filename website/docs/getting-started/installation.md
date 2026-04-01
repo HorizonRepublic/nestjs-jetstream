@@ -1,6 +1,7 @@
 ---
 sidebar_position: 1
 title: Installation
+description: Install the package, set up NATS with Docker, and configure peer dependencies.
 schema:
   type: Article
   headline: "Installation"
