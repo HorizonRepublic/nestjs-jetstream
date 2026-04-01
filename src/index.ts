@@ -13,6 +13,7 @@ export type {
   JetstreamModuleOptions,
   OrderedEventOverrides,
   RpcConfig,
+  ScheduleRecordOptions,
   StreamConsumerOverrides,
   TransportHooks,
 } from './interfaces';

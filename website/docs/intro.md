@@ -33,6 +33,7 @@ NestJS ships with a [built-in NATS transport](https://docs.nestjs.com/microservi
 | **Health Checks** | `JetstreamHealthIndicator` for readiness/liveness probes |
 | **Custom Codec** | Pluggable serialization — JSON (default), MessagePack, Protobuf, etc. |
 | **Graceful Shutdown** | Drain in-flight messages before closing the connection |
+| **Message Scheduling** | One-shot delayed delivery via NATS 2.12 `Nats-Schedule` headers |
 | **Publisher-only mode** | `consumer: false` for API gateways that only emit messages |
 
 ## Architecture at a glance
@@ -72,7 +73,7 @@ This documentation is organized into sections that progressively build on each o
 
 - [**Getting Started**](/docs/getting-started/installation) — install, configure, and run your first handler in minutes
 - [**Messaging Patterns**](/docs/patterns/rpc) — deep dive into RPC, Events, Broadcast, and Ordered Events
-- [**Guides**](/docs/guides/record-builder) — Record Builder, Custom Codec, Handler Context, DLQ, Health Checks, Lifecycle Hooks, Graceful Shutdown, Performance Tuning, Troubleshooting
+- [**Guides**](/docs/guides/record-builder) — Record Builder, Scheduling, Custom Codec, Handler Context, DLQ, Health Checks, Lifecycle Hooks, Graceful Shutdown, Performance Tuning, Troubleshooting
 - [**Migration**](/docs/guides/migration) — upgrading from the built-in NATS transport or between library versions
 - [**Reference**](/docs/reference/naming-conventions) — naming conventions, default configs, edge cases, and full API reference
 

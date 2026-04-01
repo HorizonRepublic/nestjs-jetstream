@@ -104,6 +104,28 @@ const report = await lastValueFrom(
 
 The timeout only applies to RPC (`client.send()`). For fire-and-forget events (`client.emit()`), timeout has no effect since there is no response to wait for.
 
+## Scheduled delivery
+
+<Since version="2.8.0" />
+
+Use `scheduleAt()` to delay message delivery to a future time. The message is held by the NATS server and delivered to the consumer at the specified time:
+
+```typescript
+const record = new JetstreamRecordBuilder({ orderId: 42, type: 'reminder' })
+  .scheduleAt(new Date(Date.now() + 60 * 60 * 1000)) // deliver in 1 hour
+  .build();
+
+await lastValueFrom(this.client.emit('order.reminder', record));
+```
+
+Scheduling requires NATS Server >= 2.12 and `allow_msg_schedules: true` on the event stream. The consumer handles scheduled messages like any normal event — no changes needed on the receiving side.
+
+:::note Events only
+`scheduleAt()` only works with `client.emit()`. If used with `client.send()` (RPC), the schedule is silently ignored and a warning is logged.
+:::
+
+See [Scheduling (Delayed Jobs)](./scheduling.md) for the full guide, including configuration, how it works under the hood, and `max_age` considerations.
+
 ## Reserved headers
 
 The transport uses three headers internally for RPC correlation. These are **reserved** and cannot be set via the builder:
@@ -149,10 +171,12 @@ These headers are read-only from the handler's perspective — you can access th
 | `.setHeaders(record)` | Add multiple headers from a key-value object |
 | `.setMessageId(id)` | Set a deterministic message ID for deduplication |
 | `.setTimeout(ms)` | Override the global RPC timeout for this request |
+| `.scheduleAt(date)` | Schedule one-shot delayed delivery (NATS >= 2.12). <Since version="2.8.0" /> |
 | `.build()` | Return an immutable `JetstreamRecord` |
 
 ## Next steps
 
+- [Scheduling (Delayed Jobs)](./scheduling.md) — delay message delivery to a future time
 - [Handler Context](./handler-context.md) — access headers and message metadata in your handlers
 - [Custom Codec](./custom-codec.md) — control how payloads are serialized
 - [Module Configuration](/docs/getting-started/module-configuration) — configure dedup windows via stream overrides

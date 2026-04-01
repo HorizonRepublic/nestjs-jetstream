@@ -147,6 +147,12 @@ export class ConsumerProvider {
         return DEFAULT_BROADCAST_CONSUMER_CONFIG;
       case StreamKind.Ordered:
         throw new Error('Ordered consumers are ephemeral and should not use durable config');
+      default: {
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        const _exhaustive: never = kind;
+
+        throw new Error(`Unexpected StreamKind: ${_exhaustive}`);
+      }
     }
   }
 
@@ -161,6 +167,12 @@ export class ConsumerProvider {
         return this.options.broadcast?.consumer ?? {};
       case StreamKind.Ordered:
         throw new Error('Ordered consumers are ephemeral and should not use durable config');
+      default: {
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        const _exhaustive: never = kind;
+
+        throw new Error(`Unexpected StreamKind: ${_exhaustive}`);
+      }
     }
   }
 }

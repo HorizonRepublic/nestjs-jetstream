@@ -1,3 +1,9 @@
+/** Options for one-shot delayed delivery via NATS 2.12 message scheduling. */
+export interface ScheduleRecordOptions {
+  /** When to deliver the message. Must be in the future. */
+  at: Date;
+}
+
 /** @internal Options for transport-controlled headers on outbound messages. */
 export interface TransportHeaderOptions {
   /** Original NATS subject the message is published to. */
@@ -18,4 +24,6 @@ export interface ExtractedRecordData {
   timeout: number | undefined;
   /** Custom message ID for JetStream deduplication, or `undefined` for auto-generated UUID. */
   messageId: string | undefined;
+  /** Schedule options for delayed delivery, or `undefined` for immediate. */
+  schedule?: ScheduleRecordOptions;
 }

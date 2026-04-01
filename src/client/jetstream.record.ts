@@ -1,3 +1,4 @@
+import type { ScheduleRecordOptions } from '../interfaces';
 import { RESERVED_HEADERS } from '../jetstream.constants';
 
 /**
@@ -26,6 +27,8 @@ export class JetstreamRecord<TData = unknown> {
     public readonly timeout?: number,
     /** Custom message ID for JetStream deduplication. */
     public readonly messageId?: string,
+    /** Schedule options for delayed delivery. */
+    public readonly schedule?: ScheduleRecordOptions,
   ) {}
 }
 
@@ -40,6 +43,7 @@ export class JetstreamRecordBuilder<TData = unknown> {
   private readonly headers = new Map<string, string>();
   private timeout: number | undefined;
   private messageId: string | undefined;
+  private scheduleOptions: ScheduleRecordOptions | undefined;
 
   public constructor(data?: TData) {
     this.data = data;
@@ -116,16 +120,50 @@ export class JetstreamRecordBuilder<TData = unknown> {
   }
 
   /**
+   * Schedule one-shot delayed delivery.
+   *
+   * The message is held by NATS and delivered to the event consumer
+   * at the specified time. Requires NATS >= 2.12 and `allow_msg_schedules: true`
+   * on the event stream (via `events: { stream: { allow_msg_schedules: true } }`).
+   *
+   * Only meaningful for events (`client.emit()`). If used with RPC
+   * (`client.send()`), a warning is logged and the schedule is ignored.
+   *
+   * @param date - Delivery time. Must be in the future.
+   * @throws Error if the date is not in the future.
+   */
+  public scheduleAt(date: Date): this {
+    const ts = date.getTime();
+
+    if (Number.isNaN(ts)) {
+      throw new Error('Schedule date is invalid');
+    }
+
+    if (ts <= Date.now()) {
+      throw new Error('Schedule date must be in the future');
+    }
+
+    this.scheduleOptions = { at: new Date(ts) };
+
+    return this;
+  }
+
+  /**
    * Build the immutable {@link JetstreamRecord}.
    *
    * @returns A frozen record ready to pass to `client.send()` or `client.emit()`.
    */
   public build(): JetstreamRecord<TData> {
+    const schedule = this.scheduleOptions
+      ? { at: new Date(this.scheduleOptions.at.getTime()) }
+      : undefined;
+
     return new JetstreamRecord(
       this.data as TData,
       new Map(this.headers),
       this.timeout,
       this.messageId,
+      schedule,
     );
   }
 

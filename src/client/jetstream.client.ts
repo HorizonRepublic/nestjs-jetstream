@@ -131,26 +131,49 @@ export class JetstreamClient extends ClientProxy {
    * Publish a fire-and-forget event to JetStream.
    *
    * Events are published to either the workqueue stream or broadcast stream
-   * depending on the subject prefix.
+   * depending on the subject prefix. When a schedule is present the message
+   * is published to a `_sch` subject within the same stream, with the target
+   * set to the original event subject.
    */
   protected async dispatchEvent<T = unknown>(packet: ReadPacket): Promise<T> {
     await this.connect();
-    const { data, hdrs, messageId } = this.extractRecordData(packet.data);
+    const { data, hdrs, messageId, schedule } = this.extractRecordData(packet.data);
 
-    // Determine if this is a broadcast event
-    // Broadcast subjects start with 'broadcast:'
-    const subject = this.buildEventSubject(packet.pattern);
-    const msgHeaders = this.buildHeaders(hdrs, { subject });
+    const eventSubject = this.buildEventSubject(packet.pattern);
+    const msgHeaders = this.buildHeaders(hdrs, { subject: eventSubject });
 
-    const ack = await this.connection
-      .getJetStreamClient()
-      .publish(subject, this.codec.encode(data), {
-        headers: msgHeaders,
-        msgID: messageId ?? nuid.next(),
-      });
+    if (schedule) {
+      // Replace kind segment with _sch: {svc}.ev.{pattern} → {svc}._sch.{pattern}
+      // For broadcast: broadcast.{pattern} → broadcast._sch.{pattern}
+      const scheduleSubject = this.buildScheduleSubject(eventSubject);
 
-    if (ack.duplicate) {
-      this.logger.warn(`Duplicate event publish detected: ${subject} (seq: ${ack.seq})`);
+      const ack = await this.connection
+        .getJetStreamClient()
+        .publish(scheduleSubject, this.codec.encode(data), {
+          headers: msgHeaders,
+          msgID: messageId ?? nuid.next(),
+          schedule: {
+            specification: schedule.at,
+            target: eventSubject,
+          },
+        });
+
+      if (ack.duplicate) {
+        this.logger.warn(
+          `Duplicate scheduled publish detected: ${scheduleSubject} (seq: ${ack.seq})`,
+        );
+      }
+    } else {
+      const ack = await this.connection
+        .getJetStreamClient()
+        .publish(eventSubject, this.codec.encode(data), {
+          headers: msgHeaders,
+          msgID: messageId ?? nuid.next(),
+        });
+
+      if (ack.duplicate) {
+        this.logger.warn(`Duplicate event publish detected: ${eventSubject} (seq: ${ack.seq})`);
+      }
     }
 
     return undefined as T;
@@ -164,7 +187,13 @@ export class JetstreamClient extends ClientProxy {
    */
   protected publish(packet: ReadPacket, callback: (p: WritePacket) => void): () => void {
     const subject = buildSubject(this.targetName, StreamKind.Command, packet.pattern);
-    const { data, hdrs, timeout, messageId } = this.extractRecordData(packet.data);
+    const { data, hdrs, timeout, messageId, schedule } = this.extractRecordData(packet.data);
+
+    if (schedule) {
+      this.logger.warn(
+        'scheduleAt() is ignored for RPC (client.send()). Use client.emit() for scheduled events.',
+      );
+    }
 
     const onUnhandled = (err: unknown): void => {
       this.logger.error('Unhandled publish error:', err);
@@ -440,7 +469,7 @@ export class JetstreamClient extends ClientProxy {
     return hdrs;
   }
 
-  /** Extract data, headers, and timeout from raw packet data or JetstreamRecord. */
+  /** Extract data, headers, timeout, and schedule from raw packet data or JetstreamRecord. */
   private extractRecordData(rawData: unknown): ExtractedRecordData {
     if (rawData instanceof JetstreamRecord) {
       return {
@@ -448,10 +477,54 @@ export class JetstreamClient extends ClientProxy {
         hdrs: rawData.headers.size > 0 ? new Map(rawData.headers) : null,
         timeout: rawData.timeout,
         messageId: rawData.messageId,
+        schedule: rawData.schedule,
       };
     }
 
-    return { data: rawData, hdrs: null, timeout: undefined, messageId: undefined };
+    return {
+      data: rawData,
+      hdrs: null,
+      timeout: undefined,
+      messageId: undefined,
+      schedule: undefined,
+    };
+  }
+
+  /**
+   * Build a schedule-holder subject for NATS message scheduling.
+   *
+   * The schedule-holder subject resides in the same stream as the target but
+   * uses a separate `_sch` namespace that is NOT matched by any consumer filter.
+   * NATS holds the message and publishes it to the target subject after the delay.
+   *
+   * Examples:
+   * - `{svc}__microservice.ev.order.reminder` → `{svc}__microservice._sch.order.reminder`
+   * - `broadcast.config.updated` → `broadcast._sch.config.updated`
+   */
+  private buildScheduleSubject(eventSubject: string): string {
+    if (eventSubject.startsWith('broadcast.')) {
+      return eventSubject.replace('broadcast.', 'broadcast._sch.');
+    }
+
+    // For event/ordered subjects: {svc}__microservice.{kind}.{pattern}
+    // Replace the kind segment with _sch: {svc}__microservice._sch.{pattern}
+    const targetPrefix = `${internalName(this.targetName)}.`;
+
+    if (!eventSubject.startsWith(targetPrefix)) {
+      throw new Error(`Unexpected event subject format: ${eventSubject}`);
+    }
+
+    const withoutPrefix = eventSubject.slice(targetPrefix.length);
+    // withoutPrefix is "{kind}.{pattern}" — strip the kind segment
+    const dotIndex = withoutPrefix.indexOf('.');
+
+    if (dotIndex === -1) {
+      throw new Error(`Event subject missing pattern segment: ${eventSubject}`);
+    }
+
+    const pattern = withoutPrefix.slice(dotIndex + 1);
+
+    return `${targetPrefix}_sch.${pattern}`;
   }
 
   private getRpcTimeout(): number {

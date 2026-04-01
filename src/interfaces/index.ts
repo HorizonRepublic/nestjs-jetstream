@@ -19,7 +19,11 @@ export { StreamKind } from './stream.interface';
 
 export type { SubjectKind } from './stream.interface';
 
-export type { TransportHeaderOptions, ExtractedRecordData } from './client.interface';
+export type {
+  ScheduleRecordOptions,
+  TransportHeaderOptions,
+  ExtractedRecordData,
+} from './client.interface';
 
 export type {
   DeadLetterConfig,
