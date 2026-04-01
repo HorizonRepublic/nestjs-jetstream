@@ -24,6 +24,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'guides/record-builder',
+        'guides/scheduling',
         'guides/handler-context',
         'guides/custom-codec',
         'guides/dead-letter-queue',
