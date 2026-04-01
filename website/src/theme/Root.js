@@ -235,7 +235,7 @@ export default function Root({ children }) {
   const strippedPath = location.pathname.startsWith(siteBaseUrl)
     ? location.pathname.slice(siteBaseUrl.length) || '/'
     : location.pathname;
-  const contentData = schemas[strippedPath] || schemas[strippedPath + '/'] || schemas[strippedPath.replace(/\\/$/, '')];
+  const contentData = schemas[strippedPath] || schemas[strippedPath + '/'] || schemas[strippedPath.replace(/\/$/, '')];
   if (contentData) {
     let isSupportedType = true;
     const schemaType = contentData['@type'];

@@ -24,7 +24,12 @@ if [[ ! -f "$ROOT_JS" ]]; then
 fi
 
 # 1. Fix path lookup — inject baseUrl stripping before schema resolution
-sedi "s|const contentData = schemas\[location\.pathname\];|// Normalize path: strip baseUrl prefix and match with/without trailing slash\n  const siteBaseUrl = '/nestjs-jetstream';\n  const strippedPath = location.pathname.startsWith(siteBaseUrl)\n    ? location.pathname.slice(siteBaseUrl.length) \|\| '/'\n    : location.pathname;\n  const contentData = schemas[strippedPath] \|\| schemas[strippedPath + '/'] \|\| schemas[strippedPath.replace(/\\\\\\\\\\/\$/, '')];|" "$ROOT_JS"
+perl -i -pe 's|const contentData = schemas\[location\.pathname\];|// Normalize path: strip baseUrl prefix and match with/without trailing slash
+  const siteBaseUrl = \x27/nestjs-jetstream\x27;
+  const strippedPath = location.pathname.startsWith(siteBaseUrl)
+    ? location.pathname.slice(siteBaseUrl.length) \|\| \x27/\x27
+    : location.pathname;
+  const contentData = schemas[strippedPath] \|\| schemas[strippedPath + \x27/\x27] \|\| schemas[strippedPath.replace(/\\/\$/, \x27\x27)];|' "$ROOT_JS"
 
 # 2. Remove image: undefined lines
 sedi '/"image": "https:\/\/horizonrepublic\.github\.io\/undefined"/d' "$ROOT_JS"
