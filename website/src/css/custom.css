@@ -345,7 +345,8 @@ aside[class*='docSidebarContainer'] {
   transition: background-size var(--duration-normal) var(--ease-out-expo), color var(--duration-fast);
 }
 
-.markdown a:hover {
+.markdown a:hover,
+.markdown a:focus-visible {
   color: #22D3EE;
   background-size: 100% 1px;
   text-decoration: none;

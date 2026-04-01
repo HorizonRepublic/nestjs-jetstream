@@ -358,6 +358,8 @@ JetstreamModule.forRootAsync({
 **Tracking offsets in your handler:**
 
 ```typescript
+import type { JsMsg } from '@nats-io/jetstream';
+
 @EventPattern('order.status', { ordered: true })
 async handleOrderStatus(
   @Payload() data: OrderStatusDto,

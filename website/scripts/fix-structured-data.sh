@@ -51,4 +51,15 @@ perl -i -0777 -pe '
   s/\n\s*\)\}//;
 ' "$ROOT_JS"
 
+# 6. Validate patches applied correctly
+errors=0
+grep -q "const siteBaseUrl = '/nestjs-jetstream'" "$ROOT_JS" || { echo "Error: baseUrl path patch did not apply."; errors=$((errors + 1)); }
+grep -q "schemas\[homePath\] = { \"@type\": \"WebSite\"" "$ROOT_JS" || { echo "Error: homepage schema patch did not apply."; errors=$((errors + 1)); }
+grep -q "'/docs/': {" "$ROOT_JS" || { echo "Error: intro path patch did not apply."; errors=$((errors + 1)); }
+
+if [ $errors -gt 0 ]; then
+  echo "Root.js patching failed with $errors error(s)."
+  exit 1
+fi
+
 echo "Root.js patched successfully."

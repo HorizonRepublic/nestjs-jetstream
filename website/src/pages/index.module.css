@@ -510,12 +510,23 @@
     animation: none;
   }
 
+  .heroBadgeDot {
+    animation: none;
+  }
+
   .ctaPrimary,
   .ctaSecondary,
   .featureCard,
   .highlightCard,
   .codeBlock {
     transition: none;
+  }
+
+  .ctaPrimary:hover,
+  .ctaSecondary:hover,
+  .featureCard:hover,
+  .highlightCard:hover {
+    transform: none;
   }
 }
 

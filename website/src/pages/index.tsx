@@ -135,7 +135,7 @@ function Features(): React.ReactElement {
         <div className={styles.featuresGrid}>
           {features.map((f) => (
             <div key={f.label} className={`${styles.featureCard} ${styles[`featureCard--${f.color}`]}`}>
-              <div className={styles.featureIcon}>{f.icon}</div>
+              <div className={styles.featureIcon} aria-hidden="true">{f.icon}</div>
               <span className={styles.featureLabel}>{f.label}</span>
               <h3 className={styles.featureTitle}>{f.title}</h3>
               <p className={styles.featureDesc}>{f.description}</p>
@@ -161,7 +161,7 @@ function Highlights(): React.ReactElement {
         <div className={styles.highlightsGrid}>
           {highlights.map((h) => (
             <div key={h.title} className={styles.highlightCard}>
-              <span className={styles.highlightIcon}>{h.icon}</span>
+              <span className={styles.highlightIcon} aria-hidden="true">{h.icon}</span>
               <h3 className={styles.highlightTitle}>{h.title}</h3>
               <p className={styles.highlightDesc}>{h.description}</p>
             </div>
