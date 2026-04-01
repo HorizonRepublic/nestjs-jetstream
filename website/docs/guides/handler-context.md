@@ -9,6 +9,8 @@ schema:
   dateModified: "2026-03-30"
 ---
 
+import Since from '@site/src/components/Since';
+
 # Handler Context
 
 Every `@EventPattern` and `@MessagePattern` handler can inject `RpcContext` to access message metadata, JetStream delivery info, and control message settlement. This works identically for both event and RPC handlers.
@@ -50,6 +52,8 @@ export class OrdersController {
 
 ### JetStream metadata
 
+<Since version="2.7.0" />
+
 These return `undefined` for Core NATS messages — no type guard needed.
 
 | Method | Return type | Description |
@@ -61,6 +65,8 @@ These return `undefined` for Core NATS messages — no type guard needed.
 | `getCallerName()` | `string \| undefined` | Name of the service that sent the message |
 
 ### Settlement actions
+
+<Since version="2.7.0" />
 
 Control how the transport acknowledges the message — without throwing errors.
 

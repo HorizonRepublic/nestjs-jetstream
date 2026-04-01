@@ -9,7 +9,11 @@ schema:
   dateModified: "2026-03-26"
 ---
 
+import Since from '@site/src/components/Since';
+
 # Performance Tuning
+
+<Since version="2.6.0" />
 
 This guide covers how to tune the transport for high-throughput workloads. The most impactful settings are backpressure controls and concurrency limits.
 

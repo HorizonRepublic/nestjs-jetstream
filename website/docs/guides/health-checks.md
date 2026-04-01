@@ -9,7 +9,11 @@ schema:
   dateModified: "2026-03-26"
 ---
 
+import Since from '@site/src/components/Since';
+
 # Health Checks
+
+<Since version="2.1.0" />
 
 The library provides a `JetstreamHealthIndicator` that reports the NATS connection status and round-trip latency. It is auto-registered by `forRoot()` and exported from the module — no additional setup required.
 
