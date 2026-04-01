@@ -6,14 +6,12 @@ schema:
   headline: "Performance Tuning"
   description: "Tune ackWait, maxAckPending, batch sizes, and ack extension for high-throughput workloads."
   datePublished: "2026-03-26"
-  dateModified: "2026-03-26"
+  dateModified: "2026-04-02"
 ---
 
 import Since from '@site/src/components/Since';
 
 # Performance Tuning
-
-<Since version="2.6.0" />
 
 This guide covers how to tune the transport for high-throughput workloads. The most impactful settings are backpressure controls and concurrency limits.
 

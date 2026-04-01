@@ -28,4 +28,15 @@ sed -i '' "s|'/docs///': {|'/docs/': {|" "$ROOT_JS"
 # 4. Add WebSite schema to homepage instead of empty object
 sed -i '' 's|schemas\[homePath\] = {};|schemas[homePath] = { "@type": "WebSite", "name": "@horizon-republic/nestjs-jetstream", "description": "Production-grade NestJS transport for NATS JetStream — events, broadcast, ordered delivery, and RPC." };|' "$ROOT_JS"
 
+# 5. Fix missing semicolons and useless conditional (flagged by code quality bots)
+perl -i -0777 -pe '
+  # Add semicolon to schemas object closing brace (before for loop)
+  s/(\n  \})\n(  for \(const homePath)/\1;\n\2/;
+  # Add semicolon to graphData assignment closing brace
+  s/(\x27\@graph\x27: graphContent\n    \})\n/\1;\n/;
+  # Remove useless graphData conditional and fix script tag quotes
+  s/\{graphData && \(\n\s*<script type=\x27application\/ld\+json\x27>/<script type="application\/ld+json">/;
+  s/\n\s*\)\}//;
+' "$ROOT_JS"
+
 echo "Root.js patched successfully."

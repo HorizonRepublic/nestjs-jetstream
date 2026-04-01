@@ -6,7 +6,7 @@ schema:
   headline: "Record Builder & Deduplication"
   description: "Build messages with custom headers, message IDs, and deduplication via JetstreamRecordBuilder."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-01"
+  dateModified: "2026-04-02"
 ---
 
 import Since from '@site/src/components/Since';
@@ -61,7 +61,7 @@ const record = new JetstreamRecordBuilder(data)
 
 ## Message ID & JetStream deduplication
 
-<Since version="2.3.0" />
+<Since version="2.4.0" />
 
 JetStream has built-in **server-side deduplication**. When a message is published with a message ID, the server remembers that ID for a configurable time window. If a second message with the same ID arrives within the window, it is silently dropped — no duplicate processing occurs.
 

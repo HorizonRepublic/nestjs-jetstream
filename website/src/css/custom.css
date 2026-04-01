@@ -190,6 +190,7 @@ div[class*='docRoot'] {
 
 .aa-DetachedOverlay {
   background: rgba(0, 0, 0, 0.6) !important;
+  -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
 }
 
@@ -437,6 +438,7 @@ button[class*='copyButton']:hover {
   border-radius: 10px;
   border-left-width: 3px;
   background: rgba(17, 24, 39, 0.4);
+  -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   border: 1px solid var(--landing-border);
   border-left-width: 3px;

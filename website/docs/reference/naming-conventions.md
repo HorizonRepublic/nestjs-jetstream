@@ -6,7 +6,7 @@ schema:
   headline: Naming Conventions
   description: "Stream, consumer, and subject naming patterns derived from the service name."
   datePublished: "2026-03-21"
-  dateModified: "2026-03-31"
+  dateModified: "2026-04-02"
 ---
 
 # Naming Conventions
@@ -142,3 +142,14 @@ Each stream subscribes to a wildcard subject pattern that captures all messages 
 | Broadcast | `broadcast.>` |
 
 The `>` wildcard matches one or more tokens, so `orders__microservice.ev.>` will capture `orders__microservice.ev.order.created`, `orders__microservice.ev.payment.processed`, etc.
+
+### Scheduling subjects
+
+When [message scheduling](/docs/guides/scheduling) is enabled (`allow_msg_schedules: true`), the transport adds additional subject filters to capture scheduled messages:
+
+| Stream Kind | Additional Subject Filter |
+|------------|--------------------------|
+| Event | `{name}__microservice._sch.>` |
+| Broadcast | `broadcast._sch.>` |
+
+These `_sch` subjects are used internally by NATS to hold scheduled messages until their delivery time. When the scheduled time arrives, NATS republishes the message to the original subject. You don't interact with `_sch` subjects directly — they are managed by NATS Server >= 2.12.

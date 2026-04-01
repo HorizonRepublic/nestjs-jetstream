@@ -6,7 +6,7 @@ schema:
   headline: Default Configs
   description: "Default stream and consumer configurations for every StreamKind."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-01"
+  dateModified: "2026-04-02"
 ---
 
 # Default Configs
@@ -199,6 +199,7 @@ All stream and consumer defaults can be overridden in `forRoot()` options. User-
 
 ```typescript
 import { RetentionPolicy, StorageType } from '@nats-io/jetstream';
+import { JetstreamModule, toNanos } from '@horizon-republic/nestjs-jetstream';
 
 JetstreamModule.forRoot({
   name: 'orders',

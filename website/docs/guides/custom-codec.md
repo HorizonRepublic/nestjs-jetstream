@@ -6,7 +6,7 @@ schema:
   headline: "Custom Codec"
   description: "Replace the default JSON codec with MsgPack, Protobuf, or any custom binary format."
   datePublished: "2026-03-21"
-  dateModified: "2026-03-21"
+  dateModified: "2026-04-02"
 ---
 
 # Custom Codec
@@ -124,8 +124,8 @@ When using `forRootAsync()`:
 
 ```typescript
 JetstreamModule.forRootAsync({
+  name: 'orders',
   useFactory: () => ({
-    name: 'orders',
     servers: ['nats://localhost:4222'],
     codec: new MsgPackCodec(),
   }),

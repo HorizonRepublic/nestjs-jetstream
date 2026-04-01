@@ -7,7 +7,7 @@ schema:
   headline: "Installation"
   description: "Install the package, set up NATS with Docker, and configure peer dependencies."
   datePublished: "2026-03-21"
-  dateModified: "2026-03-26"
+  dateModified: "2026-04-02"
 ---
 
 # Installation
@@ -48,7 +48,7 @@ The library requires the following NestJS packages as peer dependencies (they ar
 - `@nestjs/common` ^10.2.0 || ^11.0.0
 - `@nestjs/core` ^10.2.0 || ^11.0.0
 - `@nestjs/microservices` ^10.2.0 || ^11.0.0
-- `reflect-metadata` ^0.1.13 || ^0.2.0
+- `reflect-metadata` ^0.2.0
 - `rxjs` ^7.8.0
 
 ## Runtime requirements

@@ -6,7 +6,7 @@ schema:
   headline: "Ordered Events"
   description: "Strict sequential event delivery with ephemeral consumers and replay policies."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-01"
+  dateModified: "2026-04-02"
 ---
 
 import Since from '@site/src/components/Since';
@@ -103,6 +103,7 @@ Use the `ordered:` prefix when emitting events through a `JetstreamClient`:
 ```typescript title="src/orders/orders.service.ts"
 import { Inject, Injectable } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
+import { lastValueFrom } from 'rxjs';
 
 @Injectable()
 export class OrdersService {
@@ -112,11 +113,13 @@ export class OrdersService {
 
   async shipOrder(orderId: number) {
     // The 'ordered:' prefix routes to the ordered stream
-    this.client.emit('ordered:order.status', {
-      orderId,
-      status: 'shipped',
-      timestamp: new Date().toISOString(),
-    });
+    await lastValueFrom(
+      this.client.emit('ordered:order.status', {
+        orderId,
+        status: 'shipped',
+        timestamp: new Date().toISOString(),
+      }),
+    );
   }
 }
 ```
@@ -161,7 +164,7 @@ export class ProjectionsController {
 
 ```typescript title="src/app.module.ts"
 import { Module } from '@nestjs/common';
-import { JetstreamModule } from '@horizon-republic/nestjs-jetstream';
+import { JetstreamModule, toNanos } from '@horizon-republic/nestjs-jetstream';
 
 @Module({
   imports: [
@@ -183,13 +186,17 @@ export class AppModule {}
 ```
 
 ```typescript title="src/writer/writer.service.ts"
+import { lastValueFrom } from 'rxjs';
+
 @Injectable()
 export class WriterService {
   constructor(@Inject('projections') private readonly client: ClientProxy) {}
 
   async recordEvent(event: DomainEvent) {
     // Publish to the ordered stream
-    this.client.emit(`ordered:${event.type}`, event.payload);
+    await lastValueFrom(
+      this.client.emit(`ordered:${event.type}`, event.payload),
+    );
   }
 }
 ```

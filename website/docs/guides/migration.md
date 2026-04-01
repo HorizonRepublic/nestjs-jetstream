@@ -6,7 +6,7 @@ schema:
   headline: "Migration Guide"
   description: "Migrate from the built-in NestJS NATS transport to JetStream with durable delivery."
   datePublished: "2026-03-26"
-  dateModified: "2026-03-26"
+  dateModified: "2026-04-02"
 ---
 
 # Migration Guide
@@ -120,14 +120,6 @@ After migration, you get for free:
 
 ### v2.7 → v2.8
 
-**New features:**
-- [Message scheduling](/docs/guides/scheduling) — one-shot delayed delivery via `scheduleAt()` (requires NATS >= 2.12)
-- `allow_msg_schedules` stream config option
-
-No breaking changes.
-
-### v2.6 → v2.7
-
 **Breaking change:** migrated from `nats` package to `@nats-io/*` scoped packages (v3.x).
 
 This is an internal change — the library re-exports everything users need. If you import types directly from `nats` in your own code, update them:
@@ -138,11 +130,27 @@ This is an internal change — the library re-exports everything users need. If 
 + import { NatsConnection } from '@nats-io/transport-node';
 ```
 
+**New features:**
+- [Message scheduling](/docs/guides/scheduling) — one-shot delayed delivery via `scheduleAt()` (requires NATS >= 2.12)
+- `allow_msg_schedules` stream config option
+
+### v2.6 → v2.7
+
+**New features:**
+- Handler-controlled settlement via `ctx.retry()` and `ctx.terminate()` — control message acknowledgment without throwing errors
+- Metadata getters on `RpcContext`: `getDeliveryCount()`, `getStream()`, `getSequence()`, `getTimestamp()`, `getCallerName()`
+
+No breaking changes.
+
 ### v2.5 → v2.6
 
 **New features:**
-- Dead letter queue support via `onDeadLetter` callback
-- `DeadLetterInfo` interface with full message context
+- Configurable concurrency for event/broadcast/RPC processing
+- Ack extension (`ackExtension: true`) for long-running handlers
+- Consume options passthrough for advanced prefetch tuning
+- Heartbeat monitoring with automatic consumer restart
+- S2 stream compression enabled by default
+- Performance connection defaults (unlimited reconnect, 1s interval)
 
 No breaking changes.
 
@@ -160,19 +168,20 @@ No breaking changes.
   }
 ```
 
-**New features:**
-- Configurable concurrency for event/broadcast/RPC processing
-- Ack extension (`ackExtension: true`) for long-running handlers
-- Consume options passthrough for advanced prefetch tuning
-- Heartbeat monitoring with automatic consumer restart
-- S2 stream compression enabled by default
-- Performance connection defaults (unlimited reconnect, 1s interval)
-
 ### v2.3 → v2.4
 
 **New features:**
 - Ordered events (`ordered:` prefix, `DeliverPolicy` options)
+- Custom message IDs via `setMessageId()` for publish-side deduplication
 - Documentation site (Docusaurus)
+
+No breaking changes.
+
+### v2.1 → v2.2
+
+**New features:**
+- Dead letter queue support via `onDeadLetter` callback
+- `DeadLetterInfo` interface with full message context
 
 No breaking changes.
 

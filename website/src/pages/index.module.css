@@ -59,6 +59,7 @@
   border: 1px solid var(--landing-border);
   border-radius: 100px;
   margin-bottom: 2rem;
+  -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
 }
 
@@ -145,6 +146,7 @@
   border: 1px solid var(--landing-border);
   border-radius: 10px;
   text-decoration: none;
+  -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   transition: border-color var(--duration-normal), box-shadow var(--duration-normal), transform var(--duration-normal) var(--ease-out-expo);
 }
