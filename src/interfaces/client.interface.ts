@@ -1,3 +1,5 @@
+import type { ScheduleRecordOptions } from '../client/jetstream.record';
+
 /** @internal Options for transport-controlled headers on outbound messages. */
 export interface TransportHeaderOptions {
   /** Original NATS subject the message is published to. */
@@ -18,4 +20,6 @@ export interface ExtractedRecordData {
   timeout: number | undefined;
   /** Custom message ID for JetStream deduplication, or `undefined` for auto-generated UUID. */
   messageId: string | undefined;
+  /** Schedule options for delayed delivery, or `undefined` for immediate. */
+  schedule?: ScheduleRecordOptions;
 }
