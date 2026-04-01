@@ -27,7 +27,7 @@ The `JetstreamModule` implements NestJS's `OnApplicationShutdown` interface. Whe
 flowchart LR
     A[SIGTERM] --> B[onApplicationShutdown]
     B --> C[ShutdownStart hook]
-    C --> D[Stop subscriptions]
+    C --> D[Stop consumers]
     D --> E[Drain NATS connection]
     E --> F{Drain within timeout?}
     F -- Yes --> G[ShutdownComplete hook]

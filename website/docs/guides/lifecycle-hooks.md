@@ -98,7 +98,7 @@ Track message throughput, RPC timeouts, and connection state:
 
 ```typescript
 import { Counter, Gauge } from 'prom-client';
-import { JetstreamModule, TransportEvent } from '@horizon-republic/nestjs-jetstream';
+import { JetstreamModule, MessageKind, TransportEvent } from '@horizon-republic/nestjs-jetstream';
 
 const messagesRouted = new Counter({
   name: 'jetstream_messages_routed_total',
