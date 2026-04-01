@@ -25,7 +25,7 @@ type NatsMessage = JsMsg | Msg;
  *     return;
  *   }
  *   if (!this.isReady()) {
- *     ctx.retry({ delay: 5000 });
+ *     ctx.retry({ delayMs: 5000 });
  *     return;
  *   }
  *   await this.process(data);

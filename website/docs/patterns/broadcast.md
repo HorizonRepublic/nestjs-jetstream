@@ -1,6 +1,12 @@
 ---
-sidebar_position: 3
+sidebar_position: 1
 title: "Broadcast Events"
+schema:
+  type: Article
+  headline: "Broadcast Events"
+  description: "Fan-out event delivery to every subscribing service instance."
+  datePublished: "2026-03-21"
+  dateModified: "2026-04-02"
 ---
 
 # Broadcast Events
@@ -259,11 +265,13 @@ When a centralized config service updates a value, all services must pick up the
 
 ```typescript
 // Publisher
-this.client.emit('broadcast:config.updated', {
-  key: 'rate-limit.max-requests',
-  value: '1000',
-  updatedAt: new Date().toISOString(),
-});
+await lastValueFrom(
+  this.client.emit('broadcast:config.updated', {
+    key: 'rate-limit.max-requests',
+    value: '1000',
+    updatedAt: new Date().toISOString(),
+  }),
+);
 ```
 
 ### Cache invalidation
@@ -272,11 +280,13 @@ When the source of truth changes, all services holding a cached copy must invali
 
 ```typescript
 // Publisher
-this.client.emit('broadcast:cache.invalidate', {
-  entity: 'product',
-  id: productId,
-  reason: 'price-updated',
-});
+await lastValueFrom(
+  this.client.emit('broadcast:cache.invalidate', {
+    entity: 'product',
+    id: productId,
+    reason: 'price-updated',
+  }),
+);
 
 // Handler (in any service that caches products)
 @EventPattern('cache.invalidate', { broadcast: true })
@@ -293,11 +303,13 @@ When a feature flag changes, every service instance must update its local state:
 
 ```typescript
 // Publisher
-this.client.emit('broadcast:feature-flag.updated', {
-  key: 'new-checkout-flow',
-  enabled: true,
-  rolloutPercentage: 25,
-});
+await lastValueFrom(
+  this.client.emit('broadcast:feature-flag.updated', {
+    key: 'new-checkout-flow',
+    enabled: true,
+    rolloutPercentage: 25,
+  }),
+);
 
 // Handler
 @EventPattern('feature-flag.updated', { broadcast: true })

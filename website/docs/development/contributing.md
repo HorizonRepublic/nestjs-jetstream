@@ -1,6 +1,12 @@
 ---
 sidebar_position: 2
 title: Contributing
+schema:
+  type: Article
+  headline: "Contributing"
+  description: "How to contribute to the project."
+  datePublished: "2026-03-21"
+  dateModified: "2026-03-31"
 ---
 
 # Contributing
@@ -51,6 +57,7 @@ We welcome contributions from the community. The full contribution guidelines li
 | `pnpm test:cov` | Run tests with coverage |
 | `pnpm docs:dev` | Start Docusaurus dev server |
 | `pnpm docs:build` | Build the documentation site |
+| `pnpm docs:generate` | Regenerate TypeDoc API reference (not `pnpm docs` — conflicts with npm built-in) |
 
 See [Testing](/docs/development/testing) for detailed test conventions and setup.
 

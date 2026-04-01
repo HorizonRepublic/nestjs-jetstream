@@ -1,6 +1,12 @@
 ---
 sidebar_position: 1
 title: Naming Conventions
+schema:
+  type: Article
+  headline: Naming Conventions
+  description: "Stream, consumer, and subject naming patterns derived from the service name."
+  datePublished: "2026-03-21"
+  dateModified: "2026-04-02"
 ---
 
 # Naming Conventions
@@ -50,7 +56,7 @@ Given `name: 'orders'`, the transport generates the following names:
 | Broadcast consumer | `{name}__microservice_broadcast-consumer` | `orders__microservice_broadcast-consumer` |
 
 :::note
-Ordered consumers are **ephemeral** — they are created and managed by nats.js at consumption time and do not have a durable consumer name.
+Ordered consumers are **ephemeral** — they are created and managed by the `@nats-io/jetstream` client at consumption time and do not have a durable consumer name.
 :::
 
 :::info
@@ -136,3 +142,14 @@ Each stream subscribes to a wildcard subject pattern that captures all messages 
 | Broadcast | `broadcast.>` |
 
 The `>` wildcard matches one or more tokens, so `orders__microservice.ev.>` will capture `orders__microservice.ev.order.created`, `orders__microservice.ev.payment.processed`, etc.
+
+### Scheduling subjects
+
+When [message scheduling](/docs/guides/scheduling) is enabled (`allow_msg_schedules: true`), the transport adds additional subject filters to capture scheduled messages:
+
+| Stream Kind | Additional Subject Filter |
+|------------|--------------------------|
+| Event | `{name}__microservice._sch.>` |
+| Broadcast | `broadcast._sch.>` |
+
+The `_sch` subjects are a library convention to separate scheduled messages from regular events within the same stream. NATS scheduling itself works via headers (`Nats-Schedule`, `Nats-Schedule-Target` per [ADR-51](https://github.com/nats-io/nats-architecture-and-design/blob/main/adr/ADR-51.md)), not special subjects. You don't interact with `_sch` subjects directly — the library manages them automatically.
