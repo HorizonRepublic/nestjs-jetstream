@@ -31,14 +31,238 @@ export default function Root({ children }) {
   const schemas = {
 
     
+    '/docs/development/contributing/': {
+  "@type": "Article",
+  "headline": "Contributing",
+
+  "description": "How to contribute to the project.",
+  "datePublished": "2026-03-21",
+  "dateModified": "2026-03-31"
+},
+      
+    '/docs/development/testing/': {
+  "@type": "Article",
+  "headline": "Testing",
+
+  "description": "Running unit and integration tests with Vitest and Testcontainers.",
+  "datePublished": "2026-03-21",
+  "dateModified": "2026-03-31"
+},
+      
+    '/docs/getting-started/installation/': {
+  "@type": "Article",
+  "headline": "Installation",
+
+  "description": "Install the package, set up NATS with Docker, and configure peer dependencies.",
+  "datePublished": "2026-03-21",
+  "dateModified": "2026-03-26"
+},
+      
+    '/docs/getting-started/module-configuration/': {
+  "@type": "Article",
+  "headline": "Module Configuration",
+
+  "description": "forRoot(), forRootAsync(), and forFeature() registration methods with stream, consumer, and connection options.",
+  "datePublished": "2026-03-21",
+  "dateModified": "2026-04-01"
+},
+      
+    '/docs/getting-started/quick-start/': {
+  "@type": "Article",
+  "headline": "Quick Start",
+
+  "description": "Complete working example in four steps: register the module, connect the transport, define handlers, and send messages.",
+  "datePublished": "2026-03-21",
+  "dateModified": "2026-03-21"
+},
+      
+    '/docs/guides/custom-codec/': {
+  "@type": "Article",
+  "headline": "Custom Codec",
+
+  "description": "Replace the default JSON codec with MsgPack, Protobuf, or any custom binary format.",
+  "datePublished": "2026-03-21",
+  "dateModified": "2026-03-21"
+},
+      
+    '/docs/guides/dead-letter-queue/': {
+  "@type": "Article",
+  "headline": "Dead Letter Queue",
+
+  "description": "Handle messages that exhaust all delivery attempts via onDeadLetter callback.",
+  "datePublished": "2026-03-21",
+  "dateModified": "2026-03-21"
+},
+      
+    '/docs/guides/graceful-shutdown/': {
+  "@type": "Article",
+  "headline": "Graceful Shutdown",
+
+  "description": "Automatic shutdown handling with in-flight message completion and NATS connection drain.",
+  "datePublished": "2026-03-21",
+  "dateModified": "2026-03-21"
+},
+      
+    '/docs/guides/handler-context/': {
+  "@type": "Article",
+  "headline": "Handler Context",
+
+  "description": "Access message metadata, headers, and control settlement actions via RpcContext.",
+  "datePublished": "2026-03-21",
+  "dateModified": "2026-03-30"
+},
+      
+    '/docs/guides/health-checks/': {
+  "@type": "Article",
+  "headline": "Health Checks",
+
+  "description": "JetstreamHealthIndicator for NestJS Terminus integration with connection status and latency.",
+  "datePublished": "2026-03-21",
+  "dateModified": "2026-03-26"
+},
+      
+    '/docs/guides/lifecycle-hooks/': {
+  "@type": "Article",
+  "headline": "Lifecycle Hooks",
+
+  "description": "Transport lifecycle events for connection changes, errors, message routing, and dead letters.",
+  "datePublished": "2026-03-21",
+  "dateModified": "2026-03-21"
+},
+      
+    '/docs/guides/migration/': {
+  "@type": "Article",
+  "headline": "Migration Guide",
+
+  "description": "Migrate from the built-in NestJS NATS transport to JetStream with durable delivery.",
+  "datePublished": "2026-03-26",
+  "dateModified": "2026-03-26"
+},
+      
+    '/docs/guides/performance/': {
+  "@type": "Article",
+  "headline": "Performance Tuning",
+
+  "description": "Tune ackWait, maxAckPending, batch sizes, and ack extension for high-throughput workloads.",
+  "datePublished": "2026-03-26",
+  "dateModified": "2026-03-26"
+},
+      
+    '/docs/guides/record-builder/': {
+  "@type": "Article",
+  "headline": "Record Builder & Deduplication",
+
+  "description": "Build messages with custom headers, message IDs, and deduplication via JetstreamRecordBuilder.",
+  "datePublished": "2026-03-21",
+  "dateModified": "2026-04-01"
+},
+      
+    '/docs/guides/scheduling/': {
+  "@type": "Article",
+  "headline": "Scheduling (Delayed Jobs)",
+
+  "description": "One-shot delayed message delivery powered by NATS 2.12 message scheduling.",
+  "datePublished": "2026-04-01",
+  "dateModified": "2026-04-01"
+},
+      
+    '/docs/guides/troubleshooting/': {
+  "@type": "Article",
+  "headline": "Troubleshooting",
+
+  "description": "Common issues and how to resolve them.",
+  "datePublished": "2026-03-26",
+  "dateModified": "2026-03-26"
+},
+      
+    '/docs/': {
+  "@type": "Article",
+  "headline": "Introduction",
+  "description": "Production-grade NestJS transport for NATS JetStream with durable delivery, retry, replay, and dead letter handling.",
+  "datePublished": "2026-03-21",
+  "dateModified": "2026-04-01"
+},
+      
+    '/docs/patterns/broadcast/': {
+  "@type": "Article",
+  "headline": "Broadcast Events",
+
+  "description": "Fan-out event delivery to every subscribing service instance.",
+  "datePublished": "2026-03-21",
+  "dateModified": "2026-03-26"
+},
+      
+    '/docs/patterns/events/': {
+  "@type": "Article",
+  "headline": "Events (Workqueue)",
+
+  "description": "Workqueue events with at-least-once delivery, automatic retry, deduplication, and dead letter handling.",
+  "datePublished": "2026-03-21",
+  "dateModified": "2026-04-01"
+},
+      
+    '/docs/patterns/ordered-events/': {
+  "@type": "Article",
+  "headline": "Ordered Events",
+
+  "description": "Strict sequential event delivery with ephemeral consumers and replay policies.",
+  "datePublished": "2026-03-21",
+  "dateModified": "2026-04-01"
+},
+      
+    '/docs/patterns/rpc/': {
+  "@type": "Article",
+  "headline": "RPC (Request/Reply)",
+
+  "description": "Synchronous request-reply via Core NATS or JetStream with timeout and error handling.",
+  "datePublished": "2026-03-21",
+  "dateModified": "2026-03-26"
+},
+      
+    '/docs/reference/default-configs/': {
+  "@type": "Article",
+  "headline": "Default Configs",
+
+  "description": "Default stream and consumer configurations for every StreamKind.",
+  "datePublished": "2026-03-21",
+  "dateModified": "2026-04-01"
+},
+      
+    '/docs/reference/edge-cases/': {
+  "@type": "Article",
+  "headline": "Edge Cases & FAQ",
+
+  "description": "Common questions and non-obvious behaviors of the transport.",
+  "datePublished": "2026-03-21",
+  "dateModified": "2026-03-30"
+},
+      
+    '/docs/reference/naming-conventions/': {
+  "@type": "Article",
+  "headline": "Naming Conventions",
+
+  "description": "Stream, consumer, and subject naming patterns derived from the service name.",
+  "datePublished": "2026-03-21",
+  "dateModified": "2026-03-31"
+},
+      
 
   }
   for (const homePath of homePathes) {
-    schemas[homePath] = {};
+    schemas[homePath] = {
+      "@type": "WebSite",
+      "name": "@horizon-republic/nestjs-jetstream",
+      "description": "Production-grade NestJS transport for NATS JetStream — events, broadcast, ordered delivery, and RPC.",
+      "url": baseUrl
+    };
   }
   
-  // Get the schema for the current page
-  const contentData = schemas[location.pathname];
+  // Normalize path: strip baseUrl prefix (/nestjs-jetstream) and match with/without trailing slash
+  const siteBaseUrl = '/nestjs-jetstream';
+  const strippedPath = location.pathname.startsWith(siteBaseUrl)
+    ? location.pathname.slice(siteBaseUrl.length) || '/'
+    : location.pathname;
+  const contentData = schemas[strippedPath] || schemas[strippedPath + '/'] || schemas[strippedPath.replace(/\/$/, '')];
   if (contentData) {
     let isSupportedType = true;
     const schemaType = contentData['@type'];
