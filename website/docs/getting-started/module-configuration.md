@@ -1,6 +1,12 @@
 ---
-sidebar_position: 3
+sidebar_position: 1
 title: Module Configuration
+schema:
+  type: Article
+  headline: "Module Configuration"
+  description: "forRoot(), forRootAsync(), and forFeature() registration methods with stream, consumer, and connection options."
+  datePublished: "2026-03-21"
+  dateModified: "2026-04-02"
 ---
 
 import Since from '@site/src/components/Since';
@@ -145,7 +151,7 @@ Inject the client using `@Inject()` with the service name as the token:
 ```typescript title="src/orders/orders.service.ts"
 import { Injectable, Inject } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, lastValueFrom } from 'rxjs';
 
 @Injectable()
 export class OrdersService {
@@ -161,10 +167,12 @@ export class OrdersService {
     );
 
     // Fire-and-forget event to the payments service
-    this.paymentsClient.emit('payment.initiate', {
-      userId,
-      amount: 99.99,
-    });
+    await lastValueFrom(
+      this.paymentsClient.emit('payment.initiate', {
+        userId,
+        amount: 99.99,
+      }),
+    );
   }
 }
 ```
@@ -219,10 +227,10 @@ Below is every field in `JetstreamModuleOptions` with its type, default value, a
 | `consumer` | `boolean` | `true` | Enable consumer infrastructure. Set to `false` for publisher-only services (e.g., API gateways). |
 | `events` | `StreamConsumerOverrides` | _(production defaults)_ | Overrides for workqueue event stream and consumer config. |
 | `broadcast` | `StreamConsumerOverrides` | _(production defaults)_ | Overrides for broadcast event stream and consumer config. |
-| `ordered` | `OrderedEventOverrides` | _(production defaults)_ | Configuration for ordered event consumers. <Since version="2.2.0" /> |
+| `ordered` | `OrderedEventOverrides` | _(production defaults)_ | Configuration for ordered event consumers. <Since version="2.4.0" /> |
 | `events.stream.allow_msg_schedules` | `boolean` | `false` | Enable [message scheduling](/docs/guides/scheduling) on the event stream. Requires NATS >= 2.12. <Since version="2.8.0" /> |
 | `hooks` | `Partial<TransportHooks>` | _(none)_ | Transport lifecycle hook handlers. Unset hooks are silently ignored. |
-| `onDeadLetter` | `(info: DeadLetterInfo) => Promise<void>` | _(none)_ | Async callback for dead letter handling. Called when a message exhausts all delivery attempts. <Since version="2.1.0" /> |
+| `onDeadLetter` | `(info: DeadLetterInfo) => Promise<void>` | _(none)_ | Async callback for dead letter handling. Called when a message exhausts all delivery attempts. <Since version="2.2.0" /> |
 | `shutdownTimeout` | `number` | `10_000` (10s) | Graceful shutdown timeout in milliseconds. Handlers exceeding this are abandoned. |
 | `connectionOptions` | `Partial<ConnectionOptions>` | _(none)_ | Raw NATS `ConnectionOptions` pass-through for TLS, auth, reconnection, etc. |
 
@@ -285,9 +293,9 @@ NATS JetStream uses nanoseconds for all time-based configuration. The library ex
 
 ### OrderedEventOverrides
 
-<Since version="2.2.0" />
+<Since version="2.4.0" />
 
-Ordered events use a separate stream with Limits retention and deliver messages in strict sequential order. The configuration is simpler than workqueue/broadcast because ordered consumers are ephemeral and auto-managed by nats.js.
+Ordered events use a separate stream with Limits retention and deliver messages in strict sequential order. The configuration is simpler than workqueue/broadcast because ordered consumers are ephemeral and auto-managed by the `@nats-io/jetstream` client.
 
 ```typescript
 import { DeliverPolicy } from '@nats-io/jetstream';
@@ -316,7 +324,7 @@ See [Ordered Events](/docs/patterns/ordered-events) for detailed usage.
 
 ## connectionOptions
 
-The `connectionOptions` field passes raw NATS `ConnectionOptions` directly to the nats.js client. Use it for TLS, authentication, and reconnection configuration.
+The `connectionOptions` field passes raw NATS `ConnectionOptions` (from `@nats-io/transport-node`) directly to the NATS client. Use it for TLS, authentication, and reconnection configuration.
 
 :::warning Precedence
 The `name` and `servers` fields from the top-level options take precedence over anything set in `connectionOptions`. Don't duplicate them.

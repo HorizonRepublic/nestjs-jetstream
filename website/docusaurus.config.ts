@@ -60,6 +60,21 @@ const config: Config = {
         },
       },
     ],
+    'docusaurus-plugin-llms',
+    [
+      '@coffeecup_tech/docusaurus-plugin-structured-data',
+      {
+        verbose: true,
+        docsDir: 'docs',
+        baseSchema: {
+          organization: {
+            '@type': 'Organization',
+            name: 'Horizon Republic',
+            url: '${DOCUSAURUS_CONFIG_URL}',
+          },
+        },
+      },
+    ],
   ],
   headTags: [
     { tagName: 'meta', attributes: { name: 'keywords', content: 'NestJS, NATS, JetStream, microservices, message queue, event-driven, Node.js, TypeScript' } },
@@ -114,8 +129,8 @@ const config: Config = {
           title: 'Docs',
           items: [
             { label: 'Getting Started', to: '/docs/getting-started/installation' },
-            { label: 'Messaging Patterns', to: '/docs/patterns/rpc' },
-            { label: 'Guides', to: '/docs/guides/record-builder' },
+            { label: 'Core Concepts', to: '/docs/patterns/events' },
+            { label: 'Going to Production', to: '/docs/getting-started/module-configuration' },
           ],
         },
         {

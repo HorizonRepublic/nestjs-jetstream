@@ -1,6 +1,12 @@
 ---
 sidebar_position: 2
 title: "Events (Workqueue)"
+schema:
+  type: Article
+  headline: "Events (Workqueue)"
+  description: "Workqueue events with at-least-once delivery, automatic retry, deduplication, and dead letter handling."
+  datePublished: "2026-03-21"
+  dateModified: "2026-04-02"
 ---
 
 # Events (Workqueue)
@@ -169,7 +175,7 @@ async handleOrderCreated(@Payload() data: OrderCreatedEvent): Promise<void> {
 ```typescript
 @EventPattern('payment.completed')
 async handlePayment(@Payload() data: PaymentEvent, @Ctx() ctx: RpcContext): Promise<void> {
-  const msg = ctx.getMessage();
+  const msg = ctx.getMessage() as JsMsg;
   const dedupKey = `payment:${msg.info.stream}:${msg.info.streamSequence}`;
 
   if (await this.cache.exists(dedupKey)) {
@@ -189,6 +195,7 @@ Use `JetstreamRecordBuilder` to set a deterministic message ID:
 
 ```typescript
 import { JetstreamRecordBuilder } from '@horizon-republic/nestjs-jetstream';
+import { lastValueFrom } from 'rxjs';
 
 const record = new JetstreamRecordBuilder({
   orderId: order.id,
@@ -197,7 +204,7 @@ const record = new JetstreamRecordBuilder({
   .setMessageId(`order-created-${order.id}`)
   .build();
 
-this.client.emit('order.created', record);
+await lastValueFrom(this.client.emit('order.created', record));
 ```
 
 This prevents duplicate publishes in scenarios like:
@@ -283,13 +290,12 @@ The default of 3 delivery attempts works well for transient errors (network blip
 
 ## Error handling
 
-When a handler throws, the transport automatically `nak`'s the message for redelivery. For most cases, this is all you need. However, some errors are **non-recoverable** — retrying will never succeed. For these, use `msg.term()` to permanently discard the message.
+When a handler throws, the transport automatically `nak`'s the message for redelivery. For most cases, this is all you need. However, some errors are **non-recoverable** — retrying will never succeed. For these, use `ctx.terminate()` to permanently discard the message.
 
 ```typescript title="src/orders/orders.controller.ts"
 import { Controller, Logger } from '@nestjs/common';
 import { Ctx, EventPattern, Payload } from '@nestjs/microservices';
 import { RpcContext } from '@horizon-republic/nestjs-jetstream';
-import type { JsMsg } from '@nats-io/jetstream';
 
 @Controller()
 export class OrdersController {
@@ -300,22 +306,20 @@ export class OrdersController {
     @Payload() data: OrderPayload,
     @Ctx() ctx: RpcContext,
   ): Promise<void> {
-    const msg = ctx.getMessage<JsMsg>();
-
     try {
       await this.ordersService.process(data);
-      // Success — msg.ack() is called automatically by the transport
+      // Success — ack is called automatically by the transport
     } catch (error) {
       if (this.isNonRecoverable(error)) {
         // Non-recoverable: invalid payload, business rule violation, etc.
-        // msg.term() prevents redelivery — the message is permanently discarded.
-        msg.term('Non-recoverable: ' + error.message);
-        this.logger.error(`Permanently discarding ${msg.subject}`, error);
+        // ctx.terminate() prevents redelivery — the message is permanently discarded.
+        ctx.terminate('Non-recoverable: ' + error.message);
+        this.logger.error(`Permanently discarding order`, error);
         return;
       }
 
       // Recoverable errors (DB timeout, external API down, etc.):
-      // Re-throw — the transport calls msg.nak() automatically,
+      // Re-throw — the transport calls nak automatically,
       // triggering redelivery after ack_wait.
       // After max_deliver attempts, onDeadLetter is invoked.
       throw error;
@@ -335,9 +339,9 @@ Every message ends in one of three states:
 
 | Outcome | When | Effect |
 |---------|------|--------|
-| **`msg.ack()`** | Handler succeeds | Message removed from stream. Called automatically by the transport on success. |
-| **`msg.nak()`** | Recoverable error | Message redelivered after `ack_wait`. Called automatically when the handler throws. |
-| **`msg.term(reason)`** | Non-recoverable error | Message permanently discarded. Must be called manually in the handler. |
+| **`ctx.ack()`** | Handler succeeds | Message removed from stream. Called automatically by the transport on success. |
+| **`ctx.retry()`** | Recoverable error | Message redelivered (optionally with `{ delayMs }` delay). Called automatically when the handler throws. |
+| **`ctx.terminate(reason)`** | Non-recoverable error | Message permanently discarded. Must be called manually in the handler. |
 
 ### Relationship with dead letter handling
 

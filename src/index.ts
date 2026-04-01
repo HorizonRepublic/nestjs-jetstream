@@ -36,6 +36,7 @@ export { JetstreamHealthIndicator } from './health';
 export {
   streamName,
   buildSubject,
+  buildBroadcastSubject,
   consumerName,
   internalName,
   getClientToken,

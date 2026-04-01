@@ -1,6 +1,13 @@
 ---
 sidebar_position: 2
 title: Quick Start
+description: Complete working example in four steps — register, connect, handle, and send.
+schema:
+  type: Article
+  headline: "Quick Start"
+  description: "Complete working example in four steps: register the module, connect the transport, define handlers, and send messages."
+  datePublished: "2026-03-21"
+  dateModified: "2026-03-21"
 ---
 
 # Quick Start
@@ -129,6 +136,7 @@ export class OrdersController {
 |---|---|---|---|
 | `@EventPattern('...')` | _(none)_ | One instance (workqueue) | Ignored |
 | `@EventPattern('...', { broadcast: true })` | _(none)_ | All instances (fan-out) | Ignored |
+| `@EventPattern('...', { ordered: true })` | _(none)_ | Strict sequential delivery | Ignored |
 | `@MessagePattern('...')` | _(none)_ | One instance (load-balanced) | Sent as response |
 
 ## 4. Send messages

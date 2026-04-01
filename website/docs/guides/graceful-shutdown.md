@@ -1,6 +1,12 @@
 ---
-sidebar_position: 7
+sidebar_position: 5
 title: "Graceful Shutdown"
+schema:
+  type: Article
+  headline: "Graceful Shutdown"
+  description: "Automatic shutdown handling with in-flight message completion and NATS connection drain."
+  datePublished: "2026-03-21"
+  dateModified: "2026-04-02"
 ---
 
 # Graceful Shutdown
@@ -12,8 +18,8 @@ The transport handles shutdown automatically through the NestJS application life
 The `JetstreamModule` implements NestJS's `OnApplicationShutdown` interface. When the application receives a termination signal (SIGTERM, SIGINT), NestJS calls the module's `onApplicationShutdown()` method, which triggers the following sequence:
 
 1. **Emit `ShutdownStart` hook** — notifies lifecycle hooks that shutdown has begun.
-2. **Stop subscriptions** — closes all RxJS subscriptions and stops JetStream consumers. No new messages are accepted.
-3. **Drain NATS connection** — calls `nc.drain()`, which waits for all in-flight message handlers to finish processing and acknowledge their messages, then closes the connection.
+2. **Stop consumers** — calls `strategy.close()`, which closes all RxJS subscriptions and stops JetStream consumer iterators. No new messages are accepted. In-flight handlers in the RxJS pipeline continue to run to completion.
+3. **Drain NATS connection** — calls `nc.drain()`, which flushes any pending publishes and waits for active subscriptions to finish, then closes the connection.
 4. **Safety timeout** — if drain doesn't complete within `shutdownTimeout` milliseconds, the transport proceeds with shutdown anyway. This prevents a stuck handler from blocking the process indefinitely.
 5. **Emit `ShutdownComplete` hook** — notifies lifecycle hooks that shutdown is finished.
 
@@ -21,7 +27,7 @@ The `JetstreamModule` implements NestJS's `OnApplicationShutdown` interface. Whe
 flowchart LR
     A[SIGTERM] --> B[onApplicationShutdown]
     B --> C[ShutdownStart hook]
-    C --> D[Stop subscriptions]
+    C --> D[Stop consumers]
     D --> E[Drain NATS connection]
     E --> F{Drain within timeout?}
     F -- Yes --> G[ShutdownComplete hook]

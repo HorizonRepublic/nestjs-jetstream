@@ -1,6 +1,12 @@
 ---
 sidebar_position: 2
 title: Default Configs
+schema:
+  type: Article
+  headline: Default Configs
+  description: "Default stream and consumer configurations for every StreamKind."
+  datePublished: "2026-03-21"
+  dateModified: "2026-04-02"
 ---
 
 # Default Configs
@@ -24,6 +30,8 @@ All streams share a common base configuration:
 All streams default to [Snappy S2 compression](https://github.com/nats-io/nats-server). This reduces disk I/O and storage with negligible CPU overhead (~1-3%). Requires NATS Server >= 2.10 (see [runtime requirements](/docs/getting-started/installation#runtime-requirements)). Override per stream kind:
 
 ```typescript
+import { StoreCompression } from '@nats-io/jetstream';
+
 events: {
   stream: { compression: StoreCompression.None }, // disable for event streams
 }
@@ -46,8 +54,8 @@ Workqueue retention — each message is removed after being acknowledged by a co
 | `max_msgs_per_subject` | `5,000,000` | |
 | `max_msgs` | `50,000,000` | |
 | `max_bytes` | `5 GB` | 5,368,709,120 bytes |
-| `max_age` | `7 days` | 604,800,000 ms |
-| `duplicate_window` | `2 minutes` | 120,000 ms |
+| `max_age` | `7 days` | `toNanos(7, 'days')` |
+| `duplicate_window` | `2 minutes` | `toNanos(2, 'minutes')` |
 
 :::tip Scheduling
 To enable [message scheduling](/docs/guides/scheduling), add `allow_msg_schedules: true` to the event stream config. This requires NATS Server >= 2.12.
@@ -68,8 +76,8 @@ Short-lived RPC commands (JetStream RPC mode only).
 | `max_msgs_per_subject` | `100,000` | |
 | `max_msgs` | `1,000,000` | |
 | `max_bytes` | `100 MB` | 104,857,600 bytes |
-| `max_age` | `3 minutes` | 180,000 ms |
-| `duplicate_window` | `30 seconds` | 30,000 ms |
+| `max_age` | `3 minutes` | `toNanos(3, 'minutes')` |
+| `duplicate_window` | `30 seconds` | `toNanos(30, 'seconds')` |
 
 ### Broadcast Stream
 
@@ -86,8 +94,8 @@ Limits retention — messages persist until the configured limits are reached. S
 | `max_msgs_per_subject` | `1,000,000` | |
 | `max_msgs` | `10,000,000` | |
 | `max_bytes` | `2 GB` | 2,147,483,648 bytes |
-| `max_age` | `1 day` | 86,400,000 ms |
-| `duplicate_window` | `2 minutes` | 120,000 ms |
+| `max_age` | `1 day` | `toNanos(1, 'days')` |
+| `duplicate_window` | `2 minutes` | `toNanos(2, 'minutes')` |
 
 ### Ordered Stream
 
@@ -104,8 +112,8 @@ Limits retention for strict sequential delivery. Ordered consumers are ephemeral
 | `max_msgs_per_subject` | `5,000,000` | |
 | `max_msgs` | `50,000,000` | |
 | `max_bytes` | `5 GB` | 5,368,709,120 bytes |
-| `max_age` | `1 day` | 86,400,000 ms |
-| `duplicate_window` | `2 minutes` | 120,000 ms |
+| `max_age` | `1 day` | `toNanos(1, 'days')` |
+| `duplicate_window` | `2 minutes` | `toNanos(2, 'minutes')` |
 
 ## Consumer Defaults
 
@@ -113,7 +121,7 @@ Limits retention for strict sequential delivery. Ordered consumers are ephemeral
 
 | Property | Value | Notes |
 |----------|-------|-------|
-| `ack_wait` | `10 seconds` | 10,000 ms (10s) |
+| `ack_wait` | `10 seconds` | `toNanos(10, 'seconds')` |
 | `max_deliver` | `3` | Message moves to dead-letter after 3 failed attempts |
 | `max_ack_pending` | `100` | |
 | `ack_policy` | `Explicit` | |
@@ -124,7 +132,7 @@ Limits retention for strict sequential delivery. Ordered consumers are ephemeral
 
 | Property | Value | Notes |
 |----------|-------|-------|
-| `ack_wait` | `5 minutes` | 300,000 ms (5min) |
+| `ack_wait` | `5 minutes` | `toNanos(5, 'minutes')` |
 | `max_deliver` | `1` | No retries — RPC failures propagate immediately |
 | `max_ack_pending` | `100` | |
 | `ack_policy` | `Explicit` | |
@@ -135,7 +143,7 @@ Limits retention for strict sequential delivery. Ordered consumers are ephemeral
 
 | Property | Value | Notes |
 |----------|-------|-------|
-| `ack_wait` | `10 seconds` | 10,000 ms (10s) |
+| `ack_wait` | `10 seconds` | `toNanos(10, 'seconds')` |
 | `max_deliver` | `3` | |
 | `max_ack_pending` | `100` | |
 | `ack_policy` | `Explicit` | |
@@ -143,7 +151,7 @@ Limits retention for strict sequential delivery. Ordered consumers are ephemeral
 | `replay_policy` | `Instant` | |
 
 :::note
-Ordered consumers do not have a durable consumer configuration. They are ephemeral and managed entirely by the nats.js client library.
+Ordered consumers do not have a durable consumer configuration. They are ephemeral and managed entirely by the `@nats-io/jetstream` client library.
 :::
 
 ## Connection Defaults
@@ -191,6 +199,7 @@ All stream and consumer defaults can be overridden in `forRoot()` options. User-
 
 ```typescript
 import { RetentionPolicy, StorageType } from '@nats-io/jetstream';
+import { JetstreamModule, toNanos } from '@horizon-republic/nestjs-jetstream';
 
 JetstreamModule.forRoot({
   name: 'orders',

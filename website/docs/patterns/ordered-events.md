@@ -1,11 +1,17 @@
 ---
-sidebar_position: 4
+sidebar_position: 2
 title: Ordered Events
+schema:
+  type: Article
+  headline: "Ordered Events"
+  description: "Strict sequential event delivery with ephemeral consumers and replay policies."
+  datePublished: "2026-03-21"
+  dateModified: "2026-04-02"
 ---
 
 import Since from '@site/src/components/Since';
 
-<Since version="2.3.0" />
+<Since version="2.4.0" />
 
 # Ordered Events
 
@@ -29,12 +35,12 @@ Under the hood, ordered events use a fundamentally different NATS JetStream prim
 
 ### Ephemeral, not durable
 
-Workqueue and broadcast events use **durable consumers** — server-side state that tracks which messages have been acknowledged. Ordered events use **ordered consumers**, which are ephemeral. There is no server-side consumer state. The nats.js client library creates a new consumer on each connection and manages its lifecycle internally.
+Workqueue and broadcast events use **durable consumers** — server-side state that tracks which messages have been acknowledged. Ordered events use **ordered consumers**, which are ephemeral. There is no server-side consumer state. The `@nats-io/jetstream` client creates a new consumer on each connection and manages its lifecycle internally.
 
 This means:
 - No consumer name appears in `nats consumer ls`
 - No ack tracking, no pending message state
-- If the connection drops, nats.js recreates the consumer automatically at the correct sequence position
+- If the connection drops, the client recreates the consumer automatically at the correct sequence position
 
 ### Limits retention, not Workqueue
 
@@ -49,9 +55,9 @@ The ordered stream uses **Limits retention** (`RetentionPolicy.Limits`), not Wor
 
 With Limits retention, messages stay in the stream until they expire (default: 1 day, configurable via `max_age`). Every consumer — and every service instance — can read the full history independently.
 
-### Auto-acknowledgment by nats.js
+### Auto-acknowledgment
 
-The nats.js library automatically acknowledges messages from ordered consumers. Your handler code never calls `msg.ack()` or `msg.nak()`. This is not optional — it's baked into the ordered consumer protocol.
+The `@nats-io/jetstream` client automatically acknowledges messages from ordered consumers. Your handler code never calls `msg.ack()` or `msg.nak()`. This is not optional — it's baked into the ordered consumer protocol.
 
 ### Self-healing
 
@@ -65,7 +71,7 @@ Ordered consumers provide **at-most-once** delivery. This is the fundamental tra
 
 | Scenario | What happens | Message retried? |
 |---|---|---|
-| Handler succeeds | Auto-ack by nats.js | No |
+| Handler succeeds | Auto-ack by the client | No |
 | Handler throws an error | Error logged, consumer moves to next message | **No** |
 | Decode error (malformed payload) | Error logged, message skipped | **No** |
 | No handler registered for subject | Error logged, message skipped | **No** |
@@ -97,6 +103,7 @@ Use the `ordered:` prefix when emitting events through a `JetstreamClient`:
 ```typescript title="src/orders/orders.service.ts"
 import { Inject, Injectable } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
+import { lastValueFrom } from 'rxjs';
 
 @Injectable()
 export class OrdersService {
@@ -106,11 +113,13 @@ export class OrdersService {
 
   async shipOrder(orderId: number) {
     // The 'ordered:' prefix routes to the ordered stream
-    this.client.emit('ordered:order.status', {
-      orderId,
-      status: 'shipped',
-      timestamp: new Date().toISOString(),
-    });
+    await lastValueFrom(
+      this.client.emit('ordered:order.status', {
+        orderId,
+        status: 'shipped',
+        timestamp: new Date().toISOString(),
+      }),
+    );
   }
 }
 ```
@@ -155,7 +164,7 @@ export class ProjectionsController {
 
 ```typescript title="src/app.module.ts"
 import { Module } from '@nestjs/common';
-import { JetstreamModule } from '@horizon-republic/nestjs-jetstream';
+import { JetstreamModule, toNanos } from '@horizon-republic/nestjs-jetstream';
 
 @Module({
   imports: [
@@ -177,13 +186,17 @@ export class AppModule {}
 ```
 
 ```typescript title="src/writer/writer.service.ts"
+import { lastValueFrom } from 'rxjs';
+
 @Injectable()
 export class WriterService {
   constructor(@Inject('projections') private readonly client: ClientProxy) {}
 
   async recordEvent(event: DomainEvent) {
     // Publish to the ordered stream
-    this.client.emit(`ordered:${event.type}`, event.payload);
+    await lastValueFrom(
+      this.client.emit(`ordered:${event.type}`, event.payload),
+    );
   }
 }
 ```
@@ -345,12 +358,14 @@ JetstreamModule.forRootAsync({
 **Tracking offsets in your handler:**
 
 ```typescript
+import type { JsMsg } from '@nats-io/jetstream';
+
 @EventPattern('order.status', { ordered: true })
 async handleOrderStatus(
   @Payload() data: OrderStatusDto,
   @Ctx() ctx: RpcContext,
 ) {
-  const msg = ctx.getMessage();
+  const msg = ctx.getMessage() as JsMsg;
 
   // Process the event
   await this.projectionService.apply(data);
@@ -525,7 +540,7 @@ async handleOrderStatus(@Payload() data: OrderStatusDto) {
 | **Handler parallelism** | `mergeMap` — concurrent | `concatMap` — one at a time |
 | **Retry on failure** | Yes (`nak` triggers redeliver) | No (error logged, continues) |
 | **Dead letter queue** | Yes (after `max_deliver` attempts) | No |
-| **Acknowledgment** | Explicit (`msg.ack()`) | Automatic by nats.js |
+| **Acknowledgment** | Explicit (`msg.ack()`) | Automatic by the client |
 | **Stream retention** | Workqueue (delete on ack) | Limits (delete by age/size) |
 | **Consumer type** | Durable (server-side state) | Ephemeral (client-side) |
 | **Scaling model** | Load-balanced across instances | All instances get all messages |
@@ -549,11 +564,11 @@ See [Events (Workqueue)](/docs/patterns/events) for workqueue event documentatio
 
 ## Known caveats
 
-### nats.js DeliverPolicy.All bug
+### DeliverPolicy.All bug
 
-In nats.js v2.29.x, explicitly passing `DeliverPolicy.All` to an ordered consumer causes `consume()` to hang indefinitely. The root cause: when `deliver_policy` is set to `All`, nats.js internally leaves a residual `opt_start_seq` field in the consumer configuration, which conflicts with the ordered consumer protocol.
+In the NATS JavaScript SDK (originally observed in `nats` v2.29.x, workaround retained for `@nats-io/jetstream` v3.x), explicitly passing `DeliverPolicy.All` to an ordered consumer causes `consume()` to hang indefinitely. The root cause: when `deliver_policy` is set to `All`, the SDK internally leaves a residual `opt_start_seq` field in the consumer configuration, which conflicts with the ordered consumer protocol.
 
-**The transport works around this automatically.** When the configured deliver policy is `All` (or unset), the transport omits the `deliver_policy` field entirely. The nats.js default behavior is identical to `All`, so the result is the same — without the bug.
+**The transport works around this automatically.** When the configured deliver policy is `All` (or unset), the transport omits the `deliver_policy` field entirely. The SDK default behavior is identical to `All`, so the result is the same — without the bug.
 
 ```typescript
 // This works correctly (transport omits deliver_policy internally):
@@ -565,7 +580,7 @@ ordered: {
 ordered: {}
 ```
 
-All other deliver policies (`New`, `Last`, `LastPerSubject`, `StartSequence`, `StartTime`) are passed through to nats.js directly and work without issues.
+All other deliver policies (`New`, `Last`, `LastPerSubject`, `StartSequence`, `StartTime`) are passed through to the SDK directly and work without issues.
 
 :::note
 This workaround is invisible to your application code. It's documented here for transparency and to explain why you might see `deliver_policy` absent from the consumer configuration when inspecting NATS internals via `nats consumer info`.
@@ -573,7 +588,7 @@ This workaround is invisible to your application code. It's documented here for 
 
 ### No partial replay
 
-Ordered consumers do not support "resume from where I left off" natively. If the consumer disconnects and reconnects, nats.js recreates it — but the starting position depends on the configured deliver policy, not on the last message processed. For resumable processing, use `DeliverPolicy.StartSequence` with external offset tracking (see the [StartSequence section](#startsequence) above).
+Ordered consumers do not support "resume from where I left off" natively. If the consumer disconnects and reconnects, the client recreates it — but the starting position depends on the configured deliver policy, not on the last message processed. For resumable processing, use `DeliverPolicy.StartSequence` with external offset tracking (see the [StartSequence section](#startsequence) above).
 
 ### Stream name is derived automatically
 

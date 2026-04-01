@@ -1,6 +1,12 @@
 ---
-sidebar_position: 2
+sidebar_position: 3
 title: "Scheduling (Delayed Jobs)"
+schema:
+  type: Article
+  headline: "Scheduling (Delayed Jobs)"
+  description: "One-shot delayed message delivery powered by NATS 2.12 message scheduling."
+  datePublished: "2026-04-01"
+  dateModified: "2026-04-01"
 ---
 
 import Since from '@site/src/components/Since';
@@ -40,6 +46,7 @@ Use `scheduleAt()` on `JetstreamRecordBuilder` to delay delivery:
 
 ```typescript
 import { JetstreamRecordBuilder } from '@horizon-republic/nestjs-jetstream';
+import { lastValueFrom } from 'rxjs';
 
 // Deliver in 1 hour
 const record = new JetstreamRecordBuilder({ orderId: 42, type: 'reminder' })
@@ -61,9 +68,9 @@ handleReminder(@Payload() data: OrderReminder) {
 ## How it works
 
 1. `scheduleAt(date)` stores the delivery time in the record
-2. On publish, the library routes to a special `_sch` subject within the event stream
-3. NATS holds the message until the scheduled time
-4. At delivery time, the NATS server automatically publishes a new message to the original event subject
+2. On publish, the library routes to a `_sch` subject within the event stream (a library convention to separate scheduled messages from regular events)
+3. The publish includes `Nats-Schedule` and `Nats-Schedule-Target` headers (ADR-51) — the server uses these headers, not the subject, to manage scheduling
+4. NATS holds the message until the scheduled time, then publishes a **new message** to the target event subject
 5. The event consumer processes it normally
 
 ```mermaid
@@ -76,9 +83,10 @@ flowchart LR
     sch -- "at scheduled time" --> ev
     ev --> handler["@EventPattern handler"]
 
-    style sch fill:#f9f0ff,stroke:#7c3aed
-    style ev fill:#ecfdf5,stroke:#059669
-    style handler fill:#eff6ff,stroke:#2563eb
+    style stream fill:#0B1120,stroke:#1E293B,color:#E2E8F0
+    style sch fill:#1E1338,stroke:#8B5CF6,color:#E2E8F0
+    style ev fill:#0D2818,stroke:#10B981,color:#E2E8F0
+    style handler fill:#111827,stroke:#3B82F6,color:#E2E8F0
 ```
 
 ## Important: `max_age` consideration
@@ -104,7 +112,7 @@ Setting `max_age: 0` disables automatic cleanup for **all** messages in the even
 
 | Limitation | Details |
 |-----------|---------|
-| **One-shot only** | No cron or interval scheduling (NATS 2.12 limitation) |
+| **One-shot only** | No cron or interval scheduling. NATS supports these (ADR-51), but the library currently only exposes `scheduleAt()` for one-shot delivery. |
 | **Events only** | `scheduleAt()` is ignored for RPC (`client.send()`); a warning is logged |
 | **Future dates only** | `scheduleAt()` throws if the date is not in the future |
 | **NATS >= 2.12** | `allow_msg_schedules` is not supported by older server versions |

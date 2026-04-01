@@ -1,6 +1,12 @@
 ---
-sidebar_position: 6
+sidebar_position: 4
 title: "Lifecycle Hooks"
+schema:
+  type: Article
+  headline: "Lifecycle Hooks"
+  description: "Transport lifecycle events for connection changes, errors, message routing, and dead letters."
+  datePublished: "2026-03-21"
+  dateModified: "2026-04-02"
 ---
 
 # Lifecycle Hooks
@@ -18,7 +24,7 @@ All 9 events are defined in the `TransportEvent` enum:
 | `Reconnect` | `(server: string) => void` | NATS connection re-established after a disconnect |
 | `Error` | `(error: Error, context?: string) => void` | Any transport-level error |
 | `RpcTimeout` | `(subject: string, correlationId: string) => void` | An RPC handler exceeds its timeout |
-| `MessageRouted` | `(subject: string, kind: 'rpc' \| 'event') => void` | A message is successfully routed to its handler |
+| `MessageRouted` | `(subject: string, kind: MessageKind) => void` | A message is successfully routed to its handler. `MessageKind` is an enum (`Event`, `Rpc`) — import it from `@horizon-republic/nestjs-jetstream`. |
 | `ShutdownStart` | `() => void` | Graceful shutdown sequence begins |
 | `ShutdownComplete` | `() => void` | Graceful shutdown sequence finishes |
 | `DeadLetter` | `(info: DeadLetterInfo) => void` | A message exhausts all delivery attempts |
@@ -92,7 +98,7 @@ Track message throughput, RPC timeouts, and connection state:
 
 ```typescript
 import { Counter, Gauge } from 'prom-client';
-import { JetstreamModule, TransportEvent } from '@horizon-republic/nestjs-jetstream';
+import { JetstreamModule, MessageKind, TransportEvent } from '@horizon-republic/nestjs-jetstream';
 
 const messagesRouted = new Counter({
   name: 'jetstream_messages_routed_total',

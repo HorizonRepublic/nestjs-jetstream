@@ -1,6 +1,12 @@
 ---
 sidebar_position: 1
 title: RPC (Request/Reply)
+schema:
+  type: Article
+  headline: "RPC (Request/Reply)"
+  description: "Synchronous request-reply via Core NATS or JetStream with timeout and error handling."
+  datePublished: "2026-03-21"
+  dateModified: "2026-03-26"
 ---
 
 # RPC (Request/Reply)

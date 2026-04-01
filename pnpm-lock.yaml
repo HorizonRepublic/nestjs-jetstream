@@ -96,6 +96,9 @@ importers:
       '@cmfcmf/docusaurus-search-local':
         specifier: ^2.0.1
         version: 2.0.1(@docusaurus/core@3.9.2(@mdx-js/react@3.1.1(@types/react@19.2.14)(react@19.2.4))(esbuild@0.27.4)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.2))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(search-insights@2.17.3)
+      '@coffeecup_tech/docusaurus-plugin-structured-data':
+        specifier: ^1.0.2
+        version: 1.0.2
       '@docusaurus/core':
         specifier: ^3.9.2
         version: 3.9.2(@mdx-js/react@3.1.1(@types/react@19.2.14)(react@19.2.4))(esbuild@0.27.4)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.2)
@@ -111,6 +114,9 @@ importers:
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
+      docusaurus-plugin-llms:
+        specifier: ^0.3.0
+        version: 0.3.0(@docusaurus/core@3.9.2(@mdx-js/react@3.1.1(@types/react@19.2.14)(react@19.2.4))(esbuild@0.27.4)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.2))
       prism-react-renderer:
         specifier: ^2.4.1
         version: 2.4.1(react@19.2.4)
@@ -903,6 +909,10 @@ packages:
     peerDependenciesMeta:
       nodejieba:
         optional: true
+
+  '@coffeecup_tech/docusaurus-plugin-structured-data@1.0.2':
+    resolution: {integrity: sha512-zT+aEfDxDdzvT8e45lsoRBo+mB9uDjy8uGxibSgq/JkiP8N0naFiNMoOLWQGASGveIDd54zHXgOhF0pv5xv1CA==}
+    engines: {node: '>=20.0'}
 
   '@colors/colors@1.5.0':
     resolution: {integrity: sha512-ooWCrlZP11i8GImSjTHYHLkvFDP48nS4+204nGb1RiX/WXYHmJA2III9/e2DWVabCESdW7hBAEzHRqUn9OUVvQ==}
@@ -3830,6 +3840,12 @@ packages:
   dockerode@4.0.10:
     resolution: {integrity: sha512-8L/P9JynLBiG7/coiA4FlQXegHltRqS0a+KqI44P1zgQh8QLHTg7FKOwhkBgSJwZTeHsq30WRoVFLuwkfK0YFg==}
     engines: {node: '>= 8.0'}
+
+  docusaurus-plugin-llms@0.3.0:
+    resolution: {integrity: sha512-JuADAJA2fjTv1U4XQUoIu1LyjISDzxFhRK5HbCZiHum4HlmdPwyx8NBXsi+LfdUyjK9acbZgazGsHPhdwEZs0g==}
+    engines: {node: '>=18.0'}
+    peerDependencies:
+      '@docusaurus/core': ^3.0.0
 
   docusaurus-plugin-typedoc@1.4.2:
     resolution: {integrity: sha512-1qerRejLSYxEWdyVPLDMMeKFPLA/37yZAsdwJy9ThHFQR78+v3b5spSbk67VHGLr2mAn4FVHu0aGJ6p7iWotSg==}
@@ -8446,6 +8462,10 @@ snapshots:
     transitivePeerDependencies:
       - search-insights
 
+  '@coffeecup_tech/docusaurus-plugin-structured-data@1.0.2':
+    dependencies:
+      gray-matter: 4.0.3
+
   '@colors/colors@1.5.0':
     optional: true
 
@@ -12169,6 +12189,13 @@ snapshots:
       uuid: 10.0.0
     transitivePeerDependencies:
       - supports-color
+
+  docusaurus-plugin-llms@0.3.0(@docusaurus/core@3.9.2(@mdx-js/react@3.1.1(@types/react@19.2.14)(react@19.2.4))(esbuild@0.27.4)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.2)):
+    dependencies:
+      '@docusaurus/core': 3.9.2(@mdx-js/react@3.1.1(@types/react@19.2.14)(react@19.2.4))(esbuild@0.27.4)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.2)
+      gray-matter: 4.0.3
+      minimatch: 9.0.9
+      yaml: 2.8.3
 
   docusaurus-plugin-typedoc@1.4.2(typedoc-plugin-markdown@4.11.0(typedoc@0.28.18(typescript@6.0.2))):
     dependencies:
