@@ -91,13 +91,13 @@ export const cleanupStreams = async (nc: NatsConnection, serviceName: string): P
  * Wait for an async condition to become true, polling at intervals.
  */
 export const waitForCondition = async (
-  condition: () => boolean | Promise<boolean>,
+  condition: () => boolean,
   timeoutMs: number,
   intervalMs = 50,
 ): Promise<void> => {
   const start = Date.now();
 
-  while (!(await condition())) {
+  while (!condition()) {
     if (Date.now() - start > timeoutMs) {
       throw new Error(`Condition not met within ${timeoutMs}ms`);
     }
