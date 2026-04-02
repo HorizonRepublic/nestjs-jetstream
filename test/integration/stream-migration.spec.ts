@@ -9,11 +9,25 @@ import {
   type JetStreamManager,
 } from '@nats-io/jetstream';
 import type { StartedTestContainer } from 'testcontainers';
+import { Controller } from '@nestjs/common';
+import { EventPattern, Payload } from '@nestjs/microservices';
+
+import { buildSubject, streamName, StreamKind } from '../../src';
 
 import { startNatsContainer } from './nats-container';
-import { waitForCondition } from './helpers';
+import { cleanupStreams, createTestApp, uniqueServiceName, waitForCondition } from './helpers';
 
 /* eslint-disable @typescript-eslint/naming-convention -- NATS API uses snake_case */
+
+@Controller()
+class MigrationTestController {
+  public readonly received: unknown[] = [];
+
+  @EventPattern('migration.test')
+  handle(@Payload() data: unknown): void {
+    this.received.push(data);
+  }
+}
 
 describe('Stream sourcing behavior (NATS verification)', () => {
   let nc: NatsConnection;
@@ -162,5 +176,184 @@ describe('Stream sourcing behavior (NATS verification)', () => {
 
     // Then
     expect((await jsm.streams.info(nameB)).state.messages).toBe(2);
+  });
+
+  describe('Stream migration via transport', () => {
+    afterEach(vi.resetAllMocks);
+
+    describe('empty stream migration (storage change)', () => {
+      it('should recreate stream with new storage type', async () => {
+        const serviceName = uniqueServiceName();
+
+        // Given: app creates stream with File storage
+        const { app: app1 } = await createTestApp(
+          { name: serviceName, port, events: { stream: { storage: StorageType.File } } },
+          [MigrationTestController],
+          [serviceName],
+        );
+
+        await app1.close();
+
+        // When: restart with Memory storage + allowDestructiveMigration
+        const { app: app2 } = await createTestApp(
+          {
+            name: serviceName,
+            port,
+            allowDestructiveMigration: true,
+            events: { stream: { storage: StorageType.Memory } },
+          },
+          [MigrationTestController],
+          [serviceName],
+        );
+
+        // Then: stream has Memory storage
+        const evStreamName = streamName(serviceName, StreamKind.Event);
+        const info = await jsm.streams.info(evStreamName);
+
+        expect(info.config.storage).toBe(StorageType.Memory);
+
+        await app2.close();
+        await cleanupStreams(nc, serviceName);
+      });
+    });
+
+    describe('stream with messages (storage change)', () => {
+      it('should preserve messages through migration', async () => {
+        const serviceName = uniqueServiceName();
+
+        // Given: app creates Event stream with File storage, then close it before publishing
+        const { app: app1 } = await createTestApp(
+          { name: serviceName, port, events: { stream: { storage: StorageType.File } } },
+          [MigrationTestController],
+          [serviceName],
+        );
+
+        // Close the consumer so messages accumulate in the stream
+        await app1.close();
+
+        // Publish 10 messages directly into the stream (no consumer running)
+        const evStreamName = streamName(serviceName, StreamKind.Event);
+        const subject = buildSubject(serviceName, StreamKind.Event, 'migration.test');
+        const encoder = new TextEncoder();
+
+        for (let i = 0; i < 10; i++) {
+          await js.publish(subject, encoder.encode(JSON.stringify({ index: i })));
+        }
+
+        // Verify messages exist in stream
+        const infoBefore = await jsm.streams.info(evStreamName);
+
+        expect(infoBefore.state.messages).toBeGreaterThanOrEqual(10);
+
+        // When: restart with Memory storage + allowDestructiveMigration
+        const { app: app2, module: module2 } = await createTestApp(
+          {
+            name: serviceName,
+            port,
+            allowDestructiveMigration: true,
+            events: { stream: { storage: StorageType.Memory } },
+          },
+          [MigrationTestController],
+          [serviceName],
+        );
+
+        // Then: messages preserved + new storage
+        const infoAfter = await jsm.streams.info(evStreamName);
+
+        expect(infoAfter.config.storage).toBe(StorageType.Memory);
+        expect(infoAfter.state.messages).toBeGreaterThanOrEqual(10);
+
+        // And: controller receives migrated messages
+        const controller = module2.get(MigrationTestController);
+
+        await waitForCondition(() => controller.received.length >= 10, 15_000);
+
+        expect(controller.received.length).toBeGreaterThanOrEqual(10);
+
+        await app2.close();
+        await cleanupStreams(nc, serviceName);
+      });
+    });
+
+    describe('flag OFF with immutable change', () => {
+      it('should warn and apply only mutable changes', async () => {
+        const serviceName = uniqueServiceName();
+
+        // Given: app with File storage
+        const { app: app1 } = await createTestApp(
+          { name: serviceName, port },
+          [MigrationTestController],
+          [serviceName],
+        );
+
+        await app1.close();
+
+        // When: restart with Memory storage but WITHOUT allowDestructiveMigration
+        const { app: app2 } = await createTestApp(
+          {
+            name: serviceName,
+            port,
+            // allowDestructiveMigration defaults to false
+            events: { stream: { storage: StorageType.Memory } },
+          },
+          [MigrationTestController],
+          [serviceName],
+        );
+
+        // Then: stream still has File storage (immutable change skipped)
+        const evStreamName = streamName(serviceName, StreamKind.Event);
+        const info = await jsm.streams.info(evStreamName);
+
+        expect(info.config.storage).toBe(StorageType.File);
+
+        await app2.close();
+        await cleanupStreams(nc, serviceName);
+      });
+    });
+
+    describe('orphaned backup cleanup', () => {
+      it('should clean up orphaned backup stream before migration', async () => {
+        const serviceName = uniqueServiceName();
+
+        // Given: app creates stream
+        const { app: app1 } = await createTestApp(
+          { name: serviceName, port },
+          [MigrationTestController],
+          [serviceName],
+        );
+
+        await app1.close();
+
+        // Simulate orphaned backup from previous failed migration
+        const evStreamName = streamName(serviceName, StreamKind.Event);
+        const backupName = `${evStreamName}__migration_backup`;
+
+        await jsm.streams.add({
+          name: backupName,
+          subjects: [],
+          retention: RetentionPolicy.Workqueue,
+          storage: StorageType.File,
+          num_replicas: 1,
+        });
+
+        // When: restart with migration
+        const { app: app2 } = await createTestApp(
+          {
+            name: serviceName,
+            port,
+            allowDestructiveMigration: true,
+            events: { stream: { storage: StorageType.Memory } },
+          },
+          [MigrationTestController],
+          [serviceName],
+        );
+
+        // Then: orphaned backup is gone
+        await expect(jsm.streams.info(backupName)).rejects.toThrow();
+
+        await app2.close();
+        await cleanupStreams(nc, serviceName);
+      });
+    });
   });
 });

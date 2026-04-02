@@ -62,7 +62,14 @@ export class StreamMigration {
       await jsm.streams.add(newConfig as StreamConfig);
 
       if (messageCount > 0) {
-        // Phase 4: Restore from backup — pass FULL config with sources added
+        // Phase 4: Restore from backup.
+        // First remove the backup's source pointing to streamName — that reference is stale
+        // (original was deleted in Phase 2) and would cause a cycle when we make the new
+        // stream source from the backup.
+        const backupInfo = await jsm.streams.info(backupName);
+
+        await jsm.streams.update(backupName, { ...backupInfo.config, sources: [] });
+
         this.logger.log(`  Phase 4/4: Restoring ${messageCount} messages from backup`);
         await jsm.streams.update(streamName, {
           ...newConfig,
