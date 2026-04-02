@@ -29,6 +29,8 @@ export class JetstreamRecord<TData = unknown> {
     public readonly messageId?: string,
     /** Schedule options for delayed delivery. */
     public readonly schedule?: ScheduleRecordOptions,
+    /** Per-message TTL as Go duration string (e.g. "30s", "5m"). */
+    public readonly ttl?: string,
   ) {}
 }
 
@@ -44,6 +46,7 @@ export class JetstreamRecordBuilder<TData = unknown> {
   private timeout: number | undefined;
   private messageId: string | undefined;
   private scheduleOptions: ScheduleRecordOptions | undefined;
+  private ttlDuration: string | undefined;
 
   public constructor(data?: TData) {
     this.data = data;
@@ -149,6 +152,36 @@ export class JetstreamRecordBuilder<TData = unknown> {
   }
 
   /**
+   * Set per-message TTL (time-to-live).
+   *
+   * The message expires individually after the specified duration,
+   * independent of the stream's `max_age`. Requires NATS >= 2.11 and
+   * `allow_msg_ttl: true` on the stream.
+   *
+   * Only meaningful for events (`client.emit()`). If used with RPC
+   * (`client.send()`), a warning is logged and the TTL is ignored.
+   *
+   * @param nanos - TTL in nanoseconds. Use {@link toNanos} for human-readable values.
+   *
+   * @example
+   * ```typescript
+   * import { toNanos } from '@horizon-republic/nestjs-jetstream';
+   *
+   * new JetstreamRecordBuilder(payload).ttl(toNanos(30, 'minutes')).build();
+   * new JetstreamRecordBuilder(payload).ttl(toNanos(24, 'hours')).build();
+   * ```
+   */
+  public ttl(nanos: number): this {
+    if (nanos <= 0) {
+      throw new Error('TTL must be a positive value');
+    }
+
+    this.ttlDuration = nanosToGoDuration(nanos);
+
+    return this;
+  }
+
+  /**
    * Build the immutable {@link JetstreamRecord}.
    *
    * @returns A frozen record ready to pass to `client.send()` or `client.emit()`.
@@ -164,6 +197,7 @@ export class JetstreamRecordBuilder<TData = unknown> {
       this.timeout,
       this.messageId,
       schedule,
+      this.ttlDuration,
     );
   }
 
@@ -177,3 +211,18 @@ export class JetstreamRecordBuilder<TData = unknown> {
     }
   }
 }
+
+const NS_PER_MS = 1_000_000;
+const NS_PER_S = 1_000_000_000;
+const NS_PER_M = 60 * NS_PER_S;
+const NS_PER_H = 60 * NS_PER_M;
+
+/** Convert nanoseconds to the shortest Go-style duration string for NATS. */
+const nanosToGoDuration = (nanos: number): string => {
+  if (nanos >= NS_PER_H && nanos % NS_PER_H === 0) return `${nanos / NS_PER_H}h`;
+  if (nanos >= NS_PER_M && nanos % NS_PER_M === 0) return `${nanos / NS_PER_M}m`;
+  if (nanos >= NS_PER_S && nanos % NS_PER_S === 0) return `${nanos / NS_PER_S}s`;
+  if (nanos >= NS_PER_MS && nanos % NS_PER_MS === 0) return `${nanos / NS_PER_MS}ms`;
+
+  return `${nanos}ns`;
+};

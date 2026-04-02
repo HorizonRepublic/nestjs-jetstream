@@ -127,6 +127,14 @@ export default function Root({ children }) {
   "dateModified": "2026-04-02"
 },
       
+    '/docs/guides/per-message-ttl/': {
+  "@type": "Article",
+  "headline": "Per-Message TTL",
+  "description": "Individual message expiration independent of stream max_age, powered by NATS 2.11 Nats-TTL header.",
+  "datePublished": "2026-04-02",
+  "dateModified": "2026-04-02"
+},
+      
     '/docs/guides/performance/': {
   "@type": "Article",
   "headline": "Performance Tuning",

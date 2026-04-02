@@ -265,6 +265,26 @@ describe(JetstreamClient, () => {
       });
     });
 
+    describe('when using ttl()', () => {
+      it('should pass ttl to publish options', async () => {
+        // Given: record with TTL (30 seconds in nanos)
+        const data = { token: faker.string.alphanumeric(32) };
+        const record = new JetstreamRecordBuilder(data).ttl(30 * 1_000_000_000).build();
+
+        mockJs.publish.mockResolvedValue(createMock<PubAck>({ duplicate: false }));
+
+        // When
+        await firstValueFrom(sut.emit('session.token', record));
+
+        // Then: publish called with ttl option
+        expect(mockJs.publish).toHaveBeenCalledWith(
+          expect.any(String),
+          expect.any(Uint8Array),
+          expect.objectContaining({ ttl: '30s' }),
+        );
+      });
+    });
+
     describe('when using scheduleAt()', () => {
       it('should publish to _sch subject in event stream with target set to event subject', async () => {
         // Given: record with schedule
@@ -537,6 +557,31 @@ describe(JetstreamClient, () => {
         expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('scheduleAt()'));
 
         // Then: RPC still completes successfully
+        expect(result).toEqual({ ok: true });
+      });
+    });
+
+    describe('when record has ttl()', () => {
+      it('should log warning and ignore TTL for RPC', async () => {
+        // Given: record with TTL
+        const record = new JetstreamRecordBuilder({ test: true }).ttl(30 * 1_000_000_000).build();
+
+        mockNc.request.mockResolvedValue(
+          createMock<Msg>({
+            data: codec.encode({ ok: true }),
+            headers: natsHeaders(),
+          }),
+        );
+
+        const loggerWarnSpy = vi.spyOn(sut['logger'], 'warn');
+
+        // When
+        const result = await firstValueFrom(sut.send('get.user', record));
+
+        // Then: warning logged
+        expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('ttl()'));
+
+        // Then: RPC still works
         expect(result).toEqual({ ok: true });
       });
     });

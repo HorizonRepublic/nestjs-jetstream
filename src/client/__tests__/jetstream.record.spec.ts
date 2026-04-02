@@ -213,6 +213,66 @@ describe(JetstreamRecordBuilder, () => {
     });
   });
 
+  describe('ttl()', () => {
+    it('should store TTL as Go duration string from nanoseconds', () => {
+      // Given: 30 minutes in nanos
+      const thirtyMinNanos = 30 * 60 * 1_000_000_000;
+
+      // When
+      const record = sut.setData({ id: 1 }).ttl(thirtyMinNanos).build();
+
+      // Then
+      expect(record.ttl).toBe('30m');
+    });
+
+    it('should convert hours correctly', () => {
+      const record = sut
+        .setData({ id: 1 })
+        .ttl(24 * 60 * 60 * 1_000_000_000)
+        .build();
+
+      expect(record.ttl).toBe('24h');
+    });
+
+    it('should convert seconds correctly', () => {
+      const record = sut
+        .setData({ id: 1 })
+        .ttl(10 * 1_000_000_000)
+        .build();
+
+      expect(record.ttl).toBe('10s');
+    });
+
+    it('should convert milliseconds correctly', () => {
+      const record = sut
+        .setData({ id: 1 })
+        .ttl(500 * 1_000_000)
+        .build();
+
+      expect(record.ttl).toBe('500ms');
+    });
+
+    it('should fall back to nanoseconds for non-round values', () => {
+      const record = sut.setData({ id: 1 }).ttl(12345).build();
+
+      expect(record.ttl).toBe('12345ns');
+    });
+
+    it('should return undefined when ttl is not set', () => {
+      const record = sut.setData({ id: 1 }).build();
+
+      expect(record.ttl).toBeUndefined();
+    });
+
+    it('should throw for zero', () => {
+      expect(() => sut.ttl(0)).toThrow(/positive/i);
+    });
+
+    it('should throw for negative', () => {
+      expect(() => sut.ttl(-1)).toThrow(/positive/i);
+    });
+  });
+
   describe('error paths', () => {
     describe('when setting reserved headers via setHeader()', () => {
       it.each([...RESERVED_HEADERS])('should throw for reserved header: %s', (header) => {
