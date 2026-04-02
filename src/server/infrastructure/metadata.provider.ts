@@ -97,6 +97,10 @@ export class MetadataProvider {
 
   /** Start heartbeat interval that refreshes entries every ttl/2. */
   private startHeartbeat(): void {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+    }
+
     const interval = Math.floor(this.ttl / 2);
 
     this.heartbeatTimer = setInterval(() => {

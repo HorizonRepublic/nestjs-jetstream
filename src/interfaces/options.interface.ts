@@ -275,7 +275,7 @@ export interface JetstreamModuleOptions {
    * the bucket for dynamic service discovery.
    *
    * Auto-enabled when any handler has `meta`. Set to customize bucket name,
-   * replicas, or shutdown cleanup behavior.
+   * replicas, or TTL.
    *
    * @see MetadataRegistryOptions
    */
