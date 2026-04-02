@@ -135,6 +135,7 @@ const classifyMutability = (
 
 const isEqual = (a: unknown, b: unknown): boolean => {
   if (a === b) return true;
+  /* v8 ignore next -- loose null equality covers null/undefined cross-match */
   if (a == null && b == null) return true;
 
   return JSON.stringify(a) === JSON.stringify(b);

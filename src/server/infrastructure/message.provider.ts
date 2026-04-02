@@ -262,6 +262,7 @@ export class MessageProvider {
         return this.broadcastMessages$;
       case StreamKind.Ordered:
         return this.orderedMessages$;
+      /* v8 ignore next 5 -- exhaustive switch guard, unreachable */
       default: {
         // eslint-disable-next-line @typescript-eslint/naming-convention
         const _exhaustive: never = kind;
