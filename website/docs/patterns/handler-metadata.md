@@ -131,7 +131,11 @@ const key = metadataKey('orders', StreamKind.Event, 'order.created');
 
 ## Meta structure
 
-The `meta` field is `Record<string, unknown>` — the library stores it as-is with no schema enforcement. You decide the structure based on your use case:
+The `meta` field is `Record<string, unknown>` — the library stores it as-is with no schema enforcement. You decide the structure based on your use case.
+
+:::warning Security
+The `meta` object is stored in a shared NATS KV bucket readable by any connected service. Never include secrets, API keys, passwords, or personally identifiable information (PII) in handler metadata.
+:::
 
 ```typescript
 // HTTP routing

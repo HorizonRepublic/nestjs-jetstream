@@ -149,7 +149,7 @@ export interface MetadataRegistryOptions {
    * Number of KV bucket replicas (1, 3, or 5).
    * @default 1
    */
-  replicas?: number;
+  replicas?: 1 | 3 | 5;
 
   /**
    * Delete handler metadata entries from KV on graceful shutdown.

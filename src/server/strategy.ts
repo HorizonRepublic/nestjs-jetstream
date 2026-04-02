@@ -117,7 +117,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
       await this.coreRpcServer.start();
     }
 
-    // 12. Publish handler metadata to KV (non-critical, does not block startup)
+    // 12. Publish handler metadata to KV (non-critical — errors logged, not thrown)
     if (this.metadataProvider && this.patternRegistry.hasMetadata()) {
       await this.metadataProvider.publish(this.patternRegistry.getMetadataEntries());
     }
