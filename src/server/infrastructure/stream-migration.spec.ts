@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMock } from '@golevelup/ts-vitest';
 import type { JetStreamManager, StreamConfig, StreamInfo } from '@nats-io/jetstream';
 import { StorageType, RetentionPolicy } from '@nats-io/jetstream';

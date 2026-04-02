@@ -7,7 +7,10 @@ import { JetStreamApiError } from '@nats-io/jetstream';
 import { ConnectionProvider } from '../../connection';
 import { StreamKind } from '../../interfaces';
 import type { JetstreamModuleOptions } from '../../interfaces';
-import { internalName } from '../../jetstream.constants';
+import {
+  DEFAULT_EVENT_STREAM_CONFIG,
+  internalName,
+} from '../../jetstream.constants';
 
 import { StreamProvider } from './stream.provider';
 
@@ -215,8 +218,18 @@ describe(StreamProvider, () => {
 
     describe('when the stream already exists', () => {
       it('should update the stream config', async () => {
-        // Given: streams.info resolves (stream exists)
-        mockJsm.streams.info.mockResolvedValue(createMock<StreamInfo>());
+        // Given: streams.info resolves with config matching defaults (no diff)
+        const name = `${internalName(options.name)}_ev-stream`;
+        const existingInfo = createMock<StreamInfo>({
+          config: {
+            ...DEFAULT_EVENT_STREAM_CONFIG,
+            name,
+            subjects: [`${internalName(options.name)}.ev.>`],
+            description: `JetStream ev stream for ${options.name}`,
+          },
+        });
+
+        mockJsm.streams.info.mockResolvedValue(existingInfo);
 
         const updated = createMock<StreamInfo>();
 
@@ -225,8 +238,8 @@ describe(StreamProvider, () => {
         // When
         await sut.ensureStreams([StreamKind.Event]);
 
-        // Then
-        expect(mockJsm.streams.update).toHaveBeenCalledOnce();
+        // Then: no changes detected — neither update nor add should be called
+        expect(mockJsm.streams.update).not.toHaveBeenCalled();
         expect(mockJsm.streams.add).not.toHaveBeenCalled();
       });
     });

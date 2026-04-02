@@ -12,6 +12,8 @@ import {
   internalName,
   streamName,
 } from '../../jetstream.constants';
+import { compareStreamConfig, type StreamConfigDiffResult } from './stream-config-diff';
+import { StreamMigration } from './stream-migration';
 
 /** JetStream API error code for missing streams. */
 const STREAM_NOT_FOUND = 10059;
@@ -28,6 +30,7 @@ const STREAM_NOT_FOUND = 10059;
  */
 export class StreamProvider {
   private readonly logger = new Logger('Jetstream:Stream');
+  private readonly migration = new StreamMigration();
 
   public constructor(
     private readonly options: JetstreamModuleOptions,
@@ -96,11 +99,9 @@ export class StreamProvider {
     this.logger.log(`Ensuring stream: ${config.name}`);
 
     try {
-      // Try to get existing stream info
-      await jsm.streams.info(config.name);
-      // Stream exists — update config
-      this.logger.debug(`Stream exists, updating: ${config.name}`);
-      return await jsm.streams.update(config.name, config);
+      const currentInfo = await jsm.streams.info(config.name);
+
+      return await this.handleExistingStream(jsm, currentInfo, config);
     } catch (err) {
       if (err instanceof JetStreamApiError && err.apiError().err_code === STREAM_NOT_FOUND) {
         this.logger.log(`Creating stream: ${config.name}`);
@@ -109,6 +110,99 @@ export class StreamProvider {
 
       throw err;
     }
+  }
+
+  private async handleExistingStream(
+    jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
+    currentInfo: StreamInfo,
+    config: Partial<StreamConfig> & { name: string; subjects: string[] },
+  ): Promise<StreamInfo> {
+    const diff = compareStreamConfig(currentInfo.config, config);
+
+    if (!diff.hasChanges) {
+      this.logger.debug(`Stream ${config.name}: no config changes`);
+      return currentInfo;
+    }
+
+    this.logChanges(config.name, diff);
+
+    if (diff.hasTransportControlledConflicts) {
+      const conflicts = diff.changes
+        .filter((c) => c.mutability === 'transport-controlled')
+        .map((c) => `${c.property}: ${String(c.current)} → ${String(c.desired)}`)
+        .join(', ');
+
+      throw new Error(
+        `Stream ${config.name} has transport-controlled config conflicts that cannot be migrated: ${conflicts}. ` +
+          `The retention policy is managed by the transport and must match the stream kind.`,
+      );
+    }
+
+    if (!diff.hasImmutableChanges) {
+      // Mutable-only or enable-only — normal update
+      this.logger.debug(`Stream exists, updating: ${config.name}`);
+      return await jsm.streams.update(config.name, config);
+    }
+
+    // Immutable changes detected
+    if (!this.options.allowDestructiveMigration) {
+      this.logger.warn(
+        `Stream ${config.name} has immutable config conflicts. ` +
+          `Enable allowDestructiveMigration to recreate the stream.`,
+      );
+
+      // Apply mutable-only changes by building config without immutable overrides
+      if (diff.hasMutableChanges) {
+        const mutableConfig = this.buildMutableOnlyConfig(config, currentInfo.config, diff);
+        return await jsm.streams.update(config.name, mutableConfig);
+      }
+
+      return currentInfo;
+    }
+
+    // Destructive migration
+    await this.migration.migrate(jsm, config.name, config);
+
+    return await jsm.streams.info(config.name);
+  }
+
+  private buildMutableOnlyConfig(
+    config: Partial<StreamConfig> & { name: string; subjects: string[] },
+    currentConfig: StreamConfig,
+    diff: StreamConfigDiffResult,
+  ): typeof config {
+    const nonMutableKeys = new Set(
+      diff.changes
+        .filter((c) => c.mutability === 'immutable' || c.mutability === 'transport-controlled')
+        .map((c) => c.property),
+    );
+
+    const filtered = { ...config };
+
+    for (const key of nonMutableKeys) {
+      // Replace desired immutable values with current values so NATS
+      // doesn't interpret missing fields as "use default"
+      (filtered as Record<string, unknown>)[key] = currentConfig[key as keyof StreamConfig];
+    }
+
+    return filtered;
+  }
+
+  private logChanges(streamName: string, diff: StreamConfigDiffResult): void {
+    const lines = diff.changes.map((c) => {
+      const icon =
+        c.mutability === 'immutable' || c.mutability === 'transport-controlled' ? '⚠' : '✓';
+      const suffix =
+        c.mutability === 'transport-controlled'
+          ? ' (transport-controlled, cannot be changed)'
+          : c.mutability === 'immutable'
+            ? ' (requires allowDestructiveMigration)'
+            : '';
+
+      return `  ${icon} ${c.property}: ${String(c.current)} → ${String(c.desired)}${suffix}`;
+    });
+
+    this.logger.log(`Stream ${streamName} config changes:\n${lines.join('\n')}`);
   }
 
   /** Build the full stream config by merging defaults with user overrides. */
