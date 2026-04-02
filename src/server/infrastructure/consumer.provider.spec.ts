@@ -72,8 +72,8 @@ describe(ConsumerProvider, () => {
     });
 
     describe('when consumer add() hits race condition (another pod created it)', () => {
-      it('should fall back to update() on CONSUMER_ALREADY_EXISTS (10148)', async () => {
-        // Given: info → not found, add → already exists (race), update → succeeds
+      it('should fall back to info() on CONSUMER_ALREADY_EXISTS (10148)', async () => {
+        // Given: info → not found, add → already exists (race)
         const notFoundError = new JetStreamApiError({
           err_code: 10014,
           code: 404,
@@ -84,21 +84,21 @@ describe(ConsumerProvider, () => {
           code: 400,
           description: 'consumer already exists',
         });
+        const existingInfo = createMock<ConsumerInfo>();
 
-        mockJsm.consumers.info.mockRejectedValue(notFoundError);
+        // First info → not found, second info (after race) → found
+        mockJsm.consumers.info
+          .mockRejectedValueOnce(notFoundError)
+          .mockResolvedValueOnce(existingInfo);
         mockJsm.consumers.add.mockRejectedValue(alreadyExistsError);
-
-        const updated = createMock<ConsumerInfo>();
-
-        mockJsm.consumers.update.mockResolvedValue(updated);
 
         // When
         const result = await sut.ensureConsumers([StreamKind.Event]);
 
-        // Then: fell back to update after race
+        // Then: fell back to info, did NOT update (preserves other pod's config)
         expect(mockJsm.consumers.add).toHaveBeenCalledOnce();
-        expect(mockJsm.consumers.update).toHaveBeenCalledOnce();
-        expect(result.get(StreamKind.Event)).toBe(updated);
+        expect(mockJsm.consumers.update).not.toHaveBeenCalled();
+        expect(result.get(StreamKind.Event)).toBe(existingInfo);
       });
 
       it('should rethrow non-race errors from add()', async () => {
@@ -117,11 +117,88 @@ describe(ConsumerProvider, () => {
         mockJsm.consumers.info.mockRejectedValue(notFoundError);
         mockJsm.consumers.add.mockRejectedValue(resourceError);
 
-        // When/Then: error propagates, no fallback to update
+        // When/Then: error propagates
         await expect(sut.ensureConsumers([StreamKind.Event])).rejects.toThrow(
           'resource limits exceeded',
         );
 
+        expect(mockJsm.consumers.update).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('recoverConsumer', () => {
+    describe('when consumer exists', () => {
+      it('should return info without updating config', async () => {
+        // Given: consumer exists
+        const existingInfo = createMock<ConsumerInfo>();
+
+        mockJsm.consumers.info.mockResolvedValue(existingInfo);
+
+        const jsm = await connection.getJetStreamManager();
+
+        // When
+        const result = await sut.recoverConsumer(jsm, StreamKind.Event);
+
+        // Then: returned existing info, NEVER called update or add
+        expect(result).toBe(existingInfo);
+        expect(mockJsm.consumers.update).not.toHaveBeenCalled();
+        expect(mockJsm.consumers.add).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('when consumer does not exist', () => {
+      it('should create it without updating', async () => {
+        // Given: consumer not found → create succeeds
+        const notFoundError = new JetStreamApiError({
+          err_code: 10014,
+          code: 404,
+          description: 'consumer not found',
+        });
+        const created = createMock<ConsumerInfo>();
+
+        mockJsm.consumers.info.mockRejectedValue(notFoundError);
+        mockJsm.consumers.add.mockResolvedValue(created);
+
+        const jsm = await connection.getJetStreamManager();
+
+        // When
+        const result = await sut.recoverConsumer(jsm, StreamKind.Event);
+
+        // Then: created, not updated
+        expect(result).toBe(created);
+        expect(mockJsm.consumers.add).toHaveBeenCalledOnce();
+        expect(mockJsm.consumers.update).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('when consumer created by another pod during recovery', () => {
+      it('should fall back to info without updating', async () => {
+        // Given: info → not found, add → already exists, second info → found
+        const notFoundError = new JetStreamApiError({
+          err_code: 10014,
+          code: 404,
+          description: 'consumer not found',
+        });
+        const alreadyExistsError = new JetStreamApiError({
+          err_code: 10148,
+          code: 400,
+          description: 'consumer already exists',
+        });
+        const existingInfo = createMock<ConsumerInfo>();
+
+        mockJsm.consumers.info
+          .mockRejectedValueOnce(notFoundError)
+          .mockResolvedValueOnce(existingInfo);
+        mockJsm.consumers.add.mockRejectedValue(alreadyExistsError);
+
+        const jsm = await connection.getJetStreamManager();
+
+        // When
+        const result = await sut.recoverConsumer(jsm, StreamKind.Event);
+
+        // Then: used existing, NEVER updated
+        expect(result).toBe(existingInfo);
         expect(mockJsm.consumers.update).not.toHaveBeenCalled();
       });
     });

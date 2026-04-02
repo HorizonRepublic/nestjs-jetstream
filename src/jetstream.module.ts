@@ -348,7 +348,7 @@ export class JetstreamModule implements OnApplicationShutdown {
             ? async (kind: StreamKind): Promise<ConsumerInfo> => {
                 const jsm = await connection.getJetStreamManager();
 
-                return consumerProvider.ensureConsumer(jsm, kind);
+                return consumerProvider.recoverConsumer(jsm, kind);
               }
             : undefined;
 

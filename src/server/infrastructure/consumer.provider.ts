@@ -57,7 +57,11 @@ export class ConsumerProvider {
     return consumerName(this.options.name, kind);
   }
 
-  /** Ensure a single consumer exists, creating if needed. */
+  /**
+   * Ensure a single consumer exists with the desired config.
+   * Used at **startup** — creates or updates the consumer to match
+   * the current pod's configuration.
+   */
   public async ensureConsumer(
     jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
     kind: StreamKind,
@@ -81,25 +85,68 @@ export class ConsumerProvider {
         throw err;
       }
 
-      // Consumer not found — create it.
-      // Race-safe: another pod may create it between our info() and add().
-      // If add() hits "consumer already exists" (10148), fall back to update().
-      this.logger.log(`Creating consumer: ${name}`);
+      return await this.createConsumer(jsm, stream, name, config);
+    }
+  }
 
-      try {
-        return await jsm.consumers.add(stream, config);
-      } catch (addErr) {
-        if (
-          addErr instanceof JetStreamApiError &&
-          addErr.apiError().err_code === NatsErrorCode.ConsumerAlreadyExists
-        ) {
-          this.logger.debug(`Consumer ${name} created by another pod, updating`);
+  /**
+   * Recover a consumer that disappeared during runtime.
+   * Used by **self-healing** — creates if missing, but NEVER updates config.
+   *
+   * This prevents old pods from overwriting a newer pod's consumer config
+   * during rolling updates: if the consumer already exists (another pod
+   * recreated it with newer config), we just return its info as-is.
+   */
+  public async recoverConsumer(
+    jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
+    kind: StreamKind,
+  ): Promise<ConsumerInfo> {
+    const stream = this.streamProvider.getStreamName(kind);
+    const config = this.buildConfig(kind);
+    const name = config.durable_name;
 
-          return await jsm.consumers.update(stream, name, config);
-        }
+    this.logger.log(`Recovering consumer: ${name} on stream: ${stream}`);
 
-        throw addErr;
+    try {
+      // Consumer already exists (another pod may have recreated it) — use as-is
+      return await jsm.consumers.info(stream, name);
+    } catch (err) {
+      if (
+        !(err instanceof JetStreamApiError) ||
+        err.apiError().err_code !== NatsErrorCode.ConsumerNotFound
+      ) {
+        throw err;
       }
+
+      return await this.createConsumer(jsm, stream, name, config);
+    }
+  }
+
+  /**
+   * Create a consumer, handling the race where another pod creates it first.
+   */
+  private async createConsumer(
+    jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
+    stream: string,
+    name: string,
+    /* eslint-disable-next-line @typescript-eslint/naming-convention -- NATS API uses snake_case */
+    config: Partial<ConsumerConfig> & { durable_name: string },
+  ): Promise<ConsumerInfo> {
+    this.logger.log(`Creating consumer: ${name}`);
+
+    try {
+      return await jsm.consumers.add(stream, config);
+    } catch (addErr) {
+      if (
+        addErr instanceof JetStreamApiError &&
+        addErr.apiError().err_code === NatsErrorCode.ConsumerAlreadyExists
+      ) {
+        this.logger.debug(`Consumer ${name} created by another pod, using existing`);
+
+        return await jsm.consumers.info(stream, name);
+      }
+
+      throw addErr;
     }
   }
 
