@@ -130,6 +130,37 @@ export interface OrderedEventOverrides {
 }
 
 /**
+ * Configuration for the handler metadata KV registry.
+ *
+ * When any handler has `meta` in its extras, the transport writes metadata
+ * entries to a NATS KV bucket at startup. External services (API gateways,
+ * dashboards) can watch the bucket for service discovery.
+ *
+ * All fields are optional — sensible defaults are applied.
+ */
+export interface MetadataRegistryOptions {
+  /**
+   * KV bucket name.
+   * @default 'handler_registry'
+   */
+  bucket?: string;
+
+  /**
+   * Number of KV bucket replicas (1, 3, or 5).
+   * @default 1
+   */
+  replicas?: number;
+
+  /**
+   * Delete handler metadata entries from KV on graceful shutdown.
+   * When `true`, the transport removes its entries during `onApplicationShutdown`.
+   * Crashed pods leave entries in KV — next startup refreshes them.
+   * @default true
+   */
+  cleanupOnShutdown?: boolean;
+}
+
+/**
  * Root module configuration for `JetstreamModule.forRoot()`.
  *
  * Minimal usage requires only `name` and `servers`.
@@ -231,6 +262,21 @@ export interface JetstreamModuleOptions {
    * @default false
    */
   allowDestructiveMigration?: boolean;
+
+  /**
+   * Handler metadata KV registry configuration.
+   *
+   * When any handler has `meta` in its `@EventPattern` / `@MessagePattern` extras,
+   * the transport writes metadata to a NATS KV bucket at startup.
+   * External services (API gateways, dashboards, CLI tools) can read or watch
+   * the bucket for dynamic service discovery.
+   *
+   * Auto-enabled when any handler has `meta`. Set to customize bucket name,
+   * replicas, or shutdown cleanup behavior.
+   *
+   * @see MetadataRegistryOptions
+   */
+  metadata?: MetadataRegistryOptions;
 
   /**
    * Raw NATS ConnectionOptions pass-through for advanced connection config.

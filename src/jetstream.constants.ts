@@ -199,6 +199,33 @@ export const DEFAULT_JETSTREAM_RPC_TIMEOUT = 180_000;
 export const DEFAULT_SHUTDOWN_TIMEOUT = 10_000;
 
 // ---------------------------------------------------------------------------
+// Metadata Registry Defaults
+// ---------------------------------------------------------------------------
+
+/** Default KV bucket name for handler metadata. */
+export const DEFAULT_METADATA_BUCKET = 'handler_registry';
+
+/** Default number of KV bucket replicas. */
+export const DEFAULT_METADATA_REPLICAS = 1;
+
+/** Default KV bucket history depth (latest value only). */
+export const DEFAULT_METADATA_HISTORY = 1;
+
+/** Default: delete KV entries on graceful shutdown. */
+export const DEFAULT_METADATA_CLEANUP_ON_SHUTDOWN = true;
+
+/**
+ * Build a KV key for a handler's metadata entry.
+ *
+ * @param serviceName - Service name from `forRoot({ name })`.
+ * @param kind - Handler's stream kind ({@link StreamKind}).
+ * @param pattern - The message pattern (e.g. `'order.created'`).
+ * @returns KV key (e.g. `orders.ev.order.created`).
+ */
+export const metadataKey = (serviceName: string, kind: StreamKind, pattern: string): string =>
+  `${serviceName}.${kind}.${pattern}`;
+
+// ---------------------------------------------------------------------------
 // Reserved Headers
 // ---------------------------------------------------------------------------
 
