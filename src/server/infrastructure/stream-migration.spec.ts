@@ -131,6 +131,109 @@ describe(StreamMigration.name, () => {
     });
   });
 
+  describe('Phase 2 failure (delete original fails)', () => {
+    it('should cleanup backup and rethrow when delete original throws', async () => {
+      // Given: stream with 100 messages, backup successfully created
+      const sut = new StreamMigration();
+      const jsm = buildMockJsm(100);
+
+      // Override: delete throws on original stream name
+      vi.mocked(jsm.streams.delete).mockImplementation(async (name: string) => {
+        if (!name.includes('__migration_backup')) {
+          throw new Error('permission denied');
+        }
+
+        return true;
+      });
+
+      // When/Then: error is rethrown
+      await expect(sut.migrate(jsm, 'test_ev-stream', newConfig)).rejects.toThrow(
+        'permission denied',
+      );
+
+      // And: cleanup — backup delete was called
+      expect(jsm.streams.delete).toHaveBeenCalledWith('test_ev-stream__migration_backup');
+    });
+  });
+
+  describe('Phase 3 failure (create new stream fails)', () => {
+    it('should cleanup backup and rethrow when streams.add for new stream throws', async () => {
+      // Given: stream with messages, backup + delete succeed
+      const sut = new StreamMigration();
+      const jsm = buildMockJsm(100);
+
+      let addCallCount = 0;
+
+      // Override: second add call (new stream creation) throws
+      vi.mocked(jsm.streams.add).mockImplementation(async () => {
+        addCallCount++;
+        if (addCallCount === 2) {
+          throw new Error('resource limit exceeded');
+        }
+
+        return createMock<StreamInfo>();
+      });
+
+      // When/Then: error is rethrown
+      await expect(sut.migrate(jsm, 'test_ev-stream', newConfig)).rejects.toThrow(
+        'resource limit exceeded',
+      );
+
+      // And: cleanup — backup delete was called
+      expect(jsm.streams.delete).toHaveBeenCalledWith('test_ev-stream__migration_backup');
+    });
+  });
+
+  describe('Phase 4 backup sources clearing', () => {
+    it('should clear backup sources before restore to prevent detected-cycle error', async () => {
+      // Given: stream with 100 messages
+      const sut = new StreamMigration();
+      const jsm = buildMockJsm(100);
+
+      // When
+      await sut.migrate(jsm, 'test_ev-stream', newConfig);
+
+      // Then: first update call clears backup sources (cycle prevention)
+      const updateCalls = vi.mocked(jsm.streams.update).mock.calls;
+      const firstUpdateName = updateCalls[0]![0];
+      const firstUpdateConfig = updateCalls[0]![1];
+
+      expect(firstUpdateName).toBe('test_ev-stream__migration_backup');
+      expect(firstUpdateConfig).toMatchObject({ sources: [] });
+
+      // And: second update call restores with backup as source
+      const secondUpdateName = updateCalls[1]![0];
+      const secondUpdateConfig = updateCalls[1]![1];
+
+      expect(secondUpdateName).toBe('test_ev-stream');
+      expect(secondUpdateConfig).toMatchObject({
+        sources: [{ name: 'test_ev-stream__migration_backup' }],
+      });
+    });
+
+    it('should include full newConfig properties in restore update call', async () => {
+      // Given: stream with 100 messages
+      const sut = new StreamMigration();
+      const jsm = buildMockJsm(100);
+
+      // When
+      await sut.migrate(jsm, 'test_ev-stream', newConfig);
+
+      // Then: restore update passes full config AND sources
+      const updateCalls = vi.mocked(jsm.streams.update).mock.calls;
+      const restoreCall = updateCalls[1]![1];
+
+      expect(restoreCall).toMatchObject({
+        name: newConfig.name,
+        subjects: newConfig.subjects,
+        storage: newConfig.storage,
+        retention: newConfig.retention,
+        num_replicas: newConfig.num_replicas,
+        sources: [{ name: 'test_ev-stream__migration_backup' }],
+      });
+    });
+  });
+
   describe('sourcing timeout', () => {
     it('should throw and cleanup backup on timeout', async () => {
       // Given: backup never reaches expected message count

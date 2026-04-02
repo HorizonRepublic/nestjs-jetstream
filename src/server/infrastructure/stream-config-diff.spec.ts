@@ -104,10 +104,17 @@ describe(compareStreamConfig.name, () => {
   });
 
   describe('enable-only changes', () => {
-    it('should classify allow_msg_schedules false→true as enable-only', () => {
+    const enableOnlyProperties: (keyof StreamConfig)[] = [
+      'allow_msg_schedules',
+      'allow_msg_ttl',
+      'deny_delete',
+      'deny_purge',
+    ];
+
+    it.each(enableOnlyProperties)('should classify %s false→true as enable-only', (property) => {
       // Given
-      const current: Partial<StreamConfig> = { allow_msg_schedules: false };
-      const desired: Partial<StreamConfig> = { allow_msg_schedules: true };
+      const current: Partial<StreamConfig> = { [property]: false };
+      const desired: Partial<StreamConfig> = { [property]: true };
 
       // When
       const result = compareStreamConfig(current, desired);
@@ -118,10 +125,10 @@ describe(compareStreamConfig.name, () => {
       expect(result.changes[0]!.mutability).toBe('enable-only');
     });
 
-    it('should classify allow_msg_schedules true→false as immutable', () => {
+    it.each(enableOnlyProperties)('should classify %s true→false as immutable', (property) => {
       // Given
-      const current: Partial<StreamConfig> = { allow_msg_schedules: true };
-      const desired: Partial<StreamConfig> = { allow_msg_schedules: false };
+      const current: Partial<StreamConfig> = { [property]: true };
+      const desired: Partial<StreamConfig> = { [property]: false };
 
       // When
       const result = compareStreamConfig(current, desired);
@@ -129,6 +136,57 @@ describe(compareStreamConfig.name, () => {
       // Then
       expect(result.hasImmutableChanges).toBe(true);
       expect(result.changes[0]!.mutability).toBe('immutable');
+    });
+  });
+
+  describe('equality edge cases', () => {
+    it('should detect no changes for structurally equal but distinct objects', () => {
+      // Given
+      const current: Partial<StreamConfig> = { storage: StorageType.File, max_age: 100 };
+      const desired: Partial<StreamConfig> = { storage: StorageType.File, max_age: 100 };
+
+      // When
+      const result = compareStreamConfig(current, desired);
+
+      // Then
+      expect(result.hasChanges).toBe(false);
+    });
+
+    it('should detect no changes when both values are null', () => {
+      // Given
+      const current = { max_age: null } as unknown as Partial<StreamConfig>;
+      const desired = { max_age: null } as unknown as Partial<StreamConfig>;
+
+      // When
+      const result = compareStreamConfig(current, desired);
+
+      // Then
+      expect(result.hasChanges).toBe(false);
+    });
+
+    it('should detect change when current is undefined and desired has a value', () => {
+      // Given
+      const current: Partial<StreamConfig> = {};
+      const desired: Partial<StreamConfig> = { max_age: 100 };
+
+      // When
+      const result = compareStreamConfig(current, desired);
+
+      // Then
+      expect(result.hasChanges).toBe(true);
+      expect(result.changes[0]!.current).toBeUndefined();
+    });
+
+    it('should treat subjects arrays with same elements as equal', () => {
+      // Given
+      const current: Partial<StreamConfig> = { subjects: ['a.>', 'b.>'] };
+      const desired: Partial<StreamConfig> = { subjects: ['a.>', 'b.>'] };
+
+      // When
+      const result = compareStreamConfig(current, desired);
+
+      // Then
+      expect(result.hasChanges).toBe(false);
     });
   });
 

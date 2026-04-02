@@ -2,11 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vi
 import { createMock } from '@golevelup/ts-vitest';
 import { faker } from '@faker-js/faker';
 import type { StreamInfo } from '@nats-io/jetstream';
-import { JetStreamApiError } from '@nats-io/jetstream';
+import { JetStreamApiError, RetentionPolicy, StorageType } from '@nats-io/jetstream';
 
 import { ConnectionProvider } from '../../connection';
 import { StreamKind } from '../../interfaces';
-import type { JetstreamModuleOptions } from '../../interfaces';
+import type { JetstreamModuleOptions, StreamConfigOverrides } from '../../interfaces';
 import { DEFAULT_EVENT_STREAM_CONFIG, internalName } from '../../jetstream.constants';
 
 import { StreamProvider } from './stream.provider';
@@ -214,7 +214,7 @@ describe(StreamProvider, () => {
     });
 
     describe('when the stream already exists', () => {
-      it('should update the stream config', async () => {
+      it('should skip update when config is unchanged', async () => {
         // Given: streams.info resolves with config matching defaults (no diff)
         const name = `${internalName(options.name)}_ev-stream`;
         const existingInfo = createMock<StreamInfo>({
@@ -238,6 +238,105 @@ describe(StreamProvider, () => {
         // Then: no changes detected — neither update nor add should be called
         expect(mockJsm.streams.update).not.toHaveBeenCalled();
         expect(mockJsm.streams.add).not.toHaveBeenCalled();
+      });
+
+      it('should apply mutable-only changes via streams.update', async () => {
+        // Given: stream exists with different max_age
+        const name = `${internalName(options.name)}_ev-stream`;
+        const existingConfig = {
+          ...DEFAULT_EVENT_STREAM_CONFIG,
+          name,
+          subjects: [`${internalName(options.name)}.ev.>`],
+          description: `JetStream ev stream for ${options.name}`,
+          max_age: 999,
+        };
+
+        mockJsm.streams.info.mockResolvedValue(createMock<StreamInfo>({ config: existingConfig }));
+        mockJsm.streams.update.mockResolvedValue(createMock<StreamInfo>());
+
+        // When
+        await sut.ensureStreams([StreamKind.Event]);
+
+        // Then
+        expect(mockJsm.streams.update).toHaveBeenCalledOnce();
+        expect(mockJsm.streams.add).not.toHaveBeenCalled();
+      });
+
+      it('should warn and skip when immutable change detected without allowDestructiveMigration', async () => {
+        // Given: stream exists with different storage
+        const name = `${internalName(options.name)}_ev-stream`;
+        const existingConfig = {
+          ...DEFAULT_EVENT_STREAM_CONFIG,
+          name,
+          subjects: [`${internalName(options.name)}.ev.>`],
+          description: `JetStream ev stream for ${options.name}`,
+          storage: StorageType.Memory,
+        };
+
+        mockJsm.streams.info.mockResolvedValue(createMock<StreamInfo>({ config: existingConfig }));
+
+        // When (allowDestructiveMigration is false by default)
+        await sut.ensureStreams([StreamKind.Event]);
+
+        // Then: neither update nor add called (immutable skipped, no mutable changes)
+        expect(mockJsm.streams.update).not.toHaveBeenCalled();
+        expect(mockJsm.streams.add).not.toHaveBeenCalled();
+      });
+
+      it('should apply mutable changes while skipping immutable when flag is off', async () => {
+        // Given: stream exists with different storage AND max_age
+        const name = `${internalName(options.name)}_ev-stream`;
+        const existingConfig = {
+          ...DEFAULT_EVENT_STREAM_CONFIG,
+          name,
+          subjects: [`${internalName(options.name)}.ev.>`],
+          description: `JetStream ev stream for ${options.name}`,
+          storage: StorageType.Memory,
+          max_age: 999,
+        };
+
+        mockJsm.streams.info.mockResolvedValue(createMock<StreamInfo>({ config: existingConfig }));
+        mockJsm.streams.update.mockResolvedValue(createMock<StreamInfo>());
+
+        // When
+        await sut.ensureStreams([StreamKind.Event]);
+
+        // Then: update IS called, with the existing (Memory) storage preserved
+        expect(mockJsm.streams.update).toHaveBeenCalledOnce();
+
+        const updateArg = mockJsm.streams.update.mock.calls[0]![1] as Record<string, unknown>;
+
+        expect(updateArg.storage).toBe(StorageType.Memory);
+      });
+    });
+
+    describe('stripTransportControlled', () => {
+      it('should silently strip retention from user overrides', async () => {
+        // Given: options include retention override (bypassing TypeScript via cast)
+        options = {
+          ...options,
+          events: {
+            stream: { retention: RetentionPolicy.Limits } as unknown as StreamConfigOverrides,
+          },
+        };
+        sut = new StreamProvider(options, connection);
+
+        const notFoundError = new JetStreamApiError({
+          err_code: 10059,
+          code: 404,
+          description: 'stream not found',
+        });
+
+        mockJsm.streams.info.mockRejectedValue(notFoundError);
+        mockJsm.streams.add.mockResolvedValue(createMock<StreamInfo>());
+
+        // When
+        await sut.ensureStreams([StreamKind.Event]);
+
+        // Then: the config passed to streams.add should have Workqueue retention (from default), not Limits
+        const addArg = mockJsm.streams.add.mock.calls[0]![0] as Record<string, unknown>;
+
+        expect(addArg.retention).toBe(RetentionPolicy.Workqueue);
       });
     });
 

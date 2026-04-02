@@ -494,4 +494,207 @@ describe(MessageProvider, () => {
       });
     });
   });
+
+  describe('consumer recovery', () => {
+    describe('when consumers.get throws "consumer not found" and consumerRecoveryFn is provided', () => {
+      it('should call consumerRecoveryFn with the correct StreamKind and retry with recovered consumer info', async () => {
+        // Given: a consumerRecoveryFn that returns a new ConsumerInfo
+        const recoveredConsumerInfo = createMock<ConsumerInfo>({
+          name: faker.lorem.word(),
+          stream_name: faker.lorem.word(),
+        });
+        const consumerRecoveryFn = vi.fn().mockResolvedValue(recoveredConsumerInfo);
+
+        const sutWithRecovery = new MessageProvider(
+          connection,
+          eventBus,
+          new Map(),
+          consumerRecoveryFn,
+        );
+
+        const mockMessages = createMockMessages();
+        const mockConsumer = createMock<Consumer>({
+          consume: vi.fn().mockResolvedValue(mockMessages),
+        });
+
+        const originalConsumerInfo = createMock<ConsumerInfo>({
+          name: faker.lorem.word(),
+          stream_name: faker.lorem.word(),
+        });
+
+        const consumerNotFoundError = new Error('consumer not found');
+        const js = {
+          consumers: {
+            get: vi
+              .fn()
+              .mockRejectedValueOnce(consumerNotFoundError)
+              .mockResolvedValue(mockConsumer),
+          },
+        };
+
+        connection.getJetStreamClient.mockReturnValue(js as never);
+
+        const consumers = new Map<StreamKind, ConsumerInfo>();
+
+        consumers.set(StreamKind.Event, originalConsumerInfo);
+
+        // When: start() is called and the first consumers.get throws "consumer not found"
+        sutWithRecovery.start(consumers);
+        await new Promise(process.nextTick);
+        await new Promise(process.nextTick);
+
+        // Then: consumerRecoveryFn was called with the correct StreamKind
+        expect(consumerRecoveryFn).toHaveBeenCalledWith(StreamKind.Event);
+
+        // And: consumers.get was retried with the recovered consumer info
+        expect(js.consumers.get).toHaveBeenCalledWith(
+          recoveredConsumerInfo.stream_name,
+          recoveredConsumerInfo.name,
+        );
+
+        sutWithRecovery.destroy();
+      });
+    });
+
+    describe('when consumers.get throws error with code "10014" and consumerRecoveryFn is provided', () => {
+      it('should call consumerRecoveryFn', async () => {
+        // Given: a consumerRecoveryFn and an error with NATS code 10014
+        const recoveredConsumerInfo = createMock<ConsumerInfo>({
+          name: faker.lorem.word(),
+          stream_name: faker.lorem.word(),
+        });
+        const consumerRecoveryFn = vi.fn().mockResolvedValue(recoveredConsumerInfo);
+
+        const sutWithRecovery = new MessageProvider(
+          connection,
+          eventBus,
+          new Map(),
+          consumerRecoveryFn,
+        );
+
+        const mockMessages = createMockMessages();
+        const mockConsumer = createMock<Consumer>({
+          consume: vi.fn().mockResolvedValue(mockMessages),
+        });
+
+        const consumerInfo = createMock<ConsumerInfo>({
+          name: faker.lorem.word(),
+          stream_name: faker.lorem.word(),
+        });
+
+        const codeError = new Error('10014');
+        const js = {
+          consumers: {
+            get: vi.fn().mockRejectedValueOnce(codeError).mockResolvedValue(mockConsumer),
+          },
+        };
+
+        connection.getJetStreamClient.mockReturnValue(js as never);
+
+        const consumers = new Map<StreamKind, ConsumerInfo>();
+
+        consumers.set(StreamKind.Event, consumerInfo);
+
+        // When: start() is called and consumers.get throws an error containing "10014"
+        sutWithRecovery.start(consumers);
+        await new Promise(process.nextTick);
+        await new Promise(process.nextTick);
+
+        // Then: consumerRecoveryFn was invoked
+        expect(consumerRecoveryFn).toHaveBeenCalled();
+
+        sutWithRecovery.destroy();
+      });
+    });
+
+    describe('when consumers.get throws "consumer not found" and NO consumerRecoveryFn is provided', () => {
+      it('should rethrow the error', async () => {
+        vi.useFakeTimers();
+
+        // Given: sut without consumerRecoveryFn (default from beforeEach)
+        const consumerInfo = createMock<ConsumerInfo>({
+          name: faker.lorem.word(),
+          stream_name: faker.lorem.word(),
+        });
+
+        const consumerNotFoundError = new Error('consumer not found');
+        const js = {
+          consumers: {
+            get: vi.fn().mockRejectedValue(consumerNotFoundError),
+          },
+        };
+
+        connection.getJetStreamClient.mockReturnValue(js as never);
+
+        const consumers = new Map<StreamKind, ConsumerInfo>();
+
+        consumers.set(StreamKind.Event, consumerInfo);
+
+        // When: start() is called and consumers.get throws "consumer not found"
+        sut.start(consumers);
+        await vi.advanceTimersByTimeAsync(0);
+
+        // Then: error is rethrown and captured by the self-healing flow (eventBus.emit called)
+        expect(eventBus.emit).toHaveBeenCalledWith(
+          TransportEvent.Error,
+          consumerNotFoundError,
+          'message-provider',
+        );
+
+        sut.destroy();
+        vi.useRealTimers();
+      });
+    });
+
+    describe('when consumers.get throws a non-consumer-not-found error and consumerRecoveryFn is provided', () => {
+      it('should rethrow the error and NOT call consumerRecoveryFn', async () => {
+        vi.useFakeTimers();
+
+        // Given: a consumerRecoveryFn and an unrelated error
+        const consumerRecoveryFn = vi.fn();
+
+        const sutWithRecovery = new MessageProvider(
+          connection,
+          eventBus,
+          new Map(),
+          consumerRecoveryFn,
+        );
+
+        const consumerInfo = createMock<ConsumerInfo>({
+          name: faker.lorem.word(),
+          stream_name: faker.lorem.word(),
+        });
+
+        const unrelatedError = new Error('connection reset');
+        const js = {
+          consumers: {
+            get: vi.fn().mockRejectedValue(unrelatedError),
+          },
+        };
+
+        connection.getJetStreamClient.mockReturnValue(js as never);
+
+        const consumers = new Map<StreamKind, ConsumerInfo>();
+
+        consumers.set(StreamKind.Event, consumerInfo);
+
+        // When: start() is called and consumers.get throws an unrelated error
+        sutWithRecovery.start(consumers);
+        await vi.advanceTimersByTimeAsync(0);
+
+        // Then: the error is rethrown (self-healing flow catches it via eventBus.emit)
+        expect(eventBus.emit).toHaveBeenCalledWith(
+          TransportEvent.Error,
+          unrelatedError,
+          'message-provider',
+        );
+
+        // And: consumerRecoveryFn was NOT called
+        expect(consumerRecoveryFn).not.toHaveBeenCalled();
+
+        sutWithRecovery.destroy();
+        vi.useRealTimers();
+      });
+    });
+  });
 });
