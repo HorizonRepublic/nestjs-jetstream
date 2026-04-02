@@ -165,6 +165,26 @@ describe(MetadataProvider, () => {
   });
 
   describe('heartbeat', () => {
+    it('should replace previous heartbeat when publish is called again', async () => {
+      // Given: first publish starts a heartbeat
+      const firstEntries = new Map<string, Record<string, unknown>>([['key1', { v: 1 }]]);
+
+      await sut.publish(firstEntries);
+
+      // When: second publish with different entries
+      const secondEntries = new Map<string, Record<string, unknown>>([['key2', { v: 2 }]]);
+
+      await sut.publish(secondEntries);
+      mockPut.mockClear();
+
+      // When: advance past one heartbeat tick
+      await vi.advanceTimersByTimeAsync(DEFAULT_METADATA_TTL / 2);
+
+      // Then: only second entries are refreshed (first heartbeat was replaced)
+      expect(mockPut).toHaveBeenCalledTimes(1);
+      expect(mockPut).toHaveBeenCalledWith('key2', JSON.stringify({ v: 2 }));
+    });
+
     it('should refresh entries at half the TTL interval', async () => {
       // Given: published entries with default TTL (30s → heartbeat every 15s)
       const entries = new Map<string, Record<string, unknown>>([['key', { v: 1 }]]);
