@@ -26,4 +26,6 @@ export interface ExtractedRecordData {
   messageId: string | undefined;
   /** Schedule options for delayed delivery, or `undefined` for immediate. */
   schedule?: ScheduleRecordOptions;
+  /** Per-message TTL as Go duration string (e.g. "30s"), or `undefined` for stream default. */
+  ttl?: string;
 }

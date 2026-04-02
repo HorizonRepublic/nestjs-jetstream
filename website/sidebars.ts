@@ -31,6 +31,7 @@ const sidebars: SidebarsConfig = {
         'patterns/broadcast',
         'patterns/ordered-events',
         'guides/scheduling',
+        'guides/per-message-ttl',
       ],
     },
     {
@@ -43,6 +44,7 @@ const sidebars: SidebarsConfig = {
         'guides/health-checks',
         'guides/lifecycle-hooks',
         'guides/graceful-shutdown',
+        'guides/stream-migration',
         'guides/performance',
       ],
     },

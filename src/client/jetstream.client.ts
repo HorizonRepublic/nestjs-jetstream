@@ -137,7 +137,7 @@ export class JetstreamClient extends ClientProxy {
    */
   protected async dispatchEvent<T = unknown>(packet: ReadPacket): Promise<T> {
     await this.connect();
-    const { data, hdrs, messageId, schedule } = this.extractRecordData(packet.data);
+    const { data, hdrs, messageId, schedule, ttl } = this.extractRecordData(packet.data);
 
     const eventSubject = this.buildEventSubject(packet.pattern);
     const msgHeaders = this.buildHeaders(hdrs, { subject: eventSubject });
@@ -152,6 +152,7 @@ export class JetstreamClient extends ClientProxy {
         .publish(scheduleSubject, this.codec.encode(data), {
           headers: msgHeaders,
           msgID: messageId ?? nuid.next(),
+          ttl,
           schedule: {
             specification: schedule.at,
             target: eventSubject,
@@ -169,6 +170,7 @@ export class JetstreamClient extends ClientProxy {
         .publish(eventSubject, this.codec.encode(data), {
           headers: msgHeaders,
           msgID: messageId ?? nuid.next(),
+          ttl,
         });
 
       if (ack.duplicate) {
@@ -187,11 +189,17 @@ export class JetstreamClient extends ClientProxy {
    */
   protected publish(packet: ReadPacket, callback: (p: WritePacket) => void): () => void {
     const subject = buildSubject(this.targetName, StreamKind.Command, packet.pattern);
-    const { data, hdrs, timeout, messageId, schedule } = this.extractRecordData(packet.data);
+    const { data, hdrs, timeout, messageId, schedule, ttl } = this.extractRecordData(packet.data);
 
     if (schedule) {
       this.logger.warn(
         'scheduleAt() is ignored for RPC (client.send()). Use client.emit() for scheduled events.',
+      );
+    }
+
+    if (ttl) {
+      this.logger.warn(
+        'ttl() is ignored for RPC (client.send()). Use client.emit() for events with TTL.',
       );
     }
 
@@ -478,6 +486,7 @@ export class JetstreamClient extends ClientProxy {
         timeout: rawData.timeout,
         messageId: rawData.messageId,
         schedule: rawData.schedule,
+        ttl: rawData.ttl,
       };
     }
 
@@ -487,6 +496,7 @@ export class JetstreamClient extends ClientProxy {
       timeout: undefined,
       messageId: undefined,
       schedule: undefined,
+      ttl: undefined,
     };
   }
 

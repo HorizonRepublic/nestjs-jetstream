@@ -24,6 +24,9 @@ const config: Config = {
         docs: {
           sidebarPath: './sidebars.ts',
           editUrl: 'https://github.com/HorizonRepublic/nestjs-jetstream/tree/main/website/',
+          showLastUpdateTime: true,
+          showLastUpdateAuthor: true,
+          
         },
         blog: false,
         theme: { customCss: './src/css/custom.css' },

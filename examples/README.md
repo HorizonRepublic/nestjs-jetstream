@@ -30,3 +30,4 @@ npx tsx --tsconfig examples/tsconfig.json examples/03-ordered-events/main.ts
 | 05 | [health-checks](./05-health-checks) | 3004 | Health indicator, Terminus-compatible | `GET /health`, `/health/terminus` |
 | 06 | [scheduling](./06-scheduling) | 3005 | Delayed delivery via scheduleAt() (NATS >= 2.12) | `GET /schedule` |
 | 07 | [publisher-only](./07-publisher-only) | 3006 | consumer: false, API gateway pattern | `GET /place-order` |
+| 08 | [per-message-ttl](./08-per-message-ttl) | 3007 | Individual message expiration (NATS >= 2.11) | `GET /token` |
