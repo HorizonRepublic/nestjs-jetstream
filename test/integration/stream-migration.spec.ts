@@ -12,6 +12,8 @@ import type { StartedTestContainer } from 'testcontainers';
 import { Controller } from '@nestjs/common';
 import { EventPattern, Payload } from '@nestjs/microservices';
 
+import { faker } from '@faker-js/faker';
+
 import { buildSubject, streamName, StreamKind } from '../../src';
 
 import { startNatsContainer } from './nats-container';
@@ -311,6 +313,92 @@ describe('Stream sourcing behavior (NATS verification)', () => {
         const info = await jsm.streams.info(evStreamName);
 
         expect(info.config.storage).toBe(StorageType.File);
+
+        await app2.close();
+        await cleanupStreams(nc, serviceName);
+      });
+    });
+
+    describe('randomized bulk migration', () => {
+      it('should preserve and deliver 20–50 random events through File→Memory migration', async () => {
+        const messageCount = faker.number.int({ min: 20, max: 50 });
+        const serviceName = uniqueServiceName();
+
+        // Given: create stream, then close consumer so messages accumulate
+        const { app: app1 } = await createTestApp(
+          { name: serviceName, port, events: { stream: { storage: StorageType.File } } },
+          [MigrationTestController],
+          [serviceName],
+        );
+
+        await app1.close();
+
+        // Publish N random messages directly into the stream
+        const evStreamName = streamName(serviceName, StreamKind.Event);
+        const subject = buildSubject(serviceName, StreamKind.Event, 'migration.test');
+        const encoder = new TextEncoder();
+        const published: { id: number; payload: string }[] = [];
+
+        for (let i = 0; i < messageCount; i++) {
+          const payload = { id: i, payload: faker.string.alphanumeric(64) };
+
+          published.push(payload);
+          await js.publish(subject, encoder.encode(JSON.stringify(payload)));
+        }
+
+        const infoBefore = await jsm.streams.info(evStreamName);
+
+        expect(infoBefore.state.messages).toBe(messageCount);
+
+        // When: migrate File → Memory
+        const migrationStart = Date.now();
+
+        const { app: app2, module: module2 } = await createTestApp(
+          {
+            name: serviceName,
+            port,
+            allowDestructiveMigration: true,
+            events: { stream: { storage: StorageType.Memory } },
+          },
+          [MigrationTestController],
+          [serviceName],
+        );
+
+        const migrationDone = Date.now();
+
+        // Then: all messages delivered to the controller
+        const controller = module2.get(MigrationTestController);
+
+        await waitForCondition(() => controller.received.length >= messageCount, 30_000);
+
+        const deliveryDone = Date.now();
+
+        expect(controller.received).toHaveLength(messageCount);
+
+        // Verify content integrity — every published payload arrived
+        const receivedIds = new Set(controller.received.map((r) => (r as { id: number }).id));
+
+        for (const msg of published) {
+          expect(receivedIds.has(msg.id)).toBe(true);
+        }
+
+        // Log timing for observability
+        const migrationMs = migrationDone - migrationStart;
+        const deliveryMs = deliveryDone - migrationDone;
+
+        console.log(
+          `[bulk migration] ${messageCount} messages: ` +
+            `migration ${migrationMs}ms, delivery ${deliveryMs}ms, ` +
+            `total ${migrationMs + deliveryMs}ms`,
+        );
+
+        // Sanity: migration + delivery should complete within 30s
+        expect(migrationMs + deliveryMs).toBeLessThan(30_000);
+
+        // Verify new storage applied
+        const infoAfter = await jsm.streams.info(evStreamName);
+
+        expect(infoAfter.config.storage).toBe(StorageType.Memory);
 
         await app2.close();
         await cleanupStreams(nc, serviceName);
