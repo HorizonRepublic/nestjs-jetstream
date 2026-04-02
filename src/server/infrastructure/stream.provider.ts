@@ -152,17 +152,38 @@ export class StreamProvider {
     return overrides.allow_msg_schedules === true;
   }
 
-  /** Get user-provided overrides for a stream kind. */
+  /** Get user-provided overrides for a stream kind, stripping transport-controlled properties. */
   private getOverrides(kind: StreamKind): Partial<StreamConfig> {
+    let overrides: Partial<StreamConfig>;
+
     switch (kind) {
       case StreamKind.Event:
-        return this.options.events?.stream ?? {};
+        overrides = this.options.events?.stream ?? {};
+        break;
       case StreamKind.Command:
-        return this.options.rpc?.mode === 'jetstream' ? (this.options.rpc.stream ?? {}) : {};
+        overrides = this.options.rpc?.mode === 'jetstream' ? (this.options.rpc.stream ?? {}) : {};
+        break;
       case StreamKind.Broadcast:
-        return this.options.broadcast?.stream ?? {};
+        overrides = this.options.broadcast?.stream ?? {};
+        break;
       case StreamKind.Ordered:
-        return this.options.ordered?.stream ?? {};
+        overrides = this.options.ordered?.stream ?? {};
+        break;
     }
+
+    return this.stripTransportControlled(overrides);
+  }
+
+  /**
+   * Remove transport-controlled properties from user overrides.
+   * `retention` is managed by the transport (Workqueue/Limits per stream kind)
+   * and silently stripped to protect users from misconfiguration.
+   */
+  private stripTransportControlled(overrides: Partial<StreamConfig>): Partial<StreamConfig> {
+    if (!('retention' in overrides)) return overrides;
+
+    const { retention: _, ...rest } = overrides;
+
+    return rest;
   }
 }

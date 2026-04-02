@@ -12,6 +12,7 @@ export type {
   JetstreamModuleOptions,
   OrderedEventOverrides,
   RpcConfig,
+  StreamConfigOverrides,
   StreamConsumerOverrides,
 } from './options.interface';
 
