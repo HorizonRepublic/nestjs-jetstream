@@ -104,10 +104,10 @@ Migration speed depends on message count and NATS server performance. Benchmarks
 
 | Messages | File → Memory | Memory → File |
 |----------|--------------|--------------|
-| 100 | < 1ms | < 1ms |
-| 10,000 | ~500ms | ~500ms |
+| 100 | < 10ms | < 10ms |
+| 10,000 | ~420ms | ~530ms |
 | 100,000 | ~3s | ~3s |
-| 1,000,000 | ~6s | ~5s |
+| 1,000,000 | ~6s | ~5.5s |
 
 Stream sourcing is a server-side operation — no messages travel over the network. Performance scales linearly with message count.
 
