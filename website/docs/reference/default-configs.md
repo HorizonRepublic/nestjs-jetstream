@@ -268,6 +268,10 @@ When an immutable conflict is detected:
 
 The migration uses NATS stream sourcing (server-side message copy) to avoid data loss. There is a brief window (milliseconds) during recreation where the stream does not exist — publishers may see temporary errors.
 
+:::tip Rolling updates with migration
+For most streams, migration completes in milliseconds and is safe during rolling updates. For very large streams (100k+ messages), consider scaling down to 1 replica before migrating or scheduling during a low-traffic window to avoid interference from other pods' self-healing consumers.
+:::
+
 :::caution retention is never migratable
 `retention` is controlled by the transport (`Workqueue` for events/commands, `Limits` for broadcast/ordered). A mismatch between the running stream and the expected retention policy always throws an error on startup, regardless of `allowDestructiveMigration`.
 :::

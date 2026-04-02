@@ -17,10 +17,18 @@ const SOURCING_POLL_INTERVAL_MS = 100;
  *   4. Restore: source from temp into new original
  *   5. Cleanup: remove temp stream
  *
- * **Important:** There is a brief window (milliseconds) between Phase 2 (delete)
- * and Phase 3 (create) where the stream does not exist. Publishers may see
- * temporary "stream not found" errors during this window. Client-side retry
- * is the caller's responsibility.
+ * **Rolling update safety:** During Phase 4 (restore), other pods' self-healing
+ * may recreate consumers and begin consuming restored messages. For workqueue
+ * streams this means acked messages are deleted, which could cause the sourcing
+ * count check to stall. In practice, server-side sourcing is much faster than
+ * consumer pull (network round-trips for each ack), so this is unlikely for
+ * streams under ~100k messages. For very large streams, scale down to 1 replica
+ * before migrating, or schedule migration during low-traffic windows.
+ *
+ * There is also a brief window (milliseconds) between Phase 2 (delete) and
+ * Phase 3 (create) where the stream does not exist. Publishers may see
+ * temporary "stream not found" errors. Client-side retry is the caller's
+ * responsibility.
  *
  * Ref: https://docs.nats.io/nats-concepts/jetstream/streams#sources
  */
