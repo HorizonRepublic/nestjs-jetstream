@@ -581,7 +581,14 @@ describe(JetstreamClient, () => {
         // Then: warning logged
         expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('ttl()'));
 
-        // Then: RPC still works
+        // And: TTL not passed to NATS request (Core RPC uses nc.request, not JetStream publish)
+        expect(mockNc.request).toHaveBeenCalledWith(
+          expect.any(String),
+          expect.any(Uint8Array),
+          expect.not.objectContaining({ ttl: expect.anything() }),
+        );
+
+        // And: RPC still works
         expect(result).toEqual({ ok: true });
       });
     });
