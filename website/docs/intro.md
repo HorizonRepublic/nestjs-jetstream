@@ -85,4 +85,6 @@ This documentation is organized into sections that progressively build on each o
 
 :::tip Ready to start?
 Head to [Installation](/docs/getting-started/installation) to add the library to your project, or jump straight to the [Quick Start](/docs/getting-started/quick-start) if you already have NATS running.
+
+Looking for copy-paste examples? Check out the [runnable examples](https://github.com/HorizonRepublic/nestjs-jetstream/tree/main/examples) — 7 self-contained demos covering events, RPC, scheduling, DLQ, health checks, and more.
 :::

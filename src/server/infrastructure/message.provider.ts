@@ -25,6 +25,10 @@ import { ConnectionProvider } from '../../connection';
 import { EventBus } from '../../hooks';
 import type { OrderedEventOverrides } from '../../interfaces';
 import { StreamKind, TransportEvent } from '../../interfaces';
+import { NatsErrorCode } from './nats-error-codes';
+
+/** Callback to recreate a consumer when it disappears. */
+export type ConsumerRecoveryFn = (kind: StreamKind) => Promise<ConsumerInfo>;
 
 /**
  * Manages pull-based message consumption from JetStream consumers.
@@ -51,6 +55,7 @@ export class MessageProvider {
     private readonly connection: ConnectionProvider,
     private readonly eventBus: EventBus,
     private readonly consumeOptionsMap: Map<StreamKind, Partial<ConsumeOptions>> = new Map(),
+    private readonly consumerRecoveryFn?: ConsumerRecoveryFn,
   ) {}
 
   /** Observable stream of workqueue event messages. */
@@ -192,7 +197,24 @@ export class MessageProvider {
     target$: Subject<JsMsg>,
   ): Promise<void> {
     const js = this.connection.getJetStreamClient();
-    const consumer: Consumer = await js.consumers.get(info.stream_name, info.name);
+
+    let consumer: Consumer;
+    let consumerName = info.name;
+
+    try {
+      consumer = await js.consumers.get(info.stream_name, info.name);
+    } catch (err) {
+      if (this.isConsumerNotFound(err) && this.consumerRecoveryFn) {
+        this.logger.warn(`Consumer ${info.name} not found, recreating...`);
+        const recovered = await this.consumerRecoveryFn(kind);
+
+        consumerName = recovered.name;
+        this.logger.log(`Consumer ${consumerName} recreated, resuming consumption`);
+        consumer = await js.consumers.get(recovered.stream_name, consumerName);
+      } else {
+        throw err;
+      }
+    }
 
     /* eslint-disable @typescript-eslint/naming-convention -- NATS API uses snake_case */
     const defaults: Partial<ConsumeOptions> = { idle_heartbeat: 5_000 };
@@ -202,7 +224,7 @@ export class MessageProvider {
     const messages = await consumer.consume({ ...defaults, ...userOptions } as ConsumeOptions);
 
     this.activeIterators.add(messages);
-    this.monitorConsumerHealth(messages, info.name);
+    this.monitorConsumerHealth(messages, consumerName);
 
     try {
       for await (const msg of messages) {
@@ -211,6 +233,22 @@ export class MessageProvider {
     } finally {
       this.activeIterators.delete(messages);
     }
+  }
+
+  /**
+   * Detect "consumer not found" errors from `js.consumers.get()`.
+   *
+   * Unlike JetStream Manager calls (which throw `JetStreamApiError`),
+   * the JetStream client's `consumers.get()` throws a plain `Error`
+   * with the error code embedded in the message text.
+   */
+  private isConsumerNotFound(err: unknown): boolean {
+    if (!(err instanceof Error)) return false;
+
+    return (
+      err.message.includes('consumer not found') ||
+      err.message.includes(String(NatsErrorCode.ConsumerNotFound))
+    );
   }
 
   /** Get the target subject for a consumer kind. */
@@ -224,6 +262,7 @@ export class MessageProvider {
         return this.broadcastMessages$;
       case StreamKind.Ordered:
         return this.orderedMessages$;
+      /* v8 ignore next 5 -- exhaustive switch guard, unreachable */
       default: {
         // eslint-disable-next-line @typescript-eslint/naming-convention
         const _exhaustive: never = kind;

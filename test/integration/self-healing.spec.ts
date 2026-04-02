@@ -3,7 +3,7 @@ import { Controller, INestApplication } from '@nestjs/common';
 import { ClientProxy, EventPattern, Payload } from '@nestjs/microservices';
 import { TestingModule } from '@nestjs/testing';
 import type { NatsConnection } from '@nats-io/transport-node';
-import { jetstreamManager } from '@nats-io/jetstream';
+import { jetstreamManager, type JetStreamManager } from '@nats-io/jetstream';
 import { firstValueFrom } from 'rxjs';
 import type { StartedTestContainer } from 'testcontainers';
 
@@ -192,5 +192,114 @@ describe('Self-Healing Consumer Flow', () => {
         await secondApp.close();
       },
     );
+  });
+
+  describe('consumer recovery (auto-recreate on not found)', () => {
+    let nc: NatsConnection;
+    let jsm: JetStreamManager;
+    let container: StartedTestContainer;
+    let port: number;
+
+    beforeAll(async () => {
+      ({ container, port } = await startNatsContainer());
+      nc = await createNatsConnection(port);
+      jsm = await jetstreamManager(nc);
+    }, 60_000);
+
+    afterAll(async () => {
+      try {
+        await nc.drain();
+      } finally {
+        await container.stop();
+      }
+    });
+
+    let app: INestApplication;
+    let module: TestingModule;
+    let client: ClientProxy;
+    let serviceName: string;
+    let controller: SelfHealingController;
+
+    beforeEach(async () => {
+      serviceName = uniqueServiceName();
+
+      ({ app, module } = await createTestApp(
+        { name: serviceName, port },
+        [SelfHealingController],
+        [serviceName],
+      ));
+
+      client = module.get<ClientProxy>(getClientToken(serviceName));
+      controller = module.get(SelfHealingController);
+    });
+
+    afterEach(async () => {
+      await app.close().catch(() => {});
+      await cleanupStreams(nc, serviceName).catch(() => {});
+    });
+
+    it('should block consumer recovery while migration backup exists', async () => {
+      // Given: message consumed successfully
+      await firstValueFrom(client.emit('healing.check', { phase: 'initial' }));
+
+      await waitForCondition(() => controller.received.length >= 1, 10_000);
+
+      const evStream = streamName(serviceName, StreamKind.Event);
+      const evConsumer = consumerName(serviceName, StreamKind.Event);
+      const backupName = `${evStream}__migration_backup`;
+
+      // When: simulate migration — create backup stream, then delete consumer
+
+      await jsm.streams.add({
+        name: backupName,
+        subjects: [],
+        num_replicas: 1,
+      });
+
+      await jsm.consumers.delete(evStream, evConsumer);
+
+      // Publish a message while backup exists
+      await firstValueFrom(client.emit('healing.check', { phase: 'during-migration' }));
+
+      // Wait enough for self-healing to attempt recovery (several retry cycles)
+      await new Promise((r) => setTimeout(r, 3_000));
+
+      // Then: consumer should NOT be recreated — backup blocks recovery
+      await expect(jsm.consumers.info(evStream, evConsumer)).rejects.toThrow();
+
+      // Only the first message was consumed
+      expect(controller.received).toHaveLength(1);
+
+      // When: "migration completes" — delete backup stream
+      await jsm.streams.delete(backupName);
+
+      // Then: self-healing recovers, consumer recreated, pending message delivered
+      await waitForCondition(() => controller.received.length >= 2, 30_000);
+
+      expect(controller.received).toHaveLength(2);
+    }, 60_000);
+
+    it('should recreate event consumer after manual deletion and resume consumption', async () => {
+      // Given: message consumed successfully
+      await firstValueFrom(client.emit('healing.check', { phase: 'before-delete' }));
+
+      await waitForCondition(() => controller.received.length >= 1, 10_000);
+
+      expect(controller.received).toHaveLength(1);
+
+      // When: delete consumer via NATS
+      const evStream = streamName(serviceName, StreamKind.Event);
+      const evConsumer = consumerName(serviceName, StreamKind.Event);
+
+      await jsm.consumers.delete(evStream, evConsumer);
+
+      // And: publish another message
+      await firstValueFrom(client.emit('healing.check', { phase: 'after-delete' }));
+
+      // Then: self-healing recreates consumer and message is delivered
+      await waitForCondition(() => controller.received.length >= 2, 30_000);
+
+      expect(controller.received).toHaveLength(2);
+    }, 60_000);
   });
 });

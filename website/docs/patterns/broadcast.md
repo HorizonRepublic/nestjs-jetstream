@@ -245,7 +245,7 @@ Each consumer only subscribes to the broadcast subjects it has handlers for (via
 | `max_msg_size` | 10 MB | Maximum size per message |
 | `max_msgs` | 10,000,000 | Maximum total messages |
 | `max_bytes` | 2 GB | Maximum total stream size |
-| `max_age` | 1 day | Messages older than this are purged |
+| `max_age` | 1 hour | Messages older than this are purged |
 | `duplicate_window` | 2 minutes | Window for publish-side deduplication |
 
 **Consumer defaults (per-service):**

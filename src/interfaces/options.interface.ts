@@ -8,6 +8,15 @@ import type { DeadLetterInfo } from './hooks.interface';
 import { TransportHooks } from './hooks.interface';
 
 /**
+ * Stream config overrides exposed to users.
+ *
+ * `retention` is excluded because it is controlled by the transport layer
+ * (Workqueue for events/commands, Limits for broadcast/ordered).
+ * Any `retention` value provided at runtime is silently stripped.
+ */
+export type StreamConfigOverrides = Partial<Omit<StreamConfig, 'retention'>>;
+
+/**
  * RPC transport configuration.
  *
  * Discriminated union on `mode`:
@@ -28,7 +37,7 @@ export type RpcConfig =
       /** Handler timeout in ms. Default: 180_000 (3 min). */
       timeout?: number;
       /** Raw NATS StreamConfig overrides for the command stream. */
-      stream?: Partial<StreamConfig>;
+      stream?: StreamConfigOverrides;
       /** Raw NATS ConsumerConfig overrides for the command consumer. */
       consumer?: Partial<ConsumerConfig>;
 
@@ -47,7 +56,7 @@ export type RpcConfig =
 
 /** Overrides for JetStream stream and consumer configuration. */
 export interface StreamConsumerOverrides {
-  stream?: Partial<StreamConfig>;
+  stream?: StreamConfigOverrides;
   consumer?: Partial<ConsumerConfig>;
 
   /**
@@ -95,7 +104,7 @@ export interface StreamConsumerOverrides {
  */
 export interface OrderedEventOverrides {
   /** Stream overrides (e.g. `max_age`, `max_bytes`). */
-  stream?: Partial<StreamConfig>;
+  stream?: StreamConfigOverrides;
 
   /**
    * Where to start reading when the consumer is (re)created.
@@ -204,6 +213,24 @@ export interface JetstreamModuleOptions {
    * @default 10_000
    */
   shutdownTimeout?: number;
+
+  /**
+   * Allow destructive stream migration when immutable config changes are detected.
+   *
+   * When `true`, the transport will recreate streams (via blue-green sourcing)
+   * if immutable properties like `storage` differ from the running stream.
+   * Messages are preserved during migration.
+   *
+   * `retention` is NOT migratable — it is controlled by the transport
+   * (Workqueue for events, Limits for broadcast/ordered) and a mismatch
+   * is always treated as an error regardless of this flag.
+   *
+   * When `false` (default), immutable conflicts are logged as warnings and
+   * the stream continues with its existing configuration.
+   *
+   * @default false
+   */
+  allowDestructiveMigration?: boolean;
 
   /**
    * Raw NATS ConnectionOptions pass-through for advanced connection config.

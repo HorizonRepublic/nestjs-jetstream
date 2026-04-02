@@ -12,9 +12,9 @@ import {
   internalName,
   streamName,
 } from '../../jetstream.constants';
-
-/** JetStream API error code for missing streams. */
-const STREAM_NOT_FOUND = 10059;
+import { NatsErrorCode } from './nats-error-codes';
+import { compareStreamConfig, type StreamConfigDiffResult } from './stream-config-diff';
+import { StreamMigration } from './stream-migration';
 
 /**
  * Manages JetStream stream lifecycle: creation, updates, and idempotent ensures.
@@ -28,6 +28,7 @@ const STREAM_NOT_FOUND = 10059;
  */
 export class StreamProvider {
   private readonly logger = new Logger('Jetstream:Stream');
+  private readonly migration = new StreamMigration();
 
   public constructor(
     private readonly options: JetstreamModuleOptions,
@@ -96,18 +97,116 @@ export class StreamProvider {
     this.logger.log(`Ensuring stream: ${config.name}`);
 
     try {
-      // Try to get existing stream info
-      await jsm.streams.info(config.name);
-      // Stream exists — update config
-      this.logger.debug(`Stream exists, updating: ${config.name}`);
-      return await jsm.streams.update(config.name, config);
+      const currentInfo = await jsm.streams.info(config.name);
+
+      return await this.handleExistingStream(jsm, currentInfo, config);
     } catch (err) {
-      if (err instanceof JetStreamApiError && err.apiError().err_code === STREAM_NOT_FOUND) {
+      if (
+        err instanceof JetStreamApiError &&
+        err.apiError().err_code === NatsErrorCode.StreamNotFound
+      ) {
         this.logger.log(`Creating stream: ${config.name}`);
         return await jsm.streams.add(config as StreamConfig);
       }
 
       throw err;
+    }
+  }
+
+  private async handleExistingStream(
+    jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
+    currentInfo: StreamInfo,
+    config: Partial<StreamConfig> & { name: string; subjects: string[] },
+  ): Promise<StreamInfo> {
+    const diff = compareStreamConfig(currentInfo.config, config);
+
+    if (!diff.hasChanges) {
+      this.logger.debug(`Stream ${config.name}: no config changes`);
+      return currentInfo;
+    }
+
+    this.logChanges(config.name, diff, !!this.options.allowDestructiveMigration);
+
+    if (diff.hasTransportControlledConflicts) {
+      const conflicts = diff.changes
+        .filter((c) => c.mutability === 'transport-controlled')
+        .map((c) => `${c.property}: ${JSON.stringify(c.current)} → ${JSON.stringify(c.desired)}`)
+        .join(', ');
+
+      throw new Error(
+        `Stream ${config.name} has transport-controlled config conflicts that cannot be migrated: ${conflicts}. ` +
+          `The retention policy is managed by the transport and must match the stream kind.`,
+      );
+    }
+
+    if (!diff.hasImmutableChanges) {
+      // Mutable-only or enable-only — normal update
+      this.logger.debug(`Stream exists, updating: ${config.name}`);
+      return await jsm.streams.update(config.name, config);
+    }
+
+    // Immutable changes detected
+    if (!this.options.allowDestructiveMigration) {
+      this.logger.warn(
+        `Stream ${config.name} has immutable config conflicts. ` +
+          `Enable allowDestructiveMigration to recreate the stream.`,
+      );
+
+      // Apply mutable-only changes by building config without immutable overrides
+      if (diff.hasMutableChanges) {
+        const mutableConfig = this.buildMutableOnlyConfig(config, currentInfo.config, diff);
+
+        return await jsm.streams.update(config.name, mutableConfig);
+      }
+
+      return currentInfo;
+    }
+
+    // Destructive migration
+    await this.migration.migrate(jsm, config.name, config);
+
+    return await jsm.streams.info(config.name);
+  }
+
+  private buildMutableOnlyConfig(
+    config: Partial<StreamConfig> & { name: string; subjects: string[] },
+    currentConfig: StreamConfig,
+    diff: StreamConfigDiffResult,
+  ): typeof config {
+    const nonMutableKeys = new Set(
+      diff.changes
+        .filter((c) => c.mutability === 'immutable' || c.mutability === 'transport-controlled')
+        .map((c) => c.property),
+    );
+
+    const filtered = { ...config };
+
+    for (const key of nonMutableKeys) {
+      // Replace desired immutable values with current values so NATS
+      // doesn't interpret missing fields as "use default"
+      (filtered as Record<string, unknown>)[key] = currentConfig[key];
+    }
+
+    return filtered;
+  }
+
+  private logChanges(
+    streamName: string,
+    diff: StreamConfigDiffResult,
+    migrationEnabled: boolean,
+  ): void {
+    for (const c of diff.changes) {
+      const detail = `${c.property}: ${JSON.stringify(c.current)} → ${JSON.stringify(c.desired)}`;
+
+      if (c.mutability === 'transport-controlled') {
+        this.logger.error(
+          `Stream ${streamName}: ${detail} — transport-controlled, cannot be changed`,
+        );
+      } else if (c.mutability === 'immutable' && !migrationEnabled) {
+        this.logger.warn(`Stream ${streamName}: ${detail} — requires allowDestructiveMigration`);
+      } else {
+        this.logger.log(`Stream ${streamName}: ${detail}`);
+      }
     }
   }
 
@@ -152,17 +251,44 @@ export class StreamProvider {
     return overrides.allow_msg_schedules === true;
   }
 
-  /** Get user-provided overrides for a stream kind. */
+  /** Get user-provided overrides for a stream kind, stripping transport-controlled properties. */
   private getOverrides(kind: StreamKind): Partial<StreamConfig> {
+    let overrides: Partial<StreamConfig>;
+
     switch (kind) {
       case StreamKind.Event:
-        return this.options.events?.stream ?? {};
+        overrides = this.options.events?.stream ?? {};
+        break;
       case StreamKind.Command:
-        return this.options.rpc?.mode === 'jetstream' ? (this.options.rpc.stream ?? {}) : {};
+        overrides = this.options.rpc?.mode === 'jetstream' ? (this.options.rpc.stream ?? {}) : {};
+        break;
       case StreamKind.Broadcast:
-        return this.options.broadcast?.stream ?? {};
+        overrides = this.options.broadcast?.stream ?? {};
+        break;
       case StreamKind.Ordered:
-        return this.options.ordered?.stream ?? {};
+        overrides = this.options.ordered?.stream ?? {};
+        break;
     }
+
+    return this.stripTransportControlled(overrides);
+  }
+
+  /**
+   * Remove transport-controlled properties from user overrides.
+   * `retention` is managed by the transport (Workqueue/Limits per stream kind)
+   * and silently stripped to protect users from misconfiguration.
+   */
+  private stripTransportControlled(overrides: Partial<StreamConfig>): Partial<StreamConfig> {
+    if (!('retention' in overrides)) return overrides;
+
+    this.logger.debug(
+      'Stripping user-provided retention override — retention is managed by the transport',
+    );
+
+    const cleaned = { ...overrides };
+
+    delete cleaned.retention;
+
+    return cleaned;
   }
 }

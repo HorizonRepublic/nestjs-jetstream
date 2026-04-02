@@ -222,4 +222,14 @@ export default [
     },
   },
 
+  // Examples: relaxed rules for copy-paste readability
+  {
+    files: ['examples/**/*.ts'],
+    rules: {
+      '@typescript-eslint/explicit-member-accessibility': 'off',
+      '@typescript-eslint/naming-convention': 'off',
+      '@typescript-eslint/no-unnecessary-condition': 'off',
+    },
+  },
+
 ];

@@ -1,0 +1,165 @@
+import { Logger } from '@nestjs/common';
+import { JetStreamApiError, type JetStreamManager, type StreamConfig } from '@nats-io/jetstream';
+
+import { NatsErrorCode } from './nats-error-codes';
+
+export const MIGRATION_BACKUP_SUFFIX = '__migration_backup';
+const DEFAULT_SOURCING_TIMEOUT_MS = 30_000;
+const SOURCING_POLL_INTERVAL_MS = 100;
+
+/**
+ * Orchestrates blue-green stream recreation for immutable property changes.
+ *
+ * Uses NATS stream sourcing (server-side copy) to preserve messages:
+ *   1. Backup: create temp stream sourcing from original
+ *   2. Delete original
+ *   3. Create original with new config
+ *   4. Restore: source from temp into new original
+ *   5. Cleanup: remove temp stream
+ *
+ * **Rolling update safety:** During Phase 4 (restore), other pods' self-healing
+ * may recreate consumers and begin consuming restored messages. For workqueue
+ * streams this means acked messages are deleted, which could cause the sourcing
+ * count check to stall. In practice, server-side sourcing is much faster than
+ * consumer pull (network round-trips for each ack), so this is unlikely for
+ * streams under ~100k messages. For very large streams, scale down to 1 replica
+ * before migrating, or schedule migration during low-traffic windows.
+ *
+ * There is also a brief window (milliseconds) between Phase 2 (delete) and
+ * Phase 3 (create) where the stream does not exist. Publishers may see
+ * temporary "stream not found" errors. Client-side retry is the caller's
+ * responsibility.
+ *
+ * Ref: https://docs.nats.io/nats-concepts/jetstream/streams#sources
+ */
+export class StreamMigration {
+  private readonly logger = new Logger('Jetstream:Stream');
+
+  public constructor(private readonly sourcingTimeoutMs = DEFAULT_SOURCING_TIMEOUT_MS) {}
+
+  public async migrate(
+    jsm: JetStreamManager,
+    streamName: string,
+    newConfig: Partial<StreamConfig> & { name: string; subjects: string[] },
+  ): Promise<void> {
+    const backupName = `${streamName}${MIGRATION_BACKUP_SUFFIX}`;
+    const startTime = Date.now();
+
+    // Check original stream FIRST — if it's gone but backup exists,
+    // we must NOT delete the backup (it may be the only copy of the data).
+    const currentInfo = await jsm.streams.info(streamName);
+
+    await this.cleanupOrphanedBackup(jsm, backupName);
+
+    const messageCount = currentInfo.state.messages;
+
+    this.logger.log(`Stream ${streamName}: destructive migration started`);
+
+    // Track whether original stream has been deleted — after Phase 2,
+    // backup is the only copy and must NOT be deleted on failure.
+    let originalDeleted = false;
+
+    try {
+      if (messageCount > 0) {
+        // Phase 1: Backup via sourcing
+        this.logger.log(`  Phase 1/4: Backing up ${messageCount} messages → ${backupName}`);
+        await jsm.streams.add({
+          ...currentInfo.config,
+          name: backupName,
+          subjects: [],
+          sources: [{ name: streamName }],
+        } as StreamConfig);
+
+        await this.waitForSourcing(jsm, backupName, messageCount);
+      }
+
+      // Phase 2: Delete original
+      this.logger.log(`  Phase 2/4: Deleting old stream`);
+      await jsm.streams.delete(streamName);
+      originalDeleted = true;
+
+      // Phase 3: Create with new config
+      this.logger.log(`  Phase 3/4: Creating stream with new config`);
+      await jsm.streams.add(newConfig as StreamConfig);
+
+      if (messageCount > 0) {
+        // Phase 4: Restore from backup.
+        // First remove the backup's source pointing to streamName — that reference is stale
+        // (original was deleted in Phase 2) and would cause a cycle when we make the new
+        // stream source from the backup.
+        const backupInfo = await jsm.streams.info(backupName);
+
+        await jsm.streams.update(backupName, { ...backupInfo.config, sources: [] });
+
+        this.logger.log(`  Phase 4/4: Restoring ${messageCount} messages from backup`);
+        await jsm.streams.update(streamName, {
+          ...newConfig,
+          sources: [{ name: backupName }],
+        });
+
+        await this.waitForSourcing(jsm, streamName, messageCount);
+
+        // Remove sources — pass full config without sources
+        await jsm.streams.update(streamName, { ...newConfig, sources: [] });
+        await jsm.streams.delete(backupName);
+      }
+    } catch (err) {
+      if (originalDeleted && messageCount > 0) {
+        // After Phase 2: backup is the only copy — DO NOT delete it.
+        // Leave it for manual recovery or next startup retry.
+        this.logger.error(
+          `Migration failed after deleting original stream. ` +
+            `Backup ${backupName} preserved for manual recovery.`,
+        );
+      } else {
+        // Before Phase 2: original still intact — safe to clean up backup
+        await this.cleanupOrphanedBackup(jsm, backupName);
+      }
+
+      throw err;
+    }
+
+    const durationMs = Date.now() - startTime;
+
+    this.logger.log(
+      `Stream ${streamName}: migration complete (${messageCount} messages preserved, took ${(durationMs / 1000).toFixed(1)}s)`,
+    );
+  }
+
+  private async waitForSourcing(
+    jsm: JetStreamManager,
+    streamName: string,
+    expectedCount: number,
+  ): Promise<void> {
+    const deadline = Date.now() + this.sourcingTimeoutMs;
+
+    while (Date.now() < deadline) {
+      const info = await jsm.streams.info(streamName);
+
+      if (info.state.messages >= expectedCount) return;
+
+      await new Promise((r) => setTimeout(r, SOURCING_POLL_INTERVAL_MS));
+    }
+
+    throw new Error(
+      `Stream sourcing timeout: ${streamName} has not reached ${expectedCount} messages within ${this.sourcingTimeoutMs / 1000}s`,
+    );
+  }
+
+  private async cleanupOrphanedBackup(jsm: JetStreamManager, backupName: string): Promise<void> {
+    try {
+      await jsm.streams.info(backupName);
+      this.logger.warn(`Found orphaned migration backup stream: ${backupName}, cleaning up`);
+      await jsm.streams.delete(backupName);
+    } catch (err) {
+      if (
+        err instanceof JetStreamApiError &&
+        err.apiError().err_code === NatsErrorCode.StreamNotFound
+      ) {
+        return; // Backup doesn't exist — expected path
+      }
+
+      throw err;
+    }
+  }
+}

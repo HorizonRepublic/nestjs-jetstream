@@ -14,6 +14,7 @@ export type {
   OrderedEventOverrides,
   RpcConfig,
   ScheduleRecordOptions,
+  StreamConfigOverrides,
   StreamConsumerOverrides,
   TransportHooks,
 } from './interfaces';

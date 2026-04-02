@@ -38,7 +38,7 @@ JetstreamModule.forRoot({
 });
 ```
 
-This flag is not enabled by default to maintain backward compatibility with NATS < 2.12.
+This flag is not enabled by default to maintain backward compatibility with NATS < 2.12. It can be safely added to existing streams — NATS applies it as a regular update without recreation or downtime.
 
 ## Usage
 

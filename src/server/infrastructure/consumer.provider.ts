@@ -13,10 +13,9 @@ import {
 } from '../../jetstream.constants';
 import { PatternRegistry } from '../routing';
 
+import { NatsErrorCode } from './nats-error-codes';
+import { MIGRATION_BACKUP_SUFFIX } from './stream-migration';
 import { StreamProvider } from './stream.provider';
-
-/** JetStream API error code for missing consumers. */
-const CONSUMER_NOT_FOUND = 10014;
 
 /**
  * Manages JetStream consumer lifecycle: creation and idempotent ensures.
@@ -59,8 +58,12 @@ export class ConsumerProvider {
     return consumerName(this.options.name, kind);
   }
 
-  /** Ensure a single consumer exists, creating if needed. */
-  private async ensureConsumer(
+  /**
+   * Ensure a single consumer exists with the desired config.
+   * Used at **startup** — creates or updates the consumer to match
+   * the current pod's configuration.
+   */
+  public async ensureConsumer(
     jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
     kind: StreamKind,
   ): Promise<ConsumerInfo> {
@@ -73,14 +76,119 @@ export class ConsumerProvider {
     try {
       await jsm.consumers.info(stream, name);
       this.logger.debug(`Consumer exists, updating: ${name}`);
+
       return await jsm.consumers.update(stream, name, config);
     } catch (err) {
-      if (err instanceof JetStreamApiError && err.apiError().err_code === CONSUMER_NOT_FOUND) {
-        this.logger.log(`Creating consumer: ${name}`);
-        return await jsm.consumers.add(stream, config);
+      if (
+        !(err instanceof JetStreamApiError) ||
+        err.apiError().err_code !== NatsErrorCode.ConsumerNotFound
+      ) {
+        throw err;
       }
 
+      return await this.createConsumer(jsm, stream, name, config);
+    }
+  }
+
+  /**
+   * Recover a consumer that disappeared during runtime.
+   * Used by **self-healing** — creates if missing, but NEVER updates config.
+   *
+   * If a migration backup stream exists, another pod is mid-migration — we
+   * throw so the self-healing retry loop waits with backoff until migration
+   * completes and the backup is cleaned up.
+   *
+   * This prevents old pods from:
+   * - Overwriting a newer pod's consumer config during rolling updates
+   * - Creating consumers during migration (which would consume and delete
+   *   workqueue messages while they're being restored)
+   */
+  public async recoverConsumer(
+    jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
+    kind: StreamKind,
+  ): Promise<ConsumerInfo> {
+    const stream = this.streamProvider.getStreamName(kind);
+    const config = this.buildConfig(kind);
+    const name = config.durable_name;
+
+    this.logger.log(`Recovering consumer: ${name} on stream: ${stream}`);
+
+    // Check if another pod is mid-migration — backup stream acts as a lock
+    await this.assertNoMigrationInProgress(jsm, stream);
+
+    try {
+      // Consumer already exists (another pod may have recreated it) — use as-is
+      return await jsm.consumers.info(stream, name);
+    } catch (err) {
+      if (
+        !(err instanceof JetStreamApiError) ||
+        err.apiError().err_code !== NatsErrorCode.ConsumerNotFound
+      ) {
+        throw err;
+      }
+
+      return await this.createConsumer(jsm, stream, name, config);
+    }
+  }
+
+  /**
+   * Throw if a migration backup stream exists for this stream.
+   * The self-healing retry loop catches the error and retries with backoff,
+   * naturally waiting until the migrating pod finishes and cleans up the backup.
+   */
+  private async assertNoMigrationInProgress(
+    jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
+    stream: string,
+  ): Promise<void> {
+    const backupName = `${stream}${MIGRATION_BACKUP_SUFFIX}`;
+
+    try {
+      await jsm.streams.info(backupName);
+
+      // Backup exists → migration in progress
+      throw new Error(
+        `Stream ${stream} is being migrated (backup ${backupName} exists). ` +
+          `Waiting for migration to complete before recovering consumer.`,
+      );
+    } catch (err) {
+      // Backup doesn't exist → no migration in progress → proceed
+      if (
+        err instanceof JetStreamApiError &&
+        err.apiError().err_code === NatsErrorCode.StreamNotFound
+      ) {
+        return;
+      }
+
+      // Re-throw: either the "migration in progress" error or an unexpected error
       throw err;
+    }
+  }
+
+  /**
+   * Create a consumer, handling the race where another pod creates it first.
+   */
+  private async createConsumer(
+    jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
+    stream: string,
+    name: string,
+    /* eslint-disable-next-line @typescript-eslint/naming-convention -- NATS API uses snake_case */
+    config: Partial<ConsumerConfig> & { durable_name: string },
+  ): Promise<ConsumerInfo> {
+    this.logger.log(`Creating consumer: ${name}`);
+
+    try {
+      return await jsm.consumers.add(stream, config);
+    } catch (addErr) {
+      if (
+        addErr instanceof JetStreamApiError &&
+        addErr.apiError().err_code === NatsErrorCode.ConsumerAlreadyExists
+      ) {
+        this.logger.debug(`Consumer ${name} created by another pod, using existing`);
+
+        return await jsm.consumers.info(stream, name);
+      }
+
+      throw addErr;
     }
   }
 
@@ -147,6 +255,7 @@ export class ConsumerProvider {
         return DEFAULT_BROADCAST_CONSUMER_CONFIG;
       case StreamKind.Ordered:
         throw new Error('Ordered consumers are ephemeral and should not use durable config');
+      /* v8 ignore next 5 -- exhaustive switch guard, unreachable */
       default: {
         // eslint-disable-next-line @typescript-eslint/naming-convention
         const _exhaustive: never = kind;
@@ -167,6 +276,7 @@ export class ConsumerProvider {
         return this.options.broadcast?.consumer ?? {};
       case StreamKind.Ordered:
         throw new Error('Ordered consumers are ephemeral and should not use durable config');
+      /* v8 ignore next 5 -- exhaustive switch guard, unreachable */
       default: {
         // eslint-disable-next-line @typescript-eslint/naming-convention
         const _exhaustive: never = kind;

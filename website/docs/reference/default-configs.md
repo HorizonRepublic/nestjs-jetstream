@@ -21,7 +21,7 @@ All streams share a common base configuration:
 |----------|-------|
 | `retention` | `Workqueue` (overridden per type below) |
 | `storage` | `File` |
-| `num_replicas` | `1` |
+| `num_replicas` | `1` (see [production recommendation](#replicas-in-production) below) |
 | `discard` | `Old` |
 | `allow_direct` | `true` |
 | `compression` | `S2` |
@@ -94,8 +94,12 @@ Limits retention — messages persist until the configured limits are reached. S
 | `max_msgs_per_subject` | `1,000,000` | |
 | `max_msgs` | `10,000,000` | |
 | `max_bytes` | `2 GB` | 2,147,483,648 bytes |
-| `max_age` | `1 day` | `toNanos(1, 'days')` |
+| `max_age` | `1 hour` | `toNanos(1, 'hours')` |
 | `duplicate_window` | `2 minutes` | `toNanos(2, 'minutes')` |
+
+:::info Changed in this release
+`max_age` reduced from 1 day to 1 hour. Broadcast messages (config propagation, cache invalidation, feature flags) are relevant for minutes, not days. 1 hour provides sufficient catch-up window for new instances while reducing unnecessary storage. This is a mutable property — existing streams update automatically on next startup.
+:::
 
 ### Ordered Stream
 
@@ -192,6 +196,64 @@ The JetStream RPC timeout is intentionally longer because messages are persisted
 | Shutdown timeout | `10 seconds` |
 
 The transport waits up to 10 seconds for in-flight messages to be processed before forcing shutdown via `drain()`.
+
+## Replicas in production
+
+The default `num_replicas: 1` is suitable for development and single-node NATS. **For production NATS clusters, set `num_replicas: 3`** to ensure data survives node failures via Raft consensus:
+
+```typescript
+JetstreamModule.forRoot({
+  name: 'orders',
+  servers: ['nats://nats-1:4222', 'nats://nats-2:4222', 'nats://nats-3:4222'],
+  events: { stream: { num_replicas: 3 } },
+  broadcast: { stream: { num_replicas: 3 } },
+  ordered: { stream: { num_replicas: 3 } },
+  rpc: { mode: 'jetstream', stream: { num_replicas: 3 } },
+});
+```
+
+:::tip
+`num_replicas` can be changed on an existing stream — NATS will add or remove replicas automatically. No downtime or stream recreation required.
+:::
+
+## Immutable vs mutable stream properties
+
+NATS JetStream divides stream configuration into properties that can be updated on an existing stream and properties that are **locked at creation time**.
+
+### Mutable (can be changed at any time)
+
+`num_replicas`, `max_age`, `max_bytes`, `max_msgs`, `max_msg_size`, `max_msgs_per_subject`, `discard`, `duplicate_window`, `subjects`, `compression`, `description`, `allow_rollup_hdrs`, `allow_direct`
+
+The transport applies mutable changes automatically on startup — just update the value in `forRoot()` and restart the service.
+
+### Enable-only (can be turned on, but never off)
+
+These properties can be **enabled** on an existing stream via a normal update, but once enabled they cannot be disabled. No stream recreation required.
+
+| Property | Default | Notes |
+|----------|---------|-------|
+| `allow_msg_schedules` | `false` | Enable [message scheduling](/docs/guides/scheduling) — safe to add to existing streams |
+| `allow_msg_ttl` | `false` | Enable per-message TTL |
+| `deny_delete` | `false` | Prevent message deletion via API |
+| `deny_purge` | `false` | Prevent stream purging via API |
+
+:::tip Enabling scheduling on existing streams
+You can safely add `allow_msg_schedules: true` to an existing stream config — NATS applies this as a regular update. No downtime, no message loss, no stream recreation. Just update `forRoot()` and restart.
+:::
+
+### Immutable (locked after creation)
+
+| Property | Default | Migratable | Notes |
+|----------|---------|-----------|-------|
+| `name` | derived from service name | No | Cannot be renamed |
+| `retention` | `Workqueue` or `Limits` | **No** | Controlled by the transport — a mismatch is always an error |
+| `storage` | `File` | **Yes** | Can be migrated with `allowDestructiveMigration: true` |
+
+The transport can automatically migrate `storage` via blue-green stream recreation. See the full **[Stream Migration guide](/docs/guides/stream-migration)** for how it works, rolling update behavior, performance benchmarks, and limitations.
+
+:::caution retention is never migratable
+`retention` is controlled by the transport (`Workqueue` for events/commands, `Limits` for broadcast/ordered). A mismatch between the running stream and the expected retention policy always throws an error on startup, regardless of `allowDestructiveMigration`.
+:::
 
 ## Overriding Defaults
 

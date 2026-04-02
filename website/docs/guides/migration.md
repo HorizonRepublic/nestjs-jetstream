@@ -118,6 +118,25 @@ After migration, you get for free:
 
 ## Upgrading between versions
 
+### v2.8 → v2.9
+
+**Notable change:**
+
+:::caution Broadcast `max_age` reduced: 1 day → 1 hour
+Broadcast messages (config propagation, cache invalidation, feature flags) are relevant for minutes, not days. The new default provides a sufficient catch-up window while reducing storage. This is a mutable property — **existing streams update automatically on next application startup**. If you need a longer retention window, override it explicitly:
+```typescript
+broadcast: { stream: { max_age: toNanos(1, 'days') } }
+```
+:::
+
+**New features:**
+- [Stream migration](/docs/guides/stream-migration) — automatic blue-green stream recreation for immutable property changes (`storage`). Enable with `allowDestructiveMigration: true`.
+- Consumer self-healing auto-recreation — consumers deleted externally are automatically recreated. Migration-aware: waits during active stream migrations.
+- `StreamConfigOverrides` type — prevents users from overriding `retention` (transport-controlled).
+- `NatsErrorCode` enum for NATS JetStream API error codes.
+
+No breaking changes.
+
 ### v2.7 → v2.8
 
 **Breaking change:** migrated from `nats` package to `@nats-io/*` scoped packages (v3.x).
