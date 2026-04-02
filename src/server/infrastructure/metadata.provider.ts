@@ -9,6 +9,7 @@ import {
   DEFAULT_METADATA_HISTORY,
   DEFAULT_METADATA_REPLICAS,
   DEFAULT_METADATA_TTL,
+  MIN_METADATA_TTL,
 } from '../../jetstream.constants';
 
 /**
@@ -36,7 +37,7 @@ export class MetadataProvider {
   ) {
     this.bucketName = options.metadata?.bucket ?? DEFAULT_METADATA_BUCKET;
     this.replicas = options.metadata?.replicas ?? DEFAULT_METADATA_REPLICAS;
-    this.ttl = options.metadata?.ttl ?? DEFAULT_METADATA_TTL;
+    this.ttl = Math.max(options.metadata?.ttl ?? DEFAULT_METADATA_TTL, MIN_METADATA_TTL);
   }
 
   /**

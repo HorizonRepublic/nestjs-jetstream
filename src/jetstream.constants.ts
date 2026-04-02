@@ -214,6 +214,9 @@ export const DEFAULT_METADATA_HISTORY = 1;
 /** Default KV bucket TTL in milliseconds (entries expire unless refreshed). */
 export const DEFAULT_METADATA_TTL = 30_000;
 
+/** Minimum allowed metadata TTL in milliseconds. Prevents tight heartbeat loops. */
+export const MIN_METADATA_TTL = 5_000;
+
 /**
  * Build a KV key for a handler's metadata entry.
  *

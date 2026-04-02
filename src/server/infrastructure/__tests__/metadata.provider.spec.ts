@@ -9,6 +9,7 @@ import {
   DEFAULT_METADATA_HISTORY,
   DEFAULT_METADATA_REPLICAS,
   DEFAULT_METADATA_TTL,
+  MIN_METADATA_TTL,
 } from '../../../jetstream.constants';
 
 import { MetadataProvider } from '../metadata.provider';
@@ -122,6 +123,24 @@ describe(MetadataProvider, () => {
     });
 
     describe('edge cases', () => {
+      it('should clamp TTL to minimum when user provides a dangerously low value', async () => {
+        // Given: TTL below minimum
+        options.metadata = { ttl: 100 };
+        sut = new MetadataProvider(options, connection);
+
+        const entries = new Map<string, Record<string, unknown>>([['key', { v: 1 }]]);
+
+        // When
+        await sut.publish(entries);
+
+        // Then: bucket created with clamped TTL
+        expect(mockCreate).toHaveBeenCalledWith(DEFAULT_METADATA_BUCKET, {
+          history: DEFAULT_METADATA_HISTORY,
+          replicas: DEFAULT_METADATA_REPLICAS,
+          ttl: MIN_METADATA_TTL,
+        });
+      });
+
       it('should skip KV operations when entries map is empty', async () => {
         // Given: no entries
         const entries = new Map<string, Record<string, unknown>>();
@@ -219,13 +238,14 @@ describe(MetadataProvider, () => {
       const entries = new Map<string, Record<string, unknown>>([['key', { v: 1 }]]);
 
       await sut.publish(entries);
+      mockCreate.mockClear();
       mockCreate.mockRejectedValue(new Error('connection lost'));
 
       // When: heartbeat tick fires
       await vi.advanceTimersByTimeAsync(DEFAULT_METADATA_TTL / 2);
 
-      // Then: refresh was attempted (mockCreate called) but didn't crash
-      expect(mockCreate).toHaveBeenCalled();
+      // Then: refresh was attempted (mockCreate called by heartbeat) but didn't crash
+      expect(mockCreate).toHaveBeenCalledTimes(1);
     });
   });
 

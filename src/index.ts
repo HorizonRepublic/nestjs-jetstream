@@ -55,6 +55,7 @@ export {
   DEFAULT_METADATA_REPLICAS,
   DEFAULT_METADATA_HISTORY,
   DEFAULT_METADATA_TTL,
+  MIN_METADATA_TTL,
   metadataKey,
 } from './jetstream.constants';
 
