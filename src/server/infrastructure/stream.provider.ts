@@ -183,7 +183,7 @@ export class StreamProvider {
     for (const key of nonMutableKeys) {
       // Replace desired immutable values with current values so NATS
       // doesn't interpret missing fields as "use default"
-      (filtered as Record<string, unknown>)[key] = currentConfig[key as keyof StreamConfig];
+      (filtered as Record<string, unknown>)[key] = currentConfig[key];
     }
 
     return filtered;
