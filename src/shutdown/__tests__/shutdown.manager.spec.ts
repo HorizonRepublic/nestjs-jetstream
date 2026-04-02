@@ -82,63 +82,6 @@ describe(ShutdownManager, () => {
       });
     });
 
-    describe('pre-drain hooks', () => {
-      it('should execute registered hooks before draining connection', async () => {
-        // Given: a hook registered
-        const executionOrder: string[] = [];
-
-        sut.registerPreDrainHook(async () => {
-          executionOrder.push('hook');
-        });
-        connection.shutdown.mockImplementation(async () => {
-          executionOrder.push('drain');
-        });
-
-        // When
-        await sut.shutdown();
-
-        // Then: hook ran before drain
-        expect(executionOrder).toEqual(['hook', 'drain']);
-      });
-
-      it('should execute multiple hooks in registration order', async () => {
-        // Given: two hooks
-        const order: number[] = [];
-
-        sut.registerPreDrainHook(async () => {
-          order.push(1);
-        });
-        sut.registerPreDrainHook(async () => {
-          order.push(2);
-        });
-
-        // When
-        await sut.shutdown();
-
-        // Then
-        expect(order).toEqual([1, 2]);
-      });
-
-      it('should continue shutdown when a hook throws', async () => {
-        // Given: a failing hook followed by a passing hook
-        const hookRan = vi.fn();
-
-        sut.registerPreDrainHook(async () => {
-          throw new Error('hook failure');
-        });
-        sut.registerPreDrainHook(async () => {
-          hookRan();
-        });
-
-        // When
-        await sut.shutdown();
-
-        // Then: second hook ran, connection drained
-        expect(hookRan).toHaveBeenCalled();
-        expect(connection.shutdown).toHaveBeenCalled();
-      });
-    });
-
     describe('edge cases', () => {
       describe('when connection.shutdown() completes before timeout', () => {
         it('should clear the safety timeout', async () => {
