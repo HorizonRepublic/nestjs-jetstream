@@ -7,7 +7,12 @@ import type { JetstreamModuleOptions } from '../interfaces';
 import { isCoreRpcMode, isJetStreamRpcMode } from '../jetstream.constants';
 
 import { CoreRpcServer } from './core-rpc.server';
-import { ConsumerProvider, MessageProvider, StreamProvider } from './infrastructure';
+import {
+  ConsumerProvider,
+  MessageProvider,
+  MetadataProvider,
+  StreamProvider,
+} from './infrastructure';
 import { EventRouter, PatternRegistry, RpcRouter } from './routing';
 
 /**
@@ -38,6 +43,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     private readonly rpcRouter: RpcRouter,
     private readonly coreRpcServer: CoreRpcServer,
     private readonly ackWaitMap: Map<StreamKind, number> = new Map(),
+    private readonly metadataProvider?: MetadataProvider,
   ) {
     super();
   }
@@ -109,6 +115,11 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     // 11. Start Core RPC server if core mode
     if (isCoreRpcMode(this.options.rpc) && this.patternRegistry.hasRpcHandlers()) {
       await this.coreRpcServer.start();
+    }
+
+    // 12. Publish handler metadata to KV (non-critical, does not block startup)
+    if (this.metadataProvider && this.patternRegistry.hasMetadata()) {
+      await this.metadataProvider.publish(this.patternRegistry.getMetadataEntries());
     }
 
     callback();

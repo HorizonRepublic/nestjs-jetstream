@@ -6,7 +6,12 @@ import { ConnectionProvider } from '../../connection';
 import type { JetstreamModuleOptions } from '../../interfaces';
 
 import { CoreRpcServer } from '../core-rpc.server';
-import { ConsumerProvider, MessageProvider, StreamProvider } from '../infrastructure';
+import {
+  ConsumerProvider,
+  MessageProvider,
+  MetadataProvider,
+  StreamProvider,
+} from '../infrastructure';
 import { EventRouter, PatternRegistry, RpcRouter } from '../routing';
 import { JetstreamStrategy } from '../strategy';
 
@@ -21,6 +26,7 @@ describe(JetstreamStrategy, () => {
   let eventRouter: Mocked<EventRouter>;
   let rpcRouter: Mocked<RpcRouter>;
   let coreRpcServer: Mocked<CoreRpcServer>;
+  let metadataProvider: Mocked<MetadataProvider>;
   let options: JetstreamModuleOptions;
 
   beforeEach(() => {
@@ -30,6 +36,7 @@ describe(JetstreamStrategy, () => {
       hasEventHandlers: vi.fn().mockReturnValue(false),
       hasBroadcastHandlers: vi.fn().mockReturnValue(false),
       hasRpcHandlers: vi.fn().mockReturnValue(false),
+      hasMetadata: vi.fn().mockReturnValue(false),
     });
     streamProvider = createMock<StreamProvider>();
     consumerProvider = createMock<ConsumerProvider>({
@@ -39,6 +46,7 @@ describe(JetstreamStrategy, () => {
     eventRouter = createMock<EventRouter>();
     rpcRouter = createMock<RpcRouter>();
     coreRpcServer = createMock<CoreRpcServer>();
+    metadataProvider = createMock<MetadataProvider>();
 
     sut = new JetstreamStrategy(
       options,
@@ -50,6 +58,8 @@ describe(JetstreamStrategy, () => {
       eventRouter,
       rpcRouter,
       coreRpcServer,
+      new Map(),
+      metadataProvider,
     );
   });
 
@@ -72,6 +82,33 @@ describe(JetstreamStrategy, () => {
       // Then: second callback NOT called, handlers not re-registered
       expect(secondCallback).not.toHaveBeenCalled();
       expect(patternRegistry.registerHandlers).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('metadata publishing', () => {
+    it('should publish metadata when handlers have meta', async () => {
+      // Given: pattern registry has metadata
+      const metadataEntries = new Map([['svc.ev.order.created', { http: { method: 'POST' } }]]);
+
+      patternRegistry.hasMetadata = vi.fn().mockReturnValue(true);
+      patternRegistry.getMetadataEntries = vi.fn().mockReturnValue(metadataEntries);
+
+      // When
+      await sut.listen(vi.fn());
+
+      // Then
+      expect(metadataProvider.publish).toHaveBeenCalledWith(metadataEntries);
+    });
+
+    it('should not publish metadata when no handlers have meta', async () => {
+      // Given: no metadata
+      patternRegistry.hasMetadata = vi.fn().mockReturnValue(false);
+
+      // When
+      await sut.listen(vi.fn());
+
+      // Then
+      expect(metadataProvider.publish).not.toHaveBeenCalled();
     });
   });
 
