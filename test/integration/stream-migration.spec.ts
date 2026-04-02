@@ -225,6 +225,66 @@ describe('Stream sourcing behavior (NATS verification)', () => {
       });
     });
 
+    describe('reverse migration (Memory → File)', () => {
+      it('should migrate Memory back to File and preserve messages', async () => {
+        const serviceName = uniqueServiceName();
+
+        // Given: create stream with Memory storage
+        const { app: app1 } = await createTestApp(
+          {
+            name: serviceName,
+            port,
+            events: { stream: { storage: StorageType.Memory } },
+          },
+          [MigrationTestController],
+          [serviceName],
+        );
+
+        await app1.close();
+
+        // Publish messages directly
+        const evStreamName = streamName(serviceName, StreamKind.Event);
+        const subject = buildSubject(serviceName, StreamKind.Event, 'migration.test');
+        const encoder = new TextEncoder();
+
+        for (let i = 0; i < 5; i++) {
+          await js.publish(subject, encoder.encode(JSON.stringify({ i })));
+        }
+
+        const infoBefore = await jsm.streams.info(evStreamName);
+
+        expect(infoBefore.config.storage).toBe(StorageType.Memory);
+        expect(infoBefore.state.messages).toBe(5);
+
+        // When: migrate Memory → File
+        const { app: app2, module: module2 } = await createTestApp(
+          {
+            name: serviceName,
+            port,
+            allowDestructiveMigration: true,
+            events: { stream: { storage: StorageType.File } },
+          },
+          [MigrationTestController],
+          [serviceName],
+        );
+
+        // Then: stream has File storage with messages preserved
+        const infoAfter = await jsm.streams.info(evStreamName);
+
+        expect(infoAfter.config.storage).toBe(StorageType.File);
+        expect(infoAfter.state.messages).toBeGreaterThanOrEqual(5);
+
+        const controller = module2.get(MigrationTestController);
+
+        await waitForCondition(() => controller.received.length >= 5, 15_000);
+
+        expect(controller.received).toHaveLength(5);
+
+        await app2.close();
+        await cleanupStreams(nc, serviceName);
+      });
+    });
+
     describe('stream with messages (storage change)', () => {
       it('should preserve messages through migration', async () => {
         const serviceName = uniqueServiceName();

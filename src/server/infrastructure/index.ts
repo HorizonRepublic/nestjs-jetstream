@@ -6,6 +6,8 @@ export { MessageProvider } from './message.provider';
 
 export type { ConsumerRecoveryFn } from './message.provider';
 
+export { NatsErrorCode } from './nats-error-codes';
+
 export {
   compareStreamConfig,
   type StreamConfigChange,

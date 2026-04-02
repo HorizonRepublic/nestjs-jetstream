@@ -13,13 +13,8 @@ import {
 } from '../../jetstream.constants';
 import { PatternRegistry } from '../routing';
 
+import { NatsErrorCode } from './nats-error-codes';
 import { StreamProvider } from './stream.provider';
-
-/** JetStream API error code for missing consumers. */
-const CONSUMER_NOT_FOUND = 10014;
-
-/** JetStream API error code when consumer name is already in use with different config. */
-const CONSUMER_ALREADY_EXISTS = 10148;
 
 /**
  * Manages JetStream consumer lifecycle: creation and idempotent ensures.
@@ -79,7 +74,10 @@ export class ConsumerProvider {
 
       return await jsm.consumers.update(stream, name, config);
     } catch (err) {
-      if (!(err instanceof JetStreamApiError) || err.apiError().err_code !== CONSUMER_NOT_FOUND) {
+      if (
+        !(err instanceof JetStreamApiError) ||
+        err.apiError().err_code !== NatsErrorCode.ConsumerNotFound
+      ) {
         throw err;
       }
 
@@ -93,7 +91,7 @@ export class ConsumerProvider {
       } catch (addErr) {
         if (
           addErr instanceof JetStreamApiError &&
-          addErr.apiError().err_code === CONSUMER_ALREADY_EXISTS
+          addErr.apiError().err_code === NatsErrorCode.ConsumerAlreadyExists
         ) {
           this.logger.debug(`Consumer ${name} created by another pod, updating`);
 

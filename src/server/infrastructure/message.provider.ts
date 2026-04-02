@@ -25,6 +25,7 @@ import { ConnectionProvider } from '../../connection';
 import { EventBus } from '../../hooks';
 import type { OrderedEventOverrides } from '../../interfaces';
 import { StreamKind, TransportEvent } from '../../interfaces';
+import { NatsErrorCode } from './nats-error-codes';
 
 /** Callback to recreate a consumer when it disappears. */
 export type ConsumerRecoveryFn = (kind: StreamKind) => Promise<ConsumerInfo>;
@@ -232,10 +233,20 @@ export class MessageProvider {
     }
   }
 
+  /**
+   * Detect "consumer not found" errors from `js.consumers.get()`.
+   *
+   * Unlike JetStream Manager calls (which throw `JetStreamApiError`),
+   * the JetStream client's `consumers.get()` throws a plain `Error`
+   * with the error code embedded in the message text.
+   */
   private isConsumerNotFound(err: unknown): boolean {
     if (!(err instanceof Error)) return false;
 
-    return err.message.includes('consumer not found') || err.message.includes('10014');
+    return (
+      err.message.includes('consumer not found') ||
+      err.message.includes(String(NatsErrorCode.ConsumerNotFound))
+    );
   }
 
   /** Get the target subject for a consumer kind. */

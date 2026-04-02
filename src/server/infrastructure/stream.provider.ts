@@ -12,11 +12,9 @@ import {
   internalName,
   streamName,
 } from '../../jetstream.constants';
+import { NatsErrorCode } from './nats-error-codes';
 import { compareStreamConfig, type StreamConfigDiffResult } from './stream-config-diff';
 import { StreamMigration } from './stream-migration';
-
-/** JetStream API error code for missing streams. */
-const STREAM_NOT_FOUND = 10059;
 
 /**
  * Manages JetStream stream lifecycle: creation, updates, and idempotent ensures.
@@ -103,7 +101,10 @@ export class StreamProvider {
 
       return await this.handleExistingStream(jsm, currentInfo, config);
     } catch (err) {
-      if (err instanceof JetStreamApiError && err.apiError().err_code === STREAM_NOT_FOUND) {
+      if (
+        err instanceof JetStreamApiError &&
+        err.apiError().err_code === NatsErrorCode.StreamNotFound
+      ) {
         this.logger.log(`Creating stream: ${config.name}`);
         return await jsm.streams.add(config as StreamConfig);
       }

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 import { createMock } from '@golevelup/ts-vitest';
 import { faker } from '@faker-js/faker';
 import type { ConsumerInfo } from '@nats-io/jetstream';
@@ -48,6 +48,8 @@ describe(ConsumerProvider, () => {
 
     sut = new ConsumerProvider(options, connection, streamProvider, patternRegistry);
   });
+
+  afterEach(vi.resetAllMocks);
 
   describe('ensureConsumer', () => {
     describe('when consumer info throws a non-CONSUMER_NOT_FOUND error', () => {
