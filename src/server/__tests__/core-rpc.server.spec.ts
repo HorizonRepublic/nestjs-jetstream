@@ -3,12 +3,12 @@ import { createMock } from '@golevelup/ts-vitest';
 import { faker } from '@faker-js/faker';
 import type { Msg, NatsConnection, Subscription } from '@nats-io/transport-node';
 
-import { ConnectionProvider } from '../connection';
-import { EventBus } from '../hooks';
-import type { Codec, JetstreamModuleOptions } from '../interfaces';
+import { ConnectionProvider } from '../../connection';
+import { EventBus } from '../../hooks';
+import type { Codec, JetstreamModuleOptions } from '../../interfaces';
 
-import { CoreRpcServer } from './core-rpc.server';
-import { PatternRegistry } from './routing/pattern-registry';
+import { CoreRpcServer } from '../core-rpc.server';
+import { PatternRegistry } from '../routing/pattern-registry';
 
 describe(CoreRpcServer, () => {
   let sut: CoreRpcServer;

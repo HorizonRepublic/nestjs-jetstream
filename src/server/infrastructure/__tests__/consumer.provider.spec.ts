@@ -4,13 +4,13 @@ import { faker } from '@faker-js/faker';
 import type { ConsumerInfo, StreamInfo } from '@nats-io/jetstream';
 import { JetStreamApiError } from '@nats-io/jetstream';
 
-import { ConnectionProvider } from '../../connection';
-import { StreamKind } from '../../interfaces';
-import type { JetstreamModuleOptions } from '../../interfaces';
-import { PatternRegistry } from '../routing';
+import { ConnectionProvider } from '../../../connection';
+import { StreamKind } from '../../../interfaces';
+import type { JetstreamModuleOptions } from '../../../interfaces';
+import { PatternRegistry } from '../../routing';
 
-import { ConsumerProvider } from './consumer.provider';
-import { StreamProvider } from './stream.provider';
+import { ConsumerProvider } from '../consumer.provider';
+import { StreamProvider } from '../stream.provider';
 
 describe(ConsumerProvider, () => {
   let sut: ConsumerProvider;

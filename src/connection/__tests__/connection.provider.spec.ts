@@ -15,11 +15,11 @@ import { connect } from '@nats-io/transport-node';
 import type { JetStreamClient, JetStreamManager } from '@nats-io/jetstream';
 import { jetstream, jetstreamManager } from '@nats-io/jetstream';
 
-import { EventBus } from '../hooks';
-import type { JetstreamModuleOptions } from '../interfaces';
-import { TransportEvent } from '../interfaces';
+import { EventBus } from '../../hooks';
+import type { JetstreamModuleOptions } from '../../interfaces';
+import { TransportEvent } from '../../interfaces';
 
-import { ConnectionProvider } from './connection.provider';
+import { ConnectionProvider } from '../connection.provider';
 
 vi.mock('@nats-io/transport-node', async () => ({
   ...(await vi.importActual('@nats-io/transport-node')),

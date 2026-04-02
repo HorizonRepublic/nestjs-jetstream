@@ -2,13 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vi
 import { createMock } from '@golevelup/ts-vitest';
 import type { NatsConnection } from '@nats-io/transport-node';
 
-import { ConnectionProvider } from '../connection';
-import type { JetstreamModuleOptions } from '../interfaces';
+import { ConnectionProvider } from '../../connection';
+import type { JetstreamModuleOptions } from '../../interfaces';
 
-import { CoreRpcServer } from './core-rpc.server';
-import { ConsumerProvider, MessageProvider, StreamProvider } from './infrastructure';
-import { EventRouter, PatternRegistry, RpcRouter } from './routing';
-import { JetstreamStrategy } from './strategy';
+import { CoreRpcServer } from '../core-rpc.server';
+import { ConsumerProvider, MessageProvider, StreamProvider } from '../infrastructure';
+import { EventRouter, PatternRegistry, RpcRouter } from '../routing';
+import { JetstreamStrategy } from '../strategy';
 
 describe(JetstreamStrategy, () => {
   let sut: JetstreamStrategy;

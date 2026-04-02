@@ -3,11 +3,11 @@ import { createMock } from '@golevelup/ts-vitest';
 import { faker } from '@faker-js/faker';
 import type { Consumer, ConsumerInfo, ConsumerMessages, JsMsg } from '@nats-io/jetstream';
 
-import { ConnectionProvider } from '../../connection';
-import { EventBus } from '../../hooks';
-import { StreamKind, TransportEvent } from '../../interfaces';
+import { ConnectionProvider } from '../../../connection';
+import { EventBus } from '../../../hooks';
+import { StreamKind, TransportEvent } from '../../../interfaces';
 
-import { MessageProvider } from './message.provider';
+import { MessageProvider } from '../message.provider';
 
 interface MockIteratorResult<T> {
   done: boolean;

@@ -3,9 +3,9 @@ import { createMock } from '@golevelup/ts-vitest';
 import { Logger } from '@nestjs/common';
 import { faker } from '@faker-js/faker';
 
-import { TransportEvent } from '../interfaces';
+import { TransportEvent } from '../../interfaces';
 
-import { EventBus } from './event-bus';
+import { EventBus } from '../event-bus';
 
 describe(EventBus, () => {
   let sut: EventBus;

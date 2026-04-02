@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MessageHandler } from '@nestjs/microservices';
 import { faker } from '@faker-js/faker';
 
-import type { JetstreamModuleOptions } from '../../interfaces';
+import type { JetstreamModuleOptions } from '../../../interfaces';
 
-import { PatternRegistry } from './pattern-registry';
+import { PatternRegistry } from '../pattern-registry';
 
 const createHandler = (
   opts: { isEvent?: boolean; broadcast?: boolean; ordered?: boolean } = {},

@@ -2,12 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vi
 import { createMock } from '@golevelup/ts-vitest';
 import { faker } from '@faker-js/faker';
 
-import { ConnectionProvider } from '../connection';
-import { EventBus } from '../hooks';
-import { TransportEvent } from '../interfaces';
-import { JetstreamStrategy } from '../server/strategy';
+import { ConnectionProvider } from '../../connection';
+import { EventBus } from '../../hooks';
+import { TransportEvent } from '../../interfaces';
+import { JetstreamStrategy } from '../../server/strategy';
 
-import { ShutdownManager } from './shutdown.manager';
+import { ShutdownManager } from '../shutdown.manager';
 
 describe(ShutdownManager, () => {
   let sut: ShutdownManager;

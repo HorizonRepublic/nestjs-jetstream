@@ -4,16 +4,16 @@ import { faker } from '@faker-js/faker';
 import type { DeliveryInfo, JsMsg } from '@nats-io/jetstream';
 import { Subject } from 'rxjs';
 
-import { EventBus } from '../../hooks';
-import type { Codec } from '../../interfaces';
-import { TransportEvent } from '../../interfaces';
-import { MessageProvider } from '../infrastructure';
+import { EventBus } from '../../../hooks';
+import type { Codec } from '../../../interfaces';
+import { TransportEvent } from '../../../interfaces';
+import { MessageProvider } from '../../infrastructure';
 
-import { RpcContext } from '../../context';
-import { StreamKind } from '../../interfaces';
-import type { DeadLetterConfig, EventProcessingConfig } from '../../interfaces';
-import { EventRouter } from './event.router';
-import { PatternRegistry } from './pattern-registry';
+import { RpcContext } from '../../../context';
+import { StreamKind } from '../../../interfaces';
+import type { DeadLetterConfig, EventProcessingConfig } from '../../../interfaces';
+import { EventRouter } from '../event.router';
+import { PatternRegistry } from '../pattern-registry';
 
 describe(EventRouter, () => {
   let sut: EventRouter;

@@ -5,15 +5,15 @@ import type { MsgHdrs, NatsConnection } from '@nats-io/transport-node';
 import type { JsMsg } from '@nats-io/jetstream';
 import { Subject } from 'rxjs';
 
-import { ConnectionProvider } from '../../connection';
-import { EventBus } from '../../hooks';
-import type { Codec } from '../../interfaces';
-import { StreamKind, TransportEvent } from '../../interfaces';
-import { DEFAULT_JETSTREAM_RPC_TIMEOUT, JetstreamHeader } from '../../jetstream.constants';
-import { MessageProvider } from '../infrastructure';
+import { ConnectionProvider } from '../../../connection';
+import { EventBus } from '../../../hooks';
+import type { Codec } from '../../../interfaces';
+import { StreamKind, TransportEvent } from '../../../interfaces';
+import { DEFAULT_JETSTREAM_RPC_TIMEOUT, JetstreamHeader } from '../../../jetstream.constants';
+import { MessageProvider } from '../../infrastructure';
 
-import { PatternRegistry } from './pattern-registry';
-import { RpcRouter } from './rpc.router';
+import { PatternRegistry } from '../pattern-registry';
+import { RpcRouter } from '../rpc.router';
 
 describe(RpcRouter, () => {
   let sut: RpcRouter;

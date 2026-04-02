@@ -4,7 +4,7 @@ import { faker } from '@faker-js/faker';
 import type { JetStreamManager, StreamConfig, StreamInfo } from '@nats-io/jetstream';
 import { JetStreamApiError, StorageType, RetentionPolicy } from '@nats-io/jetstream';
 
-import { MIGRATION_BACKUP_SUFFIX, StreamMigration } from './stream-migration';
+import { MIGRATION_BACKUP_SUFFIX, StreamMigration } from '../stream-migration';
 
 const streamNotFoundError = new JetStreamApiError({
   err_code: 10059,

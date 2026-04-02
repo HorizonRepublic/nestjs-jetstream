@@ -6,18 +6,18 @@ import { headers as natsHeaders } from '@nats-io/transport-node';
 import type { JetStreamClient as NatsJsClient, PubAck } from '@nats-io/jetstream';
 import { firstValueFrom, Subject } from 'rxjs';
 
-import { ConnectionProvider } from '../connection';
-import { EventBus } from '../hooks';
-import type { Codec, JetstreamModuleOptions } from '../interfaces';
-import { TransportEvent } from '../interfaces';
+import { ConnectionProvider } from '../../connection';
+import { EventBus } from '../../hooks';
+import type { Codec, JetstreamModuleOptions } from '../../interfaces';
+import { TransportEvent } from '../../interfaces';
 import {
   DEFAULT_JETSTREAM_RPC_TIMEOUT,
   DEFAULT_RPC_TIMEOUT,
   JetstreamHeader,
-} from '../jetstream.constants';
+} from '../../jetstream.constants';
 
-import { JetstreamClient } from './jetstream.client';
-import { JetstreamRecordBuilder } from './jetstream.record';
+import { JetstreamClient } from '../jetstream.client';
+import { JetstreamRecordBuilder } from '../jetstream.record';
 
 describe(JetstreamClient, () => {
   let sut: JetstreamClient;

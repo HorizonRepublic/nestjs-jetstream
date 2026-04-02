@@ -3,9 +3,9 @@ import { createMock } from '@golevelup/ts-vitest';
 import { faker } from '@faker-js/faker';
 import type { NatsConnection } from '@nats-io/transport-node';
 
-import { ConnectionProvider } from '../connection';
+import { ConnectionProvider } from '../../connection';
 
-import { JetstreamHealthIndicator } from './jetstream.health-indicator';
+import { JetstreamHealthIndicator } from '../jetstream.health-indicator';
 
 describe(JetstreamHealthIndicator, () => {
   let sut: JetstreamHealthIndicator;

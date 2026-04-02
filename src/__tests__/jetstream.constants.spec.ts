@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { faker } from '@faker-js/faker';
 import { StoreCompression } from '@nats-io/jetstream';
 
-import { StreamKind } from './interfaces';
+import { StreamKind } from '../interfaces';
 import {
   buildBroadcastSubject,
   buildSubject,
@@ -15,7 +15,7 @@ import {
   internalName,
   toNanos,
   streamName,
-} from './jetstream.constants';
+} from '../jetstream.constants';
 
 describe('jetstream.constants', () => {
   describe(toNanos.name, () => {

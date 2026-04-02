@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { RpcException } from '@nestjs/microservices';
 import { faker } from '@faker-js/faker';
 
-import { serializeError } from './serialize-error';
+import { serializeError } from '../serialize-error';
 
 describe(serializeError.name, () => {
   describe('happy path', () => {

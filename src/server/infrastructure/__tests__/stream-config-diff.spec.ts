@@ -3,7 +3,7 @@ import { RetentionPolicy, StorageType } from '@nats-io/jetstream';
 import type { StreamConfig } from '@nats-io/jetstream';
 import { faker } from '@faker-js/faker';
 
-import { compareStreamConfig } from './stream-config-diff';
+import { compareStreamConfig } from '../stream-config-diff';
 
 describe(compareStreamConfig.name, () => {
   afterEach(vi.resetAllMocks);

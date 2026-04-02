@@ -4,12 +4,12 @@ import { faker } from '@faker-js/faker';
 import type { StreamInfo } from '@nats-io/jetstream';
 import { JetStreamApiError, RetentionPolicy, StorageType } from '@nats-io/jetstream';
 
-import { ConnectionProvider } from '../../connection';
-import { StreamKind } from '../../interfaces';
-import type { JetstreamModuleOptions, StreamConfigOverrides } from '../../interfaces';
-import { DEFAULT_EVENT_STREAM_CONFIG, internalName } from '../../jetstream.constants';
+import { ConnectionProvider } from '../../../connection';
+import { StreamKind } from '../../../interfaces';
+import type { JetstreamModuleOptions, StreamConfigOverrides } from '../../../interfaces';
+import { DEFAULT_EVENT_STREAM_CONFIG, internalName } from '../../../jetstream.constants';
 
-import { StreamProvider } from './stream.provider';
+import { StreamProvider } from '../stream.provider';
 
 describe(StreamProvider, () => {
   let sut: StreamProvider;

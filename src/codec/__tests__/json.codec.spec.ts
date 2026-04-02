@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { faker } from '@faker-js/faker';
 
-import { JsonCodec } from './json.codec';
+import { JsonCodec } from '../json.codec';
 
 describe(JsonCodec, () => {
   let sut: JsonCodec;

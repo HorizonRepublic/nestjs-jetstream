@@ -4,9 +4,9 @@ import { faker } from '@faker-js/faker';
 import type { Msg, MsgHdrs } from '@nats-io/transport-node';
 import type { DeliveryInfo, JsMsg } from '@nats-io/jetstream';
 
-import { JetstreamHeader } from '../jetstream.constants';
+import { JetstreamHeader } from '../../jetstream.constants';
 
-import { RpcContext } from './rpc.context';
+import { RpcContext } from '../rpc.context';
 
 describe(RpcContext, () => {
   describe('happy path', () => {
