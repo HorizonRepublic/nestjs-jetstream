@@ -271,6 +271,14 @@ describe(JetstreamRecordBuilder, () => {
     it('should throw for negative', () => {
       expect(() => sut.ttl(-1)).toThrow(/positive/i);
     });
+
+    it('should throw for NaN', () => {
+      expect(() => sut.ttl(NaN)).toThrow(/finite/i);
+    });
+
+    it('should throw for Infinity', () => {
+      expect(() => sut.ttl(Infinity)).toThrow(/finite/i);
+    });
   });
 
   describe('error paths', () => {

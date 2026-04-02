@@ -172,8 +172,8 @@ export class JetstreamRecordBuilder<TData = unknown> {
    * ```
    */
   public ttl(nanos: number): this {
-    if (nanos <= 0) {
-      throw new Error('TTL must be a positive value');
+    if (!Number.isFinite(nanos) || nanos <= 0) {
+      throw new Error('TTL must be a positive finite value');
     }
 
     this.ttlDuration = nanosToGoDuration(nanos);

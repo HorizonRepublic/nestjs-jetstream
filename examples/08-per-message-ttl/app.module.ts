@@ -37,7 +37,7 @@ class HttpController {
   @Get('token')
   async token(): Promise<string> {
     const record = new JetstreamRecordBuilder({
-      token: `tok_${Date.now()}`,
+      token: crypto.randomUUID(),
       userId: 42,
     })
       .ttl(toNanos(30, 'seconds'))
