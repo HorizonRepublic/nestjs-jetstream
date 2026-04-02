@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 import { createMock } from '@golevelup/ts-vitest';
 import { faker } from '@faker-js/faker';
-import type { ConsumerInfo } from '@nats-io/jetstream';
+import type { ConsumerInfo, StreamInfo } from '@nats-io/jetstream';
 import { JetStreamApiError } from '@nats-io/jetstream';
 
 import { ConnectionProvider } from '../../connection';
@@ -25,16 +25,29 @@ describe(ConsumerProvider, () => {
       add: ReturnType<typeof vi.fn>;
       update: ReturnType<typeof vi.fn>;
     };
+    streams: {
+      info: ReturnType<typeof vi.fn>;
+    };
   };
 
   beforeEach(() => {
     options = { name: faker.lorem.word(), servers: ['nats://localhost:4222'] };
+
+    const streamNotFoundError = new JetStreamApiError({
+      err_code: 10059,
+      code: 404,
+      description: 'stream not found',
+    });
 
     mockJsm = {
       consumers: {
         info: vi.fn(),
         add: vi.fn(),
         update: vi.fn(),
+      },
+      streams: {
+        // Default: no migration backup exists
+        info: vi.fn().mockRejectedValue(streamNotFoundError),
       },
     };
 
@@ -200,6 +213,31 @@ describe(ConsumerProvider, () => {
         // Then: used existing, NEVER updated
         expect(result).toBe(existingInfo);
         expect(mockJsm.consumers.update).not.toHaveBeenCalled();
+      });
+    });
+    describe('when migration is in progress', () => {
+      it('should throw instead of creating consumer', async () => {
+        // Given: backup stream exists (migration in progress)
+        const backupInfo = createMock<StreamInfo>();
+
+        mockJsm.streams.info.mockResolvedValue(backupInfo);
+
+        // Consumer not found
+        const notFoundError = new JetStreamApiError({
+          err_code: 10014,
+          code: 404,
+          description: 'consumer not found',
+        });
+
+        mockJsm.consumers.info.mockRejectedValue(notFoundError);
+
+        const jsm = await connection.getJetStreamManager();
+
+        // When / Then: throws "migration in progress"
+        await expect(sut.recoverConsumer(jsm, StreamKind.Event)).rejects.toThrow(/being migrated/);
+
+        // And: consumer was NOT created
+        expect(mockJsm.consumers.add).not.toHaveBeenCalled();
       });
     });
   });

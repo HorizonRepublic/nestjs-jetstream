@@ -3,7 +3,7 @@ import { JetStreamApiError, type JetStreamManager, type StreamConfig } from '@na
 
 import { NatsErrorCode } from './nats-error-codes';
 
-const MIGRATION_SUFFIX = '__migration_backup';
+export const MIGRATION_BACKUP_SUFFIX = '__migration_backup';
 const DEFAULT_SOURCING_TIMEOUT_MS = 30_000;
 const SOURCING_POLL_INTERVAL_MS = 100;
 
@@ -42,7 +42,7 @@ export class StreamMigration {
     streamName: string,
     newConfig: Partial<StreamConfig> & { name: string; subjects: string[] },
   ): Promise<void> {
-    const backupName = `${streamName}${MIGRATION_SUFFIX}`;
+    const backupName = `${streamName}${MIGRATION_BACKUP_SUFFIX}`;
     const startTime = Date.now();
 
     // Check original stream FIRST — if it's gone but backup exists,
