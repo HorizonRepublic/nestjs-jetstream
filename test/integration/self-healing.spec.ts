@@ -1,9 +1,9 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Controller, INestApplication } from '@nestjs/common';
 import { ClientProxy, EventPattern, Payload } from '@nestjs/microservices';
 import { TestingModule } from '@nestjs/testing';
 import type { NatsConnection } from '@nats-io/transport-node';
-import { jetstreamManager } from '@nats-io/jetstream';
+import { jetstreamManager, type JetStreamManager } from '@nats-io/jetstream';
 import { firstValueFrom } from 'rxjs';
 import type { StartedTestContainer } from 'testcontainers';
 
@@ -192,5 +192,72 @@ describe('Self-Healing Consumer Flow', () => {
         await secondApp.close();
       },
     );
+  });
+
+  describe('consumer recovery (auto-recreate on not found)', () => {
+    let nc: NatsConnection;
+    let jsm: JetStreamManager;
+    let container: StartedTestContainer;
+    let port: number;
+
+    beforeAll(async () => {
+      ({ container, port } = await startNatsContainer());
+      nc = await createNatsConnection(port);
+      jsm = await jetstreamManager(nc);
+    }, 60_000);
+
+    afterAll(async () => {
+      await nc.drain();
+      await container.stop();
+    });
+
+    afterEach(vi.resetAllMocks);
+
+    let app: INestApplication;
+    let module: TestingModule;
+    let client: ClientProxy;
+    let serviceName: string;
+    let controller: SelfHealingController;
+
+    beforeEach(async () => {
+      serviceName = uniqueServiceName();
+
+      ({ app, module } = await createTestApp(
+        { name: serviceName, port },
+        [SelfHealingController],
+        [serviceName],
+      ));
+
+      client = module.get<ClientProxy>(getClientToken(serviceName));
+      controller = module.get(SelfHealingController);
+    });
+
+    afterEach(async () => {
+      await app.close();
+      await cleanupStreams(nc, serviceName);
+    });
+
+    it('should recreate event consumer after manual deletion and resume consumption', async () => {
+      // Given: message consumed successfully
+      await firstValueFrom(client.emit('healing.check', { phase: 'before-delete' }));
+
+      await waitForCondition(() => controller.received.length >= 1, 10_000);
+
+      expect(controller.received).toHaveLength(1);
+
+      // When: delete consumer via NATS
+      const evStream = streamName(serviceName, StreamKind.Event);
+      const evConsumer = consumerName(serviceName, StreamKind.Event);
+
+      await jsm.consumers.delete(evStream, evConsumer);
+
+      // And: publish another message
+      await firstValueFrom(client.emit('healing.check', { phase: 'after-delete' }));
+
+      // Then: self-healing recreates consumer and message is delivered
+      await waitForCondition(() => controller.received.length >= 2, 30_000);
+
+      expect(controller.received).toHaveLength(2);
+    }, 60_000);
   });
 });
