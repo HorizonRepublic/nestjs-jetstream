@@ -211,12 +211,13 @@ describe(MetadataProvider, () => {
 
   describe('destroy()', () => {
     it('should be safe to call multiple times', () => {
-      // When: double destroy
-      sut.destroy();
+      // Given: already destroyed once
       sut.destroy();
 
-      // Then: no error thrown (implicit — test completes)
-      expect(true).toBe(true);
+      // When/Then: second destroy does not throw
+      expect(() => {
+        sut.destroy();
+      }).not.toThrow();
     });
   });
 });

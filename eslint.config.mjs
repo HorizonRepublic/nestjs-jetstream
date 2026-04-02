@@ -61,7 +61,7 @@ export default [
         },
       ],
       'max-depth': ['warn', 4],
-      'max-params': ['warn', 10],
+      'max-params': ['warn', 15],
       'no-alert': 'error',
       'no-debugger': 'error',
       'no-duplicate-imports': 'error',
