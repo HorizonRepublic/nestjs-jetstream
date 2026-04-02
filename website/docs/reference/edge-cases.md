@@ -101,6 +101,8 @@ The backoff formula is: `min(100ms * 2^failures, 30,000ms)`
 
 This applies to all consumer types: event, command, broadcast, and ordered. The transport emits a `TransportEvent.Error` hook on each failure so you can monitor consumer health. See [Lifecycle Hooks](/docs/guides/lifecycle-hooks).
 
+**Consumer auto-recreation:** If a consumer is deleted (e.g., manual deletion, stream recreation during migration, NATS cluster state loss), the transport automatically recreates it using the original configuration and resumes consumption. This goes beyond the existing retry-loop — when `consumers.get()` returns "consumer not found", the transport calls `ConsumerProvider.ensureConsumer()` to recreate the consumer before retrying. Ordered consumers are excluded — they are ephemeral and handled internally by the nats.js client.
+
 ## NATS Header Size Limits
 
 **Q: Are there limits on custom headers?**

@@ -94,8 +94,12 @@ Limits retention — messages persist until the configured limits are reached. S
 | `max_msgs_per_subject` | `1,000,000` | |
 | `max_msgs` | `10,000,000` | |
 | `max_bytes` | `2 GB` | 2,147,483,648 bytes |
-| `max_age` | `1 day` | `toNanos(1, 'days')` |
+| `max_age` | `1 hour` | `toNanos(1, 'hours')` |
 | `duplicate_window` | `2 minutes` | `toNanos(2, 'minutes')` |
+
+:::info Changed in this release
+`max_age` reduced from 1 day to 1 hour. Broadcast messages (config propagation, cache invalidation, feature flags) are relevant for minutes, not days. 1 hour provides sufficient catch-up window for new instances while reducing unnecessary storage. This is a mutable property — existing streams update automatically on next startup.
+:::
 
 ### Ordered Stream
 
