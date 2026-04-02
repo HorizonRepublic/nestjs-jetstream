@@ -18,6 +18,9 @@ import { StreamProvider } from './stream.provider';
 /** JetStream API error code for missing consumers. */
 const CONSUMER_NOT_FOUND = 10014;
 
+/** JetStream API error code when consumer name is already in use with different config. */
+const CONSUMER_ALREADY_EXISTS = 10148;
+
 /**
  * Manages JetStream consumer lifecycle: creation and idempotent ensures.
  *
@@ -73,14 +76,32 @@ export class ConsumerProvider {
     try {
       await jsm.consumers.info(stream, name);
       this.logger.debug(`Consumer exists, updating: ${name}`);
+
       return await jsm.consumers.update(stream, name, config);
     } catch (err) {
-      if (err instanceof JetStreamApiError && err.apiError().err_code === CONSUMER_NOT_FOUND) {
-        this.logger.log(`Creating consumer: ${name}`);
-        return await jsm.consumers.add(stream, config);
+      if (!(err instanceof JetStreamApiError) || err.apiError().err_code !== CONSUMER_NOT_FOUND) {
+        throw err;
       }
 
-      throw err;
+      // Consumer not found — create it.
+      // Race-safe: another pod may create it between our info() and add().
+      // If add() hits "consumer already exists" (10148), fall back to update().
+      this.logger.log(`Creating consumer: ${name}`);
+
+      try {
+        return await jsm.consumers.add(stream, config);
+      } catch (addErr) {
+        if (
+          addErr instanceof JetStreamApiError &&
+          addErr.apiError().err_code === CONSUMER_ALREADY_EXISTS
+        ) {
+          this.logger.debug(`Consumer ${name} created by another pod, updating`);
+
+          return await jsm.consumers.update(stream, name, config);
+        }
+
+        throw addErr;
+      }
     }
   }
 

@@ -68,6 +68,61 @@ describe(ConsumerProvider, () => {
         expect(mockJsm.consumers.add).not.toHaveBeenCalled();
       });
     });
+
+    describe('when consumer add() hits race condition (another pod created it)', () => {
+      it('should fall back to update() on CONSUMER_ALREADY_EXISTS (10148)', async () => {
+        // Given: info → not found, add → already exists (race), update → succeeds
+        const notFoundError = new JetStreamApiError({
+          err_code: 10014,
+          code: 404,
+          description: 'consumer not found',
+        });
+        const alreadyExistsError = new JetStreamApiError({
+          err_code: 10148,
+          code: 400,
+          description: 'consumer already exists',
+        });
+
+        mockJsm.consumers.info.mockRejectedValue(notFoundError);
+        mockJsm.consumers.add.mockRejectedValue(alreadyExistsError);
+
+        const updated = createMock<ConsumerInfo>();
+
+        mockJsm.consumers.update.mockResolvedValue(updated);
+
+        // When
+        const result = await sut.ensureConsumers([StreamKind.Event]);
+
+        // Then: fell back to update after race
+        expect(mockJsm.consumers.add).toHaveBeenCalledOnce();
+        expect(mockJsm.consumers.update).toHaveBeenCalledOnce();
+        expect(result.get(StreamKind.Event)).toBe(updated);
+      });
+
+      it('should rethrow non-race errors from add()', async () => {
+        // Given: info → not found, add → resource limit (not a race)
+        const notFoundError = new JetStreamApiError({
+          err_code: 10014,
+          code: 404,
+          description: 'consumer not found',
+        });
+        const resourceError = new JetStreamApiError({
+          err_code: 10025,
+          code: 400,
+          description: 'resource limits exceeded',
+        });
+
+        mockJsm.consumers.info.mockRejectedValue(notFoundError);
+        mockJsm.consumers.add.mockRejectedValue(resourceError);
+
+        // When/Then: error propagates, no fallback to update
+        await expect(sut.ensureConsumers([StreamKind.Event])).rejects.toThrow(
+          'resource limits exceeded',
+        );
+
+        expect(mockJsm.consumers.update).not.toHaveBeenCalled();
+      });
+    });
   });
 
   describe('buildConfig', () => {
