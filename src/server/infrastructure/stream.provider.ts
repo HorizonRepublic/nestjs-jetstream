@@ -125,7 +125,7 @@ export class StreamProvider {
       return currentInfo;
     }
 
-    this.logChanges(config.name, diff);
+    this.logChanges(config.name, diff, !!this.options.allowDestructiveMigration);
 
     if (diff.hasTransportControlledConflicts) {
       const conflicts = diff.changes
@@ -190,7 +190,11 @@ export class StreamProvider {
     return filtered;
   }
 
-  private logChanges(streamName: string, diff: StreamConfigDiffResult): void {
+  private logChanges(
+    streamName: string,
+    diff: StreamConfigDiffResult,
+    migrationEnabled: boolean,
+  ): void {
     for (const c of diff.changes) {
       const detail = `${c.property}: ${JSON.stringify(c.current)} → ${JSON.stringify(c.desired)}`;
 
@@ -198,7 +202,7 @@ export class StreamProvider {
         this.logger.error(
           `Stream ${streamName}: ${detail} — transport-controlled, cannot be changed`,
         );
-      } else if (c.mutability === 'immutable') {
+      } else if (c.mutability === 'immutable' && !migrationEnabled) {
         this.logger.warn(`Stream ${streamName}: ${detail} — requires allowDestructiveMigration`);
       } else {
         this.logger.log(`Stream ${streamName}: ${detail}`);

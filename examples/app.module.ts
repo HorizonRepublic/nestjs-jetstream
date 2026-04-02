@@ -12,11 +12,12 @@ import { AppMicroserviceController } from './app.microservice-controller';
     JetstreamModule.forRoot({
       name: 'my-service',
       servers: ['localhost:4222'],
+      allowDestructiveMigration: true,
 
       // RPC mode: 'core' (default) uses NATS request/reply,
       // 'jetstream' persists commands in a stream.
       rpc: { mode: 'core', timeout: 10_000 },
-      events: { stream: { storage: 'memory' } },
+      events: { stream: { storage: 'file' } },
 
       // Optional lifecycle hooks (falls back to NestJS Logger)
       hooks: {
