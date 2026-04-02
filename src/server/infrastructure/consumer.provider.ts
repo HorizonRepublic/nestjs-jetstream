@@ -60,7 +60,7 @@ export class ConsumerProvider {
   }
 
   /** Ensure a single consumer exists, creating if needed. */
-  private async ensureConsumer(
+  public async ensureConsumer(
     jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
     kind: StreamKind,
   ): Promise<ConsumerInfo> {

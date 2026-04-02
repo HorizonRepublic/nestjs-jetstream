@@ -42,6 +42,7 @@ import {
   PatternRegistry,
   RpcRouter,
   StreamProvider,
+  type ConsumerRecoveryFn,
 } from './server';
 import { ShutdownManager } from './shutdown';
 
@@ -322,11 +323,12 @@ export class JetstreamModule implements OnApplicationShutdown {
       // MessageProvider — pull-based message consumption
       {
         provide: MessageProvider,
-        inject: [JETSTREAM_OPTIONS, JETSTREAM_CONNECTION, JETSTREAM_EVENT_BUS],
+        inject: [JETSTREAM_OPTIONS, JETSTREAM_CONNECTION, JETSTREAM_EVENT_BUS, ConsumerProvider],
         useFactory: (
           options: JetstreamModuleOptions,
           connection: ConnectionProvider,
           eventBus: EventBus,
+          consumerProvider: ConsumerProvider | null,
         ): MessageProvider | null => {
           if (options.consumer === false) return null;
 
@@ -341,7 +343,15 @@ export class JetstreamModule implements OnApplicationShutdown {
             consumeOptionsMap.set(StreamKind.Command, options.rpc.consume);
           }
 
-          return new MessageProvider(connection, eventBus, consumeOptionsMap);
+          // Recovery callback: recreate consumer when "not found" during self-healing
+          const consumerRecoveryFn: ConsumerRecoveryFn | undefined = consumerProvider
+            ? async (kind: StreamKind) => {
+                const jsm = await connection.getJetStreamManager();
+                return consumerProvider.ensureConsumer(jsm, kind);
+              }
+            : undefined;
+
+          return new MessageProvider(connection, eventBus, consumeOptionsMap, consumerRecoveryFn);
         },
       },
 
