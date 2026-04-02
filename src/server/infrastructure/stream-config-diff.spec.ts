@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/naming-convention */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RetentionPolicy, StorageType } from '@nats-io/jetstream';
 import type { StreamConfig } from '@nats-io/jetstream';

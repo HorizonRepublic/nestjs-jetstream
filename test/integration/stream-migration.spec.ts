@@ -17,8 +17,6 @@ import { buildSubject, streamName, StreamKind } from '../../src';
 import { startNatsContainer } from './nats-container';
 import { cleanupStreams, createTestApp, uniqueServiceName, waitForCondition } from './helpers';
 
-/* eslint-disable @typescript-eslint/naming-convention -- NATS API uses snake_case */
-
 @Controller()
 class MigrationTestController {
   public readonly received: unknown[] = [];
@@ -63,6 +61,7 @@ describe('Stream sourcing behavior (NATS verification)', () => {
     // Given: stream A with 10 messages
     const nameA = `source-test-a-${Date.now()}`;
     const nameB = `source-test-b-${Date.now()}`;
+
     streams.push(nameA, nameB);
 
     await jsm.streams.add({
@@ -74,6 +73,7 @@ describe('Stream sourcing behavior (NATS verification)', () => {
     });
 
     const encoder = new TextEncoder();
+
     for (let i = 0; i < 10; i++) {
       await js.publish(`${nameA}.test`, encoder.encode(JSON.stringify({ index: i })));
     }
@@ -90,6 +90,7 @@ describe('Stream sourcing behavior (NATS verification)', () => {
 
     await waitForCondition(async () => {
       const info = await jsm.streams.info(nameB);
+
       return info.state.messages >= 10;
     }, 10_000);
 
@@ -103,6 +104,7 @@ describe('Stream sourcing behavior (NATS verification)', () => {
     // Given: File stream with messages
     const nameFile = `storage-file-${Date.now()}`;
     const nameMem = `storage-mem-${Date.now()}`;
+
     streams.push(nameFile, nameMem);
 
     await jsm.streams.add({
@@ -114,6 +116,7 @@ describe('Stream sourcing behavior (NATS verification)', () => {
     });
 
     const encoder = new TextEncoder();
+
     for (let i = 0; i < 5; i++) {
       await js.publish(`${nameFile}.test`, encoder.encode(JSON.stringify({ i })));
     }
@@ -130,6 +133,7 @@ describe('Stream sourcing behavior (NATS verification)', () => {
 
     await waitForCondition(async () => {
       const info = await jsm.streams.info(nameMem);
+
       return info.state.messages >= 5;
     }, 10_000);
 
@@ -144,6 +148,7 @@ describe('Stream sourcing behavior (NATS verification)', () => {
     // Given: stream with dedup IDs
     const nameA = `msgid-a-${Date.now()}`;
     const nameB = `msgid-b-${Date.now()}`;
+
     streams.push(nameA, nameB);
 
     await jsm.streams.add({
@@ -171,6 +176,7 @@ describe('Stream sourcing behavior (NATS verification)', () => {
 
     await waitForCondition(async () => {
       const info = await jsm.streams.info(nameB);
+
       return info.state.messages >= 2;
     }, 10_000);
 

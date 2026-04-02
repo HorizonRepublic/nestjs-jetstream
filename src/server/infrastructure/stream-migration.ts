@@ -20,9 +20,7 @@ const SOURCING_POLL_INTERVAL_MS = 100;
 export class StreamMigration {
   private readonly logger = new Logger('Jetstream:Stream');
 
-  public constructor(
-    private readonly sourcingTimeoutMs = DEFAULT_SOURCING_TIMEOUT_MS,
-  ) {}
+  public constructor(private readonly sourcingTimeoutMs = DEFAULT_SOURCING_TIMEOUT_MS) {}
 
   public async migrate(
     jsm: JetStreamManager,

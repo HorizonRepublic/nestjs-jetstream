@@ -154,6 +154,7 @@ export class StreamProvider {
       // Apply mutable-only changes by building config without immutable overrides
       if (diff.hasMutableChanges) {
         const mutableConfig = this.buildMutableOnlyConfig(config, currentInfo.config, diff);
+
         return await jsm.streams.update(config.name, mutableConfig);
       }
 
@@ -192,12 +193,13 @@ export class StreamProvider {
     const lines = diff.changes.map((c) => {
       const icon =
         c.mutability === 'immutable' || c.mutability === 'transport-controlled' ? '⚠' : '✓';
-      const suffix =
-        c.mutability === 'transport-controlled'
-          ? ' (transport-controlled, cannot be changed)'
-          : c.mutability === 'immutable'
-            ? ' (requires allowDestructiveMigration)'
-            : '';
+      let suffix = '';
+
+      if (c.mutability === 'transport-controlled') {
+        suffix = ' (transport-controlled, cannot be changed)';
+      } else if (c.mutability === 'immutable') {
+        suffix = ' (requires allowDestructiveMigration)';
+      }
 
       return `  ${icon} ${c.property}: ${String(c.current)} → ${String(c.desired)}${suffix}`;
     });
@@ -276,8 +278,10 @@ export class StreamProvider {
   private stripTransportControlled(overrides: Partial<StreamConfig>): Partial<StreamConfig> {
     if (!('retention' in overrides)) return overrides;
 
-    const { retention: _, ...rest } = overrides;
+    const cleaned = { ...overrides };
 
-    return rest;
+    delete cleaned.retention;
+
+    return cleaned;
   }
 }

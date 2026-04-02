@@ -16,8 +16,7 @@ describe(StreamMigration.name, () => {
     num_replicas: 1,
   };
 
-  const buildMockJsm = (messageCount: number) => {
-    /* eslint-disable @typescript-eslint/naming-convention -- NATS API uses snake_case */
+  const buildMockJsm = (messageCount: number): JetStreamManager => {
     const mockInfo = createMock<StreamInfo>({
       config: {
         name: 'test_ev-stream',
@@ -28,7 +27,6 @@ describe(StreamMigration.name, () => {
       } as StreamConfig,
       state: { messages: messageCount } as StreamInfo['state'],
     });
-    /* eslint-enable @typescript-eslint/naming-convention */
 
     let infoCallCount = 0;
 
@@ -42,7 +40,11 @@ describe(StreamMigration.name, () => {
             }
 
             // Subsequent: backup stream has messages
-            return { ...mockInfo, config: { ...mockInfo.config, name }, state: { messages: messageCount } };
+            return {
+              ...mockInfo,
+              config: { ...mockInfo.config, name },
+              state: { messages: messageCount },
+            };
           }
 
           return mockInfo;

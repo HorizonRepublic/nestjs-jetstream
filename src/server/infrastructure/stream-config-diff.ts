@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/naming-convention */
 import type { StreamConfig } from '@nats-io/jetstream';
 
 export interface StreamConfigChange {

@@ -9,7 +9,7 @@ import {
   Provider,
 } from '@nestjs/common';
 
-import type { ConsumeOptions } from '@nats-io/jetstream';
+import type { ConsumeOptions, ConsumerInfo } from '@nats-io/jetstream';
 
 import { JetstreamClient } from './client';
 import { JsonCodec } from './codec';
@@ -345,8 +345,9 @@ export class JetstreamModule implements OnApplicationShutdown {
 
           // Recovery callback: recreate consumer when "not found" during self-healing
           const consumerRecoveryFn: ConsumerRecoveryFn | undefined = consumerProvider
-            ? async (kind: StreamKind) => {
+            ? async (kind: StreamKind): Promise<ConsumerInfo> => {
                 const jsm = await connection.getJetStreamManager();
+
                 return consumerProvider.ensureConsumer(jsm, kind);
               }
             : undefined;

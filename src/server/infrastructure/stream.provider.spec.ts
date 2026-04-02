@@ -7,10 +7,7 @@ import { JetStreamApiError } from '@nats-io/jetstream';
 import { ConnectionProvider } from '../../connection';
 import { StreamKind } from '../../interfaces';
 import type { JetstreamModuleOptions } from '../../interfaces';
-import {
-  DEFAULT_EVENT_STREAM_CONFIG,
-  internalName,
-} from '../../jetstream.constants';
+import { DEFAULT_EVENT_STREAM_CONFIG, internalName } from '../../jetstream.constants';
 
 import { StreamProvider } from './stream.provider';
 

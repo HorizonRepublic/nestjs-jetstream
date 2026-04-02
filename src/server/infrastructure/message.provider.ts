@@ -205,6 +205,7 @@ export class MessageProvider {
       if (this.isConsumerNotFound(err) && this.consumerRecoveryFn) {
         this.logger.warn(`Consumer ${info.name} not found, recreating...`);
         const recovered = await this.consumerRecoveryFn(kind);
+
         this.logger.log(`Consumer ${recovered.name} recreated, resuming consumption`);
         consumer = await js.consumers.get(recovered.stream_name, recovered.name);
       } else {
