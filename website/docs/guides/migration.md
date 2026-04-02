@@ -123,7 +123,7 @@ After migration, you get for free:
 **Notable change:**
 
 :::caution Broadcast `max_age` reduced: 1 day → 1 hour
-Broadcast messages (config propagation, cache invalidation, feature flags) are relevant for minutes, not days. The new default provides a sufficient catch-up window while reducing storage. This is a mutable property — **existing streams update automatically on next startup**. If you need a longer retention window, override it explicitly:
+Broadcast messages (config propagation, cache invalidation, feature flags) are relevant for minutes, not days. The new default provides a sufficient catch-up window while reducing storage. This is a mutable property — **existing streams update automatically on next application startup**. If you need a longer retention window, override it explicitly:
 ```typescript
 broadcast: { stream: { max_age: toNanos(1, 'days') } }
 ```

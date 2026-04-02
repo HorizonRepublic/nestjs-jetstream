@@ -600,8 +600,8 @@ describe(MessageProvider, () => {
         await new Promise(process.nextTick);
         await new Promise(process.nextTick);
 
-        // Then: consumerRecoveryFn was invoked
-        expect(consumerRecoveryFn).toHaveBeenCalled();
+        // Then: consumerRecoveryFn was invoked with correct kind
+        expect(consumerRecoveryFn).toHaveBeenCalledWith(StreamKind.Event);
 
         sutWithRecovery.destroy();
       });

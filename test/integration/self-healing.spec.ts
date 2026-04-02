@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { Controller, INestApplication } from '@nestjs/common';
 import { ClientProxy, EventPattern, Payload } from '@nestjs/microservices';
 import { TestingModule } from '@nestjs/testing';
@@ -207,11 +207,12 @@ describe('Self-Healing Consumer Flow', () => {
     }, 60_000);
 
     afterAll(async () => {
-      await nc.drain();
-      await container.stop();
+      try {
+        await nc.drain();
+      } finally {
+        await container.stop();
+      }
     });
-
-    afterEach(vi.resetAllMocks);
 
     let app: INestApplication;
     let module: TestingModule;
@@ -233,8 +234,8 @@ describe('Self-Healing Consumer Flow', () => {
     });
 
     afterEach(async () => {
-      await app.close();
-      await cleanupStreams(nc, serviceName);
+      await app.close().catch(() => {});
+      await cleanupStreams(nc, serviceName).catch(() => {});
     });
 
     it('should block consumer recovery while migration backup exists', async () => {

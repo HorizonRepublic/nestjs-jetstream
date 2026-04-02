@@ -114,15 +114,15 @@ Stream sourcing is a server-side operation — no messages travel over the netwo
 | Failure | Behavior |
 |---------|----------|
 | Backup creation fails | Original stream untouched, error thrown |
-| Process killed mid-migration | Orphaned backup detected on next startup, cleaned up, migration retried |
+| Phase 2/3 fails (delete or create) | Backup cleaned up, error thrown |
+| Sourcing timeout during Phase 4 (30s default) | Stream exists with new config but incomplete messages. Backup cleaned up, error thrown. Manual intervention may be needed — check stream message count. |
+| Process killed mid-migration | Orphaned backup detected on next application startup, cleaned up, migration retried from scratch |
 | NATS connection lost | Transport reconnects, migration resumes from the beginning |
-| Sourcing timeout (30s default) | Backup cleaned up, error thrown, original stream untouched (backup was created before delete) |
 
 ## Limitations
 
 - **`retention` is not migratable.** It is controlled by the transport (`Workqueue` for events/commands, `Limits` for broadcast/ordered). A mismatch always throws an error on startup.
 - **The publisher gap is inherent.** NATS does not support atomic stream rename or swap. The millisecond window between delete and create cannot be eliminated.
-- **Very large streams (100k+) during rolling updates.** Server-side sourcing is fast, but if another pod's self-healing creates a consumer during Phase 4, it could consume messages from the workqueue before restoration completes. For very large streams, scale down to 1 pod before migrating.
 - **`allowDestructiveMigration` applies to all streams.** It's a single flag at the module level. You cannot enable migration for the event stream but not the broadcast stream — if any stream has an immutable conflict, it will be migrated.
 
 ## Example: switching to in-memory streams

@@ -199,6 +199,7 @@ export class MessageProvider {
     const js = this.connection.getJetStreamClient();
 
     let consumer: Consumer;
+    let consumerName = info.name;
 
     try {
       consumer = await js.consumers.get(info.stream_name, info.name);
@@ -207,8 +208,9 @@ export class MessageProvider {
         this.logger.warn(`Consumer ${info.name} not found, recreating...`);
         const recovered = await this.consumerRecoveryFn(kind);
 
-        this.logger.log(`Consumer ${recovered.name} recreated, resuming consumption`);
-        consumer = await js.consumers.get(recovered.stream_name, recovered.name);
+        consumerName = recovered.name;
+        this.logger.log(`Consumer ${consumerName} recreated, resuming consumption`);
+        consumer = await js.consumers.get(recovered.stream_name, consumerName);
       } else {
         throw err;
       }
@@ -222,7 +224,7 @@ export class MessageProvider {
     const messages = await consumer.consume({ ...defaults, ...userOptions } as ConsumeOptions);
 
     this.activeIterators.add(messages);
-    this.monitorConsumerHealth(messages, info.name);
+    this.monitorConsumerHealth(messages, consumerName);
 
     try {
       for await (const msg of messages) {

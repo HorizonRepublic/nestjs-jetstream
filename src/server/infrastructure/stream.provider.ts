@@ -191,21 +191,19 @@ export class StreamProvider {
   }
 
   private logChanges(streamName: string, diff: StreamConfigDiffResult): void {
-    const lines = diff.changes.map((c) => {
-      const icon =
-        c.mutability === 'immutable' || c.mutability === 'transport-controlled' ? '⚠' : '✓';
-      let suffix = '';
+    for (const c of diff.changes) {
+      const detail = `${c.property}: ${JSON.stringify(c.current)} → ${JSON.stringify(c.desired)}`;
 
       if (c.mutability === 'transport-controlled') {
-        suffix = ' (transport-controlled, cannot be changed)';
+        this.logger.error(
+          `Stream ${streamName}: ${detail} — transport-controlled, cannot be changed`,
+        );
       } else if (c.mutability === 'immutable') {
-        suffix = ' (requires allowDestructiveMigration)';
+        this.logger.warn(`Stream ${streamName}: ${detail} — requires allowDestructiveMigration`);
+      } else {
+        this.logger.log(`Stream ${streamName}: ${detail}`);
       }
-
-      return `  ${icon} ${c.property}: ${JSON.stringify(c.current)} → ${JSON.stringify(c.desired)}${suffix}`;
-    });
-
-    this.logger.log(`Stream ${streamName} config changes:\n${lines.join('\n')}`);
+    }
   }
 
   /** Build the full stream config by merging defaults with user overrides. */

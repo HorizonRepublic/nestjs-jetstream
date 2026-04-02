@@ -16,6 +16,7 @@ import { AppMicroserviceController } from './app.microservice-controller';
       // RPC mode: 'core' (default) uses NATS request/reply,
       // 'jetstream' persists commands in a stream.
       rpc: { mode: 'core', timeout: 10_000 },
+      events: { stream: { storage: 'memory' } },
 
       // Optional lifecycle hooks (falls back to NestJS Logger)
       hooks: {
