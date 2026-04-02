@@ -162,8 +162,8 @@ describe(StreamMigration.name, () => {
   });
 
   describe('Phase 3 failure (create new stream fails)', () => {
-    it('should cleanup backup and rethrow when streams.add for new stream throws', async () => {
-      // Given: stream with messages, backup + delete succeed
+    it('should PRESERVE backup and rethrow (backup is the only copy after Phase 2)', async () => {
+      // Given: stream with messages, backup + delete succeed, Phase 3 fails
       const sut = new StreamMigration();
       const jsm = buildMockJsm(100);
 
@@ -184,8 +184,10 @@ describe(StreamMigration.name, () => {
         'resource limit exceeded',
       );
 
-      // And: cleanup — backup delete was called
-      expect(jsm.streams.delete).toHaveBeenCalledWith('test_ev-stream__migration_backup');
+      // And: backup NOT deleted — it's the only copy after original was deleted in Phase 2
+      const deleteCalls = vi.mocked(jsm.streams.delete).mock.calls.map((c) => c[0]);
+
+      expect(deleteCalls).not.toContain('test_ev-stream__migration_backup');
     });
   });
 
@@ -278,7 +280,7 @@ describe(StreamMigration.name, () => {
         /sourcing timeout/i,
       );
 
-      // And: cleanup backup
+      // And: backup cleaned up — original stream was NOT deleted (Phase 1 timeout)
       expect(jsm.streams.delete).toHaveBeenCalledWith('test_ev-stream__migration_backup');
     });
   });

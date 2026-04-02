@@ -48,7 +48,7 @@ Without `allowDestructiveMigration`, the transport logs a warning and continues 
 
 The transport uses **blue-green recreation** via [NATS stream sourcing](https://docs.nats.io/nats-concepts/jetstream/streams#sources) — a server-side message copy mechanism that preserves all messages:
 
-```
+```text
 Phase 1/4  Create backup stream ← sourcing ← original
            (server-side copy, no application-level consumption)
 

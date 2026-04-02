@@ -55,6 +55,10 @@ export class StreamMigration {
 
     this.logger.log(`Stream ${streamName}: destructive migration started`);
 
+    // Track whether original stream has been deleted — after Phase 2,
+    // backup is the only copy and must NOT be deleted on failure.
+    let originalDeleted = false;
+
     try {
       if (messageCount > 0) {
         // Phase 1: Backup via sourcing
@@ -72,6 +76,7 @@ export class StreamMigration {
       // Phase 2: Delete original
       this.logger.log(`  Phase 2/4: Deleting old stream`);
       await jsm.streams.delete(streamName);
+      originalDeleted = true;
 
       // Phase 3: Create with new config
       this.logger.log(`  Phase 3/4: Creating stream with new config`);
@@ -99,8 +104,18 @@ export class StreamMigration {
         await jsm.streams.delete(backupName);
       }
     } catch (err) {
-      // Cleanup backup on any failure during migration
-      await this.cleanupOrphanedBackup(jsm, backupName);
+      if (originalDeleted && messageCount > 0) {
+        // After Phase 2: backup is the only copy — DO NOT delete it.
+        // Leave it for manual recovery or next startup retry.
+        this.logger.error(
+          `Migration failed after deleting original stream. ` +
+            `Backup ${backupName} preserved for manual recovery.`,
+        );
+      } else {
+        // Before Phase 2: original still intact — safe to clean up backup
+        await this.cleanupOrphanedBackup(jsm, backupName);
+      }
+
       throw err;
     }
 
