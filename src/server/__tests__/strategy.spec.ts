@@ -113,6 +113,17 @@ describe(JetstreamStrategy, () => {
   });
 
   describe('close()', () => {
+    it('should destroy metadata provider on close', async () => {
+      // Given: strategy has started
+      await sut.listen(vi.fn());
+
+      // When
+      sut.close();
+
+      // Then
+      expect(metadataProvider.destroy).toHaveBeenCalled();
+    });
+
     it('should allow listen() to be called again after close()', async () => {
       // Given: started then closed
       const callback1 = vi.fn();

@@ -98,7 +98,7 @@ JetstreamModule.forRoot({
   metadata: {
     bucket: 'handler_registry',   // default: 'handler_registry'
     replicas: 3,                  // default: 1
-    cleanupOnShutdown: true,      // default: true
+    ttl: 30_000,                  // default: 30_000 (30 seconds)
   },
 })
 ```
@@ -107,7 +107,7 @@ JetstreamModule.forRoot({
 |---|---|---|
 | `bucket` | `'handler_registry'` | KV bucket name |
 | `replicas` | `1` | Bucket replicas (1, 3, or 5) |
-| `cleanupOnShutdown` | `true` | Delete entries on graceful shutdown |
+| `ttl` | `30_000` | Entry TTL in ms — entries expire unless refreshed by heartbeat |
 
 ## KV key format
 
@@ -131,7 +131,7 @@ const key = metadataKey('orders', StreamKind.Event, 'order.created');
 
 ## Meta structure
 
-The `meta` field is `Record<string, unknown>` — the library stores it as-is with no schema enforcement. You decide the structure based on your use case.
+The `meta` field is `Record<string, unknown>` — the library serializes it as JSON and stores as-is with no schema enforcement. Values must be JSON-serializable. You decide the structure based on your use case.
 
 :::warning Security
 The `meta` object is stored in a shared NATS KV bucket readable by any connected service. Never include secrets, API keys, passwords, or personally identifiable information (PII) in handler metadata.
@@ -153,13 +153,16 @@ The `meta` object is stored in a shared NATS KV bucket readable by any connected
 
 ## Lifecycle
 
+Entries are managed via TTL + heartbeat — no explicit delete needed.
+
 | Event | Behavior |
 |---|---|
-| **Startup** | Transport writes all handler meta entries to KV |
-| **Rolling update** | New pod writes same keys with (potentially updated) meta |
-| **Graceful shutdown** | Entries deleted from KV (when `cleanupOnShutdown: true`) |
-| **Crash** | Entries persist — next startup refreshes them |
-| **Multi-pod** | All pods write same keys with same data (idempotent) |
+| **Startup** | Transport writes all handler meta entries to KV, starts heartbeat |
+| **Heartbeat** | Every `ttl / 2`, all entries are re-written to reset their TTL |
+| **Graceful shutdown** | Heartbeat stops → entries expire after TTL |
+| **Crash** | Heartbeat stops → entries expire after TTL (automatic cleanup) |
+| **Rolling update** | New pod writes entries immediately; old entries from removed handlers expire via TTL |
+| **Multi-pod** | All pods heartbeat the same keys — entries stay alive while any pod is running |
 
 ## Use cases
 

@@ -152,12 +152,15 @@ export interface MetadataRegistryOptions {
   replicas?: 1 | 3 | 5;
 
   /**
-   * Delete handler metadata entries from KV on graceful shutdown.
-   * When `true`, the transport removes its entries during `onApplicationShutdown`.
-   * Crashed pods leave entries in KV — next startup refreshes them.
-   * @default true
+   * KV bucket TTL in milliseconds.
+   *
+   * Entries expire automatically unless refreshed by a heartbeat.
+   * The transport refreshes entries every `ttl / 2` while the pod is alive.
+   * When the pod stops (graceful or crash), entries expire after this duration.
+   *
+   * @default 30_000 (30 seconds)
    */
-  cleanupOnShutdown?: boolean;
+  ttl?: number;
 }
 
 /**

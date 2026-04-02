@@ -125,8 +125,9 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     callback();
   }
 
-  /** Stop all consumers, routers, and subscriptions. Called during shutdown. */
+  /** Stop all consumers, routers, subscriptions, and metadata heartbeat. Called during shutdown. */
   public close(): void {
+    this.metadataProvider?.destroy();
     this.eventRouter.destroy();
     this.rpcRouter.destroy();
     this.coreRpcServer.stop();

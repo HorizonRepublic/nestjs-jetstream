@@ -6,16 +6,18 @@ import { ConnectionProvider } from '../../connection';
 import type { JetstreamModuleOptions } from '../../interfaces';
 import {
   DEFAULT_METADATA_BUCKET,
-  DEFAULT_METADATA_CLEANUP_ON_SHUTDOWN,
   DEFAULT_METADATA_HISTORY,
   DEFAULT_METADATA_REPLICAS,
+  DEFAULT_METADATA_TTL,
 } from '../../jetstream.constants';
 
 /**
  * Publishes handler metadata to a NATS KV bucket for external service discovery.
  *
- * Receives pre-built metadata entries (key → meta) and writes them to KV.
- * Optionally cleans up entries on graceful shutdown.
+ * Uses TTL + heartbeat to manage entry lifecycle:
+ * - Entries are written on startup and refreshed every `ttl / 2`
+ * - When the pod stops (graceful or crash), heartbeat stops → entries expire via TTL
+ * - No explicit delete needed — NATS handles expiry automatically
  *
  * This provider is fully decoupled from stream/consumer infrastructure —
  * it only depends on the NATS connection and module options.
@@ -24,8 +26,9 @@ export class MetadataProvider {
   private readonly logger = new Logger('Jetstream:Metadata');
   private readonly bucketName: string;
   private readonly replicas: number;
-  private readonly cleanupOnShutdown: boolean;
-  private publishedKeys: string[] = [];
+  private readonly ttl: number;
+  private currentEntries?: Map<string, Record<string, unknown>>;
+  private heartbeatTimer?: ReturnType<typeof setInterval>;
 
   public constructor(
     options: JetstreamModuleOptions,
@@ -33,15 +36,17 @@ export class MetadataProvider {
   ) {
     this.bucketName = options.metadata?.bucket ?? DEFAULT_METADATA_BUCKET;
     this.replicas = options.metadata?.replicas ?? DEFAULT_METADATA_REPLICAS;
-    this.cleanupOnShutdown =
-      options.metadata?.cleanupOnShutdown ?? DEFAULT_METADATA_CLEANUP_ON_SHUTDOWN;
+    this.ttl = options.metadata?.ttl ?? DEFAULT_METADATA_TTL;
   }
 
   /**
-   * Write handler metadata entries to the KV bucket.
+   * Write handler metadata entries to the KV bucket and start heartbeat.
    *
    * Creates the bucket if it doesn't exist (idempotent).
    * Skips silently when entries map is empty.
+   * Starts a heartbeat interval that refreshes entries every `ttl / 2`
+   * to prevent TTL expiry while the pod is alive.
+   *
    * Non-critical — errors are logged but do not prevent transport startup.
    *
    * @param entries Map of KV key → metadata object.
@@ -52,11 +57,10 @@ export class MetadataProvider {
     try {
       const kv = await this.openBucket();
 
-      for (const [key, meta] of entries) {
-        await kv.put(key, JSON.stringify(meta));
-      }
+      await this.writeEntries(kv, entries);
 
-      this.publishedKeys = [...entries.keys()];
+      this.currentEntries = entries;
+      this.startHeartbeat();
       this.logger.log(
         `Published ${entries.size} handler metadata entries to KV bucket "${this.bucketName}"`,
       );
@@ -66,27 +70,53 @@ export class MetadataProvider {
   }
 
   /**
-   * Delete previously published metadata entries from KV.
+   * Stop the heartbeat timer.
    *
-   * Called during graceful shutdown. Skips when `cleanupOnShutdown` is false
-   * or no entries were published. Non-critical — errors are logged.
+   * After this call, entries will expire via TTL once the heartbeat window passes.
+   * Called during transport shutdown (strategy.close()).
    */
-  public async cleanup(): Promise<void> {
-    if (!this.cleanupOnShutdown || this.publishedKeys.length === 0) return;
+  public destroy(): void {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = undefined;
+    }
+
+    this.currentEntries = undefined;
+  }
+
+  /** Write entries to KV with per-entry error handling. */
+  private async writeEntries(kv: KV, entries: Map<string, Record<string, unknown>>): Promise<void> {
+    for (const [key, meta] of entries) {
+      try {
+        await kv.put(key, JSON.stringify(meta));
+      } catch (err) {
+        this.logger.error(`Failed to write metadata entry "${key}"`, err);
+      }
+    }
+  }
+
+  /** Start heartbeat interval that refreshes entries every ttl/2. */
+  private startHeartbeat(): void {
+    const interval = Math.floor(this.ttl / 2);
+
+    this.heartbeatTimer = setInterval(() => {
+      void this.refreshEntries();
+    }, interval);
+
+    // Don't keep the Node.js process alive just for metadata heartbeat
+    this.heartbeatTimer.unref();
+  }
+
+  /** Refresh all current entries in KV (heartbeat tick). */
+  private async refreshEntries(): Promise<void> {
+    if (!this.currentEntries || this.currentEntries.size === 0) return;
 
     try {
       const kv = await this.openBucket();
 
-      for (const key of this.publishedKeys) {
-        await kv.delete(key);
-      }
-
-      this.logger.log(
-        `Cleaned up ${this.publishedKeys.length} metadata entries from KV bucket "${this.bucketName}"`,
-      );
-      this.publishedKeys = [];
+      await this.writeEntries(kv, this.currentEntries);
     } catch (err) {
-      this.logger.error('Failed to clean up metadata entries', err);
+      this.logger.error('Failed to refresh handler metadata in KV', err);
     }
   }
 
@@ -98,6 +128,7 @@ export class MetadataProvider {
     return kvm.create(this.bucketName, {
       history: DEFAULT_METADATA_HISTORY,
       replicas: this.replicas,
+      ttl: this.ttl,
     });
   }
 }

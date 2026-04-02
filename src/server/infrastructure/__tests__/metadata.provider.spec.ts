@@ -8,6 +8,7 @@ import {
   DEFAULT_METADATA_BUCKET,
   DEFAULT_METADATA_HISTORY,
   DEFAULT_METADATA_REPLICAS,
+  DEFAULT_METADATA_TTL,
 } from '../../../jetstream.constants';
 
 import { MetadataProvider } from '../metadata.provider';
@@ -17,9 +18,8 @@ import { MetadataProvider } from '../metadata.provider';
 // ---------------------------------------------------------------------------
 
 const mockPut = vi.fn<(k: string, data: string) => Promise<number>>();
-const mockDelete = vi.fn<(k: string) => Promise<void>>();
 
-const mockKv = { put: mockPut, delete: mockDelete };
+const mockKv = { put: mockPut };
 const mockCreate = vi.fn<(name: string, opts?: unknown) => Promise<typeof mockKv>>();
 
 vi.mock('@nats-io/kv', () => {
@@ -42,9 +42,10 @@ describe(MetadataProvider, () => {
   let options: JetstreamModuleOptions;
 
   beforeEach(() => {
+    vi.useFakeTimers();
+
     mockCreate.mockResolvedValue(mockKv);
     mockPut.mockResolvedValue(1);
-    mockDelete.mockResolvedValue(undefined);
 
     options = {
       name: faker.lorem.word(),
@@ -58,11 +59,15 @@ describe(MetadataProvider, () => {
     sut = new MetadataProvider(options, connection);
   });
 
-  afterEach(vi.resetAllMocks);
+  afterEach(() => {
+    sut.destroy();
+    vi.useRealTimers();
+    vi.resetAllMocks();
+  });
 
   describe('publish()', () => {
     describe('happy path', () => {
-      it('should write each entry to KV bucket', async () => {
+      it('should write each entry to KV bucket with TTL', async () => {
         // Given: metadata entries
         const entries = new Map<string, Record<string, unknown>>([
           [`${options.name}.ev.order.created`, { http: { method: 'POST', path: '/orders' } }],
@@ -72,10 +77,11 @@ describe(MetadataProvider, () => {
         // When
         await sut.publish(entries);
 
-        // Then: bucket created with defaults
+        // Then: bucket created with defaults including TTL
         expect(mockCreate).toHaveBeenCalledWith(DEFAULT_METADATA_BUCKET, {
           history: DEFAULT_METADATA_HISTORY,
           replicas: DEFAULT_METADATA_REPLICAS,
+          ttl: DEFAULT_METADATA_TTL,
         });
 
         // Then: each entry written
@@ -92,12 +98,13 @@ describe(MetadataProvider, () => {
         );
       });
 
-      it('should use custom bucket name and replicas from options', async () => {
+      it('should use custom bucket name, replicas, and TTL from options', async () => {
         // Given: custom metadata options
         const customBucket = faker.lorem.word();
         const customReplicas = 3;
+        const customTtl = 60_000;
 
-        options.metadata = { bucket: customBucket, replicas: customReplicas };
+        options.metadata = { bucket: customBucket, replicas: customReplicas, ttl: customTtl };
         sut = new MetadataProvider(options, connection);
 
         const entries = new Map<string, Record<string, unknown>>([['key', { value: true }]]);
@@ -109,6 +116,7 @@ describe(MetadataProvider, () => {
         expect(mockCreate).toHaveBeenCalledWith(customBucket, {
           history: DEFAULT_METADATA_HISTORY,
           replicas: customReplicas,
+          ttl: customTtl,
         });
       });
     });
@@ -128,8 +136,8 @@ describe(MetadataProvider, () => {
     });
 
     describe('error paths', () => {
-      it('should not throw when KV operations fail', async () => {
-        // Given: KV put fails
+      it('should not throw when bucket creation fails', async () => {
+        // Given: KV bucket creation fails
         mockCreate.mockRejectedValueOnce(new Error('KV unavailable'));
 
         const entries = new Map<string, Record<string, unknown>>([['key', { value: true }]]);
@@ -137,89 +145,78 @@ describe(MetadataProvider, () => {
         // When/Then: does not throw
         await expect(sut.publish(entries)).resolves.toBeUndefined();
       });
+
+      it('should continue writing remaining entries when one put fails', async () => {
+        // Given: first put fails, second succeeds
+        mockPut.mockRejectedValueOnce(new Error('put failed')).mockResolvedValueOnce(1);
+
+        const entries = new Map<string, Record<string, unknown>>([
+          ['key1', { a: 1 }],
+          ['key2', { b: 2 }],
+        ]);
+
+        // When
+        await sut.publish(entries);
+
+        // Then: both puts attempted
+        expect(mockPut).toHaveBeenCalledTimes(2);
+      });
     });
   });
 
-  describe('cleanup()', () => {
-    describe('happy path', () => {
-      it('should delete previously published keys when cleanupOnShutdown is true', async () => {
-        // Given: entries were published (default cleanupOnShutdown = true)
-        const entries = new Map<string, Record<string, unknown>>([
-          ['svc.ev.order.created', { http: { method: 'POST' } }],
-          ['svc.cmd.order.get', { http: { method: 'GET' } }],
-        ]);
+  describe('heartbeat', () => {
+    it('should refresh entries at half the TTL interval', async () => {
+      // Given: published entries with default TTL (30s → heartbeat every 15s)
+      const entries = new Map<string, Record<string, unknown>>([['key', { v: 1 }]]);
 
-        await sut.publish(entries);
-        vi.clearAllMocks();
-        mockCreate.mockResolvedValue(mockKv);
+      await sut.publish(entries);
+      mockPut.mockClear();
 
-        // When
-        await sut.cleanup();
+      // When: advance time by one heartbeat interval (TTL/2 = 15s)
+      await vi.advanceTimersByTimeAsync(DEFAULT_METADATA_TTL / 2);
 
-        // Then: each key deleted
-        expect(mockDelete).toHaveBeenCalledTimes(2);
-        expect(mockDelete).toHaveBeenCalledWith('svc.ev.order.created');
-        expect(mockDelete).toHaveBeenCalledWith('svc.cmd.order.get');
-      });
+      // Then: entries refreshed
+      expect(mockPut).toHaveBeenCalledWith('key', JSON.stringify({ v: 1 }));
     });
 
-    describe('edge cases', () => {
-      it('should skip cleanup when cleanupOnShutdown is false', async () => {
-        // Given: cleanup disabled
-        options.metadata = { cleanupOnShutdown: false };
-        sut = new MetadataProvider(options, connection);
+    it('should not refresh after destroy', async () => {
+      // Given: published and then destroyed
+      const entries = new Map<string, Record<string, unknown>>([['key', { v: 1 }]]);
 
-        const entries = new Map<string, Record<string, unknown>>([['key', { value: true }]]);
+      await sut.publish(entries);
+      sut.destroy();
+      mockPut.mockClear();
 
-        await sut.publish(entries);
-        vi.clearAllMocks();
+      // When: advance past heartbeat interval
+      await vi.advanceTimersByTimeAsync(DEFAULT_METADATA_TTL);
 
-        // When
-        await sut.cleanup();
-
-        // Then: no KV interaction
-        expect(mockCreate).not.toHaveBeenCalled();
-        expect(mockDelete).not.toHaveBeenCalled();
-      });
-
-      it('should skip cleanup when no entries were published', async () => {
-        // Given: nothing was published
-
-        // When
-        await sut.cleanup();
-
-        // Then
-        expect(mockCreate).not.toHaveBeenCalled();
-      });
-
-      it('should clear published keys after successful cleanup', async () => {
-        // Given: entries published
-        const entries = new Map<string, Record<string, unknown>>([['key', { value: true }]]);
-
-        await sut.publish(entries);
-        vi.clearAllMocks();
-        mockCreate.mockResolvedValue(mockKv);
-
-        // When: cleanup twice
-        await sut.cleanup();
-        await sut.cleanup();
-
-        // Then: second cleanup is no-op
-        expect(mockDelete).toHaveBeenCalledTimes(1);
-      });
+      // Then: no refresh
+      expect(mockPut).not.toHaveBeenCalled();
     });
 
-    describe('error paths', () => {
-      it('should not throw when KV delete fails', async () => {
-        // Given: entries published, delete will fail
-        const entries = new Map<string, Record<string, unknown>>([['key', { value: true }]]);
+    it('should not throw when heartbeat refresh fails', async () => {
+      // Given: published, then KV becomes unavailable
+      const entries = new Map<string, Record<string, unknown>>([['key', { v: 1 }]]);
 
-        await sut.publish(entries);
-        mockDelete.mockRejectedValueOnce(new Error('delete failed'));
+      await sut.publish(entries);
+      mockCreate.mockRejectedValue(new Error('connection lost'));
 
-        // When/Then: does not throw
-        await expect(sut.cleanup()).resolves.toBeUndefined();
-      });
+      // When: heartbeat tick fires
+      await vi.advanceTimersByTimeAsync(DEFAULT_METADATA_TTL / 2);
+
+      // Then: refresh was attempted (mockCreate called) but didn't crash
+      expect(mockCreate).toHaveBeenCalled();
+    });
+  });
+
+  describe('destroy()', () => {
+    it('should be safe to call multiple times', () => {
+      // When: double destroy
+      sut.destroy();
+      sut.destroy();
+
+      // Then: no error thrown (implicit — test completes)
+      expect(true).toBe(true);
     });
   });
 });

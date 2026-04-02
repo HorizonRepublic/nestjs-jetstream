@@ -211,8 +211,8 @@ export const DEFAULT_METADATA_REPLICAS = 1;
 /** Default KV bucket history depth (latest value only). */
 export const DEFAULT_METADATA_HISTORY = 1;
 
-/** Default: delete KV entries on graceful shutdown. */
-export const DEFAULT_METADATA_CLEANUP_ON_SHUTDOWN = true;
+/** Default KV bucket TTL in milliseconds (entries expire unless refreshed). */
+export const DEFAULT_METADATA_TTL = 30_000;
 
 /**
  * Build a KV key for a handler's metadata entry.

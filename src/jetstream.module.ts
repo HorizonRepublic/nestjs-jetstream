@@ -91,20 +91,7 @@ export class JetstreamModule implements OnApplicationShutdown {
     @Inject(ShutdownManager)
     private readonly shutdownManager?: ShutdownManager,
     @Optional() @Inject(JetstreamStrategy) private readonly strategy?: JetstreamStrategy | null,
-    @Optional()
-    @Inject(MetadataProvider)
-    private readonly metadataProvider?: MetadataProvider | null,
-  ) {
-    // Register metadata KV cleanup as a pre-drain hook so it executes
-    // while the NATS connection is still active. This is critical because
-    // NestJS may call onApplicationShutdown on forFeature module instances
-    // before forRoot, and forFeature's shutdown drains the shared connection.
-    if (this.shutdownManager && this.metadataProvider) {
-      const metadata = this.metadataProvider;
-
-      this.shutdownManager.registerPreDrainHook(() => metadata.cleanup());
-    }
-  }
+  ) {}
 
   // -------------------------------------------------------------------
   // forRoot — global module registration

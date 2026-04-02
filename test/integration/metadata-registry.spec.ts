@@ -9,7 +9,13 @@ import type { StartedTestContainer } from 'testcontainers';
 
 import { DEFAULT_METADATA_BUCKET, metadataKey, StreamKind } from '../../src';
 
-import { cleanupStreams, createNatsConnection, createTestApp, uniqueServiceName } from './helpers';
+import {
+  cleanupStreams,
+  createNatsConnection,
+  createTestApp,
+  uniqueServiceName,
+  waitForCondition,
+} from './helpers';
 import { startNatsContainer } from './nats-container';
 
 // ---------------------------------------------------------------------------
@@ -19,6 +25,9 @@ import { startNatsContainer } from './nats-container';
 const EVENT_META = { http: { method: 'POST', path: '/orders' } };
 const RPC_META = { http: { method: 'GET', path: '/orders/:id' }, auth: 'bearer' };
 const BROADCAST_META = { scope: 'global' };
+
+/** Short TTL for tests — entries expire quickly after heartbeat stops. */
+const TEST_TTL = 3_000;
 
 // ---------------------------------------------------------------------------
 // Test Controllers
@@ -106,7 +115,11 @@ describe('Handler Metadata Registry', { timeout: 60_000 }, () => {
     it('should write handler meta entries to KV bucket', async () => {
       // Given: a service with handlers that have meta
       serviceName = uniqueServiceName();
-      ({ app } = await createTestApp({ name: serviceName, port }, [MetaController], [serviceName]));
+      ({ app } = await createTestApp(
+        { name: serviceName, port, metadata: { ttl: TEST_TTL } },
+        [MetaController],
+        [serviceName],
+      ));
 
       // When: we read the KV bucket
       const kv = await openKv();
@@ -161,7 +174,7 @@ describe('Handler Metadata Registry', { timeout: 60_000 }, () => {
       // Given: first app writes metadata
       serviceName = uniqueServiceName();
       const { app: firstApp } = await createTestApp(
-        { name: serviceName, port },
+        { name: serviceName, port, metadata: { ttl: TEST_TTL } },
         [MetaController],
         [serviceName],
       );
@@ -180,7 +193,7 @@ describe('Handler Metadata Registry', { timeout: 60_000 }, () => {
       await cleanupStreams(nc, serviceName);
 
       const { app: secondApp } = await createTestApp(
-        { name: serviceName, port },
+        { name: serviceName, port, metadata: { ttl: TEST_TTL } },
         [MetaController],
         [serviceName],
       );
@@ -196,7 +209,7 @@ describe('Handler Metadata Registry', { timeout: 60_000 }, () => {
     });
   });
 
-  describe('shutdown cleanup', () => {
+  describe('TTL lifecycle', () => {
     let app: INestApplication | undefined;
     let serviceName: string | undefined;
 
@@ -213,35 +226,11 @@ describe('Handler Metadata Registry', { timeout: 60_000 }, () => {
       await destroyBucketIfExists();
     });
 
-    it('should delete entries on graceful shutdown when cleanupOnShutdown is true (default)', async () => {
-      // Given: an app with metadata handlers (default cleanupOnShutdown = true)
-      serviceName = uniqueServiceName();
-      ({ app } = await createTestApp({ name: serviceName, port }, [MetaController], [serviceName]));
-
-      const kv = await openKv();
-      const eventKey = metadataKey(serviceName, StreamKind.Event, 'order.created');
-
-      // Verify entries exist before shutdown
-      const entryBeforeShutdown = await kv.get(eventKey);
-
-      expect(entryBeforeShutdown).not.toBeNull();
-      expect(entryBeforeShutdown!.operation).toBe('PUT');
-
-      // When: close the app (graceful shutdown)
-      await app.close();
-
-      // Then: entry has DEL operation
-      const entryAfterShutdown = await kv.get(eventKey);
-
-      expect(entryAfterShutdown).not.toBeNull();
-      expect(entryAfterShutdown!.operation).toBe('DEL');
-    });
-
-    it('should preserve entries on shutdown when cleanupOnShutdown is false', async () => {
-      // Given: an app with cleanupOnShutdown disabled
+    it('should expire entries after shutdown when heartbeat stops', async () => {
+      // Given: app with short TTL (3s)
       serviceName = uniqueServiceName();
       ({ app } = await createTestApp(
-        { name: serviceName, port, metadata: { cleanupOnShutdown: false } },
+        { name: serviceName, port, metadata: { ttl: TEST_TTL } },
         [MetaController],
         [serviceName],
       ));
@@ -249,20 +238,47 @@ describe('Handler Metadata Registry', { timeout: 60_000 }, () => {
       const kv = await openKv();
       const eventKey = metadataKey(serviceName, StreamKind.Event, 'order.created');
 
-      // Verify entries exist before shutdown
-      const entryBeforeShutdown = await kv.get(eventKey);
+      // Verify entry exists
+      const entryBefore = await kv.get(eventKey);
 
-      expect(entryBeforeShutdown).not.toBeNull();
-      expect(entryBeforeShutdown!.operation).toBe('PUT');
+      expect(entryBefore).not.toBeNull();
 
-      // When: close the app (graceful shutdown)
+      // When: graceful shutdown (heartbeat stops)
       await app.close();
+      app = undefined;
 
-      // Then: entry still has PUT operation (not deleted)
-      const entryAfterShutdown = await kv.get(eventKey);
+      // Then: entry expires after TTL
+      await waitForCondition(
+        async () => {
+          const entry = await kv.get(eventKey);
 
-      expect(entryAfterShutdown).not.toBeNull();
-      expect(entryAfterShutdown!.operation).toBe('PUT');
+          return entry === null;
+        },
+        TEST_TTL + 2_000,
+        500,
+      );
+    });
+
+    it('should keep entries alive while app is running via heartbeat', async () => {
+      // Given: app with short TTL (3s), heartbeat refreshes every 1.5s
+      serviceName = uniqueServiceName();
+      ({ app } = await createTestApp(
+        { name: serviceName, port, metadata: { ttl: TEST_TTL } },
+        [MetaController],
+        [serviceName],
+      ));
+
+      const kv = await openKv();
+      const eventKey = metadataKey(serviceName, StreamKind.Event, 'order.created');
+
+      // When: wait longer than TTL (heartbeat should keep entries alive)
+      await new Promise((r) => setTimeout(r, TEST_TTL + 1_000));
+
+      // Then: entry still exists (heartbeat refreshed it)
+      const entry = await kv.get(eventKey);
+
+      expect(entry).not.toBeNull();
+      expect(entry!.json()).toEqual(EVENT_META);
     });
   });
 });
