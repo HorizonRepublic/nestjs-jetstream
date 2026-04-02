@@ -118,6 +118,17 @@ After migration, you get for free:
 
 ## Upgrading between versions
 
+### v2.8 → v2.9
+
+**New features:**
+- [Stream migration](/docs/guides/stream-migration) — automatic blue-green stream recreation for immutable property changes (`storage`). Enable with `allowDestructiveMigration: true`.
+- Consumer self-healing auto-recreation — consumers deleted externally are automatically recreated. Migration-aware: waits during active stream migrations.
+- Broadcast stream `max_age` reduced from 1 day to 1 hour (mutable — applied automatically on startup).
+- `StreamConfigOverrides` type — prevents users from overriding `retention` (transport-controlled).
+- `NatsErrorCode` enum for NATS JetStream API error codes.
+
+No breaking changes.
+
 ### v2.7 → v2.8
 
 **Breaking change:** migrated from `nats` package to `@nats-io/*` scoped packages (v3.x).

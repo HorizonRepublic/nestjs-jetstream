@@ -249,28 +249,7 @@ You can safely add `allow_msg_schedules: true` to an existing stream config — 
 | `retention` | `Workqueue` or `Limits` | **No** | Controlled by the transport — a mismatch is always an error |
 | `storage` | `File` | **Yes** | Can be migrated with `allowDestructiveMigration: true` |
 
-#### Automatic stream migration
-
-The transport can automatically recreate streams when `storage` needs to change. Enable `allowDestructiveMigration` to opt in:
-
-```typescript
-JetstreamModule.forRoot({
-  name: 'orders',
-  servers: ['nats://localhost:4222'],
-  allowDestructiveMigration: true,
-  events: { stream: { storage: StorageType.Memory } },
-});
-```
-
-When an immutable conflict is detected:
-- **`allowDestructiveMigration: false`** (default) — logs a warning, skips the immutable change, applies mutable changes only
-- **`allowDestructiveMigration: true`** — recreates the stream via blue-green sourcing, preserving all messages
-
-The migration uses NATS stream sourcing (server-side message copy) to avoid data loss. There is a brief window (milliseconds) during recreation where the stream does not exist — publishers may see temporary errors.
-
-:::tip Rolling updates with migration
-For most streams, migration completes in milliseconds and is safe during rolling updates. For very large streams (100k+ messages), consider scaling down to 1 replica before migrating or scheduling during a low-traffic window to avoid interference from other pods' self-healing consumers.
-:::
+The transport can automatically migrate `storage` via blue-green stream recreation. See the full **[Stream Migration guide](/docs/guides/stream-migration)** for how it works, rolling update behavior, performance benchmarks, and limitations.
 
 :::caution retention is never migratable
 `retention` is controlled by the transport (`Workqueue` for events/commands, `Limits` for broadcast/ordered). A mismatch between the running stream and the expected retention policy always throws an error on startup, regardless of `allowDestructiveMigration`.

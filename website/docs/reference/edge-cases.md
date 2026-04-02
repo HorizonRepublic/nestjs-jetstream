@@ -101,13 +101,15 @@ The backoff formula is: `min(100ms * 2^failures, 30,000ms)`
 
 This applies to all consumer types: event, command, broadcast, and ordered. The transport emits a `TransportEvent.Error` hook on each failure so you can monitor consumer health. See [Lifecycle Hooks](/docs/guides/lifecycle-hooks).
 
-**Consumer auto-recreation:** If a consumer is deleted, the transport automatically recreates it using the original configuration and resumes consumption. Common deletion scenarios include:
+**Consumer auto-recreation:** If a consumer is deleted, the transport automatically recreates it and resumes consumption. Common deletion scenarios include:
 
 - Manual deletion via NATS CLI or admin tools
-- Stream recreation during migration
+- Stream recreation during [migration](/docs/guides/stream-migration)
 - NATS cluster state loss
 
-When the transport detects a missing consumer, it recreates the consumer configuration before retrying the connection. This recovery mechanism works alongside the exponential backoff retry loop described above.
+The recovery is **migration-aware**: if a migration backup stream exists (another pod is mid-migration), the consumer is NOT recreated. Instead, self-healing waits with exponential backoff until migration completes and the backup is cleaned up. This prevents consumers from interfering with message restoration on workqueue streams.
+
+During rolling updates, recovery never overwrites a newer pod's consumer configuration — if the consumer already exists (another pod recreated it), it is used as-is without config changes.
 
 Ordered consumers are excluded from auto-recreation — they are ephemeral and managed internally by the nats.js client.
 

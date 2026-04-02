@@ -151,6 +151,14 @@ export default function Root({ children }) {
   "dateModified": "2026-04-01"
 },
       
+    '/docs/guides/stream-migration/': {
+  "@type": "Article",
+  "headline": "Stream Migration",
+  "description": "Safe stream recreation for immutable property changes with automatic message preservation via blue-green sourcing.",
+  "datePublished": "2026-04-02",
+  "dateModified": "2026-04-02"
+},
+      
     '/docs/guides/troubleshooting/': {
   "@type": "Article",
   "headline": "Troubleshooting",
