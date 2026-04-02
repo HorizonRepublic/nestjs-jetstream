@@ -49,17 +49,15 @@ Without `allowDestructiveMigration`, the transport logs a warning and continues 
 The transport uses **blue-green recreation** via [NATS stream sourcing](https://docs.nats.io/nats-concepts/jetstream/streams#sources) — a server-side message copy mechanism that preserves all messages:
 
 ```
-Phase 1  Create backup stream ← sourcing ← original
-         (server-side copy, no application-level consumption)
+Phase 1/4  Create backup stream ← sourcing ← original
+           (server-side copy, no application-level consumption)
 
-Phase 2  Delete original stream
+Phase 2/4  Delete original stream
 
-Phase 3  Create original stream with new config (e.g., Memory storage)
+Phase 3/4  Create original stream with new config (e.g., Memory storage)
 
-Phase 4  Original ← sourcing ← backup
-         (restore all messages into the new stream)
-
-Phase 5  Delete backup stream
+Phase 4/4  Original ← sourcing ← backup
+           → restore all messages → remove sources → delete backup
 ```
 
 The stream keeps its original name. Consumers are recreated automatically after migration by each pod's startup sequence or self-healing.
