@@ -310,6 +310,30 @@ describe(StreamProvider, () => {
       });
     });
 
+    describe('when stream has transport-controlled conflict', () => {
+      it('should throw when existing stream retention differs from expected', async () => {
+        // Given: stream exists with Limits retention, but transport expects Workqueue
+        const name = `${internalName(options.name)}_ev-stream`;
+        const existingConfig = {
+          ...DEFAULT_EVENT_STREAM_CONFIG,
+          name,
+          subjects: [`${internalName(options.name)}.ev.>`],
+          description: `JetStream ev stream for ${options.name}`,
+          retention: RetentionPolicy.Limits,
+        };
+
+        mockJsm.streams.info.mockResolvedValue(createMock<StreamInfo>({ config: existingConfig }));
+
+        // When / Then
+        await expect(sut.ensureStreams([StreamKind.Event])).rejects.toThrow(
+          /transport-controlled config conflicts/,
+        );
+
+        expect(mockJsm.streams.update).not.toHaveBeenCalled();
+        expect(mockJsm.streams.add).not.toHaveBeenCalled();
+      });
+    });
+
     describe('stripTransportControlled', () => {
       it('should silently strip retention from user overrides', async () => {
         // Given: options include retention override (bypassing TypeScript via cast)
