@@ -262,7 +262,7 @@ describe(StreamProvider, () => {
         expect(mockJsm.streams.add).not.toHaveBeenCalled();
       });
 
-      it('should warn and skip when immutable change detected without allowDestructiveMigration', async () => {
+      it('should skip immutable change when allowDestructiveMigration is off', async () => {
         // Given: stream exists with different storage
         const name = `${internalName(options.name)}_ev-stream`;
         const existingConfig = {

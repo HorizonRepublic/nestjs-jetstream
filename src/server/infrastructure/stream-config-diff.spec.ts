@@ -232,19 +232,22 @@ describe(compareStreamConfig.name, () => {
   });
 
   describe('server-managed fields', () => {
-    it('should ignore fields not present in desired config', () => {
-      // Given: current has server-managed fields, desired does not
+    it('should ignore fields in current that are absent from desired', () => {
+      // Given: current has extra server-managed fields (sealed, first_seq)
       const current = {
         storage: StorageType.File,
         max_age: 100,
+        sealed: false,
+        first_seq: 42,
       } as Partial<StreamConfig>;
 
+      // desired only has user-managed fields
       const desired: Partial<StreamConfig> = { storage: StorageType.File, max_age: 100 };
 
       // When
       const result = compareStreamConfig(current, desired);
 
-      // Then
+      // Then: server-managed fields are not flagged as changes
       expect(result.hasChanges).toBe(false);
     });
   });

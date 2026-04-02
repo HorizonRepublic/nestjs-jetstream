@@ -1,5 +1,7 @@
 import { Logger } from '@nestjs/common';
-import type { JetStreamManager, StreamConfig } from '@nats-io/jetstream';
+import { JetStreamApiError, type JetStreamManager, type StreamConfig } from '@nats-io/jetstream';
+
+import { NatsErrorCode } from './nats-error-codes';
 
 const MIGRATION_SUFFIX = '__migration_backup';
 const DEFAULT_SOURCING_TIMEOUT_MS = 30_000;
@@ -14,6 +16,11 @@ const SOURCING_POLL_INTERVAL_MS = 100;
  *   3. Create original with new config
  *   4. Restore: source from temp into new original
  *   5. Cleanup: remove temp stream
+ *
+ * **Important:** There is a brief window (milliseconds) between Phase 2 (delete)
+ * and Phase 3 (create) where the stream does not exist. Publishers may see
+ * temporary "stream not found" errors during this window. Client-side retry
+ * is the caller's responsibility.
  *
  * Ref: https://docs.nats.io/nats-concepts/jetstream/streams#sources
  */
@@ -30,9 +37,12 @@ export class StreamMigration {
     const backupName = `${streamName}${MIGRATION_SUFFIX}`;
     const startTime = Date.now();
 
+    // Check original stream FIRST — if it's gone but backup exists,
+    // we must NOT delete the backup (it may be the only copy of the data).
+    const currentInfo = await jsm.streams.info(streamName);
+
     await this.cleanupOrphanedBackup(jsm, backupName);
 
-    const currentInfo = await jsm.streams.info(streamName);
     const messageCount = currentInfo.state.messages;
 
     this.logger.log(`Stream ${streamName}: destructive migration started`);
@@ -118,8 +128,15 @@ export class StreamMigration {
       await jsm.streams.info(backupName);
       this.logger.warn(`Found orphaned migration backup stream: ${backupName}, cleaning up`);
       await jsm.streams.delete(backupName);
-    } catch {
-      // Backup doesn't exist — expected path
+    } catch (err) {
+      if (
+        err instanceof JetStreamApiError &&
+        err.apiError().err_code === NatsErrorCode.StreamNotFound
+      ) {
+        return; // Backup doesn't exist — expected path
+      }
+
+      throw err;
     }
   }
 }

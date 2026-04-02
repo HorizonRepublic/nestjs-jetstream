@@ -1,9 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMock } from '@golevelup/ts-vitest';
 import type { JetStreamManager, StreamConfig, StreamInfo } from '@nats-io/jetstream';
-import { StorageType, RetentionPolicy } from '@nats-io/jetstream';
+import { JetStreamApiError, StorageType, RetentionPolicy } from '@nats-io/jetstream';
 
 import { StreamMigration } from './stream-migration';
+
+const streamNotFoundError = new JetStreamApiError({
+  err_code: 10059,
+  code: 404,
+  description: 'stream not found',
+});
 
 describe(StreamMigration.name, () => {
   afterEach(vi.resetAllMocks);
@@ -34,12 +40,11 @@ describe(StreamMigration.name, () => {
       streams: {
         info: vi.fn().mockImplementation(async (name: string) => {
           if (name.includes('__migration_backup')) {
-            // First call: orphan check — not found
+            // Orphan check — not found (first call), subsequent: has messages
             if (infoCallCount++ === 0) {
-              throw new Error('stream not found');
+              throw streamNotFoundError;
             }
 
-            // Subsequent: backup stream has messages
             return {
               ...mockInfo,
               config: { ...mockInfo.config, name },
@@ -245,7 +250,7 @@ describe(StreamMigration.name, () => {
         streams: {
           info: vi.fn().mockImplementation(async (name: string) => {
             if (name.includes('__migration_backup') && !backupCreated) {
-              throw new Error('stream not found');
+              throw streamNotFoundError;
             }
 
             if (name.includes('__migration_backup') && backupCreated) {

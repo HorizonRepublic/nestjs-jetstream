@@ -130,7 +130,7 @@ export class StreamProvider {
     if (diff.hasTransportControlledConflicts) {
       const conflicts = diff.changes
         .filter((c) => c.mutability === 'transport-controlled')
-        .map((c) => `${c.property}: ${String(c.current)} → ${String(c.desired)}`)
+        .map((c) => `${c.property}: ${JSON.stringify(c.current)} → ${JSON.stringify(c.desired)}`)
         .join(', ');
 
       throw new Error(
@@ -202,7 +202,7 @@ export class StreamProvider {
         suffix = ' (requires allowDestructiveMigration)';
       }
 
-      return `  ${icon} ${c.property}: ${String(c.current)} → ${String(c.desired)}${suffix}`;
+      return `  ${icon} ${c.property}: ${JSON.stringify(c.current)} → ${JSON.stringify(c.desired)}${suffix}`;
     });
 
     this.logger.log(`Stream ${streamName} config changes:\n${lines.join('\n')}`);
@@ -278,6 +278,10 @@ export class StreamProvider {
    */
   private stripTransportControlled(overrides: Partial<StreamConfig>): Partial<StreamConfig> {
     if (!('retention' in overrides)) return overrides;
+
+    this.logger.debug(
+      'Stripping user-provided retention override — retention is managed by the transport',
+    );
 
     const cleaned = { ...overrides };
 

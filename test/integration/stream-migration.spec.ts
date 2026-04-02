@@ -187,8 +187,6 @@ describe('Stream sourcing behavior (NATS verification)', () => {
   });
 
   describe('Stream migration via transport', () => {
-    afterEach(vi.resetAllMocks);
-
     describe('empty stream migration (storage change)', () => {
       it('should recreate stream with new storage type', async () => {
         const serviceName = uniqueServiceName();
