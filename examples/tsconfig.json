@@ -4,11 +4,8 @@
     "outDir": "../dist-example",
     "rootDir": "..",
     "noEmit": false,
-    "baseUrl": "..",
     "paths": {
-      "@horizon-republic/nestjs-jetstream": [
-        "src/index.ts"
-      ]
+      "@horizon-republic/nestjs-jetstream": ["../src/index.ts"]
     }
   },
   "include": [

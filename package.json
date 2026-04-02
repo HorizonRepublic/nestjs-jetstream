@@ -57,8 +57,7 @@
   "scripts": {
     "build": "tsup",
     "build:watch": "tsup --watch",
-    "build:example": "tsc -p examples/tsconfig.json",
-    "start:example": "pnpm build && pnpm build:example && node dist-example/examples/main.js",
+    "start:example": "pnpm build && tsx --tsconfig examples/tsconfig.json examples/main.ts",
     "dev:example": "tsx --tsconfig examples/tsconfig.json examples/main.ts",
     "prepublishOnly": "pnpm build",
     "lint": "eslint",
@@ -94,7 +93,7 @@
     "testcontainers": "^11.13.0",
     "tsup": "^8.5.1",
     "tsx": "^4.21.0",
-    "typescript": "~5.9.3",
+    "typescript": "~6.0.2",
     "typescript-eslint": "^8.58.0",
     "vitest": "^4.1.2"
   },
