@@ -199,6 +199,14 @@ export default function Root({ children }) {
   "dateModified": "2026-04-02"
 },
       
+    '/docs/patterns/handler-metadata/': {
+  "@type": "Article",
+  "headline": "Handler Metadata Registry",
+  "description": "Publish handler metadata to a NATS KV bucket for dynamic service discovery, API gateway routing, and catalog generation.",
+  "datePublished": "2026-04-02",
+  "dateModified": "2026-04-02"
+},
+      
     '/docs/patterns/ordered-events/': {
   "@type": "Article",
   "headline": "Ordered Events",
