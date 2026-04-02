@@ -131,7 +131,7 @@ export const DEFAULT_BROADCAST_STREAM_CONFIG: Partial<StreamConfig> = {
   max_msgs_per_subject: 1_000_000,
   max_msgs: 10_000_000,
   max_bytes: 2 * GB,
-  max_age: toNanos(1, 'days'),
+  max_age: toNanos(1, 'hours'),
   duplicate_window: toNanos(2, 'minutes'),
 };
 
