@@ -54,6 +54,7 @@ The library requires the following NestJS packages as peer dependencies (they ar
 ## Runtime requirements
 
 - **Node.js** >= 20.0.0
+- **TypeScript** >= 5.7 (required by `@nats-io/*` v3 typed array generics)
 - **NATS Server** >= 2.10 with JetStream enabled (>= 2.12 for [message scheduling](/docs/guides/scheduling))
 
 ## Run NATS locally
