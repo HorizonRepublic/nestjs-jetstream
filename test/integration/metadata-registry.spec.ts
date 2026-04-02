@@ -26,8 +26,8 @@ const EVENT_META = { http: { method: 'POST', path: '/orders' } };
 const RPC_META = { http: { method: 'GET', path: '/orders/:id' }, auth: 'bearer' };
 const BROADCAST_META = { scope: 'global' };
 
-/** Short TTL for tests — entries expire quickly after heartbeat stops. */
-const TEST_TTL = 3_000;
+/** Short TTL for tests — must be >= MIN_METADATA_TTL (5s). */
+const TEST_TTL = 5_000;
 
 // ---------------------------------------------------------------------------
 // Test Controllers
@@ -254,7 +254,7 @@ describe('Handler Metadata Registry', { timeout: 60_000 }, () => {
 
           return entry === null;
         },
-        TEST_TTL + 2_000,
+        TEST_TTL + 5_000,
         500,
       );
     });
