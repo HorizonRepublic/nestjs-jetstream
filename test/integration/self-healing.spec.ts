@@ -237,6 +237,47 @@ describe('Self-Healing Consumer Flow', () => {
       await cleanupStreams(nc, serviceName);
     });
 
+    it('should block consumer recovery while migration backup exists', async () => {
+      // Given: message consumed successfully
+      await firstValueFrom(client.emit('healing.check', { phase: 'initial' }));
+
+      await waitForCondition(() => controller.received.length >= 1, 10_000);
+
+      const evStream = streamName(serviceName, StreamKind.Event);
+      const evConsumer = consumerName(serviceName, StreamKind.Event);
+      const backupName = `${evStream}__migration_backup`;
+
+      // When: simulate migration — create backup stream, then delete consumer
+
+      await jsm.streams.add({
+        name: backupName,
+        subjects: [],
+        num_replicas: 1,
+      });
+
+      await jsm.consumers.delete(evStream, evConsumer);
+
+      // Publish a message while backup exists
+      await firstValueFrom(client.emit('healing.check', { phase: 'during-migration' }));
+
+      // Wait enough for self-healing to attempt recovery (several retry cycles)
+      await new Promise((r) => setTimeout(r, 3_000));
+
+      // Then: consumer should NOT be recreated — backup blocks recovery
+      await expect(jsm.consumers.info(evStream, evConsumer)).rejects.toThrow();
+
+      // Only the first message was consumed
+      expect(controller.received).toHaveLength(1);
+
+      // When: "migration completes" — delete backup stream
+      await jsm.streams.delete(backupName);
+
+      // Then: self-healing recovers, consumer recreated, pending message delivered
+      await waitForCondition(() => controller.received.length >= 2, 30_000);
+
+      expect(controller.received).toHaveLength(2);
+    }, 60_000);
+
     it('should recreate event consumer after manual deletion and resume consumption', async () => {
       // Given: message consumed successfully
       await firstValueFrom(client.emit('healing.check', { phase: 'before-delete' }));
