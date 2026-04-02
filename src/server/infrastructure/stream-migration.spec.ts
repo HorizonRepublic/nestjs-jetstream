@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMock } from '@golevelup/ts-vitest';
+import { faker } from '@faker-js/faker';
 import type { JetStreamManager, StreamConfig, StreamInfo } from '@nats-io/jetstream';
 import { JetStreamApiError, StorageType, RetentionPolicy } from '@nats-io/jetstream';
 
-import { StreamMigration } from './stream-migration';
+import { MIGRATION_BACKUP_SUFFIX, StreamMigration } from './stream-migration';
 
 const streamNotFoundError = new JetStreamApiError({
   err_code: 10059,
@@ -14,9 +15,12 @@ const streamNotFoundError = new JetStreamApiError({
 describe(StreamMigration.name, () => {
   afterEach(vi.resetAllMocks);
 
+  const testStreamName = `${faker.lorem.word()}__microservice_ev-stream`;
+  const backupStreamName = `${testStreamName}${MIGRATION_BACKUP_SUFFIX}`;
+
   const newConfig = {
-    name: 'test_ev-stream',
-    subjects: ['test.ev.>'],
+    name: testStreamName,
+    subjects: [`${testStreamName}.>`],
     storage: StorageType.Memory,
     retention: RetentionPolicy.Workqueue,
     num_replicas: 1,
@@ -25,7 +29,7 @@ describe(StreamMigration.name, () => {
   const buildMockJsm = (messageCount: number): JetStreamManager => {
     const mockInfo = createMock<StreamInfo>({
       config: {
-        name: 'test_ev-stream',
+        name: testStreamName,
         storage: StorageType.File,
         retention: RetentionPolicy.Workqueue,
         subjects: ['test.ev.>'],
@@ -39,7 +43,7 @@ describe(StreamMigration.name, () => {
     return createMock<JetStreamManager>({
       streams: {
         info: vi.fn().mockImplementation(async (name: string) => {
-          if (name.includes('__migration_backup')) {
+          if (name === backupStreamName) {
             // Orphan check — not found (first call), subsequent: has messages
             if (infoCallCount++ === 0) {
               throw streamNotFoundError;
@@ -68,10 +72,10 @@ describe(StreamMigration.name, () => {
       const jsm = buildMockJsm(0);
 
       // When
-      await sut.migrate(jsm, 'test_ev-stream', newConfig);
+      await sut.migrate(jsm, testStreamName, newConfig);
 
       // Then: delete + create, no backup sourcing
-      expect(jsm.streams.delete).toHaveBeenCalledWith('test_ev-stream');
+      expect(jsm.streams.delete).toHaveBeenCalledWith(testStreamName);
       expect(jsm.streams.add).toHaveBeenCalledWith(newConfig);
 
       // No backup stream created (only the new stream via add)
@@ -86,25 +90,25 @@ describe(StreamMigration.name, () => {
       const jsm = buildMockJsm(100);
 
       // When
-      await sut.migrate(jsm, 'test_ev-stream', newConfig);
+      await sut.migrate(jsm, testStreamName, newConfig);
 
       // Then: Phase 1 — backup created with sources
       const addCalls = vi.mocked(jsm.streams.add).mock.calls;
 
       expect(addCalls[0]![0]).toMatchObject({
-        name: 'test_ev-stream__migration_backup',
+        name: backupStreamName,
         subjects: [],
       });
 
       // Phase 2 — delete original
-      expect(jsm.streams.delete).toHaveBeenCalledWith('test_ev-stream');
+      expect(jsm.streams.delete).toHaveBeenCalledWith(testStreamName);
 
       // Phase 3 — create new
       expect(addCalls[1]![0]).toMatchObject(newConfig);
 
       // Phase 4 — restore via sources, then remove sources, then delete backup
       expect(jsm.streams.update).toHaveBeenCalled();
-      expect(jsm.streams.delete).toHaveBeenCalledWith('test_ev-stream__migration_backup');
+      expect(jsm.streams.delete).toHaveBeenCalledWith(backupStreamName);
     });
   });
 
@@ -116,23 +120,23 @@ describe(StreamMigration.name, () => {
 
       // Override: backup exists on first info call
       vi.mocked(jsm.streams.info).mockImplementation(async (name: string) => {
-        if (name.includes('__migration_backup')) {
+        if (name === backupStreamName) {
           return createMock<StreamInfo>({ state: { messages: 0 } as StreamInfo['state'] });
         }
 
         return createMock<StreamInfo>({
           state: { messages: 0 } as StreamInfo['state'],
-          config: { name: 'test_ev-stream' } as StreamConfig,
+          config: { name: testStreamName } as StreamConfig,
         });
       });
 
       // When
-      await sut.migrate(jsm, 'test_ev-stream', newConfig);
+      await sut.migrate(jsm, testStreamName, newConfig);
 
       // Then: backup deleted before migration
       const deleteCalls = vi.mocked(jsm.streams.delete).mock.calls.map((c) => c[0]);
 
-      expect(deleteCalls).toContain('test_ev-stream__migration_backup');
+      expect(deleteCalls).toContain(backupStreamName);
     });
   });
 
@@ -144,7 +148,7 @@ describe(StreamMigration.name, () => {
 
       // Override: delete throws on original stream name
       vi.mocked(jsm.streams.delete).mockImplementation(async (name: string) => {
-        if (!name.includes('__migration_backup')) {
+        if (name !== backupStreamName) {
           throw new Error('permission denied');
         }
 
@@ -152,12 +156,12 @@ describe(StreamMigration.name, () => {
       });
 
       // When/Then: error is rethrown
-      await expect(sut.migrate(jsm, 'test_ev-stream', newConfig)).rejects.toThrow(
+      await expect(sut.migrate(jsm, testStreamName, newConfig)).rejects.toThrow(
         'permission denied',
       );
 
       // And: cleanup — backup delete was called
-      expect(jsm.streams.delete).toHaveBeenCalledWith('test_ev-stream__migration_backup');
+      expect(jsm.streams.delete).toHaveBeenCalledWith(backupStreamName);
     });
   });
 
@@ -180,14 +184,14 @@ describe(StreamMigration.name, () => {
       });
 
       // When/Then: error is rethrown
-      await expect(sut.migrate(jsm, 'test_ev-stream', newConfig)).rejects.toThrow(
+      await expect(sut.migrate(jsm, testStreamName, newConfig)).rejects.toThrow(
         'resource limit exceeded',
       );
 
       // And: backup NOT deleted — it's the only copy after original was deleted in Phase 2
       const deleteCalls = vi.mocked(jsm.streams.delete).mock.calls.map((c) => c[0]);
 
-      expect(deleteCalls).not.toContain('test_ev-stream__migration_backup');
+      expect(deleteCalls).not.toContain(backupStreamName);
     });
   });
 
@@ -198,23 +202,23 @@ describe(StreamMigration.name, () => {
       const jsm = buildMockJsm(100);
 
       // When
-      await sut.migrate(jsm, 'test_ev-stream', newConfig);
+      await sut.migrate(jsm, testStreamName, newConfig);
 
       // Then: first update call clears backup sources (cycle prevention)
       const updateCalls = vi.mocked(jsm.streams.update).mock.calls;
       const firstUpdateName = updateCalls[0]![0];
       const firstUpdateConfig = updateCalls[0]![1];
 
-      expect(firstUpdateName).toBe('test_ev-stream__migration_backup');
+      expect(firstUpdateName).toBe(backupStreamName);
       expect(firstUpdateConfig).toMatchObject({ sources: [] });
 
       // And: second update call restores with backup as source
       const secondUpdateName = updateCalls[1]![0];
       const secondUpdateConfig = updateCalls[1]![1];
 
-      expect(secondUpdateName).toBe('test_ev-stream');
+      expect(secondUpdateName).toBe(testStreamName);
       expect(secondUpdateConfig).toMatchObject({
-        sources: [{ name: 'test_ev-stream__migration_backup' }],
+        sources: [{ name: backupStreamName }],
       });
     });
 
@@ -224,7 +228,7 @@ describe(StreamMigration.name, () => {
       const jsm = buildMockJsm(100);
 
       // When
-      await sut.migrate(jsm, 'test_ev-stream', newConfig);
+      await sut.migrate(jsm, testStreamName, newConfig);
 
       // Then: restore update passes full config AND sources
       const updateCalls = vi.mocked(jsm.streams.update).mock.calls;
@@ -236,7 +240,7 @@ describe(StreamMigration.name, () => {
         storage: newConfig.storage,
         retention: newConfig.retention,
         num_replicas: newConfig.num_replicas,
-        sources: [{ name: 'test_ev-stream__migration_backup' }],
+        sources: [{ name: backupStreamName }],
       });
     });
   });
@@ -251,18 +255,18 @@ describe(StreamMigration.name, () => {
       const jsm = createMock<JetStreamManager>({
         streams: {
           info: vi.fn().mockImplementation(async (name: string) => {
-            if (name.includes('__migration_backup') && !backupCreated) {
+            if (name === backupStreamName && !backupCreated) {
               throw streamNotFoundError;
             }
 
-            if (name.includes('__migration_backup') && backupCreated) {
+            if (name === backupStreamName && backupCreated) {
               // Always returns 0 messages — simulates stuck sourcing
               return createMock<StreamInfo>({ state: { messages: 0 } as StreamInfo['state'] });
             }
 
             return createMock<StreamInfo>({
               state: { messages: 100 } as StreamInfo['state'],
-              config: { name: 'test_ev-stream' } as StreamConfig,
+              config: { name: testStreamName } as StreamConfig,
             });
           }),
           add: vi.fn().mockImplementation(async () => {
@@ -276,12 +280,12 @@ describe(StreamMigration.name, () => {
       });
 
       // When/Then: should throw timeout error
-      await expect(sut.migrate(jsm, 'test_ev-stream', newConfig)).rejects.toThrow(
+      await expect(sut.migrate(jsm, testStreamName, newConfig)).rejects.toThrow(
         /sourcing timeout/i,
       );
 
       // And: backup cleaned up — original stream was NOT deleted (Phase 1 timeout)
-      expect(jsm.streams.delete).toHaveBeenCalledWith('test_ev-stream__migration_backup');
+      expect(jsm.streams.delete).toHaveBeenCalledWith(backupStreamName);
     });
   });
 });
