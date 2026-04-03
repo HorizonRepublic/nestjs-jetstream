@@ -243,8 +243,11 @@ export class EventRouter {
       await this.deadLetterConfig.onDeadLetter(info);
       msg.term('Dead letter processed');
     } catch (hookErr) {
-      this.logger.error(`onDeadLetter callback failed for ${msg.subject}, nak for retry:`, hookErr);
-      msg.nak();
+      this.logger.error(
+        `onDeadLetter callback failed for ${msg.subject}, terminating to prevent loop:`,
+        hookErr,
+      );
+      msg.term('Dead letter callback failed');
     }
   }
 }

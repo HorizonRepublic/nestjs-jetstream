@@ -8,7 +8,12 @@ import type {
   RegisteredHandler,
   SubjectKind,
 } from '../../interfaces';
-import { buildBroadcastSubject, buildSubject, internalName } from '../../jetstream.constants';
+import {
+  buildBroadcastSubject,
+  buildSubject,
+  internalName,
+  metadataKey,
+} from '../../jetstream.constants';
 
 /** Maps StreamKind to a human-readable label for logging. */
 const HANDLER_LABELS: Record<StreamKind, string> = {
@@ -36,6 +41,7 @@ export class PatternRegistry {
   private _hasCommands = false;
   private _hasBroadcasts = false;
   private _hasOrdered = false;
+  private _hasMetadata = false;
 
   public constructor(private readonly options: JetstreamModuleOptions) {}
 
@@ -52,6 +58,7 @@ export class PatternRegistry {
       const isEvent = handler.isEventHandler ?? false;
       const isBroadcast = !!extras?.broadcast;
       const isOrdered = !!extras?.ordered;
+      const meta = extras?.meta as Record<string, unknown> | undefined;
 
       if (isBroadcast && isOrdered) {
         throw new Error(
@@ -77,6 +84,7 @@ export class PatternRegistry {
         isEvent: isEvent && !isOrdered,
         isBroadcast,
         isOrdered,
+        meta,
       });
 
       this.logger.debug(`Registered ${HANDLER_LABELS[kind]}: ${pattern} -> ${fullSubject}`);
@@ -87,6 +95,7 @@ export class PatternRegistry {
     this._hasCommands = this.cachedPatterns.commands.length > 0;
     this._hasBroadcasts = this.cachedPatterns.broadcasts.length > 0;
     this._hasOrdered = this.cachedPatterns.ordered.length > 0;
+    this._hasMetadata = [...this.registry.values()].some((entry) => entry.meta !== undefined);
     this.logSummary();
   }
 
@@ -121,6 +130,32 @@ export class PatternRegistry {
     return this.getPatternsByKind().ordered.map((p) =>
       buildSubject(this.options.name, StreamKind.Ordered, p),
     );
+  }
+
+  /** Check if any registered handler has metadata. */
+  public hasMetadata(): boolean {
+    return this._hasMetadata;
+  }
+
+  /**
+   * Get handler metadata entries for KV publishing.
+   *
+   * Returns a map of KV key -> metadata object for all handlers that have `meta`.
+   * Key format: `{serviceName}.{kind}.{pattern}`.
+   */
+  public getMetadataEntries(): Map<string, Record<string, unknown>> {
+    const entries = new Map<string, Record<string, unknown>>();
+
+    for (const entry of this.registry.values()) {
+      if (!entry.meta) continue;
+
+      const kind = this.resolveStreamKind(entry);
+      const key = metadataKey(this.options.name, kind, entry.pattern);
+
+      entries.set(key, entry.meta);
+    }
+
+    return entries;
   }
 
   /** Get patterns grouped by kind (cached after registration). */
@@ -168,6 +203,14 @@ export class PatternRegistry {
     }
 
     return { events, commands, broadcasts, ordered };
+  }
+
+  private resolveStreamKind(entry: RegisteredHandler): StreamKind {
+    if (entry.isBroadcast) return StreamKind.Broadcast;
+    if (entry.isOrdered) return StreamKind.Ordered;
+    if (entry.isEvent) return StreamKind.Event;
+
+    return StreamKind.Command;
   }
 
   private logSummary(): void {

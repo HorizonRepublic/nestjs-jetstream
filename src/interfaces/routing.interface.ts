@@ -14,6 +14,8 @@ export interface RegisteredHandler {
   isBroadcast: boolean;
   /** `true` if this handler uses ordered delivery (strict sequential processing). */
   isOrdered: boolean;
+  /** User-defined metadata from `@EventPattern`/`@MessagePattern` extras. */
+  meta?: Record<string, unknown>;
 }
 
 /** @internal Grouped pattern lists by stream kind, used for stream/consumer setup. */

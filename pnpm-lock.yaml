@@ -11,6 +11,9 @@ importers:
       '@nats-io/jetstream':
         specifier: ^3.3.1
         version: 3.3.1
+      '@nats-io/kv':
+        specifier: ^3.3.1
+        version: 3.3.1
       '@nats-io/nuid':
         specifier: ^2.0.3
         version: 2.0.3
@@ -1853,6 +1856,9 @@ packages:
 
   '@nats-io/jetstream@3.3.1':
     resolution: {integrity: sha512-oTIxM47pQfv4zCMlLN7FtARxSclMlUUPPn9I3VxRwMH+N2jkj1WCApu+tSL778KuljxfG8txi/MPwoWSXqbbQQ==}
+
+  '@nats-io/kv@3.3.1':
+    resolution: {integrity: sha512-KqFTRNxDFbeZ5rMG/2dOYVYRujd6gzSfDm0Eo9r5GMbSDT7waNzD6Hz9hOqXwBL7/72F/fJ7+NfPVD9KWq37ew==}
 
   '@nats-io/nats-core@3.3.1':
     resolution: {integrity: sha512-myFXGTo4cCfKrsLDjkoEz7FjjjvSfBRjun7Qx3n3Z5OzW4JUY8Ou7VQsGAdXLQxHN3ae/XNXvmXxshDoFPex4w==}
@@ -9969,6 +9975,11 @@ snapshots:
 
   '@nats-io/jetstream@3.3.1':
     dependencies:
+      '@nats-io/nats-core': 3.3.1
+
+  '@nats-io/kv@3.3.1':
+    dependencies:
+      '@nats-io/jetstream': 3.3.1
       '@nats-io/nats-core': 3.3.1
 
   '@nats-io/nats-core@3.3.1':

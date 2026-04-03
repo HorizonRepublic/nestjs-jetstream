@@ -7,7 +7,12 @@ import type { JetstreamModuleOptions } from '../interfaces';
 import { isCoreRpcMode, isJetStreamRpcMode } from '../jetstream.constants';
 
 import { CoreRpcServer } from './core-rpc.server';
-import { ConsumerProvider, MessageProvider, StreamProvider } from './infrastructure';
+import {
+  ConsumerProvider,
+  MessageProvider,
+  MetadataProvider,
+  StreamProvider,
+} from './infrastructure';
 import { EventRouter, PatternRegistry, RpcRouter } from './routing';
 
 /**
@@ -38,6 +43,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     private readonly rpcRouter: RpcRouter,
     private readonly coreRpcServer: CoreRpcServer,
     private readonly ackWaitMap: Map<StreamKind, number> = new Map(),
+    private readonly metadataProvider?: MetadataProvider,
   ) {
     super();
   }
@@ -111,11 +117,17 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
       await this.coreRpcServer.start();
     }
 
+    // 12. Publish handler metadata to KV (non-critical — errors logged, not thrown)
+    if (this.metadataProvider && this.patternRegistry.hasMetadata()) {
+      await this.metadataProvider.publish(this.patternRegistry.getMetadataEntries());
+    }
+
     callback();
   }
 
-  /** Stop all consumers, routers, and subscriptions. Called during shutdown. */
+  /** Stop all consumers, routers, subscriptions, and metadata heartbeat. Called during shutdown. */
   public close(): void {
+    this.metadataProvider?.destroy();
     this.eventRouter.destroy();
     this.rpcRouter.destroy();
     this.coreRpcServer.stop();

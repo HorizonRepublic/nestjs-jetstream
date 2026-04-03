@@ -369,6 +369,7 @@ export class JetstreamClient extends ClientProxy {
     this.pendingTimeouts.clear();
     this.inboxSubscription?.unsubscribe();
     this.inboxSubscription = null;
+    this.inbox = null;
   }
 
   /** Setup shared inbox subscription for JetStream RPC responses. */

@@ -2,7 +2,12 @@ export { JetstreamStrategy } from './strategy';
 
 export { CoreRpcServer } from './core-rpc.server';
 
-export { ConsumerProvider, MessageProvider, StreamProvider } from './infrastructure';
+export {
+  ConsumerProvider,
+  MessageProvider,
+  MetadataProvider,
+  StreamProvider,
+} from './infrastructure';
 
 export type { ConsumerRecoveryFn } from './infrastructure';
 

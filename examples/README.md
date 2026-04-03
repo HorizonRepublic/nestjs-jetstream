@@ -31,3 +31,4 @@ npx tsx --tsconfig examples/tsconfig.json examples/03-ordered-events/main.ts
 | 06 | [scheduling](./06-scheduling) | 3005 | Delayed delivery via scheduleAt() (NATS >= 2.12) | `GET /schedule` |
 | 07 | [publisher-only](./07-publisher-only) | 3006 | consumer: false, API gateway pattern | `GET /place-order` |
 | 08 | [per-message-ttl](./08-per-message-ttl) | 3007 | Individual message expiration (NATS >= 2.11) | `GET /token` |
+| 09 | [handler-metadata](./09-handler-metadata) | 3008 | KV metadata registry, service discovery | — |
