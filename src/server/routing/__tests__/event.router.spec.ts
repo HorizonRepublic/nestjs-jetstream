@@ -607,7 +607,7 @@ describe(EventRouter, () => {
     });
 
     describe('error paths', () => {
-      it('should term the message if onDeadLetter throws to prevent infinite loop', async () => {
+      it('should nak the message if onDeadLetter throws', async () => {
         // Given: dead letter hook that fails (e.g. Redis/Postgres down)
         onDeadLetter.mockRejectedValue(new Error('DLQ persistence failed'));
 
@@ -621,9 +621,9 @@ describe(EventRouter, () => {
         events$.next(msg);
         await new Promise(process.nextTick);
 
-        // Then: term to prevent infinite nak→redeliver→dead-letter→nak loop
-        expect(msg.term).toHaveBeenCalledWith('Dead letter callback failed');
-        expect(msg.nak).not.toHaveBeenCalled();
+        // Then: nak for retry instead of term
+        expect(msg.nak).toHaveBeenCalled();
+        expect(msg.term).not.toHaveBeenCalled();
       });
     });
   });
