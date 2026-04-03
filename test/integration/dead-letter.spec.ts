@@ -7,7 +7,8 @@ import { firstValueFrom } from 'rxjs';
 import type { StartedTestContainer } from 'testcontainers';
 
 import type { DeadLetterInfo } from '../../src';
-import { getClientToken, toNanos } from '../../src';
+import { getClientToken, toNanos, dlqStreamName, JetstreamDlqHeader } from '../../src';
+import { jetstreamManager } from '@nats-io/jetstream';
 
 import {
   cleanupStreams,
@@ -163,6 +164,81 @@ describe('Dead Letter Queue Hook', () => {
       await waitForCondition(() => controller.attempts >= 2, 10_000);
 
       // Then: no crash, handler was attempted max_deliver times
+      expect(controller.attempts).toBe(2);
+    });
+  });
+  describe('with native DLQ configured', () => {
+    let app: INestApplication;
+    let module: TestingModule;
+    let client: ClientProxy;
+    let serviceName: string;
+    let controller: AlwaysFailingController;
+
+    const deadLetters: DeadLetterInfo[] = [];
+
+    beforeEach(async () => {
+      serviceName = uniqueServiceName();
+      deadLetters.length = 0;
+
+      ({ app, module } = await createTestApp(
+        {
+          name: serviceName,
+          port,
+          dlq: {}, // enable native DLQ
+          events: {
+            consumer: {
+              max_deliver: 2,
+              ack_wait: toNanos(2, 'seconds'),
+            },
+          },
+          onDeadLetter: async (info) => {
+            deadLetters.push(info);
+          },
+        },
+        [AlwaysFailingController],
+        [serviceName],
+      ));
+
+      client = module.get<ClientProxy>(getClientToken(serviceName));
+      controller = module.get(AlwaysFailingController);
+    });
+
+    afterEach(async () => {
+      await app.close();
+      await cleanupStreams(nc, serviceName);
+    });
+
+    it('should republish to DLQ stream and invoke onDeadLetter fallback', async () => {
+      // Given: emit an event that will always fail
+      await firstValueFrom(client.emit('order.doomed', { orderId: 'dlq-123' }));
+
+      // When: wait for max_deliver attempts
+      await waitForCondition(() => deadLetters.length > 0, 10_000);
+
+      // Then: message is in DLQ stream
+      const jsm = await jetstreamManager(nc);
+      const dlqName = dlqStreamName(serviceName);
+
+      const streamInfo = await jsm.streams.info(dlqName);
+      expect(streamInfo.state.messages).toBe(1);
+
+      const msg = await jsm.streams.getMessage(dlqName, { seq: 1 });
+      expect(msg).toBeDefined();
+
+      const decodedStr = new TextDecoder().decode(msg!.data);
+      const decodedDict = JSON.parse(decodedStr);
+      expect(decodedDict.orderId).toBe('dlq-123');
+
+      const hdrs = msg!.header;
+      expect(hdrs).toBeDefined();
+      expect(hdrs?.get(JetstreamDlqHeader.DeadLetterReason)).toMatch(/Permanent failure|error/i);
+      expect(hdrs?.get(JetstreamDlqHeader.DeliveryCount)).toBe('2');
+      expect(hdrs?.get(JetstreamDlqHeader.OriginalStream)).toBeDefined();
+
+      // Ensure fallback callback was ALSO invoked
+      expect(deadLetters).toHaveLength(1);
+      
+      // Ensure the handler was attempted exactly max_deliver times (2)
       expect(controller.attempts).toBe(2);
     });
   });

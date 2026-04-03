@@ -149,6 +149,20 @@ export const DEFAULT_ORDERED_STREAM_CONFIG: Partial<StreamConfig> = {
   duplicate_window: toNanos(2, 'minutes'),
 };
 
+/** Default config for dead-letter queue (DLQ) streams. */
+export const DEFAULT_DLQ_STREAM_CONFIG: Partial<StreamConfig> = {
+  ...baseStreamConfig,
+  retention: RetentionPolicy.Workqueue,
+  allow_rollup_hdrs: false,
+  max_consumers: 100,
+  max_msg_size: 10 * MB,
+  max_msgs_per_subject: 5_000_000,
+  max_msgs: 50_000_000,
+  max_bytes: 5 * GB,
+  max_age: toNanos(30, 'days'),
+  duplicate_window: toNanos(2, 'minutes'),
+};
+
 // ---------------------------------------------------------------------------
 // Default Consumer Configurations
 // ---------------------------------------------------------------------------
@@ -222,6 +236,19 @@ export enum JetstreamHeader {
   Error = 'x-error',
 }
 
+export enum JetstreamDlqHeader {
+  /** Reason for the message being sent to the DLQ (error message or 'max_deliver_exceeded') */
+  DeadLetterReason = 'x-dead-letter-reason',
+  /** Original NATS subject the message was originally published to */
+  OriginalSubject = 'x-original-subject',
+  /** Source stream name */
+  OriginalStream = 'x-original-stream',
+  /** ISO timestamp of when the message was moved to DLQ */
+  FailedAt = 'x-failed-at',
+  /** Number of times the message has been delivered */
+  DeliveryCount = 'x-delivery-count',
+}
+
 /** Set of header names that are reserved and cannot be set by users. */
 export const RESERVED_HEADERS = new Set<string>([
   JetstreamHeader.CorrelationId,
@@ -270,6 +297,16 @@ export const buildBroadcastSubject = (pattern: string): string => `broadcast.${p
 export const streamName = (serviceName: string, kind: StreamKind): string => {
   if (kind === StreamKind.Broadcast) return 'broadcast-stream';
   return `${internalName(serviceName)}_${kind}-stream`;
+};
+
+/**
+ * Build the JetStream dead-letter queue stream name for a given service.
+ *
+ * @param serviceName - Service name from `forRoot({ name })`.
+ * @returns DLQ Stream name (e.g. `orders__microservice_dlq-stream`).
+ */
+export const dlqStreamName = (serviceName: string): string => {
+  return `${internalName(serviceName)}_dlq-stream`;
 };
 
 /**

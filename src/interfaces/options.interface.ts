@@ -208,6 +208,24 @@ export interface JetstreamModuleOptions {
   onDeadLetter?(info: DeadLetterInfo): Promise<void>;
 
   /**
+   * Dead-letter queue (DLQ) configuration.
+   * DLQ is a separate stream used to store messages that have exhausted all delivery attempts.
+   * @example
+   * ```typescript
+   * JetstreamModule.forRootAsync({
+   *   name: 'my-service',
+   *   servers: ['nats://localhost:4222'],
+   *   dlq: {
+   *     stream: {
+   *       max_age: toNanos(30, 'days'),
+   *     },
+   *   },
+   * })
+   * ```
+   */
+  dlq?: { stream?: StreamConfigOverrides };
+
+  /**
    * Graceful shutdown timeout in ms.
    * Handlers exceeding this are abandoned.
    * @default 10_000

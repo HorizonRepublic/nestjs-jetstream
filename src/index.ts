@@ -44,6 +44,8 @@ export {
   isCoreRpcMode,
   isJetStreamRpcMode,
   JetstreamHeader,
+  JetstreamDlqHeader,
+  dlqStreamName,
   JETSTREAM_CODEC,
   JETSTREAM_CONNECTION,
   JETSTREAM_EVENT_BUS,

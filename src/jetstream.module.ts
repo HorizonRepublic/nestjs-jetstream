@@ -366,6 +366,7 @@ export class JetstreamModule implements OnApplicationShutdown {
           JETSTREAM_CODEC,
           JETSTREAM_EVENT_BUS,
           JETSTREAM_ACK_WAIT_MAP,
+          JETSTREAM_CONNECTION,
         ],
         useFactory: (
           options: JetstreamModuleOptions,
@@ -374,6 +375,7 @@ export class JetstreamModule implements OnApplicationShutdown {
           codec: Codec,
           eventBus: EventBus,
           ackWaitMap: Map<StreamKind, number>,
+          connection: ConnectionProvider,
         ): EventRouter | null => {
           if (options.consumer === false) return null;
 
@@ -403,6 +405,8 @@ export class JetstreamModule implements OnApplicationShutdown {
             deadLetterConfig,
             processingConfig,
             ackWaitMap,
+            connection,
+            options,
           );
         },
       },

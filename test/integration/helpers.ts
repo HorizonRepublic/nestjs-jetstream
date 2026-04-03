@@ -4,7 +4,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { connect, type NatsConnection } from '@nats-io/transport-node';
 import { jetstreamManager, type JetStreamManager } from '@nats-io/jetstream';
 
-import { JetstreamModule, JetstreamStrategy, StreamKind, streamName } from '../../src';
+import { JetstreamModule, JetstreamStrategy, StreamKind, streamName, dlqStreamName } from '../../src';
 import type { JetstreamModuleOptions } from '../../src';
 
 /**
@@ -85,6 +85,7 @@ export const cleanupStreams = async (nc: NatsConnection, serviceName: string): P
   }
 
   await deleteStreamIfExists(jsm, streamName(serviceName, StreamKind.Broadcast));
+  await deleteStreamIfExists(jsm, dlqStreamName(serviceName));
 };
 
 /**

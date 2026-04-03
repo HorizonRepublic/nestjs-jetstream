@@ -11,6 +11,8 @@ import {
   DEFAULT_ORDERED_STREAM_CONFIG,
   internalName,
   streamName,
+  dlqStreamName,
+  DEFAULT_DLQ_STREAM_CONFIG,
 } from '../../jetstream.constants';
 import { NatsErrorCode } from './nats-error-codes';
 import { compareStreamConfig, type StreamConfigDiffResult } from './stream-config-diff';
@@ -40,11 +42,15 @@ export class StreamProvider {
    *
    * @param kinds Which stream kinds to create. Determined by the module based
    *              on RPC mode and registered handler patterns.
+   * If the dlq option is enabled, also ensures the DLQ stream exists.
    */
   public async ensureStreams(kinds: StreamKind[]): Promise<void> {
     const jsm = await this.connection.getJetStreamManager();
 
     await Promise.all(kinds.map((kind) => this.ensureStream(jsm, kind)));
+    if (this.options.dlq) {
+      await this.ensureDlqStream(jsm);
+    }
   }
 
   /** Get the stream name for a given kind. */
@@ -106,6 +112,31 @@ export class StreamProvider {
         err.apiError().err_code === NatsErrorCode.StreamNotFound
       ) {
         this.logger.log(`Creating stream: ${config.name}`);
+        return await jsm.streams.add(config as StreamConfig);
+      }
+
+      throw err;
+    }
+  }
+
+  /** Ensure a dead-letter queue stream exists, creating or updating as needed. */
+  private async ensureDlqStream(
+    jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
+  ): Promise<StreamInfo> {
+    const config = this.buildDlqConfig();
+
+    this.logger.log(`Ensuring DLQ stream: ${config.name}`);
+
+    try {
+      const currentInfo = await jsm.streams.info(config.name);
+
+      return await this.handleExistingStream(jsm, currentInfo, config);
+    } catch (err) {
+      if (
+        err instanceof JetStreamApiError &&
+        err.apiError().err_code === NatsErrorCode.StreamNotFound
+      ) {
+        this.logger.log(`Creating DLQ stream: ${config.name}`);
         return await jsm.streams.add(config as StreamConfig);
       }
 
@@ -224,6 +255,28 @@ export class StreamProvider {
     return {
       ...defaults,
       ...overrides,
+      name,
+      subjects,
+      description,
+    };
+  }
+
+  /**
+   * Build the stream configuration for the Dead-Letter Queue (DLQ).
+   *
+   * Merges the library default DLQ config with user-provided overrides.
+   * Ensures transport-controlled settings like retention are safely decoupled.
+   */
+  private buildDlqConfig(): Partial<StreamConfig> & { name: string; subjects: string[] } {
+    const name = dlqStreamName(this.options.name);
+    const subjects = [name];
+    const description = `JetStream DLQ stream for ${this.options.name}`;
+    const overrides = this.options.dlq?.stream ?? {};
+    const safeOverrides = this.stripTransportControlled(overrides);
+
+    return {
+      ...DEFAULT_DLQ_STREAM_CONFIG,
+      ...safeOverrides,
       name,
       subjects,
       description,
