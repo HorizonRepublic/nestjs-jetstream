@@ -233,19 +233,40 @@ describe(MetadataProvider, () => {
       expect(mockPut).not.toHaveBeenCalled();
     });
 
+    it('should reuse cached KV handle on heartbeat ticks instead of re-opening bucket', async () => {
+      // Given: published entries (first openBucket call)
+      const entries = new Map<string, Record<string, unknown>>([['key', { v: 1 }]]);
+
+      await sut.publish(entries);
+
+      expect(mockCreate).toHaveBeenCalledTimes(1);
+      mockCreate.mockClear();
+      mockPut.mockClear();
+
+      // When: multiple heartbeat ticks fire
+      await vi.advanceTimersByTimeAsync(DEFAULT_METADATA_TTL / 2);
+      await vi.advanceTimersByTimeAsync(DEFAULT_METADATA_TTL / 2);
+
+      // Then: KV handle was reused — no additional openBucket calls
+      expect(mockCreate).not.toHaveBeenCalled();
+
+      // Then: entries were still refreshed via the cached handle
+      expect(mockPut).toHaveBeenCalledTimes(2);
+    });
+
     it('should not throw when heartbeat refresh fails', async () => {
       // Given: published, then KV becomes unavailable
       const entries = new Map<string, Record<string, unknown>>([['key', { v: 1 }]]);
 
       await sut.publish(entries);
-      mockCreate.mockClear();
-      mockCreate.mockRejectedValue(new Error('connection lost'));
+      mockPut.mockRejectedValue(new Error('connection lost'));
+      mockPut.mockClear();
 
       // When: heartbeat tick fires
       await vi.advanceTimersByTimeAsync(DEFAULT_METADATA_TTL / 2);
 
-      // Then: refresh was attempted (mockCreate called by heartbeat) but didn't crash
-      expect(mockCreate).toHaveBeenCalledTimes(1);
+      // Then: refresh was attempted but didn't crash
+      expect(mockPut).toHaveBeenCalledTimes(1);
     });
   });
 

@@ -163,17 +163,32 @@ describe(JetstreamHealthIndicator, () => {
           await expect(sut.isHealthy()).rejects.toThrow('Jetstream health check failed');
         });
 
-        it('should attach down details to the thrown error', async () => {
+        it('should set isHealthCheckError flag for Terminus duck-type detection', async () => {
+          // Given: no connection
+          setupDisconnected(null);
+
+          // When/Then: thrown error has the Terminus duck-type marker
+          await expect(sut.isHealthy()).rejects.toMatchObject({
+            isHealthCheckError: true,
+          });
+        });
+
+        it('should include causes in thrown error for Terminus integration', async () => {
           // Given: no connection
           setupDisconnected(null);
           const key = faker.lorem.word();
 
-          // When: fails — Then: details attached to error
-          await expect(sut.isHealthy(key)).rejects.toMatchObject({
-            [key]: {
-              status: 'down',
-              server: null,
-              latency: null,
+          // When: fails
+          const error = await sut.isHealthy(key).catch((err: unknown) => err);
+
+          // Then: causes contain down details
+          expect(error).toMatchObject({
+            causes: {
+              [key]: {
+                status: 'down',
+                server: null,
+                latency: null,
+              },
             },
           });
         });

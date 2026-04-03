@@ -30,6 +30,7 @@ export class MetadataProvider {
   private readonly ttl: number;
   private currentEntries?: Map<string, Record<string, unknown>>;
   private heartbeatTimer?: ReturnType<typeof setInterval>;
+  private cachedKv?: KV;
 
   public constructor(
     options: JetstreamModuleOptions,
@@ -83,6 +84,7 @@ export class MetadataProvider {
     }
 
     this.currentEntries = undefined;
+    this.cachedKv = undefined;
   }
 
   /** Write entries to KV with per-entry error handling. */
@@ -125,15 +127,19 @@ export class MetadataProvider {
     }
   }
 
-  /** Create or open the KV bucket (idempotent). */
+  /** Create or open the KV bucket (cached after first call). */
   private async openBucket(): Promise<KV> {
+    if (this.cachedKv) return this.cachedKv;
+
     const js = this.connection.getJetStreamClient();
     const kvm = new Kvm(js);
 
-    return kvm.create(this.bucketName, {
+    this.cachedKv = await kvm.create(this.bucketName, {
       history: DEFAULT_METADATA_HISTORY,
       replicas: this.replicas,
       ttl: this.ttl,
     });
+
+    return this.cachedKv;
   }
 }
