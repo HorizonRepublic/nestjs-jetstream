@@ -220,24 +220,28 @@ describe('Dead Letter Queue Hook', () => {
       const dlqName = dlqStreamName(serviceName);
 
       const streamInfo = await jsm.streams.info(dlqName);
+
       expect(streamInfo.state.messages).toBe(1);
 
       const msg = await jsm.streams.getMessage(dlqName, { seq: 1 });
+
       expect(msg).toBeDefined();
 
       const decodedStr = new TextDecoder().decode(msg!.data);
       const decodedDict = JSON.parse(decodedStr);
+
       expect(decodedDict.orderId).toBe('dlq-123');
 
       const hdrs = msg!.header;
+
       expect(hdrs).toBeDefined();
-      expect(hdrs?.get(JetstreamDlqHeader.DeadLetterReason)).toMatch(/Permanent failure|error/i);
-      expect(hdrs?.get(JetstreamDlqHeader.DeliveryCount)).toBe('2');
-      expect(hdrs?.get(JetstreamDlqHeader.OriginalStream)).toBeDefined();
+      expect(hdrs.get(JetstreamDlqHeader.DeadLetterReason)).toMatch(/Permanent failure|error/i);
+      expect(hdrs.get(JetstreamDlqHeader.DeliveryCount)).toBe('2');
+      expect(hdrs.get(JetstreamDlqHeader.OriginalStream)).toBeDefined();
 
       // Ensure fallback callback was ALSO invoked
       expect(deadLetters).toHaveLength(1);
-      
+
       // Ensure the handler was attempted exactly max_deliver times (2)
       expect(controller.attempts).toBe(2);
     });

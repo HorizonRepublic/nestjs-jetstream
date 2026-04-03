@@ -290,12 +290,13 @@ export class EventRouter {
       }
     }
 
-    const reason =
-      error instanceof Error
-        ? error.message
-        : typeof error === 'object' && error !== null && 'message' in error
-          ? String((error as Record<string, unknown>).message)
-          : String(error);
+    let reason = String(error);
+
+    if (error instanceof Error) {
+      reason = error.message;
+    } else if (typeof error === 'object' && error !== null && 'message' in error) {
+      reason = String((error as Record<string, unknown>).message);
+    }
 
     hdrs.set(JetstreamDlqHeader.DeadLetterReason, reason);
     hdrs.set(JetstreamDlqHeader.OriginalSubject, msg.subject);

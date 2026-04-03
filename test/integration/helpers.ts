@@ -4,7 +4,13 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { connect, type NatsConnection } from '@nats-io/transport-node';
 import { jetstreamManager, type JetStreamManager } from '@nats-io/jetstream';
 
-import { JetstreamModule, JetstreamStrategy, StreamKind, streamName, dlqStreamName } from '../../src';
+import {
+  JetstreamModule,
+  JetstreamStrategy,
+  StreamKind,
+  streamName,
+  dlqStreamName,
+} from '../../src';
 import type { JetstreamModuleOptions } from '../../src';
 
 /**
