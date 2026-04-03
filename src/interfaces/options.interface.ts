@@ -130,6 +130,41 @@ export interface OrderedEventOverrides {
 }
 
 /**
+ * Configuration for the handler metadata KV registry.
+ *
+ * When any handler has `meta` in its extras, the transport writes metadata
+ * entries to a NATS KV bucket at startup. External services (API gateways,
+ * dashboards) can watch the bucket for service discovery.
+ *
+ * All fields are optional — sensible defaults are applied.
+ */
+export interface MetadataRegistryOptions {
+  /**
+   * KV bucket name.
+   * @default 'handler_registry'
+   */
+  bucket?: string;
+
+  /**
+   * Number of KV bucket replicas. Must be an odd number (1, 3, 5, 7, ...).
+   * Requires a NATS cluster with at least this many nodes.
+   * @default 1
+   */
+  replicas?: number;
+
+  /**
+   * KV bucket TTL in milliseconds.
+   *
+   * Entries expire automatically unless refreshed by a heartbeat.
+   * The transport refreshes entries every `ttl / 2` while the pod is alive.
+   * When the pod stops (graceful or crash), entries expire after this duration.
+   *
+   * @default 30_000 (30 seconds)
+   */
+  ttl?: number;
+}
+
+/**
  * Root module configuration for `JetstreamModule.forRoot()`.
  *
  * Minimal usage requires only `name` and `servers`.
@@ -231,6 +266,21 @@ export interface JetstreamModuleOptions {
    * @default false
    */
   allowDestructiveMigration?: boolean;
+
+  /**
+   * Handler metadata KV registry configuration.
+   *
+   * When any handler has `meta` in its `@EventPattern` / `@MessagePattern` extras,
+   * the transport writes metadata to a NATS KV bucket at startup.
+   * External services (API gateways, dashboards, CLI tools) can read or watch
+   * the bucket for dynamic service discovery.
+   *
+   * Auto-enabled when any handler has `meta`. Set to customize bucket name,
+   * replicas, or TTL.
+   *
+   * @see MetadataRegistryOptions
+   */
+  metadata?: MetadataRegistryOptions;
 
   /**
    * Raw NATS ConnectionOptions pass-through for advanced connection config.

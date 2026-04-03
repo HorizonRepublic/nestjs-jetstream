@@ -59,9 +59,14 @@ export class JetstreamHealthIndicator {
    * Returns `{ [key]: { status: 'up', ... } }` on success.
    * Throws an error with `{ [key]: { status: 'down', ... } }` on failure.
    *
+   * The thrown error sets `isHealthCheckError: true` and `causes` — the
+   * duck-type contract that Terminus `HealthCheckExecutor` uses to distinguish
+   * health failures from unexpected exceptions. Works with both Terminus v10
+   * (`instanceof HealthCheckError`) and v11+ (`error?.isHealthCheckError`).
+   *
    * @param key - Health indicator key (default: `'jetstream'`).
    * @returns Object with status, server, and latency under the given key.
-   * @throws Error with `{ [key]: { status: 'down' } }` when disconnected.
+   * @throws Error with `isHealthCheckError`, `causes`, and `{ [key]: { status: 'down' } }`.
    */
   public async isHealthy(key = 'jetstream'): Promise<Record<string, Record<string, unknown>>> {
     const status = await this.check();
@@ -73,8 +78,11 @@ export class JetstreamHealthIndicator {
     };
 
     if (!status.connected) {
+      const causes = { [key]: details };
+
       throw Object.assign(new Error('Jetstream health check failed'), {
-        [key]: details,
+        causes,
+        isHealthCheckError: true,
       });
     }
 

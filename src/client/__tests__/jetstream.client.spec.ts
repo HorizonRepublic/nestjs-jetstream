@@ -147,6 +147,25 @@ describe(JetstreamClient, () => {
         await expect(sut.close()).resolves.toBeUndefined();
       });
     });
+
+    describe('inbox reset', () => {
+      it('should null out inbox on close, matching handleDisconnect behavior', async () => {
+        // Given: jetstream mode, connected (inbox created)
+        options.rpc = { mode: 'jetstream' };
+        sut = new JetstreamClient(options, targetName, connection, codec, eventBus);
+
+        mockNc.subscribe.mockReturnValue(createMock<Subscription>());
+        await sut.connect();
+
+        // When: close
+        await sut.close();
+
+        // Then: inbox is reset (symmetric with handleDisconnect)
+        // Access private field to verify internal state consistency
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        expect((sut as any).inbox).toBeNull();
+      });
+    });
   });
 
   describe('unwrap()', () => {

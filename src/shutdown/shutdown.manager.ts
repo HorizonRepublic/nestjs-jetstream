@@ -15,12 +15,17 @@ export interface Stoppable {
  * Shutdown sequence:
  * 1. Emit onShutdownStart hook
  * 2. Stop accepting new messages (close subscriptions, stop consumers)
- * 3. Wait for in-flight handlers to complete (up to timeout)
- * 4. Drain and close NATS connection
- * 5. Emit onShutdownComplete hook
+ * 3. Drain and close NATS connection (with timeout safety net)
+ * 4. Emit onShutdownComplete hook
+ *
+ * Idempotent — concurrent or repeated calls return the same promise.
+ * This is critical because NestJS may call `onApplicationShutdown` on
+ * multiple module instances (forRoot + forFeature) that share this
+ * singleton, and the call order is not guaranteed.
  */
 export class ShutdownManager {
   private readonly logger = new Logger('Jetstream:Shutdown');
+  private shutdownPromise?: Promise<void>;
 
   public constructor(
     private readonly connection: ConnectionProvider,
@@ -31,9 +36,17 @@ export class ShutdownManager {
   /**
    * Execute the full shutdown sequence.
    *
+   * Idempotent — concurrent or repeated calls return the same promise.
+   *
    * @param strategy Optional stoppable to close (stops consumers and subscriptions).
    */
   public async shutdown(strategy?: Stoppable): Promise<void> {
+    this.shutdownPromise ??= this.doShutdown(strategy);
+
+    return this.shutdownPromise;
+  }
+
+  private async doShutdown(strategy?: Stoppable): Promise<void> {
     this.eventBus.emit(TransportEvent.ShutdownStart);
     this.logger.log(`Graceful shutdown started (timeout: ${this.timeout}ms)`);
 
