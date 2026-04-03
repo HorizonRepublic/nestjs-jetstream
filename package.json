@@ -79,9 +79,9 @@
   "devDependencies": {
     "@faker-js/faker": "^10.4.0",
     "@golevelup/ts-vitest": "^4.0.0",
-    "@nestjs/platform-express": "^11.1.17",
-    "@nestjs/testing": "^11.1.17",
-    "@types/node": "^25.5.0",
+    "@nestjs/platform-express": "^11.1.18",
+    "@nestjs/testing": "^11.1.18",
+    "@types/node": "^25.5.2",
     "@vitest/coverage-v8": "^4.1.2",
     "eslint": "^10.1.0",
     "eslint-config-prettier": "^10.1.8",
@@ -99,6 +99,7 @@
   },
   "dependencies": {
     "@nats-io/jetstream": "^3.3.1",
+    "@nats-io/kv": "^3.3.1",
     "@nats-io/nuid": "^2.0.3",
     "@nats-io/transport-node": "^3.3.1"
   }

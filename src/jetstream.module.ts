@@ -39,6 +39,7 @@ import {
   EventRouter,
   JetstreamStrategy,
   MessageProvider,
+  MetadataProvider,
   PatternRegistry,
   RpcRouter,
   StreamProvider,
@@ -478,6 +479,20 @@ export class JetstreamModule implements OnApplicationShutdown {
         },
       },
 
+      // MetadataProvider — handler metadata KV registry (decoupled from stream/consumer infra)
+      {
+        provide: MetadataProvider,
+        inject: [JETSTREAM_OPTIONS, JETSTREAM_CONNECTION],
+        useFactory: (
+          options: JetstreamModuleOptions,
+          connection: ConnectionProvider,
+        ): MetadataProvider | null => {
+          if (options.consumer === false) return null;
+
+          return new MetadataProvider(options, connection);
+        },
+      },
+
       // JetstreamStrategy — server-side transport (only when consumer enabled)
       {
         provide: JetstreamStrategy,
@@ -492,6 +507,7 @@ export class JetstreamModule implements OnApplicationShutdown {
           RpcRouter,
           CoreRpcServer,
           JETSTREAM_ACK_WAIT_MAP,
+          MetadataProvider,
         ],
         useFactory: (
           options: JetstreamModuleOptions,
@@ -504,6 +520,7 @@ export class JetstreamModule implements OnApplicationShutdown {
           rpcRouter: RpcRouter,
           coreRpcServer: CoreRpcServer,
           ackWaitMap: Map<StreamKind, number>,
+          metadataProvider: MetadataProvider,
         ): JetstreamStrategy | null => {
           if (options.consumer === false) return null;
 
@@ -518,6 +535,7 @@ export class JetstreamModule implements OnApplicationShutdown {
             rpcRouter,
             coreRpcServer,
             ackWaitMap,
+            metadataProvider,
           );
         },
       },

@@ -30,6 +30,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'patterns/broadcast',
         'patterns/ordered-events',
+        'patterns/handler-metadata',
         'guides/scheduling',
         'guides/per-message-ttl',
       ],

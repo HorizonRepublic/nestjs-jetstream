@@ -68,6 +68,20 @@ describe(ShutdownManager, () => {
       });
     });
 
+    describe('idempotency', () => {
+      it('should execute shutdown only once on repeated calls', async () => {
+        // Given: a strategy
+        const strategy = createMock<JetstreamStrategy>();
+
+        // When: shutdown called multiple times concurrently
+        await Promise.all([sut.shutdown(strategy), sut.shutdown(strategy), sut.shutdown(strategy)]);
+
+        // Then: strategy closed exactly once, connection drained exactly once
+        expect(strategy.close).toHaveBeenCalledTimes(1);
+        expect(connection.shutdown).toHaveBeenCalledTimes(1);
+      });
+    });
+
     describe('edge cases', () => {
       describe('when connection.shutdown() completes before timeout', () => {
         it('should clear the safety timeout', async () => {

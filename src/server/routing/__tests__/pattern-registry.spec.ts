@@ -2,21 +2,32 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MessageHandler } from '@nestjs/microservices';
 import { faker } from '@faker-js/faker';
 
+import { StreamKind } from '../../../interfaces';
 import type { JetstreamModuleOptions } from '../../../interfaces';
+import { metadataKey } from '../../../jetstream.constants';
 
 import { PatternRegistry } from '../pattern-registry';
 
 const createHandler = (
-  opts: { isEvent?: boolean; broadcast?: boolean; ordered?: boolean } = {},
+  opts: {
+    isEvent?: boolean;
+    broadcast?: boolean;
+    ordered?: boolean;
+    meta?: Record<string, unknown>;
+  } = {},
 ): MessageHandler => {
   const handler = vi.fn() as MessageHandler;
 
   handler.isEventHandler = opts.isEvent ?? opts.ordered ?? false;
 
-  if (opts.broadcast) {
-    handler.extras = { broadcast: true };
-  } else if (opts.ordered) {
-    handler.extras = { ordered: true };
+  const extras: Record<string, unknown> = {};
+
+  if (opts.broadcast) extras.broadcast = true;
+  if (opts.ordered) extras.ordered = true;
+  if (opts.meta) extras.meta = opts.meta;
+
+  if (Object.keys(extras).length > 0) {
+    handler.extras = extras;
   }
 
   return handler;
@@ -269,6 +280,154 @@ describe(PatternRegistry, () => {
           broadcasts: [],
           ordered: [],
         });
+      });
+    });
+  });
+
+  describe('metadata', () => {
+    describe('hasMetadata()', () => {
+      it('should return true when at least one handler has meta', () => {
+        // Given: one handler with meta, one without
+        const handlers = new Map<string, MessageHandler>([
+          [
+            'order.created',
+            createHandler({
+              isEvent: true,
+              meta: { http: { method: 'POST', path: '/orders' } },
+            }),
+          ],
+          ['internal.cleanup', createHandler({ isEvent: true })],
+        ]);
+
+        // When: registered
+        sut.registerHandlers(handlers);
+
+        // Then
+        expect(sut.hasMetadata()).toBe(true);
+      });
+
+      it('should return false when no handler has meta', () => {
+        // Given: handlers without meta
+        const handlers = new Map<string, MessageHandler>([
+          ['order.created', createHandler({ isEvent: true })],
+          ['get.user', createHandler()],
+        ]);
+
+        // When: registered
+        sut.registerHandlers(handlers);
+
+        // Then
+        expect(sut.hasMetadata()).toBe(false);
+      });
+
+      it('should return false when no handlers are registered', () => {
+        // Given: empty registration
+        sut.registerHandlers(new Map());
+
+        // Then
+        expect(sut.hasMetadata()).toBe(false);
+      });
+    });
+
+    describe('getMetadataEntries()', () => {
+      it('should return metadata keyed by service.kind.pattern for event handlers', () => {
+        // Given: event handler with meta
+        const meta = { http: { method: 'POST', path: '/orders' } };
+        const handlers = new Map<string, MessageHandler>([
+          ['order.created', createHandler({ isEvent: true, meta })],
+        ]);
+
+        // When
+        sut.registerHandlers(handlers);
+        const entries = sut.getMetadataEntries();
+
+        // Then
+        const expectedKey = metadataKey(serviceName, StreamKind.Event, 'order.created');
+
+        expect(entries.get(expectedKey)).toEqual(meta);
+      });
+
+      it('should return metadata keyed by service.kind.pattern for command handlers', () => {
+        // Given: RPC handler with meta
+        const meta = { http: { method: 'GET', path: '/orders/:id' } };
+        const handlers = new Map<string, MessageHandler>([['order.get', createHandler({ meta })]]);
+
+        // When
+        sut.registerHandlers(handlers);
+        const entries = sut.getMetadataEntries();
+
+        // Then
+        const expectedKey = metadataKey(serviceName, StreamKind.Command, 'order.get');
+
+        expect(entries.get(expectedKey)).toEqual(meta);
+      });
+
+      it('should return metadata keyed by service.kind.pattern for broadcast handlers', () => {
+        // Given: broadcast handler with meta
+        const meta = { scope: 'global' };
+        const handlers = new Map<string, MessageHandler>([
+          ['config.updated', createHandler({ isEvent: true, broadcast: true, meta })],
+        ]);
+
+        // When
+        sut.registerHandlers(handlers);
+        const entries = sut.getMetadataEntries();
+
+        // Then
+        const expectedKey = metadataKey(serviceName, StreamKind.Broadcast, 'config.updated');
+
+        expect(entries.get(expectedKey)).toEqual(meta);
+      });
+
+      it('should return metadata keyed by service.kind.pattern for ordered handlers', () => {
+        // Given: ordered handler with meta
+        const meta = { tracking: true };
+        const handlers = new Map<string, MessageHandler>([
+          ['audit.trail', createHandler({ ordered: true, meta })],
+        ]);
+
+        // When
+        sut.registerHandlers(handlers);
+        const entries = sut.getMetadataEntries();
+
+        // Then
+        const expectedKey = metadataKey(serviceName, StreamKind.Ordered, 'audit.trail');
+
+        expect(entries.get(expectedKey)).toEqual(meta);
+      });
+
+      it('should exclude handlers without meta', () => {
+        // Given: mix of handlers with and without meta
+        const handlers = new Map<string, MessageHandler>([
+          [
+            'order.created',
+            createHandler({
+              isEvent: true,
+              meta: { http: { method: 'POST', path: '/orders' } },
+            }),
+          ],
+          ['internal.cleanup', createHandler({ isEvent: true })],
+        ]);
+
+        // When
+        sut.registerHandlers(handlers);
+        const entries = sut.getMetadataEntries();
+
+        // Then
+        expect(entries.size).toBe(1);
+      });
+
+      it('should return empty map when no handlers have meta', () => {
+        // Given: handlers without meta
+        const handlers = new Map<string, MessageHandler>([
+          ['order.created', createHandler({ isEvent: true })],
+        ]);
+
+        // When
+        sut.registerHandlers(handlers);
+
+        // Then
+        expect(sut.getMetadataEntries().size).toBe(0);
       });
     });
   });

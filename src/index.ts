@@ -11,6 +11,7 @@ export type {
   JetstreamHealthStatus,
   JetstreamModuleAsyncOptions,
   JetstreamModuleOptions,
+  MetadataRegistryOptions,
   OrderedEventOverrides,
   RpcConfig,
   ScheduleRecordOptions,
@@ -52,6 +53,12 @@ export {
   JETSTREAM_OPTIONS,
   PatternPrefix,
   toNanos,
+  DEFAULT_METADATA_BUCKET,
+  DEFAULT_METADATA_REPLICAS,
+  DEFAULT_METADATA_HISTORY,
+  DEFAULT_METADATA_TTL,
+  MIN_METADATA_TTL,
+  metadataKey,
 } from './jetstream.constants';
 
 // Hooks
