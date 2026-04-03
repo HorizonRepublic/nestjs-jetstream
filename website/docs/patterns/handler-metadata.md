@@ -6,7 +6,7 @@ schema:
   headline: "Handler Metadata Registry"
   description: "Publish handler metadata to a NATS KV bucket for dynamic service discovery, API gateway routing, and catalog generation."
   datePublished: "2026-04-02"
-  dateModified: "2026-04-02"
+  dateModified: "2026-04-03"
 ---
 
 import Since from '@site/src/components/Since';
@@ -16,6 +16,8 @@ import Since from '@site/src/components/Since';
 <Since version="2.9.0" />
 
 Publish handler metadata to a NATS KV bucket at startup. External services — API gateways, dashboards, CLI tools — can read or watch the bucket for automatic service discovery.
+
+**Requires:** NATS Server 2.10+ (KV support)
 
 ## The problem
 
@@ -107,7 +109,11 @@ JetstreamModule.forRoot({
 |---|---|---|
 | `bucket` | `'handler_registry'` | KV bucket name |
 | `replicas` | `1` | Bucket replicas (1, 3, or 5) |
-| `ttl` | `30_000` | Entry TTL in ms — entries expire unless refreshed by heartbeat |
+| `ttl` | `30_000` | Entry TTL in ms — entries expire unless refreshed by heartbeat (min: 5000) |
+
+:::note Bucket configuration
+The KV bucket is created on first startup. Changing `ttl` or `replicas` after creation requires deleting the existing bucket — NATS KV does not update bucket config in place. Use the NATS CLI: `nats kv rm handler_registry`.
+:::
 
 ## KV key format
 
@@ -170,3 +176,18 @@ Entries are managed via TTL + heartbeat — no explicit delete needed.
 - **Service catalog**: Read all keys → display registered handlers with metadata.
 - **Dynamic routing**: Feature flags, canary routing, A/B testing via handler metadata.
 - **Auto-documentation**: Generate API docs from handler metadata.
+
+## Debugging
+
+Verify entries with the NATS CLI:
+
+```bash
+# List all keys in the bucket
+nats kv ls handler_registry
+
+# Read a specific entry
+nats kv get handler_registry orders.ev.order.created
+
+# Watch for real-time updates
+nats kv watch handler_registry
+```

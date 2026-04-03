@@ -146,10 +146,11 @@ export interface MetadataRegistryOptions {
   bucket?: string;
 
   /**
-   * Number of KV bucket replicas (1, 3, or 5).
+   * Number of KV bucket replicas. Must be an odd number (1, 3, 5, 7, ...).
+   * Requires a NATS cluster with at least this many nodes.
    * @default 1
    */
-  replicas?: 1 | 3 | 5;
+  replicas?: number;
 
   /**
    * KV bucket TTL in milliseconds.
