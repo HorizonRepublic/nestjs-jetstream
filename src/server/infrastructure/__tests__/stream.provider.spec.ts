@@ -7,7 +7,7 @@ import { JetStreamApiError, RetentionPolicy, StorageType } from '@nats-io/jetstr
 import { ConnectionProvider } from '../../../connection';
 import { StreamKind } from '../../../interfaces';
 import type { JetstreamModuleOptions, StreamConfigOverrides } from '../../../interfaces';
-import { DEFAULT_EVENT_STREAM_CONFIG, internalName } from '../../../jetstream.constants';
+import { DEFAULT_DLQ_STREAM_CONFIG, DEFAULT_EVENT_STREAM_CONFIG, internalName } from '../../../jetstream.constants';
 
 import { StreamProvider } from '../stream.provider';
 
@@ -381,6 +381,189 @@ describe(StreamProvider, () => {
         );
         expect(mockJsm.streams.add).not.toHaveBeenCalled();
         expect(mockJsm.streams.update).not.toHaveBeenCalled();
+      });
+    });
+
+    // ---------------------------------------------------------------------------
+    // DLQ stream (ensureDlqStream)
+    // ---------------------------------------------------------------------------
+
+    describe('when options.dlq is enabled', () => {
+      describe('when the DLQ stream does not exist', () => {
+        it('should create the DLQ stream', async () => {
+          // Given: options with dlq enabled
+          options = { ...options, dlq: {} };
+          sut = new StreamProvider(options, connection);
+
+          const notFoundError = new JetStreamApiError({
+            err_code: 10059,
+            code: 404,
+            description: 'stream not found',
+          });
+
+          mockJsm.streams.info.mockRejectedValue(notFoundError);
+          mockJsm.streams.add.mockResolvedValue(createMock<StreamInfo>());
+
+          // When
+          await sut.ensureStreams([StreamKind.Event]);
+
+          // Then: both the regular stream AND the DLQ stream are created
+          expect(mockJsm.streams.add).toHaveBeenCalledTimes(2);
+        });
+      });
+
+      describe('when the DLQ stream already exists with no config changes', () => {
+        it('should skip update for the DLQ stream', async () => {
+          // Given: both regular stream and DLQ stream already exist with matching config
+          options = { ...options, dlq: {} };
+          sut = new StreamProvider(options, connection);
+
+          // First call (event stream) returns not-found, second call (DLQ) returns info
+          const notFoundError = new JetStreamApiError({
+            err_code: 10059,
+            code: 404,
+            description: 'stream not found',
+          });
+          const existingDlqInfo = createMock<StreamInfo>({
+            config: {
+              ...DEFAULT_DLQ_STREAM_CONFIG,
+              name: `${options.name}__microservice_dlq-stream`,
+              subjects: [`${options.name}__microservice_dlq-stream`],
+              description: `JetStream DLQ stream for ${options.name}`,
+            } as StreamInfo['config'],
+          });
+
+          mockJsm.streams.info
+            .mockRejectedValueOnce(notFoundError) // event stream → create
+            .mockResolvedValueOnce(existingDlqInfo); // DLQ stream → exists
+
+          mockJsm.streams.add.mockResolvedValue(createMock<StreamInfo>());
+
+          // When
+          await sut.ensureStreams([StreamKind.Event]);
+
+          // Then: event stream created, DLQ stream not updated
+          expect(mockJsm.streams.add).toHaveBeenCalledTimes(1);
+          expect(mockJsm.streams.update).not.toHaveBeenCalled();
+        });
+      });
+
+      describe('when the DLQ stream has an unexpected info error', () => {
+        it('should rethrow the error from ensureDlqStream', async () => {
+          // Given: options with dlq, but DLQ stream.info throws auth error
+          options = { ...options, dlq: {} };
+          sut = new StreamProvider(options, connection);
+
+          const notFoundError = new JetStreamApiError({
+            err_code: 10059,
+            code: 404,
+            description: 'stream not found',
+          });
+          const authError = new JetStreamApiError({
+            err_code: 10100,
+            code: 403,
+            description: 'authorization violation for DLQ',
+          });
+
+          mockJsm.streams.info
+            .mockRejectedValueOnce(notFoundError) // event stream → create
+            .mockRejectedValueOnce(authError); // DLQ stream → rethrow
+
+          mockJsm.streams.add.mockResolvedValue(createMock<StreamInfo>());
+
+          // When / Then
+          await expect(sut.ensureStreams([StreamKind.Event])).rejects.toThrow(
+            'authorization violation for DLQ',
+          );
+        });
+      });
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // getOverrides — Command and Ordered
+  // ---------------------------------------------------------------------------
+
+  describe('getSubjects (via ensureStreams)', () => {
+    describe('when kind is Command with rpc.mode=jetstream and stream overrides', () => {
+      it('should use rpc.stream overrides for command stream', async () => {
+        // Given: rpc jetstream mode with max_age override
+        options = {
+          ...options,
+          rpc: { mode: 'jetstream', stream: { max_age: 60_000 } },
+        };
+        sut = new StreamProvider(options, connection);
+
+        const notFoundError = new JetStreamApiError({
+          err_code: 10059,
+          code: 404,
+          description: 'stream not found',
+        });
+
+        mockJsm.streams.info.mockRejectedValue(notFoundError);
+        mockJsm.streams.add.mockResolvedValue(createMock<StreamInfo>());
+
+        // When
+        await sut.ensureStreams([StreamKind.Command]);
+
+        // Then: stream created with the overridden max_age
+        const addArg = mockJsm.streams.add.mock.calls[0]![0] as Record<string, unknown>;
+
+        expect(addArg.max_age).toBe(60_000);
+      });
+    });
+
+    describe('when kind is Command with rpc.mode !== jetstream', () => {
+      it('should use empty overrides for command stream', async () => {
+        // Given: rpc nats mode (no jetstream command stream)
+        options = {
+          ...options,
+          rpc: { mode: 'core' },
+        };
+        sut = new StreamProvider(options, connection);
+
+        const notFoundError = new JetStreamApiError({
+          err_code: 10059,
+          code: 404,
+          description: 'stream not found',
+        });
+
+        mockJsm.streams.info.mockRejectedValue(notFoundError);
+        mockJsm.streams.add.mockResolvedValue(createMock<StreamInfo>());
+
+        // When: create the command stream anyway
+        await sut.ensureStreams([StreamKind.Command]);
+
+        // Then: stream created with defaults (no user overrides applied)
+        expect(mockJsm.streams.add).toHaveBeenCalledOnce();
+      });
+    });
+
+    describe('when kind is Ordered with stream overrides', () => {
+      it('should apply ordered.stream overrides', async () => {
+        // Given: ordered stream with max_age override
+        options = {
+          ...options,
+          ordered: { stream: { max_age: 30_000 } },
+        };
+        sut = new StreamProvider(options, connection);
+
+        const notFoundError = new JetStreamApiError({
+          err_code: 10059,
+          code: 404,
+          description: 'stream not found',
+        });
+
+        mockJsm.streams.info.mockRejectedValue(notFoundError);
+        mockJsm.streams.add.mockResolvedValue(createMock<StreamInfo>());
+
+        // When
+        await sut.ensureStreams([StreamKind.Ordered]);
+
+        // Then: stream created with the overridden max_age
+        const addArg = mockJsm.streams.add.mock.calls[0]![0] as Record<string, unknown>;
+
+        expect(addArg.max_age).toBe(30_000);
       });
     });
   });

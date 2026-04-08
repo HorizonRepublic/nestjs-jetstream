@@ -11,9 +11,10 @@ import { MessageProvider } from '../../infrastructure';
 
 import { RpcContext } from '../../../context';
 import { StreamKind } from '../../../interfaces';
-import type { DeadLetterConfig, EventProcessingConfig } from '../../../interfaces';
+import type { DeadLetterConfig, EventProcessingConfig, JetstreamModuleOptions } from '../../../interfaces';
 import { EventRouter } from '../event.router';
 import { PatternRegistry } from '../pattern-registry';
+import { ConnectionProvider } from '../../../connection';
 
 describe(EventRouter, () => {
   let sut: EventRouter;
@@ -624,6 +625,390 @@ describe(EventRouter, () => {
         // Then: nak for retry instead of term
         expect(msg.nak).toHaveBeenCalled();
         expect(msg.term).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('publishToDlq (options.dlq enabled)', () => {
+      const streamName = 'test-stream';
+      const maxDeliverByStream = new Map<string, number>([[streamName, 3]]);
+      let onDeadLetter: Mock;
+      let deadLetterConfig: DeadLetterConfig;
+      let connection: Mocked<ConnectionProvider>;
+      let mockJs: { publish: ReturnType<typeof vi.fn> };
+
+      beforeEach(() => {
+        // Destroy the parent 'dead letter handling' sut (no dlq) started in the
+        // outer beforeEach so it doesn't also process messages sent in these tests.
+        sut.destroy();
+
+        onDeadLetter = vi.fn().mockResolvedValue(undefined);
+        deadLetterConfig = { maxDeliverByStream, onDeadLetter };
+        mockJs = { publish: vi.fn().mockResolvedValue(undefined) };
+        connection = createMock<ConnectionProvider>({
+          getJetStreamClient: vi.fn().mockReturnValue(mockJs),
+        });
+      });
+
+      const createDeadLetterMsg = (overrides?: Partial<DeliveryInfo>): JsMsg =>
+        createMock<JsMsg>({
+          subject: 'test.subject',
+          data: new TextEncoder().encode(JSON.stringify({ key: 'value' })),
+          headers: undefined,
+          info: {
+            deliveryCount: 3,
+            stream: streamName,
+            streamSequence: 42,
+            redelivered: true,
+            timestampNanos: Date.now() * 1_000_000,
+            ...overrides,
+          } as DeliveryInfo,
+        });
+
+      describe('when options.dlq is set — happy path (publish succeeds)', () => {
+        it('should publish to DLQ stream, call onDeadLetter, and term the message', async () => {
+          // Given: a DLQ-enabled router with a working connection
+          const options: JetstreamModuleOptions = {
+            name: 'my-service',
+            servers: ['nats://localhost:4222'],
+            dlq: {},
+          };
+
+          sut = new EventRouter(
+            messageProvider,
+            patternRegistry,
+            codec,
+            eventBus,
+            deadLetterConfig,
+            undefined,
+            undefined,
+            connection,
+            options,
+          );
+          sut.start();
+
+          const handler = vi.fn().mockRejectedValue(new Error('handler error'));
+
+          patternRegistry.getHandler.mockReturnValue(handler);
+
+          const msg = createDeadLetterMsg();
+
+          // When: message arrives at max delivery
+          events$.next(msg);
+          await new Promise(process.nextTick);
+
+          // Then: published to DLQ, callback notified, message terminated
+          expect(mockJs.publish).toHaveBeenCalled();
+          expect(onDeadLetter).toHaveBeenCalled();
+          expect(msg.term).toHaveBeenCalledWith('Moved to DLQ stream');
+          expect(msg.nak).not.toHaveBeenCalled();
+        });
+
+        it('should forward original message headers to the DLQ publish', async () => {
+          // Given: message with headers
+          const options: JetstreamModuleOptions = {
+            name: 'my-service',
+            servers: ['nats://localhost:4222'],
+            dlq: {},
+          };
+
+          sut = new EventRouter(
+            messageProvider,
+            patternRegistry,
+            codec,
+            eventBus,
+            deadLetterConfig,
+            undefined,
+            undefined,
+            connection,
+            options,
+          );
+          sut.start();
+
+          const handler = vi.fn().mockRejectedValue(new Error('handler error'));
+
+          patternRegistry.getHandler.mockReturnValue(handler);
+
+          // Create a msg with mock headers
+          const mockHeaders = new Map([['X-Trace-Id', ['abc123']]]);
+          const msg = createMock<JsMsg>({
+            subject: 'test.subject',
+            data: new TextEncoder().encode(JSON.stringify({ key: 'value' })),
+            headers: mockHeaders as unknown as JsMsg['headers'],
+            info: {
+              deliveryCount: 3,
+              stream: streamName,
+              streamSequence: 42,
+              redelivered: true,
+              timestampNanos: Date.now() * 1_000_000,
+            } as DeliveryInfo,
+          });
+
+          // When: dead-letter message arrives
+          events$.next(msg);
+          await new Promise(process.nextTick);
+
+          // Then: publish was called
+          expect(mockJs.publish).toHaveBeenCalled();
+          expect(msg.term).toHaveBeenCalledWith('Moved to DLQ stream');
+        });
+
+        it('should use error.message as reason for Error instances', async () => {
+          // Given: handler throws a proper Error
+          const options: JetstreamModuleOptions = {
+            name: 'my-service',
+            servers: ['nats://localhost:4222'],
+            dlq: {},
+          };
+
+          sut = new EventRouter(
+            messageProvider,
+            patternRegistry,
+            codec,
+            eventBus,
+            deadLetterConfig,
+            undefined,
+            undefined,
+            connection,
+            options,
+          );
+          sut.start();
+
+          const handler = vi.fn().mockRejectedValue(new Error('specific failure'));
+
+          patternRegistry.getHandler.mockReturnValue(handler);
+
+          const msg = createDeadLetterMsg();
+
+          events$.next(msg);
+          await new Promise(process.nextTick);
+
+          // Then: published (reason extracted from error.message)
+          expect(mockJs.publish).toHaveBeenCalled();
+          expect(msg.term).toHaveBeenCalledWith('Moved to DLQ stream');
+        });
+
+        it('should handle non-Error object errors by reading .message property', async () => {
+          // Given: handler throws a plain object with a message property
+          const options: JetstreamModuleOptions = {
+            name: 'my-service',
+            servers: ['nats://localhost:4222'],
+            dlq: {},
+          };
+
+          sut = new EventRouter(
+            messageProvider,
+            patternRegistry,
+            codec,
+            eventBus,
+            deadLetterConfig,
+            undefined,
+            undefined,
+            connection,
+            options,
+          );
+          sut.start();
+
+          const handler = vi.fn().mockRejectedValue({ message: 'object error' });
+
+          patternRegistry.getHandler.mockReturnValue(handler);
+
+          const msg = createDeadLetterMsg();
+
+          events$.next(msg);
+          await new Promise(process.nextTick);
+
+          // Then: published (reason extracted from .message)
+          expect(mockJs.publish).toHaveBeenCalled();
+          expect(msg.term).toHaveBeenCalledWith('Moved to DLQ stream');
+        });
+
+        it('should still term when onDeadLetter callback throws after successful DLQ publish', async () => {
+          // Given: DLQ publish succeeds but onDeadLetter hook fails
+          const options: JetstreamModuleOptions = {
+            name: 'my-service',
+            servers: ['nats://localhost:4222'],
+            dlq: {},
+          };
+
+          onDeadLetter.mockRejectedValue(new Error('hook failed'));
+
+          sut = new EventRouter(
+            messageProvider,
+            patternRegistry,
+            codec,
+            eventBus,
+            deadLetterConfig,
+            undefined,
+            undefined,
+            connection,
+            options,
+          );
+          sut.start();
+
+          const handler = vi.fn().mockRejectedValue(new Error('handler error'));
+
+          patternRegistry.getHandler.mockReturnValue(handler);
+
+          const msg = createDeadLetterMsg();
+
+          events$.next(msg);
+          await new Promise(process.nextTick);
+
+          // Then: message is still terminated (hook failure doesn't stop DLQ flow)
+          expect(mockJs.publish).toHaveBeenCalled();
+          expect(msg.term).toHaveBeenCalledWith('Moved to DLQ stream');
+          expect(msg.nak).not.toHaveBeenCalled();
+        });
+      });
+
+      describe('when options.dlq is set — publish fails', () => {
+        it('should fall back to onDeadLetter callback and nak when DLQ publish throws', async () => {
+          // Given: DLQ publish fails
+          const options: JetstreamModuleOptions = {
+            name: 'my-service',
+            servers: ['nats://localhost:4222'],
+            dlq: {},
+          };
+
+          mockJs.publish.mockRejectedValue(new Error('NATS timeout'));
+
+          sut = new EventRouter(
+            messageProvider,
+            patternRegistry,
+            codec,
+            eventBus,
+            deadLetterConfig,
+            undefined,
+            undefined,
+            connection,
+            options,
+          );
+          sut.start();
+
+          const handler = vi.fn().mockRejectedValue(new Error('handler error'));
+
+          patternRegistry.getHandler.mockReturnValue(handler);
+
+          const msg = createDeadLetterMsg();
+
+          events$.next(msg);
+          await new Promise(process.nextTick);
+
+          // Then: falls back — onDeadLetter was called, message term'd via fallback
+          expect(onDeadLetter).toHaveBeenCalled();
+          expect(msg.term).toHaveBeenCalledWith('Dead letter processed via fallback callback');
+          expect(msg.nak).not.toHaveBeenCalled();
+        });
+
+        it('should nak when both DLQ publish and fallback onDeadLetter throw', async () => {
+          // Given: DLQ publish fails AND fallback callback also fails
+          const options: JetstreamModuleOptions = {
+            name: 'my-service',
+            servers: ['nats://localhost:4222'],
+            dlq: {},
+          };
+
+          mockJs.publish.mockRejectedValue(new Error('NATS timeout'));
+          onDeadLetter.mockRejectedValue(new Error('DLQ persistence failed'));
+
+          sut = new EventRouter(
+            messageProvider,
+            patternRegistry,
+            codec,
+            eventBus,
+            deadLetterConfig,
+            undefined,
+            undefined,
+            connection,
+            options,
+          );
+          sut.start();
+
+          const handler = vi.fn().mockRejectedValue(new Error('handler error'));
+
+          patternRegistry.getHandler.mockReturnValue(handler);
+
+          const msg = createDeadLetterMsg();
+
+          events$.next(msg);
+          await new Promise(process.nextTick);
+
+          // Then: last resort nak
+          expect(msg.nak).toHaveBeenCalled();
+          expect(msg.term).not.toHaveBeenCalled();
+        });
+      });
+
+      describe('when connection or service name is missing', () => {
+        it('should fall back to onDeadLetter when connection is absent', async () => {
+          // Given: no ConnectionProvider (options.dlq is set but connection=undefined)
+          const options: JetstreamModuleOptions = {
+            name: 'my-service',
+            servers: ['nats://localhost:4222'],
+            dlq: {},
+          };
+
+          sut = new EventRouter(
+            messageProvider,
+            patternRegistry,
+            codec,
+            eventBus,
+            deadLetterConfig,
+            undefined,
+            undefined,
+            undefined, // no connection
+            options,
+          );
+          sut.start();
+
+          const handler = vi.fn().mockRejectedValue(new Error('handler error'));
+
+          patternRegistry.getHandler.mockReturnValue(handler);
+
+          const msg = createDeadLetterMsg();
+
+          events$.next(msg);
+          await new Promise(process.nextTick);
+
+          // Then: falls back to onDeadLetter callback since it can't publish
+          expect(onDeadLetter).toHaveBeenCalled();
+          expect(msg.term).toHaveBeenCalledWith('Dead letter processed via fallback callback');
+        });
+
+        it('should fall back to onDeadLetter when service name is absent', async () => {
+          // Given: options with no name (can't derive DLQ stream subject)
+          const options: JetstreamModuleOptions = {
+            name: '' as unknown as string,
+            servers: ['nats://localhost:4222'],
+            dlq: {},
+          };
+
+          sut = new EventRouter(
+            messageProvider,
+            patternRegistry,
+            codec,
+            eventBus,
+            deadLetterConfig,
+            undefined,
+            undefined,
+            connection,
+            options,
+          );
+          sut.start();
+
+          const handler = vi.fn().mockRejectedValue(new Error('handler error'));
+
+          patternRegistry.getHandler.mockReturnValue(handler);
+
+          const msg = createDeadLetterMsg();
+
+          events$.next(msg);
+          await new Promise(process.nextTick);
+
+          // Then: falls back to onDeadLetter callback
+          expect(onDeadLetter).toHaveBeenCalled();
+          expect(msg.term).toHaveBeenCalledWith('Dead letter processed via fallback callback');
+        });
       });
     });
   });
