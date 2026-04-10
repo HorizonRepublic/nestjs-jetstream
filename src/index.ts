@@ -53,13 +53,30 @@ export {
   JETSTREAM_OPTIONS,
   PatternPrefix,
   toNanos,
+  metadataKey,
+  RESERVED_HEADERS,
+  // Default configs — composable building blocks for custom overrides
+  DEFAULT_EVENT_STREAM_CONFIG,
+  DEFAULT_COMMAND_STREAM_CONFIG,
+  DEFAULT_BROADCAST_STREAM_CONFIG,
+  DEFAULT_ORDERED_STREAM_CONFIG,
+  DEFAULT_DLQ_STREAM_CONFIG,
+  DEFAULT_EVENT_CONSUMER_CONFIG,
+  DEFAULT_COMMAND_CONSUMER_CONFIG,
+  DEFAULT_BROADCAST_CONSUMER_CONFIG,
+  // Default timeouts and metadata-registry settings
+  DEFAULT_RPC_TIMEOUT,
+  DEFAULT_JETSTREAM_RPC_TIMEOUT,
+  DEFAULT_SHUTDOWN_TIMEOUT,
   DEFAULT_METADATA_BUCKET,
   DEFAULT_METADATA_REPLICAS,
   DEFAULT_METADATA_HISTORY,
   DEFAULT_METADATA_TTL,
   MIN_METADATA_TTL,
-  metadataKey,
 } from './jetstream.constants';
+
+// Error codes
+export { NatsErrorCode } from './server/infrastructure/nats-error-codes';
 
 // Hooks
 export { EventBus } from './hooks';
