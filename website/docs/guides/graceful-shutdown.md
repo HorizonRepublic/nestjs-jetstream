@@ -77,14 +77,22 @@ For the shutdown sequence to trigger, NestJS must be configured to listen for OS
 
 ```typescript title="src/main.ts"
 import { NestFactory } from '@nestjs/core';
+import { JetstreamStrategy } from '@horizon-republic/nestjs-jetstream';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Required for graceful shutdown to work
+  app.connectMicroservice(
+    { strategy: app.get(JetstreamStrategy) },
+    { inheritAppConfig: true },
+  );
+
+  // Required for graceful shutdown to work — without this, SIGTERM
+  // terminates the process before onApplicationShutdown() runs.
   app.enableShutdownHooks();
 
+  await app.startAllMicroservices();
   await app.listen(3000);
 }
 
@@ -127,9 +135,6 @@ JetstreamModule.forRoot({
 
 See [Lifecycle Hooks](/docs/guides/lifecycle-hooks) for all available events.
 
-## What's next?
+## See also
 
-- [**Lifecycle Hooks**](/docs/guides/lifecycle-hooks) — all 9 transport lifecycle events
-- [**Health Checks**](/docs/guides/health-checks) — monitor connection status
-- [**Module Configuration**](/docs/getting-started/module-configuration#optional-options) — `shutdownTimeout` and other options
-- [**Dead Letter Queue**](/docs/guides/dead-letter-queue) — what happens to in-flight messages that fail on the final delivery attempt during shutdown
+If a handler is still running when `shutdownTimeout` fires, its message is not acked — NATS redelivers it to another instance after `ack_wait` expires. Make sure your deployment strategy accounts for this overlap, and see [Dead Letter Queue](/docs/guides/dead-letter-queue) for what happens when a handler fails its final delivery attempt mid-shutdown.

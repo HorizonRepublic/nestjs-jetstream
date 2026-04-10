@@ -1,10 +1,12 @@
 ---
 sidebar_position: 5
-title: "Handler Metadata Registry"
+sidebar_label: "Handler Metadata"
+title: "Handler Metadata Registry — NATS KV Service Discovery for NestJS"
+description: "Publish NestJS handler metadata to a NATS KV bucket for dynamic service discovery, API gateway routing, and automatic catalog generation."
 schema:
   type: Article
-  headline: "Handler Metadata Registry"
-  description: "Publish handler metadata to a NATS KV bucket for dynamic service discovery, API gateway routing, and catalog generation."
+  headline: "Handler Metadata Registry — NATS KV Service Discovery for NestJS"
+  description: "Publish NestJS handler metadata to a NATS KV bucket for dynamic service discovery, API gateway routing, and automatic catalog generation."
   datePublished: "2026-04-02"
   dateModified: "2026-04-11"
 ---

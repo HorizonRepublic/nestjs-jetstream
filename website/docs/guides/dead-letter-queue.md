@@ -1,10 +1,12 @@
 ---
 sidebar_position: 2
-title: "Dead Letter Queue"
+sidebar_label: "Dead Letter Queue"
+title: "Dead Letter Queue — NestJS NATS JetStream DLQ Stream & Callback"
+description: "Handle NestJS NATS JetStream messages that exhaust all delivery attempts via a dedicated DLQ stream with tracking headers or onDeadLetter callback."
 schema:
   type: Article
-  headline: "Dead Letter Queue"
-  description: "Handle messages that exhaust all delivery attempts via a first-class DLQ stream or onDeadLetter callback."
+  headline: "Dead Letter Queue — NestJS NATS JetStream DLQ Stream & Callback"
+  description: "Handle NestJS NATS JetStream messages that exhaust all delivery attempts via a dedicated DLQ stream with tracking headers or onDeadLetter callback."
   datePublished: "2026-03-21"
   dateModified: "2026-04-11"
 ---
@@ -15,12 +17,12 @@ import Since from '@site/src/components/Since';
 
 <Since version="2.2.0" />
 
-When a message fails on every delivery attempt and exhausts its `max_deliver` limit, the transport treats it as a **dead letter**. Instead of silently discarding the message, the library gives you two complementary mechanisms to capture it:
+When a message fails on every delivery attempt and exhausts its `max_deliver` limit, the transport treats it as a **dead letter**. Instead of silently discarding it, the library gives you two mechanisms to capture it:
 
-1. **A first-class DLQ stream** *(added in v2.9.0)* — configure `dlq: { stream }` and exhausted messages are automatically republished to a dedicated JetStream stream with tracking headers.
-2. **An `onDeadLetter` callback** — a hook that receives the full dead letter context, for custom persistence (database, S3, external queue) or ad-hoc alerting.
+1. **A built-in DLQ stream** *(added in v2.9.0)* — `dlq: { stream }` in your module options. Exhausted messages get republished to a dedicated JetStream stream with tracking headers. This is the recommended default.
+2. **An `onDeadLetter` callback** — a hook with full dead letter context for custom persistence (database, S3, external queue).
 
-Both can be used independently. When both are configured, the DLQ stream is the primary persistence path, while the callback is invoked as a notification hook on every dead letter — and acts as a safety net if the DLQ publish itself fails. Nothing is silently dropped.
+Start with either. For maximum durability, use them together — the full fallback chain is described in [Built-in DLQ stream](#built-in-dlq-stream) below.
 
 ## What is a dead letter?
 
@@ -62,27 +64,21 @@ sequenceDiagram
 
 <Since version="2.9.0" />
 
-The simplest production setup: enable the `dlq` option and the library provisions a dedicated DLQ stream on startup, then republishes exhausted messages to it automatically.
+The simplest production setup is one option on `forRoot()`:
 
-```typescript title="src/app.module.ts"
-import { Module } from '@nestjs/common';
-import { JetstreamModule, toNanos } from '@horizon-republic/nestjs-jetstream';
-
-@Module({
-  imports: [
-    JetstreamModule.forRoot({
-      name: 'orders',
-      servers: ['nats://localhost:4222'],
-      dlq: {
-        stream: {
-          max_age: toNanos(30, 'days'), // how long dead letters are retained
-        },
-      },
-    }),
-  ],
+```typescript
+JetstreamModule.forRoot({
+  name: 'orders',
+  servers: ['nats://localhost:4222'],
+  dlq: {
+    stream: {
+      max_age: toNanos(30, 'days'), // how long dead letters are retained
+    },
+  },
 })
-export class AppModule {}
 ```
+
+On startup, the library provisions a dedicated DLQ stream and, from that point on, every exhausted message is automatically republished to it with tracking headers. No callback needed for the happy path.
 
 ### What gets created
 

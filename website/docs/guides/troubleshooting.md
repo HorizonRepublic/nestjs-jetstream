@@ -1,17 +1,19 @@
 ---
 sidebar_position: 6
-title: "Troubleshooting"
+sidebar_label: "Troubleshooting"
+title: "Troubleshooting — NestJS JetStream Transport"
+description: "Fix common NestJS JetStream issues: NATS connection errors, consumer lag, RPC timeouts, DLQ publish failures, and stream migration recovery."
 schema:
   type: Article
-  headline: "Troubleshooting"
-  description: "Common issues and how to resolve them."
+  headline: "Troubleshooting — NestJS JetStream Transport"
+  description: "Fix common NestJS JetStream issues: NATS connection errors, consumer lag, RPC timeouts, DLQ publish failures, and stream migration recovery."
   datePublished: "2026-03-26"
   dateModified: "2026-04-11"
 ---
 
 # Troubleshooting
 
-Common issues and how to resolve them.
+If something isn't working, start here. The sections below are grouped by symptom — scan them before opening an issue.
 
 ## Connection errors
 
@@ -212,7 +214,7 @@ See [Stream Migration — Error handling](/docs/guides/stream-migration#error-ha
 
 ### Publisher errors during rolling update
 
-During the brief window between Phase 2 (delete) and Phase 3 (create) of a stream migration, publishers may see "stream not found" errors. This window is typically milliseconds but can be longer for large streams. Mitigations:
+During the brief window between Phase 2 (delete) and Phase 3 (create) of a stream migration, publishers may see "stream not found" errors. The window is effectively one NATS round-trip, but is not zero. Mitigations:
 
 - For `client.emit()` (fire-and-forget), accept the loss or implement caller-side retry.
 - For `client.send()` (RPC), the caller receives an error and can retry.

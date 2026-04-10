@@ -41,7 +41,7 @@ const bytes = codec.encode({ hello: 'world' });   // Uint8Array
 const data = codec.decode(bytes);                  // { hello: 'world' }
 ```
 
-JSON is a good default for development and most production workloads. Consider a binary codec when you need smaller payloads or faster serialization.
+Rule of thumb: stick with JSON until serialization shows up in CPU profiles or your p95 payload exceeds ~10 KB on the wire. That's when a binary codec (MessagePack, Protobuf) starts paying for itself.
 
 ## MsgPack implementation
 

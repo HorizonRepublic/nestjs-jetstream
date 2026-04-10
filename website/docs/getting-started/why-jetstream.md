@@ -1,20 +1,21 @@
 ---
 sidebar_position: 0
-title: Why JetStream?
-description: When the built-in NestJS NATS transport is enough, and when you need JetStream for production-grade messaging.
+sidebar_label: "Why JetStream?"
+title: "Why JetStream? NestJS NATS Transport Comparison"
+description: "When the built-in NestJS NATS transport is enough, and when your system outgrows Core NATS and needs JetStream for durable messaging."
 schema:
   type: Article
-  headline: "Why JetStream?"
-  description: "When the built-in NestJS NATS transport is enough, and when you need JetStream for production-grade messaging."
+  headline: "Why JetStream? NestJS NATS Transport Comparison"
+  description: "When the built-in NestJS NATS transport is enough, and when your system outgrows Core NATS and needs JetStream for durable messaging."
   datePublished: "2026-04-11"
   dateModified: "2026-04-11"
 ---
 
 # Why JetStream?
 
-NestJS ships with a [built-in NATS transport](https://docs.nestjs.com/microservices/nats) that works great for a specific class of problems. This page explains where that transport stops being enough, and what JetStream solves in its place.
+The goal of this page isn't to replace the [built-in NestJS NATS transport](https://docs.nestjs.com/microservices/nats) — it's to help you recognize the moment when your system outgrows Core NATS and needs a persistence layer underneath.
 
-The goal isn't to replace the official transport — it's to help you recognize the moment when your system outgrows Core NATS and needs a persistence layer underneath.
+Most production systems hit that moment eventually. The sections below walk through when the built-in transport is enough, the concrete scenarios where it silently loses data, and what this library adds on top.
 
 ## When the built-in NATS transport is enough
 
@@ -24,7 +25,7 @@ The official `@nestjs/microservices` NATS transport is built on Core NATS — a 
 - **Messages are idempotent hints**, not commands that must be executed exactly once. Cache invalidations, notification fan-out, metric updates.
 - **Losing a message is acceptable** — retrying later or recomputing state is cheap.
 - **You don't need replay** — new consumers don't care about historical messages.
-- **Latency matters more than durability** — you want sub-millisecond round trips and are willing to trade reliability for speed.
+- **Latency matters more than durability** — you want the lowest possible round-trip time and are willing to trade reliability for speed.
 
 If this describes your workload, stop here. Use the built-in transport. Adding persistence has real costs: disk I/O, stream provisioning, consumer state to manage.
 
@@ -50,7 +51,7 @@ With JetStream, those 200 events sit in the stream. When the payment service com
 
 A bug in your email sender throws on a specific payload. With Core NATS, the message is lost on the first throw. With raw JetStream, the message redelivers forever, blocking the queue.
 
-This library gives you **bounded retries** (`max_deliver`) plus a first-class [Dead Letter Queue](../guides/dead-letter-queue): configure `dlq: { stream }` and exhausted messages are automatically republished to a dedicated DLQ stream with tracking headers (original subject, failure reason, delivery count, timestamp). An `onDeadLetter` callback hook is also available — either standalone for custom persistence, or as a safety net when the DLQ publish itself fails. Nothing is silently dropped.
+The library caps retries (`max_deliver`, default 3), and on the final failure it persists the dead message to a dedicated DLQ stream with tracking headers so you can investigate or replay later. No message is silently discarded. See [Dead Letter Queue](../guides/dead-letter-queue) for the full flow, including the optional callback hook.
 
 ### Scenario 4 — A new service needs historical data
 
@@ -73,10 +74,10 @@ JetStream itself is a protocol. Using it from Node.js directly with the `@nats-i
 - [RPC (Core or JetStream mode)](../patterns/rpc) — synchronous request/reply with configurable persistence
 
 **Message durability & recovery**
-- [Dead Letter Queue stream](../guides/dead-letter-queue) with tracking headers and a fallback callback chain
-- [Stream migration](../guides/stream-migration) with blue-green sourcing for immutable property changes
+- [Dead Letter Queue stream](../guides/dead-letter-queue) for messages that fail every retry
+- [Stream migration](../guides/stream-migration) — safely change locked stream settings (like storage type) without losing messages
 - [Self-healing consumers](../reference/edge-cases#consumer-self-healing) that recover automatically from broker restarts and external deletions
-- [Graceful shutdown](../guides/graceful-shutdown) with in-flight message drain
+- [Graceful shutdown](../guides/graceful-shutdown) — in-flight messages finish before the connection closes
 
 **Publisher features**
 - [Per-message TTL](../guides/per-message-ttl) for individual message expiration
@@ -88,7 +89,7 @@ JetStream itself is a protocol. Using it from Node.js directly with the `@nats-i
 - [Health indicator](../guides/health-checks) for Kubernetes readiness/liveness probes
 - [Lifecycle hooks](../guides/lifecycle-hooks) for metrics, tracing, and alerting
 - [Handler metadata registry](../patterns/handler-metadata) backed by NATS KV for cross-service discovery
-- [Ack extension](../guides/performance#ack-extension) for long-running handlers
+- Handlers that run longer than `ack_wait` stay alive automatically via [ack extension](../guides/performance#ack-extension)
 
 All of this is wrapped behind the same NestJS decorators you already use (`@EventPattern`, `@MessagePattern`, `ClientProxy`), so moving from the built-in transport to JetStream is mostly a configuration change, not a rewrite.
 
@@ -97,7 +98,7 @@ All of this is wrapped behind the same NestJS decorators you already use (`@Even
 Teams sometimes ask "should I use HTTP or NATS for service-to-service calls?". It's the wrong framing — the two protocols optimize for different things.
 
 - **HTTP** is great at request/response with well-defined endpoints, easy debugging, and mature tooling. But it couples caller and callee in time: if the callee is down, the call fails. Retries, circuit breakers, and timeouts become your problem.
-- **NATS (Core)** is great at low-latency RPC between in-cluster services. Multiplexed connections, no connection pooling, microsecond latency.
+- **NATS (Core)** is great at low-latency RPC between in-cluster services: multiplexed connections, no connection pooling, minimal per-call overhead.
 - **NATS (JetStream)** is great at asynchronous work that must not be lost: events, commands, integrations with unreliable downstreams.
 
 In practice, most production systems use all three. HTTP at the edge (ingress from browsers), Core NATS for internal low-latency RPC, JetStream for durable events and workflows. This library lets you configure the RPC mode per module (`rpc.mode: 'core'` for hot paths, `rpc.mode: 'jetstream'` for persisted commands) while `@EventPattern` handlers keep using durable JetStream delivery.

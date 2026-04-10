@@ -12,9 +12,7 @@ schema:
 
 # Quick Start
 
-This guide walks you through a complete working example in four steps: register the module, connect the transport, define handlers, and send messages.
-
-By the end, you'll have a NestJS application that sends and receives JetStream messages.
+Five minutes from now you'll have a NestJS service that emits `order.created`, survives a restart without losing the message, and responds to `order.get` RPCs — all over NATS JetStream. Four steps: register the module, connect the transport, define handlers, send messages.
 
 :::info Prerequisites
 Make sure you have [installed the library](/docs/getting-started/installation) and have a NATS server running with JetStream enabled.
@@ -70,6 +68,11 @@ const bootstrap = async () => {
     { strategy: app.get(JetstreamStrategy) },
     { inheritAppConfig: true },
   );
+
+  // Required so the JetStream transport drains in-flight handlers on SIGTERM.
+  // Skip this and messages in flight when the pod dies will be redelivered
+  // only after `ack_wait` expires — slower recovery, noisier metrics.
+  app.enableShutdownHooks();
 
   await app.startAllMicroservices();
   await app.listen(3000);
@@ -172,7 +175,7 @@ export class GatewayController {
   /** Send an RPC command and wait for a response. */
   @Get(':id')
   getOrder(@Param('id') id: string): Observable<{ id: number; status: string }> {
-    return this.client.send('order.get', { id: Number(id) });
+    return this.client.send<{ id: number; status: string }>('order.get', { id: Number(id) });
   }
 }
 ```

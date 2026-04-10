@@ -1,10 +1,12 @@
 ---
 sidebar_position: 2
-title: Default Configs
+sidebar_label: "Default Configs"
+title: "Default Stream & Consumer Configs for NATS JetStream"
+description: "Production-ready default stream, consumer, and connection settings for every NestJS JetStream StreamKind (event, broadcast, ordered, command, DLQ)."
 schema:
   type: Article
-  headline: Default Configs
-  description: "Default stream and consumer configurations for every StreamKind."
+  headline: "Default Stream & Consumer Configs for NATS JetStream"
+  description: "Production-ready default stream, consumer, and connection settings for every NestJS JetStream StreamKind (event, broadcast, ordered, command, DLQ)."
   datePublished: "2026-03-21"
   dateModified: "2026-04-11"
 ---
@@ -27,7 +29,7 @@ All streams share a common base configuration:
 | `compression` | `S2` |
 
 :::info S2 Compression
-All streams default to [Snappy S2 compression](https://github.com/nats-io/nats-server). This reduces disk I/O and storage with negligible CPU overhead (~1-3%). Requires NATS Server >= 2.10 (see [runtime requirements](/docs/getting-started/installation#runtime-requirements)). Override per stream kind:
+All streams default to [Snappy S2 compression](https://github.com/nats-io/nats-server). This reduces disk I/O and storage with modest CPU overhead that varies with payload entropy and size. Requires NATS Server >= 2.10 (see [runtime requirements](/docs/getting-started/installation#runtime-requirements)). Override per stream kind:
 
 ```typescript
 import { StoreCompression } from '@nats-io/jetstream';

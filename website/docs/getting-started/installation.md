@@ -12,6 +12,8 @@ schema:
 
 # Installation
 
+Get the package installed, NATS running locally, and the peer dependencies lined up. If you already have NATS, skip straight to [Quick Start](./quick-start).
+
 ## Install the package
 
 import Tabs from '@theme/Tabs';

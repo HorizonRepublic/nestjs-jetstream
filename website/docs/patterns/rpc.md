@@ -1,17 +1,19 @@
 ---
 sidebar_position: 1
-title: RPC (Request/Reply)
+sidebar_label: "RPC (Request/Reply)"
+title: "NestJS NATS RPC — Core vs JetStream Request/Reply"
+description: "Synchronous NestJS NATS request-reply in Core NATS or JetStream mode, with timeout handling, error serialization, and per-request overrides."
 schema:
   type: Article
-  headline: "RPC (Request/Reply)"
-  description: "Synchronous request-reply via Core NATS or JetStream with timeout and error handling."
+  headline: "NestJS NATS RPC — Core vs JetStream Request/Reply"
+  description: "Synchronous NestJS NATS request-reply in Core NATS or JetStream mode, with timeout handling, error serialization, and per-request overrides."
   datePublished: "2026-03-21"
   dateModified: "2026-04-11"
 ---
 
 # RPC (Request/Reply)
 
-Your API gateway needs to fetch an order from the orders microservice. The client sends a command, the handler processes it, and the response travels back — all within a timeout window. This is the **RPC (Remote Procedure Call)** pattern, and `nestjs-jetstream` supports two modes for it: **Core** and **JetStream**.
+Your API gateway needs to fetch an order from the orders microservice. The client sends a command, the handler processes it, and the response travels back within a timeout window. This is request/reply (RPC), and the library offers two modes: **Core** for lowest latency, **JetStream** for persistence.
 
 ## Core Mode (Default)
 
@@ -42,14 +44,13 @@ sequenceDiagram
 
 ```typescript
 import { Inject, Injectable } from '@nestjs/common';
+import { ClientProxy } from '@nestjs/microservices';
 import { firstValueFrom } from 'rxjs';
-import { JetstreamClient, getClientToken } from '@horizon-republic/nestjs-jetstream';
 
 @Injectable()
 export class GatewayService {
   constructor(
-    @Inject(getClientToken('orders'))
-    private readonly ordersClient: JetstreamClient,
+    @Inject('orders') private readonly ordersClient: ClientProxy,
   ) {}
 
   async getOrder(id: string): Promise<Order> {

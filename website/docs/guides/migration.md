@@ -13,7 +13,7 @@ schema:
 
 ## From `@nestjs/microservices` NATS transport
 
-The built-in NestJS NATS transport uses Core NATS — fire-and-forget pub/sub with no persistence. This library adds JetStream on top, providing durable delivery, retry, and replay.
+If your `ClientProxy` already talks to NATS, switching to JetStream is mostly configuration. Here are the five steps.
 
 ### What changes
 
@@ -95,8 +95,8 @@ async getUser(@Payload() id: string) {
 // Register in the module
 JetstreamModule.forFeature({ name: 'users' })
 
-// Inject with the service name
-@Inject(getClientToken('users')) private readonly client: JetstreamClient
+// Inject with the service name as the token
+@Inject('users') private readonly client: ClientProxy
 ```
 
 ### Step 5 — Adjust for acknowledgment semantics
@@ -130,7 +130,7 @@ broadcast: { stream: { max_age: toNanos(1, 'days') } }
 :::
 
 **New features:**
-- [**First-class Dead Letter Queue stream**](/docs/guides/dead-letter-queue#built-in-dlq-stream) — add the `dlq: { stream }` option to `forRoot()` and the library provisions a dedicated DLQ stream on startup. Exhausted messages are automatically republished with tracking headers (`x-dead-letter-reason`, `x-original-subject`, `x-original-stream`, `x-failed-at`, `x-delivery-count`). The `onDeadLetter` callback remains available as a standalone option or as a notification/safety-net hook when combined with the DLQ stream.
+- [**Built-in Dead Letter Queue stream**](/docs/guides/dead-letter-queue#built-in-dlq-stream) — add the `dlq: { stream }` option to `forRoot()` and the library provisions a dedicated DLQ stream on startup. Exhausted messages are automatically republished with tracking headers (`x-dead-letter-reason`, `x-original-subject`, `x-original-stream`, `x-failed-at`, `x-delivery-count`). The `onDeadLetter` callback remains available as a standalone option or as a notification/safety-net hook when combined with the DLQ stream.
 - [**Per-message TTL**](/docs/guides/per-message-ttl) — `JetstreamRecordBuilder.ttl(duration)` sets the `Nats-TTL` header (NATS 2.11+), allowing individual messages to expire independently of the stream's `max_age`. Requires `allow_msg_ttl: true` on the target stream.
 - [**Handler metadata registry (NATS KV)**](/docs/patterns/handler-metadata) — when enabled via the `metadata` option, the library publishes all registered `@EventPattern` / `@MessagePattern` handlers to a NATS KV bucket at startup, enabling cross-service discovery without a separate service registry.
 - [**Stream migration**](/docs/guides/stream-migration) — automatic blue-green stream recreation for immutable property changes (`storage`, `retention`, etc.). Enable with `allowDestructiveMigration: true` on a per-stream basis.
@@ -158,20 +158,24 @@ This is an internal change — the library re-exports everything users need. If 
 
 ### v2.6 → v2.7
 
+v2.7 shipped handler-controlled settlement — a way to ack, nak, or terminate a message without throwing.
+
 **New features:**
-- Handler-controlled settlement via `ctx.retry()` and `ctx.terminate()` — control message acknowledgment without throwing errors
-- Metadata getters on `RpcContext`: `getDeliveryCount()`, `getStream()`, `getSequence()`, `getTimestamp()`, `getCallerName()`
+- Handler-controlled settlement via [`ctx.retry()` and `ctx.terminate()`](/docs/guides/handler-context#controlling-message-settlement) — control message acknowledgment without throwing errors
+- Metadata getters on [`RpcContext`](/docs/guides/handler-context#jetstream-metadata): `getDeliveryCount()`, `getStream()`, `getSequence()`, `getTimestamp()`, `getCallerName()`
 
 No breaking changes.
 
 ### v2.5 → v2.6
 
+v2.6 was the performance release — concurrency control, ack extension, and production-ready defaults for reconnection and compression.
+
 **New features:**
-- Configurable concurrency for event/broadcast/RPC processing
-- Ack extension (`ackExtension: true`) for long-running handlers
+- Configurable [concurrency](/docs/guides/performance#concurrency-control) for event/broadcast/RPC processing
+- [Ack extension](/docs/guides/performance#ack-extension) (`ackExtension: true`) for long-running handlers
 - Consume options passthrough for advanced prefetch tuning
 - Heartbeat monitoring with automatic consumer restart
-- S2 stream compression enabled by default
+- S2 stream compression enabled by default (see [Stream Defaults](/docs/reference/default-configs#stream-defaults))
 - Performance connection defaults (unlimited reconnect, 1s interval)
 
 No breaking changes.

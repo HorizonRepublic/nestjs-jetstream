@@ -1,10 +1,12 @@
 ---
 sidebar_position: 4
-title: "Per-Message TTL"
+sidebar_label: "Per-Message TTL"
+title: "Per-Message TTL — NATS JetStream Message Expiration"
+description: "Individual NestJS NATS JetStream message expiration via the Nats-TTL header (NATS 2.11, ADR-43), independent of the stream's max_age."
 schema:
   type: Article
-  headline: "Per-Message TTL"
-  description: "Individual message expiration independent of stream max_age, powered by NATS 2.11 Nats-TTL header."
+  headline: "Per-Message TTL — NATS JetStream Message Expiration"
+  description: "Individual NestJS NATS JetStream message expiration via the Nats-TTL header (NATS 2.11, ADR-43), independent of the stream's max_age."
   datePublished: "2026-04-02"
   dateModified: "2026-04-11"
 ---
@@ -67,11 +69,10 @@ The consumer handles it like any normal event — no changes needed on the recei
 
 ## How it works
 
-1. `ttl(toNanos(30, 'minutes'))` converts to a Go duration string (`"30m"`)
-2. On publish, the library passes `ttl: "30m"` to the NATS JetStream publish options
-3. NATS sets the `Nats-TTL` header on the stored message
-4. After 30 minutes, NATS automatically removes the message from the stream
-5. If a consumer processes the message before expiry, it works normally
+1. `.ttl(toNanos(30, 'minutes'))` passes the TTL through to the NATS JetStream publish options
+2. NATS sets the `Nats-TTL` header on the stored message (see [ADR-43](https://github.com/nats-io/nats-architecture-and-design/blob/main/adr/ADR-43.md))
+3. After 30 minutes, NATS automatically removes the message from the stream
+4. If a consumer processes the message before expiry, it works normally
 
 ## Important: `max_age` interaction
 

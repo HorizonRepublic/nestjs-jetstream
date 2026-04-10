@@ -1,10 +1,12 @@
 ---
 sidebar_position: 3
-title: Edge Cases & FAQ
+sidebar_label: "Edge Cases & FAQ"
+title: "Edge Cases & FAQ — NestJS JetStream Transport"
+description: "NestJS JetStream transport FAQ: publisher-only mode, consumer self-healing, NATS header limits, fire-and-forget messaging, and DeliverPolicy edge cases."
 schema:
   type: Article
-  headline: Edge Cases & FAQ
-  description: "Common questions and non-obvious behaviors of the transport."
+  headline: "Edge Cases & FAQ — NestJS JetStream Transport"
+  description: "NestJS JetStream transport FAQ: publisher-only mode, consumer self-healing, NATS header limits, fire-and-forget messaging, and DeliverPolicy edge cases."
   datePublished: "2026-03-21"
   dateModified: "2026-04-11"
 ---
@@ -17,13 +19,13 @@ Answers to common questions and non-obvious behaviors of the transport.
 
 **Q: How do I send a message without waiting for a response?**
 
-This transport does not implement fire-and-forget on Core NATS (non-JetStream) subjects. If you need fire-and-forget over raw NATS `publish()`, use the standard NestJS NATS transport (`@nestjs/microservices` `ClientProxy`) alongside this library. Both transports can share the same NATS cluster.
-
-For JetStream-based fire-and-forget, use `client.emit()` — this publishes an event to the event stream without expecting a response:
+Use `client.emit()`. This publishes an event to the event stream (JetStream-backed, so it is durable) and returns immediately without waiting for a handler:
 
 ```typescript
 await lastValueFrom(this.client.emit('order.created', { orderId: '123' }));
 ```
+
+If you specifically need non-durable Core NATS `publish()` (truly ephemeral pub/sub), use the standard `@nestjs/microservices` NATS transport alongside this library — both can share the same NATS cluster.
 
 ## Publisher-Only Mode
 

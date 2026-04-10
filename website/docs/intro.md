@@ -1,28 +1,28 @@
 ---
 slug: /
 sidebar_position: 1
-title: Introduction
+sidebar_label: "Introduction"
+title: "NestJS NATS Transport with JetStream — Introduction"
+description: "A NestJS NATS microservice transport backed by JetStream: durable events, broadcast, ordered delivery, RPC, and dead letter queues."
 schema:
   type: Article
-  headline: "Introduction"
-  description: "Production-grade NestJS transport for NATS JetStream with durable delivery, retry, replay, and dead letter handling."
+  headline: "NestJS NATS Transport with JetStream — Introduction"
+  description: "A NestJS NATS microservice transport backed by JetStream: durable events, broadcast, ordered delivery, RPC, and dead letter queues."
   datePublished: "2026-03-21"
   dateModified: "2026-04-11"
 ---
 
 # Introduction
 
-**@horizon-republic/nestjs-jetstream** is a production-grade NestJS transport for [NATS JetStream](https://docs.nats.io/nats-concepts/jetstream). It brings persistent, at-least-once messaging to NestJS microservices while staying true to the framework's `@EventPattern` / `@MessagePattern` programming model.
+**`@horizon-republic/nestjs-jetstream`** is a NestJS NATS transport for production microservices. It wraps [NATS JetStream](https://docs.nats.io/nats-concepts/jetstream) under the same `@EventPattern` / `@MessagePattern` decorators you already use, so messages survive pod restarts, retries are bounded, dead letters have a home, and everything plugs into the standard NestJS lifecycle.
 
-## Why this library?
+The [built-in NestJS NATS transport](https://docs.nestjs.com/microservices/nats) is fire-and-forget: if a pod dies mid-handler the message is gone. Retries, replay, and dead letter handling are left to you. This library gives you all of that out of the box by putting JetStream underneath.
 
-NestJS ships with a [built-in NATS transport](https://docs.nestjs.com/microservices/nats) that operates over Core NATS — fire-and-forget, no persistence, no replay. The moment you need durable delivery, automatic retry, fan-out broadcast, or dead letter handling, you need JetStream. This library gives you all of it behind the same NestJS decorators you already use.
-
-For a full comparison and decision guide, read [**Why JetStream?**](/docs/getting-started/why-jetstream).
+For a side-by-side with the built-in transport and the scenarios that force the switch, read [**Why JetStream?**](/docs/getting-started/why-jetstream).
 
 ## Architecture at a glance
 
-```
+```text
  Your NestJS Application
  +--------------------------+
  |  HTTP Controllers        |    client.emit() / client.send()

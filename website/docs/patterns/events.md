@@ -1,17 +1,19 @@
 ---
 sidebar_position: 2
-title: "Events (Workqueue)"
+sidebar_label: "Events (Workqueue)"
+title: "Workqueue Events — NestJS JetStream At-Least-Once Delivery"
+description: "NestJS NATS JetStream workqueue events with at-least-once delivery, automatic retry, publish-side deduplication, and dead letter handling."
 schema:
   type: Article
-  headline: "Events (Workqueue)"
-  description: "Workqueue events with at-least-once delivery, automatic retry, deduplication, and dead letter handling."
+  headline: "Workqueue Events — NestJS JetStream At-Least-Once Delivery"
+  description: "NestJS NATS JetStream workqueue events with at-least-once delivery, automatic retry, publish-side deduplication, and dead letter handling."
   datePublished: "2026-03-21"
   dateModified: "2026-04-11"
 ---
 
 # Events (Workqueue)
 
-Workqueue events are fire-and-forget messages where **exactly one** handler instance processes each message. This is the default event delivery model in nestjs-jetstream. Contrast this with [broadcast events](/docs/patterns/broadcast) (every instance receives every message) and [ordered events](/docs/patterns/ordered-events) (strict sequential delivery).
+Workqueue events are fire-and-forget messages where **exactly one** handler instance processes each message. This is the default event delivery model. Contrast with [broadcast](/docs/patterns/broadcast) (all instances receive every message) and [ordered events](/docs/patterns/ordered-events) (strict sequential replay).
 
 ## When to use
 
@@ -175,8 +177,8 @@ async handleOrderCreated(@Payload() data: OrderCreatedEvent): Promise<void> {
 ```typescript
 @EventPattern('payment.completed')
 async handlePayment(@Payload() data: PaymentEvent, @Ctx() ctx: RpcContext): Promise<void> {
-  const msg = ctx.getMessage() as JsMsg;
-  const dedupKey = `payment:${msg.info.stream}:${msg.info.streamSequence}`;
+  // Stream sequence is guaranteed unique within a stream — perfect dedup key
+  const dedupKey = `payment:${ctx.getStream()}:${ctx.getSequence()}`;
 
   if (await this.cache.exists(dedupKey)) {
     return; // Already processed
@@ -186,6 +188,8 @@ async handlePayment(@Payload() data: PaymentEvent, @Ctx() ctx: RpcContext): Prom
   await this.cache.set(dedupKey, '1', { ttl: 86400 });
 }
 ```
+
+See [Handler Context](/docs/guides/handler-context#jetstream-metadata) for all typed accessors available on `RpcContext`.
 
 ## Message deduplication
 
@@ -213,7 +217,7 @@ This prevents duplicate publishes in scenarios like:
 - A controller endpoint is called twice with the same data.
 
 :::info Dedup window defaults
-The event stream's default `duplicate_window` is **2 minutes**. Messages with the same ID published within this window are deduplicated. If you need a longer window, override it in the stream config (see [Custom configuration](#custom-configuration) below).
+The event stream's default `duplicate_window` is **2 minutes**. Messages with the same ID published within this window are deduplicated. To extend it, override `events.stream.duplicate_window` in `forRoot()` — for example `duplicate_window: toNanos(5, 'minutes')`. See [Custom configuration](#custom-configuration) for the full override pattern.
 :::
 
 When no message ID is set explicitly, the transport generates a random UUID for each publish — meaning no deduplication occurs by default. Always set a deterministic message ID when duplicate publishes are a concern.
@@ -264,32 +268,17 @@ If your handler calls a slow external API (e.g., sending emails, processing paym
 The default of 3 delivery attempts works well for transient errors (network blips, temporary database unavailability). Increase it to 5 or higher if your handlers interact with unreliable external services where intermittent failures are common.
 :::
 
-### Default values reference
+### Default values — the ones you'll actually tune
 
-**Stream defaults:**
-
-| Setting | Default | Description |
+| Setting | Default | Why it matters |
 |---|---|---|
-| `retention` | `Workqueue` | Messages deleted after ack |
-| `storage` | `File` | Persistent file-based storage |
-| `max_msg_size` | 10 MB | Maximum size per message |
-| `max_msgs` | 50,000,000 | Maximum total messages in stream |
-| `max_bytes` | 5 GB | Maximum total stream size |
-| `max_age` | 7 days | Messages older than this are purged |
-| `duplicate_window` | 2 minutes | Window for publish-side deduplication |
+| `max_deliver` | 3 | How many retry attempts before the message is marked dead |
+| `ack_wait` | 10 seconds | Time a handler has to ack before NATS redelivers |
+| `max_ack_pending` | 100 | In-flight cap — primary backpressure control |
+| `max_age` | 7 days | How long events live in the stream before being purged |
+| `duplicate_window` | 2 minutes | Dedup window for [`setMessageId()`](/docs/guides/record-builder) |
 
-**Consumer defaults:**
-
-| Setting | Default | Description |
-|---|---|---|
-| `ack_policy` | `Explicit` | Handler must ack/nak each message |
-| `ack_wait` | 10 seconds | Time before unacked message is redelivered |
-| `max_deliver` | 3 | Maximum delivery attempts before dead letter |
-| `max_ack_pending` | 100 | Maximum unacknowledged messages in flight |
-| `deliver_policy` | `All` | Deliver all available messages |
-| `replay_policy` | `Instant` | Replay historical messages without delay |
-
-See [Default Configs — Event Consumer](/docs/reference/default-configs#event-consumer) for the canonical reference.
+See [Default Configs — Event Stream](/docs/reference/default-configs#event-stream) and [Event Consumer](/docs/reference/default-configs#event-consumer) for the complete list of stream and consumer defaults.
 
 ## Error handling
 

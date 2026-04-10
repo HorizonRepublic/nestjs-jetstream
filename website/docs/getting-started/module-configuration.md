@@ -13,7 +13,7 @@ import Since from '@site/src/components/Since';
 
 # Module Configuration
 
-The library follows NestJS conventions with three registration methods: `forRoot()` for global setup, `forRootAsync()` for async/dynamic configuration, and `forFeature()` for per-module client registration.
+This is the main surface you'll touch day-to-day. The library follows NestJS conventions with three registration methods: `forRoot()` for global setup, `forRootAsync()` for async/dynamic configuration, and `forFeature()` for per-module client registration. If you only read one configuration page, read this one.
 
 ## forRoot()
 
@@ -177,20 +177,16 @@ export class OrdersService {
 }
 ```
 
-### getClientToken()
+### Injection token
 
-The injection token is simply the service name string. The library exports a `getClientToken()` helper if you prefer explicit token references:
+The injection token is the service name string you passed to `forFeature({ name })`. Use the standard NestJS pattern:
 
 ```typescript
-import { getClientToken } from '@horizon-republic/nestjs-jetstream';
-
-@Inject(getClientToken('users'))
-private readonly usersClient: ClientProxy;
-
-// Equivalent to:
 @Inject('users')
 private readonly usersClient: ClientProxy;
 ```
+
+The library exports a `getClientToken(name)` helper that returns the same string — it exists for code bases that prefer explicit symbolic tokens, but `@Inject('users')` is the canonical form and the one used throughout these docs.
 
 ### Per-client codec override
 
@@ -230,8 +226,9 @@ Below is every field in `JetstreamModuleOptions` with its type, default value, a
 | `ordered` | `OrderedEventOverrides` | _(production defaults)_ | Configuration for ordered event consumers. <Since version="2.4.0" /> |
 | `hooks` | `Partial<TransportHooks>` | _(none)_ | Transport lifecycle hook handlers. Unset hooks are silently ignored. |
 | `onDeadLetter` | `(info: DeadLetterInfo) => Promise<void>` | _(none)_ | Async callback for dead letter handling. Called when a message exhausts all delivery attempts. <Since version="2.2.0" /> |
-| `dlq` | `{ stream?: StreamConfigOverrides }` | _(none)_ | First-class Dead Letter Queue stream. When set, exhausted messages are automatically republished to a dedicated DLQ stream with tracking headers. See [Dead Letter Queue](/docs/guides/dead-letter-queue#built-in-dlq-stream). <Since version="2.9.0" /> |
+| `dlq` | `{ stream?: StreamConfigOverrides }` | _(none)_ | Built-in Dead Letter Queue stream. When set, exhausted messages are automatically republished to a dedicated DLQ stream with tracking headers. See [Dead Letter Queue](/docs/guides/dead-letter-queue#built-in-dlq-stream). <Since version="2.9.0" /> |
 | `metadata` | `MetadataRegistryOptions` | _(auto-enabled if any handler has `meta`)_ | Handler metadata registry — publishes `@EventPattern` / `@MessagePattern` handler metadata to a NATS KV bucket for cross-service discovery. See [Handler Metadata](/docs/patterns/handler-metadata). <Since version="2.9.0" /> |
+| `allowDestructiveMigration` | `boolean` | `false` | Allow automatic blue-green stream recreation for immutable property changes (e.g., `storage`). Without this flag, the transport logs a warning and keeps the existing stream config. See [Stream Migration](/docs/guides/stream-migration). <Since version="2.9.0" /> |
 | `shutdownTimeout` | `number` | `10_000` (10s) | Graceful shutdown timeout in milliseconds. Handlers exceeding this are abandoned. |
 | `connectionOptions` | `Partial<ConnectionOptions>` | _(none)_ | Raw NATS `ConnectionOptions` pass-through for TLS, auth, reconnection, etc. |
 

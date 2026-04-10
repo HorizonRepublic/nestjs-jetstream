@@ -1,10 +1,12 @@
 ---
 sidebar_position: 2
-title: "Handler Context"
+sidebar_label: "Handler Context"
+title: "RpcContext — Handler Context & Message Settlement"
+description: "Access JetStream metadata and control ack, retry, and terminate actions in NestJS message handlers via RpcContext."
 schema:
   type: Article
-  headline: "Handler Context"
-  description: "Access message metadata, headers, and control settlement actions via RpcContext."
+  headline: "RpcContext — Handler Context & Message Settlement"
+  description: "Access JetStream metadata and control ack, retry, and terminate actions in NestJS message handlers via RpcContext."
   datePublished: "2026-03-21"
   dateModified: "2026-04-11"
 ---
@@ -13,7 +15,7 @@ import Since from '@site/src/components/Since';
 
 # Handler Context
 
-Every `@EventPattern` and `@MessagePattern` handler can inject `RpcContext` to access message metadata, JetStream delivery info, and control message settlement. This works identically for both event and RPC handlers.
+Every `@EventPattern` and `@MessagePattern` handler can inject `RpcContext` to access message metadata, JetStream delivery info, and control message settlement.
 
 ## Injecting the context
 
@@ -96,7 +98,9 @@ Use `getDeliveryCount()` for fallback logic on retries:
 ```typescript
 @EventPattern('payment.process')
 async handle(@Payload() data: PaymentDto, @Ctx() ctx: RpcContext) {
-  if (ctx.getDeliveryCount()! >= 3) {
+  const attempt = ctx.getDeliveryCount() ?? 0;
+
+  if (attempt >= 3) {
     // 3rd attempt — try a different payment provider
     await this.fallbackProvider.process(data);
     return;

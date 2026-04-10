@@ -32,6 +32,9 @@ Migration is only needed for **immutable** properties that NATS locks after stre
 ## How to enable
 
 ```typescript
+import { StorageType } from '@nats-io/jetstream';
+import { JetstreamModule } from '@horizon-republic/nestjs-jetstream';
+
 JetstreamModule.forRoot({
   name: 'orders',
   servers: ['nats://localhost:4222'],
@@ -73,7 +76,7 @@ During migration, the backup stream (`{stream}__migration_backup`) serves a dual
 
 ### To publishers
 
-There is a **brief window** (typically milliseconds) between Phase 2 (delete) and Phase 3 (create) where the stream does not exist. Publishers will receive "stream not found" errors during this window.
+There is a **brief window** between Phase 2 (delete) and Phase 3 (create) where the stream does not exist — in practice this is one round-trip to the NATS server, but the window is real. Publishers will receive "stream not found" errors during it.
 
 - **`client.emit()`** (fire-and-forget) — the event is lost. If you need guaranteed delivery during migration, implement retry logic in the caller.
 - **`client.send()`** (RPC) — the caller receives an error and can retry.
@@ -98,16 +101,9 @@ The pod that triggers migration blocks during startup until all phases complete.
 
 ## Performance
 
-Migration speed depends on message count and NATS server performance. Benchmarks on a single-node NATS 2.12.6 (Testcontainers):
+Migration speed depends on message count, message size, and NATS server performance. Stream sourcing is a server-side operation — no messages travel back over the network — so throughput is bounded by the NATS server's disk or memory, not the transport.
 
-| Messages | File → Memory | Memory → File |
-|----------|--------------|--------------|
-| 100 | < 10ms | < 10ms |
-| 10,000 | ~420ms | ~530ms |
-| 100,000 | ~3s | ~3s |
-| 1,000,000 | ~6s | ~5.5s |
-
-Stream sourcing is a server-side operation — no messages travel over the network. Performance scales linearly with message count.
+Expect migration time to scale roughly linearly with message count. For small streams (thousands of messages) the migration is effectively instantaneous from an operator's standpoint; for very large streams (hundreds of thousands or more), measure on your own hardware before scheduling a rolling update. Proper benchmarks will be published alongside the broader performance suite.
 
 ## Error handling
 

@@ -1,10 +1,12 @@
 ---
 sidebar_position: 2
-title: Ordered Events
+sidebar_label: "Ordered Events"
+title: "Ordered Events — Strict Sequential Delivery in NATS JetStream"
+description: "Strict sequential NestJS NATS JetStream event delivery with ephemeral ordered consumers, deliver policies, and CQRS replay patterns."
 schema:
   type: Article
-  headline: "Ordered Events"
-  description: "Strict sequential event delivery with ephemeral consumers and replay policies."
+  headline: "Ordered Events — Strict Sequential Delivery in NATS JetStream"
+  description: "Strict sequential NestJS NATS JetStream event delivery with ephemeral ordered consumers, deliver policies, and CQRS replay patterns."
   datePublished: "2026-03-21"
   dateModified: "2026-04-11"
 ---
@@ -430,15 +432,7 @@ useFactory: () => ({
 
 ### OrderedEventOverrides
 
-The `ordered` field in `JetstreamModuleOptions` accepts the following options:
-
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `stream` | `Partial<StreamConfig>` | [production defaults](/docs/reference/default-configs) | Stream configuration overrides (e.g., `max_age`, `max_bytes`). |
-| `deliverPolicy` | `DeliverPolicy` | `DeliverPolicy.All` | Where to start reading when the consumer is created. |
-| `optStartSeq` | `number` | -- | Start sequence number. Only used with `DeliverPolicy.StartSequence`. |
-| `optStartTime` | `string` | -- | ISO 8601 timestamp. Only used with `DeliverPolicy.StartTime`. |
-| `replayPolicy` | `ReplayPolicy` | `ReplayPolicy.Instant` | How historical messages are replayed. |
+See [OrderedEventOverrides](/docs/getting-started/module-configuration#orderedeventoverrides) in Module Configuration for the canonical field reference. This page focuses on how those fields shape the delivery policy decisions above.
 
 ### Stream overrides
 

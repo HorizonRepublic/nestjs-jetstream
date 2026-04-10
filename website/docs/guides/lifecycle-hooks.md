@@ -1,10 +1,12 @@
 ---
 sidebar_position: 4
-title: "Lifecycle Hooks"
+sidebar_label: "Lifecycle Hooks"
+title: "Lifecycle Hooks — NestJS JetStream Transport Events"
+description: "Observe NestJS NATS JetStream transport events: connection, disconnect, reconnect, errors, RPC timeouts, message routing, dead letters, and shutdown."
 schema:
   type: Article
-  headline: "Lifecycle Hooks"
-  description: "Transport lifecycle events for connection changes, errors, message routing, and dead letters."
+  headline: "Lifecycle Hooks — NestJS JetStream Transport Events"
+  description: "Observe NestJS NATS JetStream transport events: connection, disconnect, reconnect, errors, RPC timeouts, message routing, dead letters, and shutdown."
   datePublished: "2026-03-21"
   dateModified: "2026-04-11"
 ---
@@ -15,7 +17,7 @@ The transport emits lifecycle events at key moments — connection changes, erro
 
 ## Available events
 
-All 9 events are defined in the `TransportEvent` enum:
+The full event set is defined in the `TransportEvent` enum:
 
 | Event | Signature | When it fires |
 |---|---|---|
