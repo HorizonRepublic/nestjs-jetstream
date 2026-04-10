@@ -71,6 +71,14 @@ export default function Root({ children }) {
   "dateModified": "2026-03-21"
 },
       
+    '/docs/getting-started/why-jetstream/': {
+  "@type": "Article",
+  "headline": "Why JetStream?",
+  "description": "When the built-in NestJS NATS transport is enough, and when you need JetStream for production-grade messaging.",
+  "datePublished": "2026-04-11",
+  "dateModified": "2026-04-11"
+},
+      
     '/docs/guides/custom-codec/': {
   "@type": "Article",
   "headline": "Custom Codec",
@@ -82,9 +90,9 @@ export default function Root({ children }) {
     '/docs/guides/dead-letter-queue/': {
   "@type": "Article",
   "headline": "Dead Letter Queue",
-  "description": "Handle messages that exhaust all delivery attempts via onDeadLetter callback.",
+  "description": "Handle messages that exhaust all delivery attempts via a first-class DLQ stream or onDeadLetter callback.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-03-21"
+  "dateModified": "2026-04-11"
 },
       
     '/docs/guides/graceful-shutdown/': {

@@ -4,9 +4,9 @@ title: "Dead Letter Queue"
 schema:
   type: Article
   headline: "Dead Letter Queue"
-  description: "Handle messages that exhaust all delivery attempts via onDeadLetter callback."
+  description: "Handle messages that exhaust all delivery attempts via a first-class DLQ stream or onDeadLetter callback."
   datePublished: "2026-03-21"
-  dateModified: "2026-03-21"
+  dateModified: "2026-04-11"
 ---
 
 import Since from '@site/src/components/Since';
@@ -15,37 +15,131 @@ import Since from '@site/src/components/Since';
 
 <Since version="2.2.0" />
 
-When a message fails on every delivery attempt and exhausts its `max_deliver` limit, the transport treats it as a **dead letter**. Instead of silently discarding the message, you get a callback with full context — enough to persist, inspect, or re-publish it.
+When a message fails on every delivery attempt and exhausts its `max_deliver` limit, the transport treats it as a **dead letter**. Instead of silently discarding the message, the library gives you two complementary mechanisms to capture it:
+
+1. **A first-class DLQ stream** *(added in v2.9.0)* — configure `dlq: { stream }` and exhausted messages are automatically republished to a dedicated JetStream stream with tracking headers.
+2. **An `onDeadLetter` callback** — a hook that receives the full dead letter context, for custom persistence (database, S3, external queue) or ad-hoc alerting.
+
+Both can be used independently. When both are configured, the DLQ stream is the primary persistence path, while the callback is invoked as a notification hook on every dead letter — and acts as a safety net if the DLQ publish itself fails. Nothing is silently dropped.
 
 ## What is a dead letter?
 
 In NATS JetStream, each consumer has a `max_deliver` setting (default: **3**). Every time a handler throws an exception, the message is `nak`'d and redelivered. Once the delivery count reaches `max_deliver`, the message has nowhere to go — it's "dead."
 
-Without the `onDeadLetter` callback, the transport would simply `term()` the message after the final failed attempt. With the callback, you get a chance to save it before it's gone.
+Without a DLQ strategy, the transport would simply `term()` the message after the final failed attempt. With the DLQ stream or callback, you get a chance to save it before it's gone.
 
 ```mermaid
 sequenceDiagram
     participant P as Publisher
-    participant S as Stream
+    participant S as Source Stream
     participant C as Consumer
     participant H as Handler
-    participant DLQ as onDeadLetter
+    participant DLQ as DLQ Stream
+    participant CB as onDeadLetter
 
     P->>S: emit()
-    S->>C: deliver (attempt 1)
+    S->>C: deliver (attempt 1..max_deliver)
     C->>H: invoke handler
-    H-->>C: fails → nak
-    S->>C: redeliver (attempt 2)
-    C->>H: invoke handler
-    H-->>C: fails → nak
-    S->>C: redeliver (attempt 3)
-    C->>H: invoke handler
-    H-->>C: fails
-    C->>DLQ: onDeadLetter(info)
-    DLQ-->>C: term()
+    H-->>C: fails on every attempt
+    Note over C: delivery count == max_deliver
+    C->>C: emit TransportEvent.DeadLetter hook
+    alt dlq configured
+        C->>DLQ: republish with tracking headers
+        DLQ-->>C: ack
+        opt onDeadLetter also configured
+            C->>CB: onDeadLetter(info) — notification
+            Note over CB: errors here are logged,<br/>message still terminates
+        end
+        C-->>S: term() original message
+    else dlq not configured
+        C->>CB: onDeadLetter(info) — primary
+        CB-->>C: resolved
+        C-->>S: term() original message
+    end
 ```
 
+## Built-in DLQ stream
+
+<Since version="2.9.0" />
+
+The simplest production setup: enable the `dlq` option and the library provisions a dedicated DLQ stream on startup, then republishes exhausted messages to it automatically.
+
+```typescript title="src/app.module.ts"
+import { Module } from '@nestjs/common';
+import { JetstreamModule, toNanos } from '@horizon-republic/nestjs-jetstream';
+
+@Module({
+  imports: [
+    JetstreamModule.forRoot({
+      name: 'orders',
+      servers: ['nats://localhost:4222'],
+      dlq: {
+        stream: {
+          max_age: toNanos(30, 'days'), // how long dead letters are retained
+        },
+      },
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+### What gets created
+
+On application start, the library calls `ensureDlqStream()` which creates (or updates) a JetStream stream with:
+
+| Property | Default |
+|---|---|
+| Stream name | `{service}__microservice_dlq-stream` (e.g. `orders__microservice_dlq-stream`) |
+| Retention | `Workqueue` — messages are removed when a DLQ consumer acks them |
+| `max_age` | 30 days |
+| `max_bytes` | 5 GB |
+| `max_msgs` | 50,000,000 |
+| `max_msg_size` | 10 MB |
+| `max_consumers` | 100 |
+| `allow_rollup_hdrs` | `false` |
+| `duplicate_window` | 2 minutes |
+
+You can override any of these fields via `dlq.stream`, for example to shorten retention or raise the byte cap. The stream name is always derived from your service name — any `name` field you set on `dlq.stream` is ignored, which keeps DLQ streams predictable across services. Full defaults live in `DEFAULT_DLQ_STREAM_CONFIG`.
+
+The `dlqStreamName(serviceName)` helper is exported from the package so you can subscribe to the DLQ stream from elsewhere without hardcoding the name.
+
+### Tracking headers on DLQ messages
+
+Every message republished to the DLQ stream carries metadata headers so you can investigate, replay, or filter without decoding the payload first:
+
+| Header | Description |
+|---|---|
+| `x-dead-letter-reason` | The error message from the last handler failure, or `max_deliver_exceeded` |
+| `x-original-subject` | The subject the message was originally published to |
+| `x-original-stream` | The source stream the message came from |
+| `x-failed-at` | ISO 8601 timestamp of the moment the message entered the DLQ |
+| `x-delivery-count` | How many times the message was delivered before it was marked dead |
+
+The `JetstreamDlqHeader` enum is exported from the package — use it for type-safe header access in your DLQ consumer.
+
+### Fallback chain
+
+The transport uses a strict, **no-silent-loss** chain when handling a dead letter:
+
+1. **Emit `TransportEvent.DeadLetter`** — fires for every dead letter, regardless of configuration (for observability). Happens unconditionally.
+2. **Try DLQ stream publish** — if `dlq` is configured, publish the payload and tracking headers to the DLQ stream.
+3. **On successful publish — notify `onDeadLetter`** — if a callback is also registered, it is invoked as a **notification hook** (logging, metrics, alerting). Any error thrown by the callback at this stage is logged and swallowed; the original message still terminates successfully.
+4. **On failed publish — fall back to `onDeadLetter`** — if the DLQ publish itself throws (broker rejection, connectivity issue, disk full), the transport falls back to the callback so the payload still has a chance to land somewhere. On success, the message is terminated; on failure, it is `nak`'d.
+5. **`nak()` as last resort** — if no callback is configured and the DLQ publish fails, or if the fallback callback also throws, the message is `nak`'d rather than silently terminated. It will be redelivered, which gives you a chance to recover the broker or fix the callback. The delivery count stays at `max_deliver`, so it will be treated as a dead letter again on the next attempt.
+
+This chain guarantees that no message is terminated without passing through at least one recovery path.
+
+:::note Callback role depends on context
+With `dlq` configured, the callback is a **notification + safety net** — it fires on both successful and failed DLQ publishes, but with different semantics. On success it cannot block termination; on failure it is the last chance to persist the payload. Without `dlq`, the callback is the primary path (see [Callback flow (standalone mode)](#callback-flow-standalone-mode) below).
+:::
+
 ## Configuring the callback
+
+The `onDeadLetter` callback can be used in two ways:
+
+- **Standalone** — no `dlq` option, just the callback. The transport calls it for every dead letter so you can persist the payload wherever you want (database, S3, external queue). This is the right choice when you need custom logic at the moment of failure (e.g., trigger an incident, update a UI, enrich with business context).
+- **Alongside a DLQ stream** — used together with `dlq: { stream }`. The DLQ stream is the primary persistence path. The callback fires as a **notification hook** after every successful DLQ publish (errors are logged but do not block termination) and as a **fallback** if the DLQ publish itself throws. See the [Fallback chain](#fallback-chain) above for the full sequence.
 
 Register `onDeadLetter` in `forRoot()` or `forRootAsync()`:
 
@@ -83,9 +177,9 @@ The callback receives a `DeadLetterInfo` object with everything you need to inve
 | `streamSequence` | `number` | The stream sequence number (unique within the stream) |
 | `timestamp` | `string` | ISO 8601 timestamp of the message (derived from NATS metadata) |
 
-## Callback flow
+## Callback flow (standalone mode)
 
-The `onDeadLetter` callback is **async** and **awaited** before the message is acknowledged. The sequence is:
+When `dlq` is not configured and only the callback is registered, the flow is:
 
 1. Handler fails on the final delivery attempt (`deliveryCount >= max_deliver`).
 2. The transport builds a `DeadLetterInfo` object.
@@ -94,8 +188,8 @@ The `onDeadLetter` callback is **async** and **awaited** before the message is a
 5. On success: the message is `term()`'d (terminated — removed from the stream permanently).
 6. On failure: the message is `nak()`'d, giving the callback another chance on the next delivery cycle.
 
-:::warning Safety net: callback failures trigger retry
-If your `onDeadLetter` callback throws (e.g., the database is down), the message is **not** terminated. Instead, it is `nak`'d so that NATS redelivers it. This means your callback will be retried — but be aware that the delivery count has already reached `max_deliver`, so the message will be treated as a dead letter again on the next attempt.
+:::warning Callback failures trigger retry
+If your `onDeadLetter` callback throws (e.g., the database is down), the message is **not** terminated. Instead, it is `nak`'d so that NATS redelivers it. This means your callback will be retried — but be aware that the delivery count has already reached `max_deliver`, so the message will be treated as a dead letter again on the next attempt. If you combine the callback with `dlq: { stream }`, the same nak safety applies at the end of the fallback chain described above.
 :::
 
 ## DI integration with forRootAsync
