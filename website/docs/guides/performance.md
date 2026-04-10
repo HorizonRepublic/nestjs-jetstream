@@ -94,7 +94,7 @@ When enabled, the transport calls `msg.working()` at regular intervals (at half 
 
 ## S2 compression
 
-All streams default to [Snappy S2 compression](https://github.com/nats-io/nats-server), reducing disk I/O and storage with modest CPU overhead. The actual cost varies with payload entropy, message size, and CPU — measure before assuming it's free. Requires **NATS Server >= 2.10**.
+All streams default to [S2 compression](https://github.com/klauspost/compress/tree/master/s2) (a Snappy-compatible codec), reducing disk I/O and storage with modest CPU overhead. The actual cost varies with payload entropy, message size, and CPU — measure before assuming it's free. Requires **NATS Server >= 2.10**.
 
 See [Default Configs — S2 Compression](/docs/reference/default-configs) for details and how to override per stream kind.
 

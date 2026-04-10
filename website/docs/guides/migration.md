@@ -162,7 +162,7 @@ v2.7 shipped handler-controlled settlement — a way to ack, nak, or terminate a
 
 **New features:**
 - Handler-controlled settlement via [`ctx.retry()` and `ctx.terminate()`](/docs/guides/handler-context#controlling-message-settlement) — control message acknowledgment without throwing errors
-- Metadata getters on [`RpcContext`](/docs/guides/handler-context#jetstream-metadata): `getDeliveryCount()`, `getStream()`, `getSequence()`, `getTimestamp()`, `getCallerName()`
+- Metadata getters on [`RpcContext`](/docs/guides/handler-context#jetstream-message-info): `getDeliveryCount()`, `getStream()`, `getSequence()`, `getTimestamp()`, `getCallerName()`
 
 No breaking changes.
 

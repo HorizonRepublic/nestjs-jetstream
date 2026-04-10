@@ -1,6 +1,8 @@
 ---
 sidebar_position: 1
+sidebar_label: "Module Configuration"
 title: Module Configuration
+description: "forRoot(), forRootAsync(), and forFeature() registration methods with stream, consumer, and connection options."
 schema:
   type: Article
   headline: "Module Configuration"

@@ -195,7 +195,7 @@ JetstreamModule.forRoot({
 ```
 
 :::warning Stream config is global
-Since all services share the same `broadcast-stream`, any service can update the stream config on startup. The last service to start wins. Coordinate stream-level settings across your team, or let a single "infrastructure" service own them.
+Since all services share the same `broadcast-stream`, any service can update the stream config on startup, and the last service to start wins for mutable properties. Coordinate stream-level settings across your team, or let a single "infrastructure" service own them. The transport logs every applied change on startup so drift is detectable in your logs, and immutable conflicts (like `storage`) are surfaced as warnings unless `allowDestructiveMigration` is enabled.
 :::
 
 ### Consumer-level config (per-service)

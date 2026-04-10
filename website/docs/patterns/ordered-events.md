@@ -360,20 +360,21 @@ JetstreamModule.forRootAsync({
 **Tracking offsets in your handler:**
 
 ```typescript
-import type { JsMsg } from '@nats-io/jetstream';
-
 @EventPattern('order.status', { ordered: true })
 async handleOrderStatus(
   @Payload() data: OrderStatusDto,
   @Ctx() ctx: RpcContext,
 ) {
-  const msg = ctx.getMessage() as JsMsg;
-
   // Process the event
   await this.projectionService.apply(data);
 
-  // Persist the stream sequence for resume-on-restart
-  await this.offsetStore.save('projections', msg.info.streamSequence);
+  // Persist the stream sequence for resume-on-restart.
+  // getSequence() returns undefined for Core NATS messages, but ordered
+  // events are always JetStream, so it is safe to assume a number here.
+  const sequence = ctx.getSequence();
+  if (sequence !== undefined) {
+    await this.offsetStore.save('projections', sequence);
+  }
 }
 ```
 

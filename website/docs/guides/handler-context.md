@@ -50,9 +50,9 @@ export class OrdersController {
 | `getHeader(key)` | `string \| undefined` | Value of a single header, or `undefined` if missing |
 | `getHeaders()` | `MsgHdrs \| undefined` | All NATS message headers (the raw NATS `MsgHdrs` object from `@nats-io/transport-node`) |
 | `isJetStream()` | `boolean` | Type guard — returns `true` when the message is a JetStream message |
-| `getMessage()` | `JsMsg \| Msg` | The raw NATS message (type depends on transport mode) |
+| `getMessage()` | `JsMsg \| Msg` | The raw NATS message. Narrowed to `JsMsg` after a successful `isJetStream()` check, or `Msg` when the check returns `false`. |
 
-### JetStream metadata
+### JetStream message info
 
 <Since version="2.7.0" />
 
@@ -78,7 +78,7 @@ Control how the transport acknowledges the message — without throwing errors.
 | `ctx.terminate(reason?)` | `msg.term(reason)` — permanent reject | Message no longer relevant (order cancelled, entity deleted) |
 | *(no action)* | `msg.ack()` — acknowledge | Successful processing (default) |
 
-## JetStream metadata
+## Accessing JetStream metadata
 
 Access delivery info directly without type narrowing:
 

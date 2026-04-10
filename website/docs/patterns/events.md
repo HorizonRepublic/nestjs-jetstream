@@ -189,7 +189,7 @@ async handlePayment(@Payload() data: PaymentEvent, @Ctx() ctx: RpcContext): Prom
 }
 ```
 
-See [Handler Context](/docs/guides/handler-context#jetstream-metadata) for all typed accessors available on `RpcContext`.
+See [Handler Context](/docs/guides/handler-context#jetstream-message-info) for all typed accessors available on `RpcContext`.
 
 ## Message deduplication
 
@@ -331,8 +331,8 @@ Every message ends in one of three states:
 
 | Outcome | When | Effect |
 |---------|------|--------|
-| **`ctx.ack()`** | Handler succeeds | Message removed from stream. Called automatically by the transport on success. |
-| **`ctx.retry()`** | Recoverable error | Message redelivered (optionally with `{ delayMs }` delay). Called automatically when the handler throws. |
+| **auto-ack** *(no action)* | Handler succeeds | Message removed from stream. The transport calls `ack()` on the underlying message when the handler returns successfully. |
+| **`ctx.retry()`** | Recoverable error | Message redelivered (optionally with `{ delayMs }` delay). Also called automatically when the handler throws. |
 | **`ctx.terminate(reason)`** | Non-recoverable error | Message permanently discarded. Must be called manually in the handler. |
 
 ### Relationship with dead letter handling

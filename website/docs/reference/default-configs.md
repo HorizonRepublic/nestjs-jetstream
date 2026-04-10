@@ -29,7 +29,7 @@ All streams share a common base configuration:
 | `compression` | `S2` |
 
 :::info S2 Compression
-All streams default to [Snappy S2 compression](https://github.com/nats-io/nats-server). This reduces disk I/O and storage with modest CPU overhead that varies with payload entropy and size. Requires NATS Server >= 2.10 (see [runtime requirements](/docs/getting-started/installation#runtime-requirements)). Override per stream kind:
+All streams default to [S2 compression](https://github.com/klauspost/compress/tree/master/s2), a Snappy-compatible codec with better ratios. This reduces disk I/O and storage with modest CPU overhead that varies with payload entropy and size. Requires NATS Server >= 2.10 (see [runtime requirements](/docs/getting-started/installation#runtime-requirements)). Override per stream kind:
 
 ```typescript
 import { StoreCompression } from '@nats-io/jetstream';

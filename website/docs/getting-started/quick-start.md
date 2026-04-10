@@ -1,5 +1,6 @@
 ---
 sidebar_position: 2
+sidebar_label: "Quick Start"
 title: Quick Start
 description: Complete working example in four steps — register, connect, handle, and send.
 schema:
