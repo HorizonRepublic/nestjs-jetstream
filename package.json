@@ -1,6 +1,6 @@
 {
   "name": "@horizon-republic/nestjs-jetstream",
-  "version": "2.8.0",
+  "version": "2.9.0",
   "description": "A NestJS transport for NATS with JetStream events, broadcast fan-out, and Core/JetStream RPC.",
   "repository": {
     "type": "git",

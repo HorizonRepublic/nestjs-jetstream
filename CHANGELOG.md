@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.9.0](https://github.com/HorizonRepublic/nestjs-jetstream/compare/v2.8.0...v2.9.0) (2026-04-10)
+
+
+### Features
+
+* first-class Dead Letter Queue (DLQ) ([#123](https://github.com/HorizonRepublic/nestjs-jetstream/issues/123)) ([835ec79](https://github.com/HorizonRepublic/nestjs-jetstream/commit/835ec79dbaaa81e4136da7d98117b06da68409a3))
+* handler metadata registry (NATS KV) ([#110](https://github.com/HorizonRepublic/nestjs-jetstream/issues/110)) ([#121](https://github.com/HorizonRepublic/nestjs-jetstream/issues/121)) ([cd99694](https://github.com/HorizonRepublic/nestjs-jetstream/commit/cd996941615ad7db026120965ccaaa43507371df))
+* per-message TTL via JetstreamRecordBuilder.ttl() ([#120](https://github.com/HorizonRepublic/nestjs-jetstream/issues/120)) ([d37fd62](https://github.com/HorizonRepublic/nestjs-jetstream/commit/d37fd62f691485eaa43fc6961167631db72dd8a8))
+* stream migration & self-healing consumer recovery ([#118](https://github.com/HorizonRepublic/nestjs-jetstream/issues/118)) ([ddef850](https://github.com/HorizonRepublic/nestjs-jetstream/commit/ddef850124877ff2964b36bc083f7dcfdda853bf))
+
 ## [2.8.0](https://github.com/HorizonRepublic/nestjs-jetstream/compare/v2.7.1...v2.8.0) (2026-04-01)
 
 
