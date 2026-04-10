@@ -6,7 +6,7 @@ schema:
   headline: "Graceful Shutdown"
   description: "Automatic shutdown handling with in-flight message completion and NATS connection drain."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-02"
+  dateModified: "2026-04-11"
 ---
 
 # Graceful Shutdown
@@ -131,4 +131,5 @@ See [Lifecycle Hooks](/docs/guides/lifecycle-hooks) for all available events.
 
 - [**Lifecycle Hooks**](/docs/guides/lifecycle-hooks) — all 9 transport lifecycle events
 - [**Health Checks**](/docs/guides/health-checks) — monitor connection status
-- [**Module Configuration**](/docs/getting-started/module-configuration) — `shutdownTimeout` and other options
+- [**Module Configuration**](/docs/getting-started/module-configuration#optional-options) — `shutdownTimeout` and other options
+- [**Dead Letter Queue**](/docs/guides/dead-letter-queue) — what happens to in-flight messages that fail on the final delivery attempt during shutdown

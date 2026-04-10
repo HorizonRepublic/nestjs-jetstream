@@ -64,19 +64,33 @@ This library provides a dedicated [Broadcast](../patterns/broadcast) pattern: pe
 
 ## What this library adds on top of raw JetStream
 
-JetStream itself is a protocol. Using it from Node.js with the official `nats` client works, but you'd rebuild a lot of infrastructure before you could focus on business logic:
+JetStream itself is a protocol. Using it from Node.js directly with the `@nats-io/*` client packages works, but you'd rebuild a lot of infrastructure before you could focus on business logic. Here is what the library provides out of the box — each bullet is a link to the dedicated page:
 
-- Stream and consumer provisioning on application start
-- Subject routing from NATS messages to `@EventPattern` / `@MessagePattern` handlers
-- Ack extension for long-running handlers (automatic `inProgress()` pings)
-- Graceful shutdown with in-flight drain
-- Retry bounds and dead letter callbacks
-- Self-healing consumer recovery after broker restarts
-- Health indicators for Kubernetes probes
-- Publisher-only mode for API gateways
-- Observability hooks for metrics and tracing
+**Delivery patterns**
+- [Workqueue events](../patterns/events) — at-least-once delivery with one handler instance per message
+- [Broadcast events](../patterns/broadcast) — fan-out to every subscribing service
+- [Ordered events](../patterns/ordered-events) — strict sequential delivery with ephemeral consumers
+- [RPC (Core or JetStream mode)](../patterns/rpc) — synchronous request/reply with configurable persistence
 
-This library wraps all of that behind the same NestJS decorators you already use (`@EventPattern`, `@MessagePattern`, `ClientProxy`), so moving from the built-in transport to JetStream is mostly a configuration change, not a rewrite.
+**Message durability & recovery**
+- [Dead Letter Queue stream](../guides/dead-letter-queue) with tracking headers and a fallback callback chain
+- [Stream migration](../guides/stream-migration) with blue-green sourcing for immutable property changes
+- [Self-healing consumers](../reference/edge-cases#consumer-self-healing) that recover automatically from broker restarts and external deletions
+- [Graceful shutdown](../guides/graceful-shutdown) with in-flight message drain
+
+**Publisher features**
+- [Per-message TTL](../guides/per-message-ttl) for individual message expiration
+- [Scheduled delivery](../guides/scheduling) via NATS 2.12 scheduling headers
+- [Deduplication via deterministic message IDs](../guides/record-builder) through the built-in `JetstreamRecordBuilder`
+- [Publisher-only mode](../reference/edge-cases#publisher-only-mode) for API gateways
+
+**Operations**
+- [Health indicator](../guides/health-checks) for Kubernetes readiness/liveness probes
+- [Lifecycle hooks](../guides/lifecycle-hooks) for metrics, tracing, and alerting
+- [Handler metadata registry](../patterns/handler-metadata) backed by NATS KV for cross-service discovery
+- [Ack extension](../guides/performance#ack-extension) for long-running handlers
+
+All of this is wrapped behind the same NestJS decorators you already use (`@EventPattern`, `@MessagePattern`, `ClientProxy`), so moving from the built-in transport to JetStream is mostly a configuration change, not a rewrite.
 
 ## When HTTP is the wrong question
 

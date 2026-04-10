@@ -6,7 +6,7 @@ schema:
   headline: "Per-Message TTL"
   description: "Individual message expiration independent of stream max_age, powered by NATS 2.11 Nats-TTL header."
   datePublished: "2026-04-02"
-  dateModified: "2026-04-02"
+  dateModified: "2026-04-11"
 ---
 
 import Since from '@site/src/components/Since';
@@ -85,7 +85,14 @@ Per-message TTL works **independently** from stream `max_age`:
 
 | Limitation | Details |
 |-----------|---------|
-| **Events only** | `ttl()` is ignored for RPC (`client.send()`); a warning is logged |
+| **Events only** | `ttl()` is ignored for RPC ([`client.send()`](/docs/patterns/rpc)); a warning is logged |
 | **NATS >= 2.11** | `allow_msg_ttl` is not supported by older server versions |
 | **Per-stream opt-in** | Each stream must have `allow_msg_ttl: true` explicitly |
 | **No consumer-side awareness** | Consumers don't know if a message has TTL — they process it normally before expiry |
+
+## See also
+
+- [Record Builder & Deduplication](/docs/guides/record-builder) — full `JetstreamRecordBuilder` API including `.ttl()`, `.setMessageId()`, `.scheduleAt()`
+- [Scheduling (Delayed Jobs)](/docs/guides/scheduling) — the sibling feature for one-shot delayed delivery
+- [Default Configs](/docs/reference/default-configs#enable-only-can-be-turned-on-but-never-off) — `allow_msg_ttl` in the enable-only stream properties table
+- [Module Configuration](/docs/getting-started/module-configuration) — where to set `events.stream.allow_msg_ttl`

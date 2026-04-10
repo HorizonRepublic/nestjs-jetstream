@@ -6,12 +6,12 @@ schema:
   headline: "Broadcast Events"
   description: "Fan-out event delivery to every subscribing service instance."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-02"
+  dateModified: "2026-04-11"
 ---
 
 # Broadcast Events
 
-Broadcast events implement **fan-out** delivery: every subscribing service receives a copy of each message. This is the opposite of [workqueue events](/docs/patterns/events), where only one instance processes each message.
+Broadcast events implement **fan-out** delivery: every subscribing service receives a copy of each message. This is the opposite of [workqueue events](/docs/patterns/events) (one instance processes each message) and distinct from [ordered events](/docs/patterns/ordered-events) (every instance receives a full sequential replay).
 
 ## When to use
 
@@ -234,6 +234,10 @@ JetstreamModule.forRoot({
 
 Each consumer only subscribes to the broadcast subjects it has handlers for (via `filter_subject` or `filter_subjects`), so services only receive the broadcast events they care about.
 
+:::tip Broadcast scheduling
+To schedule delayed broadcasts, enable `broadcast.stream.allow_msg_schedules: true` — this is a separate opt-in from the event stream flag. See [Scheduling (Delayed Jobs)](/docs/guides/scheduling).
+:::
+
 ### Default values reference
 
 **Stream defaults (shared):**
@@ -256,6 +260,10 @@ Each consumer only subscribes to the broadcast subjects it has handlers for (via
 | `ack_wait` | 10 seconds | Time before unacked message is redelivered |
 | `max_deliver` | 3 | Maximum delivery attempts before dead letter |
 | `max_ack_pending` | 100 | Maximum unacknowledged messages in flight |
+| `deliver_policy` | `All` | Deliver all available messages to new consumers |
+| `replay_policy` | `Instant` | Replay historical messages without delay |
+
+See [Default Configs — Broadcast Consumer](/docs/reference/default-configs#broadcast-consumer) for the canonical reference.
 
 ## Common use cases
 

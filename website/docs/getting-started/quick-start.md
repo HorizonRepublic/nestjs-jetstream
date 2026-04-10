@@ -7,7 +7,7 @@ schema:
   headline: "Quick Start"
   description: "Complete working example in four steps: register the module, connect the transport, define handlers, and send messages."
   datePublished: "2026-03-21"
-  dateModified: "2026-03-21"
+  dateModified: "2026-04-11"
 ---
 
 # Quick Start
@@ -211,4 +211,4 @@ curl http://localhost:3000/orders/42
 - [**Module Configuration**](/docs/getting-started/module-configuration) — learn about all configuration options, async setup, and advanced connection settings
 - [**RPC Patterns**](/docs/patterns/rpc) — deep dive into Core vs JetStream RPC modes
 - [**Events & Broadcast**](/docs/patterns/events) — workqueue events, broadcast fan-out, and ordered events
-- [**Record Builder**](/docs/guides/record-builder) — attach custom headers and per-message timeouts
+- [**Record Builder & Deduplication**](/docs/guides/record-builder) — custom headers, deterministic message IDs, per-request RPC timeouts, and deduplication

@@ -6,7 +6,7 @@ schema:
   headline: Edge Cases & FAQ
   description: "Common questions and non-obvious behaviors of the transport."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-02"
+  dateModified: "2026-04-11"
 ---
 
 # Edge Cases & FAQ
@@ -117,10 +117,13 @@ Ordered consumers are excluded from auto-recreation — they are ephemeral and m
 
 **Q: Are there limits on custom headers?**
 
-NATS imposes a total header size limit (default 4 KB per message in most server configurations). The transport uses several [reserved headers](/docs/reference/api/enumerations/JetstreamHeader) (`x-correlation-id`, `x-reply-to`, `x-subject`, `x-caller-name`, `x-error`) that count toward this limit.
+NATS imposes a total header size limit (default 4 KB per message in most server configurations). The transport uses five [transport-managed headers](/docs/reference/api/enumerations/JetstreamHeader) that count toward this limit:
+
+- **Reserved** — `x-correlation-id`, `x-reply-to`, `x-error`. Setting these via `JetstreamRecordBuilder.setHeader()` throws immediately at the call site.
+- **Auto-set** — `x-subject`, `x-caller-name`. The transport populates these on every outbound message; any value you pass via the builder is silently replaced at publish time.
 
 When using `JetstreamRecordBuilder.setHeader()`, keep in mind:
-- Reserved headers (`x-correlation-id`, `x-reply-to`, `x-error`) cannot be overwritten
+- None of the five transport-managed headers above can be overwritten from user code
 - Custom headers are additive — they are included alongside transport-managed headers
 - If the total header size exceeds the NATS server limit, the publish will fail
 

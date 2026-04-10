@@ -6,12 +6,12 @@ schema:
   headline: "Events (Workqueue)"
   description: "Workqueue events with at-least-once delivery, automatic retry, deduplication, and dead letter handling."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-02"
+  dateModified: "2026-04-11"
 ---
 
 # Events (Workqueue)
 
-Workqueue events are fire-and-forget messages where **exactly one** handler instance processes each message. This is the default event delivery model in nestjs-jetstream.
+Workqueue events are fire-and-forget messages where **exactly one** handler instance processes each message. This is the default event delivery model in nestjs-jetstream. Contrast this with [broadcast events](/docs/patterns/broadcast) (every instance receives every message) and [ordered events](/docs/patterns/ordered-events) (strict sequential delivery).
 
 ## When to use
 
@@ -191,7 +191,7 @@ async handlePayment(@Payload() data: PaymentEvent, @Ctx() ctx: RpcContext): Prom
 
 NATS JetStream has built-in **publish-side deduplication**. If two messages with the same `messageId` arrive within the stream's `duplicate_window`, the second publish is silently dropped.
 
-Use `JetstreamRecordBuilder` to set a deterministic message ID:
+Use [`JetstreamRecordBuilder`](/docs/guides/record-builder) to set a deterministic message ID:
 
 ```typescript
 import { JetstreamRecordBuilder } from '@horizon-republic/nestjs-jetstream';
@@ -257,7 +257,7 @@ JetstreamModule.forRoot({
 ```
 
 :::tip When to increase ack_wait
-If your handler calls a slow external API (e.g., sending emails, processing payments), increase `ack_wait` so that NATS doesn't redeliver the message before your handler finishes. The default is 10 seconds — long-running handlers may need 30s or more.
+If your handler calls a slow external API (e.g., sending emails, processing payments), increase `ack_wait` so that NATS doesn't redeliver the message before your handler finishes. The default is 10 seconds — long-running handlers may need 30s or more. For unbounded processing, consider [ack extension](/docs/guides/performance#ack-extension) instead.
 :::
 
 :::tip When to increase max_deliver
@@ -287,6 +287,9 @@ The default of 3 delivery attempts works well for transient errors (network blip
 | `max_deliver` | 3 | Maximum delivery attempts before dead letter |
 | `max_ack_pending` | 100 | Maximum unacknowledged messages in flight |
 | `deliver_policy` | `All` | Deliver all available messages |
+| `replay_policy` | `Instant` | Replay historical messages without delay |
+
+See [Default Configs — Event Consumer](/docs/reference/default-configs#event-consumer) for the canonical reference.
 
 ## Error handling
 

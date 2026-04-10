@@ -6,7 +6,7 @@ schema:
   headline: "Handler Metadata Registry"
   description: "Publish handler metadata to a NATS KV bucket for dynamic service discovery, API gateway routing, and catalog generation."
   datePublished: "2026-04-02"
-  dateModified: "2026-04-03"
+  dateModified: "2026-04-11"
 ---
 
 import Since from '@site/src/components/Since';
@@ -191,3 +191,11 @@ nats kv get handler_registry orders.ev.order.created
 # Watch for real-time updates
 nats kv watch handler_registry
 ```
+
+If entries are missing or the bucket fails to create, see [Troubleshooting — Handler metadata registry](/docs/guides/troubleshooting#handler-metadata-registry).
+
+## See also
+
+- [Naming Conventions — `metadataKey()`](/docs/reference/naming-conventions#metadatakeyservicename-kind-pattern) — programmatic key construction
+- [Module Configuration](/docs/getting-started/module-configuration) — the `metadata` option in the full options reference
+- [Events (Workqueue)](/docs/patterns/events), [RPC](/docs/patterns/rpc), [Broadcast](/docs/patterns/broadcast), [Ordered Events](/docs/patterns/ordered-events) — any handler type can attach `meta`

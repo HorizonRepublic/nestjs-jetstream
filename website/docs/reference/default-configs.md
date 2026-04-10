@@ -6,7 +6,7 @@ schema:
   headline: Default Configs
   description: "Default stream and consumer configurations for every StreamKind."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-02"
+  dateModified: "2026-04-11"
 ---
 
 # Default Configs
@@ -97,7 +97,7 @@ Limits retention — messages persist until the configured limits are reached. S
 | `max_age` | `1 hour` | `toNanos(1, 'hours')` |
 | `duplicate_window` | `2 minutes` | `toNanos(2, 'minutes')` |
 
-:::info Changed in this release
+:::info Changed in v2.9.0
 `max_age` reduced from 1 day to 1 hour. Broadcast messages (config propagation, cache invalidation, feature flags) are relevant for minutes, not days. 1 hour provides sufficient catch-up window for new instances while reducing unnecessary storage. This is a mutable property — existing streams update automatically on next startup.
 :::
 
@@ -195,7 +195,7 @@ The JetStream RPC timeout is intentionally longer because messages are persisted
 |----------|-------|
 | Shutdown timeout | `10 seconds` |
 
-The transport waits up to 10 seconds for in-flight messages to be processed before forcing shutdown via `drain()`.
+On shutdown, the transport calls `drain()` on the NATS connection and waits up to 10 seconds for it to complete before forcing the connection closed. Increase this timeout if your handlers have long-running I/O that must finish cleanly.
 
 ## Replicas in production
 
@@ -286,3 +286,28 @@ JetstreamModule.forRoot({
 ```
 
 See [Module Configuration](/docs/getting-started/module-configuration) for the full options reference.
+
+## Exported constants
+
+Every default above is exposed as a typed constant from the package, so you can import and reuse it when composing overrides programmatically or writing tests:
+
+| Constant | Contents |
+|---|---|
+| `DEFAULT_EVENT_STREAM_CONFIG` | Event (workqueue) stream defaults |
+| `DEFAULT_BROADCAST_STREAM_CONFIG` | Broadcast stream defaults (shared `broadcast-stream`) |
+| `DEFAULT_ORDERED_STREAM_CONFIG` | Ordered stream defaults |
+| `DEFAULT_COMMAND_STREAM_CONFIG` | JetStream RPC command stream defaults |
+| `DEFAULT_DLQ_STREAM_CONFIG` | [Dead Letter Queue](/docs/guides/dead-letter-queue#built-in-dlq-stream) stream defaults |
+| `DEFAULT_EVENT_CONSUMER_CONFIG` | Event consumer defaults |
+| `DEFAULT_BROADCAST_CONSUMER_CONFIG` | Broadcast consumer defaults |
+| `DEFAULT_COMMAND_CONSUMER_CONFIG` | JetStream RPC command consumer defaults |
+| `DEFAULT_RPC_TIMEOUT` | `30_000` (Core mode timeout, ms) |
+| `DEFAULT_JETSTREAM_RPC_TIMEOUT` | `180_000` (JetStream mode timeout, ms) |
+
+```typescript
+import { DEFAULT_EVENT_STREAM_CONFIG } from '@horizon-republic/nestjs-jetstream';
+
+events: {
+  stream: { ...DEFAULT_EVENT_STREAM_CONFIG, max_age: toNanos(14, 'days') },
+}
+```

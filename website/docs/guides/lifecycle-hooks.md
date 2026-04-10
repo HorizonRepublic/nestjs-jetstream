@@ -6,7 +6,7 @@ schema:
   headline: "Lifecycle Hooks"
   description: "Transport lifecycle events for connection changes, errors, message routing, and dead letters."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-02"
+  dateModified: "2026-04-11"
 ---
 
 # Lifecycle Hooks
@@ -189,7 +189,7 @@ The transport has two dead letter mechanisms that serve different purposes:
 
 | | `hooks[TransportEvent.DeadLetter]` | `onDeadLetter` callback |
 |---|---|---|
-| **Type** | Synchronous hook (fire-and-forget) | Async callback (awaited) |
+| **Type** | Sync or async hook (fire-and-forget) | Async callback (awaited) |
 | **Fires** | Always, before the callback | Only if configured |
 | **Affects message fate?** | No | Yes — success = `term()`, failure = `nak()` |
 | **Use case** | Metrics, logging, alerting | Persisting dead letters to a store |

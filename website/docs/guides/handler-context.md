@@ -6,7 +6,7 @@ schema:
   headline: "Handler Context"
   description: "Access message metadata, headers, and control settlement actions via RpcContext."
   datePublished: "2026-03-21"
-  dateModified: "2026-03-30"
+  dateModified: "2026-04-11"
 ---
 
 import Since from '@site/src/components/Since';
@@ -170,7 +170,7 @@ flowchart TD
 :::
 
 :::info Scope
-Settlement actions only affect **JetStream event handlers** (workqueue and broadcast). They have no effect on ordered events (auto-acknowledged) or RPC handlers (separate settlement logic).
+Settlement actions only affect **JetStream event handlers** ([workqueue](/docs/patterns/events) and [broadcast](/docs/patterns/broadcast)). They have no effect on [ordered events](/docs/patterns/ordered-events) (auto-acknowledged) or [RPC handlers](/docs/patterns/rpc) (separate settlement logic).
 :::
 
 ## Extracting custom headers

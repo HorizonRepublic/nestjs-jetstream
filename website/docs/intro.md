@@ -7,7 +7,7 @@ schema:
   headline: "Introduction"
   description: "Production-grade NestJS transport for NATS JetStream with durable delivery, retry, replay, and dead letter handling."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-01"
+  dateModified: "2026-04-11"
 ---
 
 # Introduction
@@ -16,31 +16,9 @@ schema:
 
 ## Why this library?
 
-NestJS ships with a [built-in NATS transport](https://docs.nestjs.com/microservices/nats), but it operates exclusively over NATS Core — a fire-and-forget, in-memory pub/sub layer. That's fine for ephemeral messages, but when you need:
+NestJS ships with a [built-in NATS transport](https://docs.nestjs.com/microservices/nats) that operates over Core NATS — fire-and-forget, no persistence, no replay. The moment you need durable delivery, automatic retry, fan-out broadcast, or dead letter handling, you need JetStream. This library gives you all of it behind the same NestJS decorators you already use.
 
-- **Persistent delivery** — messages survive broker and consumer restarts
-- **At-least-once semantics** — automatic redelivery on failure with configurable retry limits
-- **Stream-based replay** — new consumers can catch up on historical messages
-- **Fan-out broadcast** — every running instance of a service receives every message
-
-...you need JetStream. This library manages streams, consumers, and subjects automatically so you can focus on business logic instead of NATS plumbing.
-
-## Feature overview
-
-| Capability | What it does |
-|---|---|
-| **Workqueue Events** | At-least-once delivery, one handler instance processes each message |
-| **Broadcast Events** | Fan-out to all subscribing services via per-service durable consumers |
-| **Ordered Events** | Strict sequential delivery with automatic failover (Limits retention) |
-| **RPC — Core mode** | NATS native request/reply for lowest latency |
-| **RPC — JetStream mode** | Commands persisted in a stream, responses via Core NATS inbox |
-| **Dead Letter Queue** | Callback when a message exhausts all delivery attempts |
-| **Lifecycle Hooks** | Observable events: connect, disconnect, errors, timeouts, shutdown |
-| **Health Checks** | `JetstreamHealthIndicator` for readiness/liveness probes |
-| **Custom Codec** | Pluggable serialization — JSON (default), MessagePack, Protobuf, etc. |
-| **Graceful Shutdown** | Drain in-flight messages before closing the connection |
-| **Message Scheduling** | One-shot delayed delivery via NATS 2.12 `Nats-Schedule` headers |
-| **Publisher-only mode** | `consumer: false` for API gateways that only emit messages |
+For a full comparison and decision guide, read [**Why JetStream?**](/docs/getting-started/why-jetstream).
 
 ## Architecture at a glance
 
@@ -65,26 +43,20 @@ NestJS ships with a [built-in NATS transport](https://docs.nestjs.com/microservi
  +--------------------------+
 ```
 
-The library sits between your NestJS application code and the NATS server. It:
+The library sits between your NestJS application code and the NATS server. It provisions streams and consumers on startup, routes messages to decorated handlers, manages the connection lifecycle, and drains cleanly on shutdown. You interact with the standard NestJS abstractions (`ClientProxy`, `@Payload()`, `@Ctx()`) and the library translates them into JetStream operations.
 
-1. **Manages infrastructure** — creates and updates JetStream streams and consumers on startup
-2. **Routes messages** — maps NATS subjects to your `@EventPattern` and `@MessagePattern` handlers
-3. **Handles lifecycle** — connection management, graceful shutdown, error propagation
+## Where to start
 
-You interact with standard NestJS abstractions (`ClientProxy`, `@Payload()`, `@Ctx()`) and the library translates them into JetStream operations.
+Pick an entry point based on where you are in your journey:
 
-## What you'll learn
+- **New to the library?** — [Installation](/docs/getting-started/installation) → [Quick Start](/docs/getting-started/quick-start)
+- **Comparing transports?** — [Why JetStream?](/docs/getting-started/why-jetstream) covers when Core NATS is enough and when you outgrow it
+- **Migrating from `@nestjs/microservices` NATS?** — [Migration Guide](/docs/guides/migration)
+- **Planning a production rollout?** — [Module Configuration](/docs/getting-started/module-configuration), [Dead Letter Queue](/docs/guides/dead-letter-queue), [Graceful Shutdown](/docs/guides/graceful-shutdown), [Health Checks](/docs/guides/health-checks), [Performance Tuning](/docs/guides/performance)
+- **Looking for a specific delivery pattern?** — [Workqueue Events](/docs/patterns/events), [RPC (Request/Reply)](/docs/patterns/rpc), [Broadcast](/docs/patterns/broadcast), [Ordered Events](/docs/patterns/ordered-events)
 
-This documentation is organized into sections that progressively build on each other:
+The full feature catalog lives in the sidebar on the left — every page is one click away.
 
-- [**Getting Started**](/docs/getting-started/installation) — install and run your first handler in minutes
-- [**Core Concepts**](/docs/patterns/events) — events, RPC, record builder, and handler context — what you'll use daily
-- [**Advanced Patterns**](/docs/patterns/broadcast) — broadcast, ordered events, and message scheduling
-- [**Going to Production**](/docs/getting-started/module-configuration) — full configuration, DLQ, health checks, lifecycle hooks, graceful shutdown, and performance tuning
-- [**Reference**](/docs/reference/naming-conventions) — naming conventions, default configs, edge cases, custom codec, migration, and troubleshooting
-
-:::tip Ready to start?
-Head to [Installation](/docs/getting-started/installation) to add the library to your project, or jump straight to the [Quick Start](/docs/getting-started/quick-start) if you already have NATS running.
-
-Looking for copy-paste examples? Check out the [runnable examples](https://github.com/HorizonRepublic/nestjs-jetstream/tree/main/examples) — 7 self-contained demos covering events, RPC, scheduling, DLQ, health checks, and more.
+:::tip Runnable examples
+The GitHub repository ships [7 self-contained demos](https://github.com/HorizonRepublic/nestjs-jetstream/tree/main/examples) covering events, RPC, scheduling, DLQ, health checks, and more. Clone and run.
 :::

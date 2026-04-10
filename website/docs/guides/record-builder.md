@@ -6,7 +6,7 @@ schema:
   headline: "Record Builder & Deduplication"
   description: "Build messages with custom headers, message IDs, and deduplication via JetstreamRecordBuilder."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-02"
+  dateModified: "2026-04-11"
 ---
 
 import Since from '@site/src/components/Since';
@@ -178,10 +178,22 @@ These headers are read-only from the handler's perspective — you can access th
 | `.setMessageId(id)` | Set a deterministic message ID for deduplication |
 | `.setTimeout(ms)` | Override the global RPC timeout for this request |
 | `.scheduleAt(date)` | Schedule one-shot delayed delivery (NATS >= 2.12). <Since version="2.8.0" /> |
+| `.ttl(ns)` | Set per-message TTL via the `Nats-TTL` header (NATS >= 2.11, requires `allow_msg_ttl: true`). See [Per-Message TTL](./per-message-ttl.md). <Since version="2.9.0" /> |
 | `.build()` | Return an immutable `JetstreamRecord` |
+
+The `RESERVED_HEADERS` set is also exported from the package — use it in custom tooling (e.g., a header-sanitization helper) to check whether a key is blocked before calling `.setHeader()`:
+
+```typescript
+import { RESERVED_HEADERS } from '@horizon-republic/nestjs-jetstream';
+
+if (RESERVED_HEADERS.has(key)) {
+  throw new Error(`${key} is reserved by the transport`);
+}
+```
 
 ## Next steps
 
+- [Per-Message TTL](./per-message-ttl.md) — set individual message lifetimes via `.ttl()`
 - [Scheduling (Delayed Jobs)](./scheduling.md) — delay message delivery to a future time
 - [Handler Context](./handler-context.md) — access headers and message metadata in your handlers
 - [Custom Codec](./custom-codec.md) — control how payloads are serialized

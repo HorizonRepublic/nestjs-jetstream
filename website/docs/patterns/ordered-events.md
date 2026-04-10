@@ -6,7 +6,7 @@ schema:
   headline: "Ordered Events"
   description: "Strict sequential event delivery with ephemeral consumers and replay policies."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-02"
+  dateModified: "2026-04-11"
 ---
 
 import Since from '@site/src/components/Since';
@@ -21,7 +21,7 @@ Imagine you're building an e-commerce platform. Every time an order changes stat
 
 Here's the catch: **order matters**. If the projections service processes "delivered" before "shipped", your read model is wrong. If it processes "paid" before "created", you get a foreign key violation. And if a message is lost, your projection diverges silently from reality.
 
-Standard workqueue events don't help here — they're designed for parallel processing and load balancing, not for sequential replay. You need a messaging primitive that guarantees:
+Standard [workqueue events](/docs/patterns/events) don't help here — they're designed for parallel processing and load balancing, not for sequential replay. You need a messaging primitive that guarantees:
 
 1. **Strict ordering** — messages arrive in exactly the sequence they were published
 2. **Full replay** — new instances can catch up from the beginning of the stream
@@ -61,7 +61,7 @@ The `@nats-io/jetstream` client automatically acknowledges messages from ordered
 
 ### Self-healing
 
-The transport wraps the ordered consumer in a `defer()` + `repeat()` loop with exponential backoff. If the consumer disconnects (NATS restart, network partition, etc.), it automatically re-establishes after a short delay. The backoff starts at 100ms and caps at 30 seconds.
+The transport wraps the ordered consumer in a `defer()` + `repeat()` loop with exponential backoff. If the consumer disconnects (NATS restart, network partition, etc.), it automatically re-establishes after a short delay. The backoff starts at 100ms and caps at 30 seconds. See [Self-healing consumers](/docs/reference/edge-cases#consumer-self-healing) for the full recovery flow that applies to all consumer types.
 
 ## At-most-once delivery semantics
 

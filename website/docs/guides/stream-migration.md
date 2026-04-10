@@ -6,7 +6,7 @@ schema:
   headline: "Stream Migration"
   description: "Safe stream recreation for immutable property changes with automatic message preservation via blue-green sourcing."
   datePublished: "2026-04-02"
-  dateModified: "2026-04-02"
+  dateModified: "2026-04-11"
 ---
 
 import Since from '@site/src/components/Since';
@@ -159,3 +159,10 @@ JetstreamModule.forRoot({
   ordered: { stream: { storage: StorageType.Memory } },
 });
 ```
+
+## See also
+
+- [Default Configs — Immutable vs mutable stream properties](/docs/reference/default-configs#immutable-vs-mutable-stream-properties) — which properties require migration
+- [Self-healing consumers](/docs/reference/edge-cases#consumer-self-healing) — how consumers on other pods wait out a migration
+- [Troubleshooting — Stream migration](/docs/guides/troubleshooting#stream-migration) — recovery from interrupted migrations
+- [Module Configuration](/docs/getting-started/module-configuration) — `allowDestructiveMigration` in the options reference

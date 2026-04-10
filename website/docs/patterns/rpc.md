@@ -6,7 +6,7 @@ schema:
   headline: "RPC (Request/Reply)"
   description: "Synchronous request-reply via Core NATS or JetStream with timeout and error handling."
   datePublished: "2026-03-21"
-  dateModified: "2026-03-26"
+  dateModified: "2026-04-11"
 ---
 
 # RPC (Request/Reply)
@@ -299,7 +299,7 @@ This fail-fast behavior prevents the client from hanging indefinitely when the n
 In Core mode, NATS handles disconnect behavior natively. Pending `nc.request()` calls are rejected by the NATS client library when the connection is lost.
 :::
 
-## See also
+## See Also
 
 - [Record Builder](/docs/guides/record-builder) — custom headers, message IDs, per-request timeouts
 - [Module Configuration](/docs/getting-started/module-configuration) — RPC mode selection and timeout config

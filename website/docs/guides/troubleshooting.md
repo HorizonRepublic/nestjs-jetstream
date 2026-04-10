@@ -6,7 +6,7 @@ schema:
   headline: "Troubleshooting"
   description: "Common issues and how to resolve them."
   datePublished: "2026-03-26"
-  dateModified: "2026-03-26"
+  dateModified: "2026-04-11"
 ---
 
 # Troubleshooting
@@ -155,6 +155,68 @@ The callback only fires when **all** of these conditions are met:
 ### DLQ callback throws
 
 If your `onDeadLetter` callback throws, the message is nak'd for another retry instead of being terminated. This is intentional — it allows transient failures (e.g., DLQ database is down) to recover.
+
+### DLQ stream publish fails
+
+When `dlq: { stream }` is configured, the transport republishes exhausted messages to a dedicated DLQ stream. If that publish fails, the transport falls back to the `onDeadLetter` callback and then to `nak()` as a last resort — the full sequence is documented in the [Fallback chain](/docs/guides/dead-letter-queue#fallback-chain).
+
+**Causes:**
+- DLQ stream was deleted manually (`nats stream rm orders__microservice_dlq-stream`)
+- NATS server is out of disk space or has hit `max_bytes`
+- NATS connection dropped between the original publish and the DLQ republish
+
+**Fix:**
+1. Check that the DLQ stream exists: `nats stream ls | grep dlq-stream`
+2. If it was deleted, restart the pod — the transport's `ensureDlqStream()` recreates it on startup when `dlq` is configured
+3. Check NATS server disk usage: `nats server report accounts`
+4. Ensure the `dlq.stream` config (if overridden) is compatible with the server's resource limits
+
+## Handler metadata registry
+
+### Entries missing from the KV bucket
+
+The transport only publishes handler metadata when the handler has a `meta` field in its decorator extras. Handlers without `meta` are intentionally skipped — see [Handler Metadata](/docs/patterns/handler-metadata) for the quick-start example.
+
+**Checklist:**
+1. Does the handler have `meta: { ... }` in `@EventPattern` / `@MessagePattern`?
+2. Is the NATS server version >= 2.10 (KV support)?
+3. Did startup succeed? Check logs for `MetadataRegistry` errors.
+4. Inspect the bucket: `nats kv ls handler_registry`
+
+### Bucket config mismatch error on startup
+
+NATS KV buckets have immutable config for some fields (`replicas`, `ttl`). If you change these in `forRoot()` after the bucket already exists, startup fails.
+
+**Fix:**
+```bash
+# Delete the bucket (safe — entries are re-published on restart)
+nats kv rm handler_registry
+
+# Restart the service → fresh bucket with new config
+```
+
+## Stream migration
+
+### Startup blocks on "migration in progress"
+
+If a previous migration was interrupted (process killed mid-phase, NATS crash), an orphaned `{stream}__migration_backup` stream exists. The transport detects it on startup and retries migration from scratch. This can take a few seconds for large streams.
+
+**Diagnosis:**
+```bash
+nats stream ls | grep migration_backup
+```
+
+**Fix:** None needed in most cases — the transport handles recovery automatically. If recovery fails repeatedly, manually inspect the backup stream and either retain it (if it contains messages you need) or delete it (`nats stream rm <stream>__migration_backup`) and retry startup.
+
+See [Stream Migration — Error handling](/docs/guides/stream-migration#error-handling) for the full recovery flow.
+
+### Publisher errors during rolling update
+
+During the brief window between Phase 2 (delete) and Phase 3 (create) of a stream migration, publishers may see "stream not found" errors. This window is typically milliseconds but can be longer for large streams. Mitigations:
+
+- For `client.emit()` (fire-and-forget), accept the loss or implement caller-side retry.
+- For `client.send()` (RPC), the caller receives an error and can retry.
+- For zero-loss migrations, schedule migration during a maintenance window with publishers paused.
 
 ## Startup issues
 

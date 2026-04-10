@@ -6,7 +6,7 @@ schema:
   headline: "Migration Guide"
   description: "Migrate from the built-in NestJS NATS transport to JetStream with durable delivery."
   datePublished: "2026-03-26"
-  dateModified: "2026-04-02"
+  dateModified: "2026-04-11"
 ---
 
 # Migration Guide
@@ -24,7 +24,7 @@ The built-in NestJS NATS transport uses Core NATS — fire-and-forget pub/sub wi
 | **Replay** | Not supported | New consumers catch up on history |
 | **Fan-out** | All subscribers get every message | Workqueue (one handler) or Broadcast (all) |
 | **RPC** | Core request/reply | Core (default) or JetStream-backed |
-| **DLQ** | Not supported | `onDeadLetter` callback after N failures |
+| **DLQ** | Not supported | Dedicated DLQ stream with tracking headers, or `onDeadLetter` callback |
 | **Ack/Nak** | Not applicable | Explicit acknowledgment per message |
 
 ### Step 1 — Install the library
@@ -130,10 +130,13 @@ broadcast: { stream: { max_age: toNanos(1, 'days') } }
 :::
 
 **New features:**
-- [Stream migration](/docs/guides/stream-migration) — automatic blue-green stream recreation for immutable property changes (`storage`). Enable with `allowDestructiveMigration: true`.
-- Consumer self-healing auto-recreation — consumers deleted externally are automatically recreated. Migration-aware: waits during active stream migrations.
-- `StreamConfigOverrides` type — prevents users from overriding `retention` (transport-controlled).
-- `NatsErrorCode` enum for NATS JetStream API error codes.
+- [**First-class Dead Letter Queue stream**](/docs/guides/dead-letter-queue#built-in-dlq-stream) — add the `dlq: { stream }` option to `forRoot()` and the library provisions a dedicated DLQ stream on startup. Exhausted messages are automatically republished with tracking headers (`x-dead-letter-reason`, `x-original-subject`, `x-original-stream`, `x-failed-at`, `x-delivery-count`). The `onDeadLetter` callback remains available as a standalone option or as a notification/safety-net hook when combined with the DLQ stream.
+- [**Per-message TTL**](/docs/guides/per-message-ttl) — `JetstreamRecordBuilder.ttl(duration)` sets the `Nats-TTL` header (NATS 2.11+), allowing individual messages to expire independently of the stream's `max_age`. Requires `allow_msg_ttl: true` on the target stream.
+- [**Handler metadata registry (NATS KV)**](/docs/patterns/handler-metadata) — when enabled via the `metadata` option, the library publishes all registered `@EventPattern` / `@MessagePattern` handlers to a NATS KV bucket at startup, enabling cross-service discovery without a separate service registry.
+- [**Stream migration**](/docs/guides/stream-migration) — automatic blue-green stream recreation for immutable property changes (`storage`, `retention`, etc.). Enable with `allowDestructiveMigration: true` on a per-stream basis.
+- **Consumer self-healing auto-recreation** — consumers deleted externally (via NATS CLI, cluster issues) are automatically recreated on the next poll. Migration-aware: waits during active stream migrations.
+- **`StreamConfigOverrides` type** — prevents users from overriding `retention` (transport-controlled).
+- **`NatsErrorCode` enum** for NATS JetStream API error codes, so error handling code can switch on typed constants instead of magic strings.
 
 No breaking changes.
 

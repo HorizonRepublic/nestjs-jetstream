@@ -6,7 +6,7 @@ schema:
   headline: "Performance Tuning"
   description: "Tune ackWait, maxAckPending, batch sizes, and ack extension for high-throughput workloads."
   datePublished: "2026-03-26"
-  dateModified: "2026-04-02"
+  dateModified: "2026-04-11"
 ---
 
 # Performance Tuning
@@ -75,7 +75,7 @@ When `concurrency` is set, messages that exceed the limit are buffered in the Rx
 
 ## Ack extension
 
-Long-running handlers risk exceeding the `ack_wait` deadline, causing redelivery of messages that are still being processed. The `ackExtension` option prevents this by periodically extending the ack deadline while the handler is running.
+Long-running handlers risk exceeding the `ack_wait` deadline, causing redelivery of messages that are still being processed. The `ackExtension` option prevents this by periodically extending the ack deadline while the handler is running. This is the right knob when you can't predict handler duration upfront (e.g., slow external APIs, long-running [RPC JetStream mode](/docs/patterns/rpc) calls).
 
 ```typescript
 events: {

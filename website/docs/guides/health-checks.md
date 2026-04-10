@@ -6,7 +6,7 @@ schema:
   headline: "Health Checks"
   description: "JetstreamHealthIndicator for NestJS Terminus integration with connection status and latency."
   datePublished: "2026-03-21"
-  dateModified: "2026-03-26"
+  dateModified: "2026-04-11"
 ---
 
 import Since from '@site/src/components/Since';
@@ -15,7 +15,7 @@ import Since from '@site/src/components/Since';
 
 <Since version="2.1.0" />
 
-The library provides a `JetstreamHealthIndicator` that reports the NATS connection status and round-trip latency. It is auto-registered by `forRoot()` and exported from the module — no additional setup required.
+The library provides a `JetstreamHealthIndicator` that reports the NATS connection status and round-trip latency. It is auto-registered by [`forRoot()`](/docs/getting-started/module-configuration#forroot) and exported from the module — no additional setup required.
 
 ## What it checks
 
