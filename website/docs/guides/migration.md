@@ -33,7 +33,7 @@ If your `ClientProxy` already talks to NATS, switching to JetStream is mostly co
 pnpm add @horizon-republic/nestjs-jetstream
 ```
 
-Verify your environment meets the [runtime requirements](/docs/getting-started/installation#runtime-requirements) — the library pulls in `@nats-io/*` packages as peer dependencies, so your NestJS version and TypeScript version need to match.
+The `@nats-io/*` client packages come in as direct dependencies — you don't have to install them yourself. Only your NestJS peer dependencies matter: make sure your project meets the [runtime requirements](/docs/getting-started/installation#runtime-requirements) (Node.js, NestJS, TypeScript versions).
 
 ### Step 2 — Replace module registration
 
