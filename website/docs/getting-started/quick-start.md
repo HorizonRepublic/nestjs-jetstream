@@ -107,7 +107,7 @@ export class OrdersController {
   @EventPattern('order.created')
   handleOrderCreated(@Payload() data: { orderId: number; total: number }): void {
     this.logger.log(`Processing order ${data.orderId}, total: $${data.total}`);
-    // If this throws, the message is nak'd and redelivered (up to max_deliver times)
+    // If this throws, the message is nak'd and redelivered (up to max_deliver — default 3)
   }
 
   /**

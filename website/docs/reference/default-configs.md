@@ -291,7 +291,9 @@ See [Module Configuration](/docs/getting-started/module-configuration) for the f
 
 ## Exported constants
 
-Every default above is exposed as a typed constant from the package, so you can import and reuse it when composing overrides programmatically or writing tests:
+Every default above is exposed as a typed constant from the package, so you can import and reuse it when composing overrides programmatically or writing tests.
+
+**Stream and consumer defaults:**
 
 | Constant | Contents |
 |---|---|
@@ -303,11 +305,31 @@ Every default above is exposed as a typed constant from the package, so you can 
 | `DEFAULT_EVENT_CONSUMER_CONFIG` | Event consumer defaults |
 | `DEFAULT_BROADCAST_CONSUMER_CONFIG` | Broadcast consumer defaults |
 | `DEFAULT_COMMAND_CONSUMER_CONFIG` | JetStream RPC command consumer defaults |
+
+**Timeouts:**
+
+| Constant | Value |
+|---|---|
 | `DEFAULT_RPC_TIMEOUT` | `30_000` (Core mode timeout, ms) |
 | `DEFAULT_JETSTREAM_RPC_TIMEOUT` | `180_000` (JetStream mode timeout, ms) |
+| `DEFAULT_SHUTDOWN_TIMEOUT` | `10_000` (graceful shutdown drain timeout, ms) |
+
+**Handler metadata registry:**
+
+| Constant | Value |
+|---|---|
+| `DEFAULT_METADATA_BUCKET` | `'handler_registry'` |
+| `DEFAULT_METADATA_REPLICAS` | `1` |
+| `DEFAULT_METADATA_HISTORY` | `1` |
+| `DEFAULT_METADATA_TTL` | `30_000` (heartbeat-refreshed entry TTL, ms) |
+| `MIN_METADATA_TTL` | `5_000` (minimum configurable TTL, ms) |
+
+**Other:**
+
+- `RESERVED_HEADERS` — the `Set<string>` of header names blocked by `JetstreamRecordBuilder.setHeader()`. See [Record Builder](/docs/guides/record-builder#reserved-headers).
 
 ```typescript
-import { DEFAULT_EVENT_STREAM_CONFIG } from '@horizon-republic/nestjs-jetstream';
+import { DEFAULT_EVENT_STREAM_CONFIG, toNanos } from '@horizon-republic/nestjs-jetstream';
 
 events: {
   stream: { ...DEFAULT_EVENT_STREAM_CONFIG, max_age: toNanos(14, 'days') },

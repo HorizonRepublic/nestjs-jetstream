@@ -78,9 +78,9 @@ The consumer handles it like any normal event — no changes needed on the recei
 
 Per-message TTL works **independently** from stream `max_age`:
 
-- A message with `ttl: "5m"` in a stream with `max_age: 7d` expires after 5 minutes
+- A message built with `.ttl(toNanos(5, 'minutes'))` in a stream with `max_age: 7 days` expires after 5 minutes
 - A message without TTL in the same stream expires after 7 days (stream default)
-- If `ttl` exceeds `max_age`, the message still expires at `max_age` (stream wins)
+- If the per-message TTL exceeds `max_age`, the message still expires at `max_age` (stream wins)
 
 ## Limitations
 

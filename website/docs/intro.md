@@ -58,5 +58,5 @@ Pick an entry point based on where you are in your journey:
 The full feature catalog lives in the sidebar on the left — every page is one click away.
 
 :::tip Runnable examples
-The GitHub repository ships [7 self-contained demos](https://github.com/HorizonRepublic/nestjs-jetstream/tree/main/examples) covering events, RPC, scheduling, DLQ, health checks, and more. Clone and run.
+The GitHub repository ships [9 self-contained demos](https://github.com/HorizonRepublic/nestjs-jetstream/tree/main/examples) covering events, RPC, ordered delivery, DLQ, health checks, scheduling, publisher-only mode, per-message TTL, and the handler metadata registry. Clone and run.
 :::

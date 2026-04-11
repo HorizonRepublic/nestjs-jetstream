@@ -111,7 +111,7 @@ JetstreamModule.forRoot({
 |---|---|---|
 | `bucket` | `'handler_registry'` | KV bucket name |
 | `replicas` | `1` | Bucket replicas (1, 3, or 5) |
-| `ttl` | `30_000` | Entry TTL in ms — entries expire unless refreshed by heartbeat (min: 5000) |
+| `ttl` | `30_000` | Entry TTL in milliseconds — entries expire unless refreshed by heartbeat (minimum: `5_000` ms). Note: this field is in ms, not nanoseconds. |
 
 :::note Bucket configuration
 The KV bucket is created on first startup. Changing `ttl` or `replicas` after creation requires deleting the existing bucket — NATS KV does not update bucket config in place. Use the NATS CLI: `nats kv rm handler_registry`.
