@@ -106,7 +106,7 @@ Every message republished to the DLQ stream carries metadata headers so you can 
 
 | Header | Description |
 |---|---|
-| `x-dead-letter-reason` | The error message from the last handler failure, or `max_deliver_exceeded` |
+| `x-dead-letter-reason` | The error message from the last handler failure (extracted from `Error.message` or coerced via `String(error)`) |
 | `x-original-subject` | The subject the message was originally published to |
 | `x-original-stream` | The source stream the message came from |
 | `x-failed-at` | ISO 8601 timestamp of the moment the message entered the DLQ |

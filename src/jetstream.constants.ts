@@ -267,7 +267,7 @@ export enum JetstreamHeader {
 }
 
 export enum JetstreamDlqHeader {
-  /** Reason for the message being sent to the DLQ (error message or 'max_deliver_exceeded') */
+  /** Reason for the message being sent to the DLQ — the last handler error message. */
   DeadLetterReason = 'x-dead-letter-reason',
   /** Original NATS subject the message was originally published to */
   OriginalSubject = 'x-original-subject',

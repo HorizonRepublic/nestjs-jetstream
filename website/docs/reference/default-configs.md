@@ -121,6 +121,24 @@ Limits retention for strict sequential delivery. Ordered consumers are ephemeral
 | `max_age` | `1 day` | `toNanos(1, 'days')` |
 | `duplicate_window` | `2 minutes` | `toNanos(2, 'minutes')` |
 
+### DLQ Stream
+
+Workqueue retention — dead letters are removed when a DLQ consumer acks them. Created on demand when `dlq: { stream }` is set in `forRoot()`. See [Dead Letter Queue — Built-in DLQ stream](/docs/guides/dead-letter-queue#built-in-dlq-stream).
+
+| Property | Value | Notes |
+|----------|-------|-------|
+| `retention` | `Workqueue` | |
+| `storage` | `File` | |
+| `num_replicas` | `1` | |
+| `allow_rollup_hdrs` | `false` | |
+| `max_consumers` | `100` | |
+| `max_msg_size` | `10 MB` | 10,485,760 bytes |
+| `max_msgs_per_subject` | `5,000,000` | |
+| `max_msgs` | `50,000,000` | |
+| `max_bytes` | `5 GB` | 5,368,709,120 bytes |
+| `max_age` | `30 days` | `toNanos(30, 'days')` |
+| `duplicate_window` | `2 minutes` | `toNanos(2, 'minutes')` |
+
 ## Consumer Defaults
 
 ### Event Consumer

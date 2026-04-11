@@ -43,7 +43,7 @@ This library handles real-time message delivery, consumer lifecycle, and self-he
 
 ### Unit Tests
 
-- **Location:** `src/**/*.spec.ts`
+- **Location:** `src/**/__tests__/*.spec.ts` (and `*.test.ts`) — tests live beside the code they cover in a dedicated `__tests__` folder
 - **Setup file:** `test/setup-unit.ts`
 - **Timeout:** 10 seconds per test
 - **Environment:** Node.js

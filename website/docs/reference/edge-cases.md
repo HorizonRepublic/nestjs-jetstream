@@ -94,12 +94,12 @@ Specifically:
 
 Each consumer runs a self-healing loop with **exponential backoff**. When the pull-based message iterator ends unexpectedly (stream deletion, NATS restart, network partition), the consumer automatically re-establishes:
 
-1. First retry: **100ms** delay
-2. Each subsequent failure doubles the delay: 200ms, 400ms, 800ms, ...
+1. First retry: **200ms** delay (counter increments to 1 before the delay is computed)
+2. Each subsequent failure doubles the delay: 400ms, 800ms, 1.6s, 3.2s, ...
 3. Maximum delay is capped at **30 seconds**
 4. After a successful consumption cycle, the failure counter resets to zero
 
-The backoff formula is: `min(100ms * 2^failures, 30,000ms)`
+The backoff formula is: `min(100ms * 2^failures, 30_000ms)` — so with 1 failure the delay is 200ms, with 2 failures it is 400ms, and so on.
 
 This applies to all consumer types: event, command, broadcast, and ordered. The transport emits a `TransportEvent.Error` hook on each failure so you can monitor consumer health. See [Lifecycle Hooks](/docs/guides/lifecycle-hooks).
 

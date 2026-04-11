@@ -199,16 +199,16 @@ nats kv rm handler_registry
 
 ## Stream migration
 
-### Startup blocks on "migration in progress"
+### Consumer self-healing waits on "migration in progress"
 
-If a previous migration was interrupted (process killed mid-phase, NATS crash), an orphaned `{stream}__migration_backup` stream exists. The transport detects it on startup and retries migration from scratch. This can take a few seconds for large streams.
+If a previous migration was interrupted (process killed mid-phase, NATS crash), an orphaned `{stream}__migration_backup` stream exists. During **consumer self-healing** (after a live consumer's iterator breaks), the transport detects the backup stream and refuses to recreate the consumer until the backup is gone — the self-healing loop waits with exponential backoff. This check runs only in the recovery path, not during initial application startup.
 
 **Diagnosis:**
 ```bash
 nats stream ls | grep migration_backup
 ```
 
-**Fix:** None needed in most cases — the transport handles recovery automatically. If recovery fails repeatedly, manually inspect the backup stream and either retain it (if it contains messages you need) or delete it (`nats stream rm <stream>__migration_backup`) and retry startup.
+**Fix:** None needed in most cases — self-healing will recover automatically once the migrating pod finishes and cleans up the backup. If the backup is orphaned permanently (the migrating pod died and nobody retried), manually inspect it and either retain it (if it contains messages you need) or delete it with `nats stream rm <stream>__migration_backup` so self-healing can resume.
 
 See [Stream Migration — Error handling](/docs/guides/stream-migration#error-handling) for the full recovery flow.
 
