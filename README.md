@@ -11,7 +11,7 @@ Events, broadcast, ordered delivery, and RPC — with two lines of config.
 [![Documentation](https://img.shields.io/badge/docs-online-brightgreen.svg)](https://horizonrepublic.github.io/nestjs-jetstream/)
 
 [![Node.js](https://img.shields.io/node/v/@horizon-republic/nestjs-jetstream.svg)](https://nodejs.org)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)](https://www.typescriptlang.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7%2B-blue.svg)](https://www.typescriptlang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 </div>

@@ -6,7 +6,7 @@ schema:
   headline: "Contributing"
   description: "How to contribute to the project."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-02"
+  dateModified: "2026-04-11"
 ---
 
 # Contributing
@@ -61,6 +61,10 @@ We welcome contributions from the community. The full contribution guidelines li
 | `pnpm docs:serve` | Serve the built documentation locally |
 
 See [Testing](/docs/development/testing) for detailed test conventions and setup.
+
+:::note Port collision between `docs:dev` and `dev:example`
+Docusaurus' dev server and the example apps both default to port 3000. If you run `pnpm docs:dev` and `pnpm dev:example` at the same time, the second one fails with `EADDRINUSE`. Launch Docusaurus with `PORT=3100 pnpm docs:dev` (or edit the example's bootstrap port) when you need both running side-by-side.
+:::
 
 ## Commit Message Format
 

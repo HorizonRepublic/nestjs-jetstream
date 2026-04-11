@@ -241,6 +241,32 @@ nats stream rm <stream-name>
 Deleting a stream destroys all messages in it. Only do this in development or when data loss is acceptable.
 :::
 
+## Typed error handling with `NatsErrorCode`
+
+When your own code needs to react to a NATS JetStream API error, use the `NatsErrorCode` enum instead of matching on error messages. It covers the three error conditions the transport itself observes most often:
+
+```typescript
+import { NatsErrorCode } from '@horizon-republic/nestjs-jetstream';
+
+try {
+  await jsm.streams.info('orders__microservice_ev-stream');
+} catch (err) {
+  const code = (err as { code?: number }).code;
+
+  if (code === NatsErrorCode.StreamNotFound) {
+    // 10059 — stream does not exist yet, safe to create
+  } else if (code === NatsErrorCode.ConsumerNotFound) {
+    // 10014 — consumer was deleted externally
+  } else if (code === NatsErrorCode.ConsumerAlreadyExists) {
+    // 10148 — race on consumer create, fetch the existing one instead
+  } else {
+    throw err;
+  }
+}
+```
+
+The library itself uses these constants in its self-healing flows (`src/server/infrastructure/consumer.provider.ts`), so consumer code that wraps library calls can reuse the same vocabulary.
+
 ## See also
 
 - [Lifecycle Hooks](/docs/guides/lifecycle-hooks) — register hooks for observability
