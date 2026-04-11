@@ -18,6 +18,9 @@ export const bootstrap = async (moduleClass: Type, port = 3000): Promise<void> =
     await app.startAllMicroservices();
   }
 
+  // Required so the JetStream transport drains in-flight handlers on SIGTERM.
+  app.enableShutdownHooks();
+
   await app.listen(port);
   logger.log(`http://localhost:${port}`);
 };
