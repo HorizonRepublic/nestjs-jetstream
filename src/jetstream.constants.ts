@@ -25,7 +25,13 @@ export const JETSTREAM_CONNECTION = Symbol('JETSTREAM_CONNECTION');
 /** Token for the global Codec instance. */
 export const JETSTREAM_CODEC = Symbol('JETSTREAM_CODEC');
 
-/** Token for the EventBus instance. */
+/**
+ * Token for the EventBus instance.
+ *
+ * @internal Reserved for the library's own DI wiring. Not part of the
+ * public API — user code should register hooks via `forRoot({ hooks })`
+ * instead of injecting the bus directly.
+ */
 export const JETSTREAM_EVENT_BUS = Symbol('JETSTREAM_EVENT_BUS');
 
 /**
