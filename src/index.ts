@@ -49,7 +49,6 @@ export {
   dlqStreamName,
   JETSTREAM_CODEC,
   JETSTREAM_CONNECTION,
-  JETSTREAM_EVENT_BUS,
   JETSTREAM_OPTIONS,
   PatternPrefix,
   toNanos,
@@ -77,9 +76,6 @@ export {
 
 // Error codes
 export { NatsErrorCode } from './server/infrastructure/nats-error-codes';
-
-// Hooks
-export { EventBus } from './hooks';
 
 // Server (for advanced use cases)
 export { JetstreamStrategy } from './server';
