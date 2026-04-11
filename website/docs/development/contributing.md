@@ -53,11 +53,12 @@ We welcome contributions from the community. The full contribution guidelines li
 | `pnpm build:watch` | Build in watch mode |
 | `pnpm lint` | Check for linting issues |
 | `pnpm lint:fix` | Auto-fix linting issues |
-| `pnpm test` | Run all tests |
+| `pnpm test` | Run all tests (unit + integration, parallel) |
+| `pnpm test:watch` | Run tests in watch mode |
 | `pnpm test:cov` | Run tests with coverage |
-| `pnpm docs:dev` | Start Docusaurus dev server |
-| `pnpm docs:build` | Build the documentation site |
-| `pnpm docs:generate` | Regenerate TypeDoc API reference (not `pnpm docs` — conflicts with npm built-in) |
+| `pnpm docs:dev` | Start the Docusaurus dev server |
+| `pnpm docs:build` | Build the documentation site (includes TypeDoc regeneration via `docusaurus-plugin-typedoc`) |
+| `pnpm docs:serve` | Serve the built documentation locally |
 
 See [Testing](/docs/development/testing) for detailed test conventions and setup.
 

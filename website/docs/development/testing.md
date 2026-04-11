@@ -99,7 +99,7 @@ Key helpers in `test/integration/`:
 |--------|---------|
 | `startNatsContainer()` | Start a NATS container with JetStream, return container + random port |
 | `createNatsConnection(port)` | Create a standalone NATS connection for assertions |
-| `createTestApp({ name, port }, controllers)` | Bootstrap a full NestJS app with the transport |
+| `createTestApp({ name, port }, controllers, clientTargets?)` | Bootstrap a full NestJS app with the transport. `clientTargets` is an array of service names that will be registered as `forFeature` clients — pass the names you need to `@Inject` in your test. |
 | `cleanupStreams(nc, serviceName)` | Delete streams/consumers created during a test |
 | `waitForCondition(fn, timeoutMs)` | Poll until an async condition is met |
 | `uniqueServiceName()` | Generate a unique service name per test |

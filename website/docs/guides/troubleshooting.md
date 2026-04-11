@@ -70,7 +70,7 @@ The transport defaults to unlimited reconnection (`maxReconnectAttempts: -1`). I
 ### Messages not being delivered
 
 **Checklist:**
-1. **Handler registered?** — Check startup logs for `Registered handlers: X RPC, Y events, Z broadcasts`.
+1. **Handler registered?** — Check startup logs for `Registered handlers: X RPC, Y events, Z broadcasts` (plus `N ordered` when ordered handlers are present). A zero count means the decorator didn't hit the registry — usually an import-order or module-wiring problem.
 2. **Stream exists?** — The transport creates streams on startup. Check with `nats stream ls`.
 3. **Consumer exists?** — Check with `nats consumer ls <stream-name>`.
 4. **Subject matches?** — Use `nats sub "servicename__microservice.ev.>"` to see if messages arrive on the expected subject.

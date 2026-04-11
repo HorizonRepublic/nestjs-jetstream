@@ -84,11 +84,15 @@ import { JetstreamModule } from '@horizon-republic/nestjs-jetstream';
       name: 'orders',
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        servers: [config.getOrThrow('NATS_URL')],
-        rpc: { mode: config.get('RPC_MODE', 'core') as 'core' | 'jetstream' },
-        shutdownTimeout: config.get('SHUTDOWN_TIMEOUT', 10_000),
-      }),
+      useFactory: (config: ConfigService) => {
+        const mode = config.get<'core' | 'jetstream'>('RPC_MODE', 'core');
+
+        return {
+          servers: [config.getOrThrow('NATS_URL')],
+          rpc: mode === 'jetstream' ? { mode, timeout: 60_000 } : { mode },
+          shutdownTimeout: config.get('SHUTDOWN_TIMEOUT', 10_000),
+        };
+      },
     }),
   ],
 })

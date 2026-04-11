@@ -111,7 +111,7 @@ This applies to all consumer types: event, command, broadcast, and ordered. The 
 
 The recovery is **migration-aware**: if a migration backup stream exists (another pod is mid-migration), the consumer is NOT recreated. Instead, self-healing waits with exponential backoff until migration completes and the backup is cleaned up. This prevents consumers from interfering with message restoration on workqueue streams.
 
-During rolling updates, recovery never overwrites a newer pod's consumer configuration — if the consumer already exists (another pod recreated it), it is used as-is without config changes.
+During rolling updates, recovery never recreates a consumer that already exists — if another pod has recreated it, self-healing uses the existing consumer as-is rather than issuing its own create/update call.
 
 Ordered consumers are excluded from auto-recreation — they are ephemeral and managed internally by the nats.js client.
 
