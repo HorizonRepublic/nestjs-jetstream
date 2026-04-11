@@ -336,12 +336,15 @@ The `name` and `servers` fields from the top-level options take precedence over 
 
 ### TLS
 
+The `tls` block is passed straight through to `@nats-io/transport-node`, so any field supported by its [`TlsOptions`](https://github.com/nats-io/nats.js/tree/main/transport-node) works here — paths (`certFile`, `keyFile`, `caFile`), inline PEM (`cert`, `key`, `ca`), or an empty `tls: {}` for server-only TLS against a broker whose CA your system already trusts.
+
 ```typescript
 JetstreamModule.forRoot({
   name: 'orders',
   servers: ['nats://nats.prod.internal:4222'],
   connectionOptions: {
     tls: {
+      // mTLS with client cert + private key, plus a self-signed CA
       certFile: '/certs/client.crt',
       keyFile: '/certs/client.key',
       caFile: '/certs/ca.crt',
@@ -349,6 +352,8 @@ JetstreamModule.forRoot({
   },
 })
 ```
+
+For server-only TLS (no client certificate) against a publicly-trusted broker, `tls: {}` is enough — it tells the client to upgrade the connection without sending a client identity.
 
 ### Authentication
 
