@@ -333,7 +333,7 @@ Every message ends in one of three states:
 | Outcome | When | Effect |
 |---------|------|--------|
 | **auto-ack** *(no action)* | Handler succeeds | Message removed from stream. The transport calls `ack()` on the underlying message when the handler returns successfully. |
-| **`ctx.retry()`** | Recoverable error | Message redelivered (optionally with `{ delayMs }` delay). Also called automatically when the handler throws. |
+| **`ctx.retry()`** | Recoverable error | Message redelivered (optionally with `{ delayMs }` delay). The transport applies the same retry semantics automatically when a handler throws, so you only need to call `ctx.retry()` manually when you want to return early without raising an exception. |
 | **`ctx.terminate(reason)`** | Non-recoverable error | Message permanently discarded. Must be called manually in the handler. |
 
 ### Relationship with dead letter handling

@@ -82,7 +82,7 @@ On startup, the library provisions a dedicated DLQ stream and, from that point o
 
 ### What gets created
 
-On application start, the library calls `ensureDlqStream()` which creates (or updates) a JetStream stream with:
+On application start, the library provisions (or updates) the DLQ JetStream stream with:
 
 | Property | Default |
 |---|---|

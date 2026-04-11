@@ -148,7 +148,7 @@ export class OrdersController {
 Inject the client by the service name you used in `forFeature()` and use the standard `ClientProxy` API:
 
 ```typescript title="src/gateway.controller.ts"
-import { Controller, Get, Inject, Param } from '@nestjs/common';
+import { Controller, Get, Inject, Param, ParseIntPipe } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { Observable } from 'rxjs';
 
@@ -175,8 +175,8 @@ export class GatewayController {
 
   /** Send an RPC command and wait for a response. */
   @Get(':id')
-  getOrder(@Param('id') id: string): Observable<{ id: number; status: string }> {
-    return this.client.send<{ id: number; status: string }>('order.get', { id: Number(id) });
+  getOrder(@Param('id', ParseIntPipe) id: number): Observable<{ id: number; status: string }> {
+    return this.client.send<{ id: number; status: string }>('order.get', { id });
   }
 }
 ```

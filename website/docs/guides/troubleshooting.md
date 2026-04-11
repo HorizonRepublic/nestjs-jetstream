@@ -189,9 +189,10 @@ The transport only publishes handler metadata when the handler has a `meta` fiel
 
 NATS KV buckets have immutable config for some fields (`replicas`, `ttl`). If you change these in `forRoot()` after the bucket already exists, startup fails.
 
-**Fix:**
+**Fix:** Delete your configured metadata bucket — the default name is `handler_registry`, but if you overrode `metadata.bucket` in `forRoot()`, substitute your own. Entries are re-published on the next startup, so the delete is safe.
+
 ```bash
-# Delete the bucket (safe — entries are re-published on restart)
+# Replace `handler_registry` with your metadata.bucket value if you overrode it
 nats kv rm handler_registry
 
 # Restart the service → fresh bucket with new config
