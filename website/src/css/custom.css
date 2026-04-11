@@ -315,6 +315,11 @@ aside[class*='docSidebarContainer'] {
   display: inline;
 }
 
+/* Breathing room between the H1 and the first paragraph of body copy */
+.theme-doc-markdown > header:first-child {
+  margin-bottom: 1.5rem;
+}
+
 .markdown h2 {
   font-size: 1.5rem;
   font-weight: 700;
