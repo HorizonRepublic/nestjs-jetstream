@@ -1,12 +1,14 @@
 ---
 sidebar_position: 1
-title: "Record Builder & Deduplication"
+sidebar_label: "Record Builder"
+title: "JetstreamRecordBuilder — Headers, Message IDs & Deduplication"
+description: "Build NestJS NATS messages with custom headers, deterministic message IDs for publish-side deduplication, and per-request RPC timeouts."
 schema:
   type: Article
-  headline: "Record Builder & Deduplication"
-  description: "Build messages with custom headers, message IDs, and deduplication via JetstreamRecordBuilder."
+  headline: "JetstreamRecordBuilder — Headers, Message IDs & Deduplication"
+  description: "Build NestJS NATS messages with custom headers, deterministic message IDs for publish-side deduplication, and per-request RPC timeouts."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-02"
+  dateModified: "2026-04-11"
 ---
 
 import Since from '@site/src/components/Since';
@@ -24,7 +26,6 @@ import { JetstreamRecordBuilder } from '@horizon-republic/nestjs-jetstream';
 
 const record = new JetstreamRecordBuilder({ orderId: 42 })
   .setHeader('x-tenant', 'acme')
-  .setTimeout(5000)
   .build();
 
 // Fire-and-forget event
@@ -36,9 +37,13 @@ const result = await lastValueFrom(this.client.send('get.order', record));
 
 The builder is immutable after `.build()` — the returned `JetstreamRecord` is a frozen snapshot of the data, headers, timeout, and message ID at the time of construction.
 
+:::note `setTimeout()` is RPC-only
+`.setTimeout()` and the per-request override it provides only apply to `client.send()`. On `client.emit()` it has no effect. See [Per-request timeout override](#per-request-timeout-override) below.
+:::
+
 ## Custom headers
 
-Use `setHeader()` to attach metadata that travels alongside the payload. Headers are available in handlers via [`RpcContext.getHeader()`](./handler-context.md).
+Use `setHeader()` to attach metadata that travels alongside the payload. Headers are available in handlers via [`RpcContext.getHeader()`](/docs/guides/handler-context).
 
 ```typescript
 const record = new JetstreamRecordBuilder(data)
@@ -130,7 +135,7 @@ Scheduling requires NATS Server >= 2.12 and `allow_msg_schedules: true` on the e
 `scheduleAt()` only works with `client.emit()`. If used with `client.send()` (RPC), the schedule is silently ignored and a warning is logged.
 :::
 
-See [Scheduling (Delayed Jobs)](./scheduling.md) for the full guide, including configuration, how it works under the hood, and `max_age` considerations.
+See [Scheduling (Delayed Jobs)](/docs/guides/scheduling) for the full guide, including configuration, how it works under the hood, and `max_age` considerations.
 
 ## Reserved headers
 
@@ -178,11 +183,23 @@ These headers are read-only from the handler's perspective — you can access th
 | `.setMessageId(id)` | Set a deterministic message ID for deduplication |
 | `.setTimeout(ms)` | Override the global RPC timeout for this request |
 | `.scheduleAt(date)` | Schedule one-shot delayed delivery (NATS >= 2.12). <Since version="2.8.0" /> |
+| `.ttl(ns)` | Set per-message TTL via the `Nats-TTL` header (NATS >= 2.11, requires `allow_msg_ttl: true`). See [Per-Message TTL](/docs/guides/per-message-ttl). <Since version="2.9.0" /> |
 | `.build()` | Return an immutable `JetstreamRecord` |
+
+The `RESERVED_HEADERS` set is also exported from the package — use it in custom tooling (e.g., a header-sanitization helper) to check whether a key is blocked before calling `.setHeader()`:
+
+```typescript
+import { RESERVED_HEADERS } from '@horizon-republic/nestjs-jetstream';
+
+if (RESERVED_HEADERS.has(key)) {
+  throw new Error(`${key} is reserved by the transport`);
+}
+```
 
 ## Next steps
 
-- [Scheduling (Delayed Jobs)](./scheduling.md) — delay message delivery to a future time
-- [Handler Context](./handler-context.md) — access headers and message metadata in your handlers
-- [Custom Codec](./custom-codec.md) — control how payloads are serialized
+- [Per-Message TTL](/docs/guides/per-message-ttl) — set individual message lifetimes via `.ttl()`
+- [Scheduling (Delayed Jobs)](/docs/guides/scheduling) — delay message delivery to a future time
+- [Handler Context](/docs/guides/handler-context) — access headers and message metadata in your handlers
+- [Custom Codec](/docs/guides/custom-codec) — control how payloads are serialized
 - [Module Configuration](/docs/getting-started/module-configuration) — configure dedup windows via stream overrides

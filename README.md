@@ -11,7 +11,7 @@ Events, broadcast, ordered delivery, and RPC — with two lines of config.
 [![Documentation](https://img.shields.io/badge/docs-online-brightgreen.svg)](https://horizonrepublic.github.io/nestjs-jetstream/)
 
 [![Node.js](https://img.shields.io/node/v/@horizon-republic/nestjs-jetstream.svg)](https://nodejs.org)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)](https://www.typescriptlang.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7%2B-blue.svg)](https://www.typescriptlang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 </div>
@@ -28,7 +28,7 @@ You keep writing `@EventPattern()` and `@MessagePattern()`. The library handles 
 
 **Delivery modes** — workqueue (one consumer), broadcast (all consumers), ordered (sequential), and dual-mode RPC (Core or JetStream-backed).
 
-**Production-ready** — dead letter queue, health checks, graceful shutdown with drain, lifecycle hooks for observability.
+**Operations** — dead letter queue stream, health indicator for Kubernetes probes, graceful shutdown with drain, lifecycle hooks for observability.
 
 **Flexible** — pluggable codecs (JSON/MsgPack/Protobuf), per-stream configuration, publisher-only mode for API gateways.
 
@@ -63,6 +63,19 @@ export class OrdersController {
     return this.client.emit('order.created', { orderId: 42 });
   }
 }
+
+// main.ts — wire the JetStream microservice transport into the HTTP app
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  app.connectMicroservice(
+    { strategy: app.get(JetstreamStrategy) },
+    { inheritAppConfig: true },
+  );
+  app.enableShutdownHooks();
+  await app.startAllMicroservices();
+  await app.listen(3000);
+}
+void bootstrap();
 ```
 
 ## Documentation

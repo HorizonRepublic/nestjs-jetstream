@@ -1,12 +1,14 @@
 ---
 sidebar_position: 2
-title: Default Configs
+sidebar_label: "Default Configs"
+title: "Default Stream & Consumer Configs for NATS JetStream"
+description: "Production-ready default stream, consumer, and connection settings for every NestJS JetStream StreamKind (event, broadcast, ordered, command, DLQ)."
 schema:
   type: Article
-  headline: Default Configs
-  description: "Default stream and consumer configurations for every StreamKind."
+  headline: "Default Stream & Consumer Configs for NATS JetStream"
+  description: "Production-ready default stream, consumer, and connection settings for every NestJS JetStream StreamKind (event, broadcast, ordered, command, DLQ)."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-02"
+  dateModified: "2026-04-11"
 ---
 
 # Default Configs
@@ -27,7 +29,7 @@ All streams share a common base configuration:
 | `compression` | `S2` |
 
 :::info S2 Compression
-All streams default to [Snappy S2 compression](https://github.com/nats-io/nats-server). This reduces disk I/O and storage with negligible CPU overhead (~1-3%). Requires NATS Server >= 2.10 (see [runtime requirements](/docs/getting-started/installation#runtime-requirements)). Override per stream kind:
+All streams default to [S2 compression](https://github.com/klauspost/compress/tree/master/s2), a Snappy-compatible codec with better ratios. This reduces disk I/O and storage with modest CPU overhead that varies with payload entropy and size. Requires NATS Server >= 2.10 (see [runtime requirements](/docs/getting-started/installation#runtime-requirements)). Override per stream kind:
 
 ```typescript
 import { StoreCompression } from '@nats-io/jetstream';
@@ -97,7 +99,7 @@ Limits retention — messages persist until the configured limits are reached. S
 | `max_age` | `1 hour` | `toNanos(1, 'hours')` |
 | `duplicate_window` | `2 minutes` | `toNanos(2, 'minutes')` |
 
-:::info Changed in this release
+:::info Changed in v2.9.0
 `max_age` reduced from 1 day to 1 hour. Broadcast messages (config propagation, cache invalidation, feature flags) are relevant for minutes, not days. 1 hour provides sufficient catch-up window for new instances while reducing unnecessary storage. This is a mutable property — existing streams update automatically on next startup.
 :::
 
@@ -117,6 +119,24 @@ Limits retention for strict sequential delivery. Ordered consumers are ephemeral
 | `max_msgs` | `50,000,000` | |
 | `max_bytes` | `5 GB` | 5,368,709,120 bytes |
 | `max_age` | `1 day` | `toNanos(1, 'days')` |
+| `duplicate_window` | `2 minutes` | `toNanos(2, 'minutes')` |
+
+### DLQ Stream
+
+Workqueue retention — dead letters are removed when a DLQ consumer acks them. Created on demand when `dlq: { stream }` is set in `forRoot()`. See [Dead Letter Queue — Built-in DLQ stream](/docs/guides/dead-letter-queue#built-in-dlq-stream).
+
+| Property | Value | Notes |
+|----------|-------|-------|
+| `retention` | `Workqueue` | |
+| `storage` | `File` | |
+| `num_replicas` | `1` | |
+| `allow_rollup_hdrs` | `false` | |
+| `max_consumers` | `100` | |
+| `max_msg_size` | `10 MB` | 10,485,760 bytes |
+| `max_msgs_per_subject` | `5,000,000` | |
+| `max_msgs` | `50,000,000` | |
+| `max_bytes` | `5 GB` | 5,368,709,120 bytes |
+| `max_age` | `30 days` | `toNanos(30, 'days')` |
 | `duplicate_window` | `2 minutes` | `toNanos(2, 'minutes')` |
 
 ## Consumer Defaults
@@ -195,7 +215,7 @@ The JetStream RPC timeout is intentionally longer because messages are persisted
 |----------|-------|
 | Shutdown timeout | `10 seconds` |
 
-The transport waits up to 10 seconds for in-flight messages to be processed before forcing shutdown via `drain()`.
+On shutdown, the transport calls `drain()` on the NATS connection and waits up to 10 seconds for it to complete before forcing the connection closed. Increase this timeout if your handlers have long-running I/O that must finish cleanly.
 
 ## Replicas in production
 
@@ -286,3 +306,50 @@ JetstreamModule.forRoot({
 ```
 
 See [Module Configuration](/docs/getting-started/module-configuration) for the full options reference.
+
+## Exported constants
+
+Every default above is exposed as a typed constant from the package, so you can import and reuse it when composing overrides programmatically or writing tests.
+
+**Stream and consumer defaults:**
+
+| Constant | Contents |
+|---|---|
+| `DEFAULT_EVENT_STREAM_CONFIG` | Event (workqueue) stream defaults |
+| `DEFAULT_BROADCAST_STREAM_CONFIG` | Broadcast stream defaults (shared `broadcast-stream`) |
+| `DEFAULT_ORDERED_STREAM_CONFIG` | Ordered stream defaults |
+| `DEFAULT_COMMAND_STREAM_CONFIG` | JetStream RPC command stream defaults |
+| `DEFAULT_DLQ_STREAM_CONFIG` | [Dead Letter Queue](/docs/guides/dead-letter-queue#built-in-dlq-stream) stream defaults |
+| `DEFAULT_EVENT_CONSUMER_CONFIG` | Event consumer defaults |
+| `DEFAULT_BROADCAST_CONSUMER_CONFIG` | Broadcast consumer defaults |
+| `DEFAULT_COMMAND_CONSUMER_CONFIG` | JetStream RPC command consumer defaults |
+
+**Timeouts:**
+
+| Constant | Value |
+|---|---|
+| `DEFAULT_RPC_TIMEOUT` | `30_000` (Core mode timeout, ms) |
+| `DEFAULT_JETSTREAM_RPC_TIMEOUT` | `180_000` (JetStream mode timeout, ms) |
+| `DEFAULT_SHUTDOWN_TIMEOUT` | `10_000` (graceful shutdown drain timeout, ms) |
+
+**Handler metadata registry:**
+
+| Constant | Value |
+|---|---|
+| `DEFAULT_METADATA_BUCKET` | `'handler_registry'` |
+| `DEFAULT_METADATA_REPLICAS` | `1` |
+| `DEFAULT_METADATA_HISTORY` | `1` |
+| `DEFAULT_METADATA_TTL` | `30_000` (heartbeat-refreshed entry TTL, ms) |
+| `MIN_METADATA_TTL` | `5_000` (minimum configurable TTL, ms) |
+
+**Other:**
+
+- `RESERVED_HEADERS` — the `Set<string>` of header names blocked by `JetstreamRecordBuilder.setHeader()`. See [Record Builder](/docs/guides/record-builder#reserved-headers).
+
+```typescript
+import { DEFAULT_EVENT_STREAM_CONFIG, toNanos } from '@horizon-republic/nestjs-jetstream';
+
+events: {
+  stream: { ...DEFAULT_EVENT_STREAM_CONFIG, max_age: toNanos(14, 'days') },
+}
+```

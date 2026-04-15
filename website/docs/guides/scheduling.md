@@ -1,12 +1,14 @@
 ---
 sidebar_position: 3
-title: "Scheduling (Delayed Jobs)"
+sidebar_label: "Scheduling (Delayed Jobs)"
+title: "NATS JetStream Scheduling — Delayed Jobs (NATS 2.12)"
+description: "One-shot delayed NestJS NATS JetStream message delivery via the Nats-Schedule header (NATS 2.12, ADR-51) — replace Bull or Agenda for simple delayed jobs."
 schema:
   type: Article
-  headline: "Scheduling (Delayed Jobs)"
-  description: "One-shot delayed message delivery powered by NATS 2.12 message scheduling."
+  headline: "NATS JetStream Scheduling — Delayed Jobs (NATS 2.12)"
+  description: "One-shot delayed NestJS NATS JetStream message delivery via the Nats-Schedule header (NATS 2.12, ADR-51) — replace Bull or Agenda for simple delayed jobs."
   datePublished: "2026-04-01"
-  dateModified: "2026-04-01"
+  dateModified: "2026-04-11"
 ---
 
 import Since from '@site/src/components/Since';
@@ -113,8 +115,15 @@ Setting `max_age: 0` disables automatic cleanup for **all** messages in the even
 | Limitation | Details |
 |-----------|---------|
 | **One-shot only** | No cron or interval scheduling. NATS supports these (ADR-51), but the library currently only exposes `scheduleAt()` for one-shot delivery. |
-| **Events only** | `scheduleAt()` is ignored for RPC (`client.send()`); a warning is logged |
+| **Events only** | `scheduleAt()` is ignored for RPC ([`client.send()`](/docs/patterns/rpc)); a warning is logged |
 | **Future dates only** | `scheduleAt()` throws if the date is not in the future |
 | **NATS >= 2.12** | `allow_msg_schedules` is not supported by older server versions |
 | **`max_age` constraint** | Schedule delay must not exceed the stream's `max_age` |
-| **Per-stream opt-in** | Broadcast scheduling requires `allow_msg_schedules: true` on the broadcast stream config separately |
+| **Per-stream opt-in** | Broadcast scheduling requires `allow_msg_schedules: true` on the [broadcast stream](/docs/patterns/broadcast) config separately |
+
+## See also
+
+- [Record Builder & Deduplication](/docs/guides/record-builder#scheduled-delivery) — `JetstreamRecordBuilder.scheduleAt()` in the full builder API
+- [Per-Message TTL](/docs/guides/per-message-ttl) — sibling feature for per-message expiration
+- [Naming Conventions — Scheduling subjects](/docs/reference/naming-conventions#scheduling-subjects) — how the transport routes scheduled messages internally
+- [Default Configs](/docs/reference/default-configs#enable-only-can-be-turned-on-but-never-off) — `allow_msg_schedules` in the enable-only stream properties table

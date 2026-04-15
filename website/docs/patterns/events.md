@@ -1,17 +1,19 @@
 ---
 sidebar_position: 2
-title: "Events (Workqueue)"
+sidebar_label: "Events (Workqueue)"
+title: "Workqueue Events — NestJS JetStream At-Least-Once Delivery"
+description: "NestJS NATS JetStream workqueue events with at-least-once delivery, automatic retry, publish-side deduplication, and dead letter handling."
 schema:
   type: Article
-  headline: "Events (Workqueue)"
-  description: "Workqueue events with at-least-once delivery, automatic retry, deduplication, and dead letter handling."
+  headline: "Workqueue Events — NestJS JetStream At-Least-Once Delivery"
+  description: "NestJS NATS JetStream workqueue events with at-least-once delivery, automatic retry, publish-side deduplication, and dead letter handling."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-02"
+  dateModified: "2026-04-11"
 ---
 
 # Events (Workqueue)
 
-Workqueue events are fire-and-forget messages where **exactly one** handler instance processes each message. This is the default event delivery model in nestjs-jetstream.
+Workqueue events are fire-and-forget messages where **exactly one** handler instance processes each message. This is the default event delivery model. Contrast with [broadcast](/docs/patterns/broadcast) (all instances receive every message) and [ordered events](/docs/patterns/ordered-events) (strict sequential replay).
 
 ## When to use
 
@@ -175,8 +177,8 @@ async handleOrderCreated(@Payload() data: OrderCreatedEvent): Promise<void> {
 ```typescript
 @EventPattern('payment.completed')
 async handlePayment(@Payload() data: PaymentEvent, @Ctx() ctx: RpcContext): Promise<void> {
-  const msg = ctx.getMessage() as JsMsg;
-  const dedupKey = `payment:${msg.info.stream}:${msg.info.streamSequence}`;
+  // Stream sequence is guaranteed unique within a stream — perfect dedup key
+  const dedupKey = `payment:${ctx.getStream()}:${ctx.getSequence()}`;
 
   if (await this.cache.exists(dedupKey)) {
     return; // Already processed
@@ -187,11 +189,13 @@ async handlePayment(@Payload() data: PaymentEvent, @Ctx() ctx: RpcContext): Prom
 }
 ```
 
+See [Handler Context](/docs/guides/handler-context#jetstream-message-info) for all typed accessors available on `RpcContext`.
+
 ## Message deduplication
 
 NATS JetStream has built-in **publish-side deduplication**. If two messages with the same `messageId` arrive within the stream's `duplicate_window`, the second publish is silently dropped.
 
-Use `JetstreamRecordBuilder` to set a deterministic message ID:
+Use [`JetstreamRecordBuilder`](/docs/guides/record-builder) to set a deterministic message ID:
 
 ```typescript
 import { JetstreamRecordBuilder } from '@horizon-republic/nestjs-jetstream';
@@ -213,7 +217,7 @@ This prevents duplicate publishes in scenarios like:
 - A controller endpoint is called twice with the same data.
 
 :::info Dedup window defaults
-The event stream's default `duplicate_window` is **2 minutes**. Messages with the same ID published within this window are deduplicated. If you need a longer window, override it in the stream config (see [Custom configuration](#custom-configuration) below).
+The event stream's default `duplicate_window` is **2 minutes**. Messages with the same ID published within this window are deduplicated. To extend it, override `events.stream.duplicate_window` in `forRoot()` — for example `duplicate_window: toNanos(5, 'minutes')`. See [Custom configuration](#custom-configuration) for the full override pattern.
 :::
 
 When no message ID is set explicitly, the transport generates a random UUID for each publish — meaning no deduplication occurs by default. Always set a deterministic message ID when duplicate publishes are a concern.
@@ -257,36 +261,24 @@ JetstreamModule.forRoot({
 ```
 
 :::tip When to increase ack_wait
-If your handler calls a slow external API (e.g., sending emails, processing payments), increase `ack_wait` so that NATS doesn't redeliver the message before your handler finishes. The default is 10 seconds — long-running handlers may need 30s or more.
+If your handler calls a slow external API (e.g., sending emails, processing payments), increase `ack_wait` so that NATS doesn't redeliver the message before your handler finishes. The default is 10 seconds — long-running handlers may need 30s or more. For unbounded processing, consider [ack extension](/docs/guides/performance#ack-extension) instead.
 :::
 
 :::tip When to increase max_deliver
 The default of 3 delivery attempts works well for transient errors (network blips, temporary database unavailability). Increase it to 5 or higher if your handlers interact with unreliable external services where intermittent failures are common.
 :::
 
-### Default values reference
+### Default values — the ones you'll actually tune
 
-**Stream defaults:**
-
-| Setting | Default | Description |
+| Setting | Default | Why it matters |
 |---|---|---|
-| `retention` | `Workqueue` | Messages deleted after ack |
-| `storage` | `File` | Persistent file-based storage |
-| `max_msg_size` | 10 MB | Maximum size per message |
-| `max_msgs` | 50,000,000 | Maximum total messages in stream |
-| `max_bytes` | 5 GB | Maximum total stream size |
-| `max_age` | 7 days | Messages older than this are purged |
-| `duplicate_window` | 2 minutes | Window for publish-side deduplication |
+| `max_deliver` | 3 | How many retry attempts before the message is marked dead |
+| `ack_wait` | 10 seconds | Time a handler has to ack before NATS redelivers |
+| `max_ack_pending` | 100 | In-flight cap — primary backpressure control |
+| `max_age` | 7 days | How long events live in the stream before being purged |
+| `duplicate_window` | 2 minutes | Dedup window for [`setMessageId()`](/docs/guides/record-builder) |
 
-**Consumer defaults:**
-
-| Setting | Default | Description |
-|---|---|---|
-| `ack_policy` | `Explicit` | Handler must ack/nak each message |
-| `ack_wait` | 10 seconds | Time before unacked message is redelivered |
-| `max_deliver` | 3 | Maximum delivery attempts before dead letter |
-| `max_ack_pending` | 100 | Maximum unacknowledged messages in flight |
-| `deliver_policy` | `All` | Deliver all available messages |
+See [Default Configs — Event Stream](/docs/reference/default-configs#event-stream) and [Event Consumer](/docs/reference/default-configs#event-consumer) for the complete list of stream and consumer defaults.
 
 ## Error handling
 
@@ -313,7 +305,8 @@ export class OrdersController {
       if (this.isNonRecoverable(error)) {
         // Non-recoverable: invalid payload, business rule violation, etc.
         // ctx.terminate() prevents redelivery — the message is permanently discarded.
-        ctx.terminate('Non-recoverable: ' + error.message);
+        const reason = error instanceof Error ? error.message : String(error);
+        ctx.terminate('Non-recoverable: ' + reason);
         this.logger.error(`Permanently discarding order`, error);
         return;
       }
@@ -339,8 +332,8 @@ Every message ends in one of three states:
 
 | Outcome | When | Effect |
 |---------|------|--------|
-| **`ctx.ack()`** | Handler succeeds | Message removed from stream. Called automatically by the transport on success. |
-| **`ctx.retry()`** | Recoverable error | Message redelivered (optionally with `{ delayMs }` delay). Called automatically when the handler throws. |
+| **auto-ack** *(no action)* | Handler succeeds | Message removed from stream. The transport calls `ack()` on the underlying message when the handler returns successfully. |
+| **`ctx.retry()`** | Recoverable error | Message redelivered (optionally with `{ delayMs }` delay). The transport applies the same retry semantics automatically when a handler throws, so you only need to call `ctx.retry()` manually when you want to return early without raising an exception. |
 | **`ctx.terminate(reason)`** | Non-recoverable error | Message permanently discarded. Must be called manually in the handler. |
 
 ### Relationship with dead letter handling
@@ -350,7 +343,7 @@ When a message is `nak`'d repeatedly and reaches the `max_deliver` limit (defaul
 1. The `onDeadLetter` callback is invoked (if configured) with full message context.
 2. The message is terminated with `term()`.
 
-This means `msg.term()` is for errors you **know** will never succeed (validation failures, schema mismatches), while `throw` is for errors that **might** succeed on retry (timeouts, temporary unavailability). For messages that exhaust all retries, the dead letter mechanism provides a safety net.
+This means `ctx.terminate()` is for errors you **know** will never succeed (validation failures, schema mismatches), while `throw` is for errors that **might** succeed on retry (timeouts, temporary unavailability). For messages that exhaust all retries, the dead letter mechanism provides a safety net.
 
 See the [Dead Letter Queue](/docs/guides/dead-letter-queue) guide for how to configure and handle dead letters.
 

@@ -1,17 +1,19 @@
 ---
 sidebar_position: 6
-title: "Troubleshooting"
+sidebar_label: "Troubleshooting"
+title: "Troubleshooting — NestJS JetStream Transport"
+description: "Fix common NestJS JetStream issues: NATS connection errors, consumer lag, RPC timeouts, DLQ publish failures, and stream migration recovery."
 schema:
   type: Article
-  headline: "Troubleshooting"
-  description: "Common issues and how to resolve them."
+  headline: "Troubleshooting — NestJS JetStream Transport"
+  description: "Fix common NestJS JetStream issues: NATS connection errors, consumer lag, RPC timeouts, DLQ publish failures, and stream migration recovery."
   datePublished: "2026-03-26"
-  dateModified: "2026-03-26"
+  dateModified: "2026-04-11"
 ---
 
 # Troubleshooting
 
-Common issues and how to resolve them.
+If something isn't working, start here. The sections below are grouped by symptom — scan them before opening an issue.
 
 ## Connection errors
 
@@ -68,7 +70,7 @@ The transport defaults to unlimited reconnection (`maxReconnectAttempts: -1`). I
 ### Messages not being delivered
 
 **Checklist:**
-1. **Handler registered?** — Check startup logs for `Registered handlers: X RPC, Y events, Z broadcasts`.
+1. **Handler registered?** — Check startup logs for `Registered handlers: X RPC, Y events, Z broadcasts` (plus `N ordered` when ordered handlers are present). A zero count means the decorator didn't hit the registry — usually an import-order or module-wiring problem.
 2. **Stream exists?** — The transport creates streams on startup. Check with `nats stream ls`.
 3. **Consumer exists?** — Check with `nats consumer ls <stream-name>`.
 4. **Subject matches?** — Use `nats sub "servicename__microservice.ev.>"` to see if messages arrive on the expected subject.
@@ -156,6 +158,69 @@ The callback only fires when **all** of these conditions are met:
 
 If your `onDeadLetter` callback throws, the message is nak'd for another retry instead of being terminated. This is intentional — it allows transient failures (e.g., DLQ database is down) to recover.
 
+### DLQ stream publish fails
+
+When `dlq: { stream }` is configured, the transport republishes exhausted messages to a dedicated DLQ stream. If that publish fails, the transport falls back to the `onDeadLetter` callback and then to `nak()` as a last resort — the full sequence is documented in the [Fallback chain](/docs/guides/dead-letter-queue#fallback-chain).
+
+**Causes:**
+- DLQ stream was deleted manually (`nats stream rm orders__microservice_dlq-stream`)
+- NATS server is out of disk space or has hit `max_bytes`
+- NATS connection dropped between the original publish and the DLQ republish
+
+**Fix:**
+1. Check that the DLQ stream exists: `nats stream ls | grep dlq-stream`
+2. If it was deleted, restart the pod — the transport's `ensureDlqStream()` recreates it on startup when `dlq` is configured
+3. Check NATS server disk usage: `nats server report accounts`
+4. Ensure the `dlq.stream` config (if overridden) is compatible with the server's resource limits
+
+## Handler metadata registry
+
+### Entries missing from the KV bucket
+
+The transport only publishes handler metadata when the handler has a `meta` field in its decorator extras. Handlers without `meta` are intentionally skipped — see [Handler Metadata](/docs/patterns/handler-metadata) for the quick-start example.
+
+**Checklist:**
+1. Does the handler have `meta: { ... }` in `@EventPattern` / `@MessagePattern`?
+2. Is the NATS server version >= 2.10 (KV support)?
+3. Did startup succeed? Check logs for `MetadataRegistry` errors.
+4. Inspect the bucket: `nats kv ls handler_registry`
+
+### Bucket config mismatch error on startup
+
+NATS KV buckets have immutable config for some fields (`replicas`, `ttl`). If you change these in `forRoot()` after the bucket already exists, startup fails.
+
+**Fix:** Delete your configured metadata bucket — the default name is `handler_registry`, but if you overrode `metadata.bucket` in `forRoot()`, substitute your own. Entries are re-published on the next startup, so the delete is safe.
+
+```bash
+# Replace `handler_registry` with your metadata.bucket value if you overrode it
+nats kv rm handler_registry
+
+# Restart the service → fresh bucket with new config
+```
+
+## Stream migration
+
+### Consumer self-healing waits on "migration in progress"
+
+If a previous migration was interrupted (process killed mid-phase, NATS crash), an orphaned `{stream}__migration_backup` stream exists. During **consumer self-healing** (after a live consumer's iterator breaks), the transport detects the backup stream and refuses to recreate the consumer until the backup is gone — the self-healing loop waits with exponential backoff. This check runs only in the recovery path, not during initial application startup.
+
+**Diagnosis:**
+```bash
+nats stream ls | grep migration_backup
+```
+
+**Fix:** None needed in most cases — self-healing will recover automatically once the migrating pod finishes and cleans up the backup. If the backup is orphaned permanently (the migrating pod died and nobody retried), manually inspect it and either retain it (if it contains messages you need) or delete it with `nats stream rm <stream>__migration_backup` so self-healing can resume.
+
+See [Stream Migration — Error handling](/docs/guides/stream-migration#error-handling) for the full recovery flow.
+
+### Publisher errors during rolling update
+
+During the brief window between Phase 2 (delete) and Phase 3 (create) of a stream migration, publishers may see "stream not found" errors. The window is effectively one NATS round-trip, but is not zero. Mitigations:
+
+- For `client.emit()` (fire-and-forget), accept the loss or implement caller-side retry.
+- For `client.send()` (RPC), the caller receives an error and can retry.
+- For zero-loss migrations, schedule migration during a maintenance window with publishers paused.
+
 ## Startup issues
 
 ### `listen() hangs` on startup
@@ -176,6 +241,32 @@ nats stream rm <stream-name>
 :::caution
 Deleting a stream destroys all messages in it. Only do this in development or when data loss is acceptable.
 :::
+
+## Typed error handling with `NatsErrorCode`
+
+When your own code needs to react to a NATS JetStream API error, use the `NatsErrorCode` enum instead of matching on error messages. It covers the three error conditions the transport itself observes most often:
+
+```typescript
+import { NatsErrorCode } from '@horizon-republic/nestjs-jetstream';
+
+try {
+  await jsm.streams.info('orders__microservice_ev-stream');
+} catch (err) {
+  const code = (err as { code?: number }).code;
+
+  if (code === NatsErrorCode.StreamNotFound) {
+    // 10059 — stream does not exist yet, safe to create
+  } else if (code === NatsErrorCode.ConsumerNotFound) {
+    // 10014 — consumer was deleted externally
+  } else if (code === NatsErrorCode.ConsumerAlreadyExists) {
+    // 10148 — race on consumer create, fetch the existing one instead
+  } else {
+    throw err;
+  }
+}
+```
+
+The library itself uses these constants in its self-healing flows (`src/server/infrastructure/consumer.provider.ts`), so consumer code that wraps library calls can reuse the same vocabulary.
 
 ## See also
 

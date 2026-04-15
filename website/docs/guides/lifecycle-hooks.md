@@ -1,12 +1,14 @@
 ---
 sidebar_position: 4
-title: "Lifecycle Hooks"
+sidebar_label: "Lifecycle Hooks"
+title: "Lifecycle Hooks — NestJS JetStream Transport Events"
+description: "Observe NestJS NATS JetStream transport events: connection, disconnect, reconnect, errors, RPC timeouts, message routing, dead letters, and shutdown."
 schema:
   type: Article
-  headline: "Lifecycle Hooks"
-  description: "Transport lifecycle events for connection changes, errors, message routing, and dead letters."
+  headline: "Lifecycle Hooks — NestJS JetStream Transport Events"
+  description: "Observe NestJS NATS JetStream transport events: connection, disconnect, reconnect, errors, RPC timeouts, message routing, dead letters, and shutdown."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-02"
+  dateModified: "2026-04-11"
 ---
 
 # Lifecycle Hooks
@@ -15,7 +17,7 @@ The transport emits lifecycle events at key moments — connection changes, erro
 
 ## Available events
 
-All 9 events are defined in the `TransportEvent` enum:
+The full event set is defined in the `TransportEvent` enum:
 
 | Event | Signature | When it fires |
 |---|---|---|
@@ -24,10 +26,12 @@ All 9 events are defined in the `TransportEvent` enum:
 | `Reconnect` | `(server: string) => void` | NATS connection re-established after a disconnect |
 | `Error` | `(error: Error, context?: string) => void` | Any transport-level error |
 | `RpcTimeout` | `(subject: string, correlationId: string) => void` | An RPC handler exceeds its timeout |
-| `MessageRouted` | `(subject: string, kind: MessageKind) => void` | A message is successfully routed to its handler. `MessageKind` is an enum (`Event`, `Rpc`) — import it from `@horizon-republic/nestjs-jetstream`. |
+| `MessageRouted` | `(subject: string, kind: MessageKind) => void` | A message is successfully routed to its handler |
 | `ShutdownStart` | `() => void` | Graceful shutdown sequence begins |
 | `ShutdownComplete` | `() => void` | Graceful shutdown sequence finishes |
 | `DeadLetter` | `(info: DeadLetterInfo) => void` | A message exhausts all delivery attempts |
+
+The `MessageKind` enum on `MessageRouted` has two values — `Event` and `Rpc` — and is importable from `@horizon-republic/nestjs-jetstream`.
 
 ## Registering hooks
 
@@ -189,7 +193,7 @@ The transport has two dead letter mechanisms that serve different purposes:
 
 | | `hooks[TransportEvent.DeadLetter]` | `onDeadLetter` callback |
 |---|---|---|
-| **Type** | Synchronous hook (fire-and-forget) | Async callback (awaited) |
+| **Type** | Sync or async hook (fire-and-forget) | Async callback (awaited) |
 | **Fires** | Always, before the callback | Only if configured |
 | **Affects message fate?** | No | Yes — success = `term()`, failure = `nak()` |
 | **Use case** | Metrics, logging, alerting | Persisting dead letters to a store |

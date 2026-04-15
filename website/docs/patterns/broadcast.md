@@ -1,17 +1,19 @@
 ---
 sidebar_position: 1
-title: "Broadcast Events"
+sidebar_label: "Broadcast Events"
+title: "Broadcast Events — NestJS JetStream Fan-Out Delivery"
+description: "Fan-out NATS JetStream events to every NestJS service instance via per-service durable consumers on a shared broadcast stream."
 schema:
   type: Article
-  headline: "Broadcast Events"
-  description: "Fan-out event delivery to every subscribing service instance."
+  headline: "Broadcast Events — NestJS JetStream Fan-Out Delivery"
+  description: "Fan-out NATS JetStream events to every NestJS service instance via per-service durable consumers on a shared broadcast stream."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-02"
+  dateModified: "2026-04-11"
 ---
 
 # Broadcast Events
 
-Broadcast events implement **fan-out** delivery: every subscribing service receives a copy of each message. This is the opposite of [workqueue events](/docs/patterns/events), where only one instance processes each message.
+Broadcast events implement **fan-out** delivery: every subscribing service receives a copy of each message. This is the opposite of [workqueue events](/docs/patterns/events) (one instance processes each message) and distinct from [ordered events](/docs/patterns/ordered-events) (every instance receives a full sequential replay).
 
 ## When to use
 
@@ -25,7 +27,7 @@ The broadcast flow, step by step:
 
 1. **Publish** — a service calls `client.emit('broadcast:config.updated', data)`. The `broadcast:` prefix tells the transport this is a fan-out event.
 2. **Route** — the transport publishes to the subject `broadcast.config.updated` (a global subject, not scoped to any service).
-3. **Shared stream** — the message is persisted in a single **shared** `broadcast-stream` with **Limits** retention (messages are kept even after acknowledgement, up to the configured limits).
+3. **Shared stream** — the message is persisted in a single **shared** `broadcast-stream` with **Limits** retention: messages stay in the stream until they exceed `max_age`, `max_msgs`, or `max_bytes`, even after every consumer acknowledges them. This is what lets new instances replay recent broadcasts on startup, unlike the Workqueue retention used for regular events.
 4. **Per-service consumers** — each service that registered a `{ broadcast: true }` handler has its own durable consumer on the shared stream. Every consumer independently receives the message.
 5. **Dispatch** — each service's `EventRouter` decodes the payload and invokes the matching handler.
 6. **Acknowledge** — each consumer acks or naks independently.
@@ -40,10 +42,6 @@ flowchart TD
     PC --> PH["handler"]
     AC --> AH["handler"]
 ```
-
-:::info Limits vs. Workqueue retention
-The broadcast stream uses **Limits** retention, not Workqueue. Messages are not deleted after acknowledgement — they stay in the stream until they exceed `max_age`, `max_msgs`, or `max_bytes`. This allows new consumers to replay historical broadcasts.
-:::
 
 ## Code examples
 
@@ -197,7 +195,7 @@ JetstreamModule.forRoot({
 ```
 
 :::warning Stream config is global
-Since all services share the same `broadcast-stream`, any service can update the stream config on startup. The last service to start wins. Coordinate stream-level settings across your team, or let a single "infrastructure" service own them.
+Since all services share the same `broadcast-stream`, any service can update the stream config on startup, and the last service to start wins for mutable properties. Coordinate stream-level settings across your team, or let a single "infrastructure" service own them. The transport logs every applied change on startup so drift is detectable in your logs, and immutable conflicts (like `storage`) are surfaced as warnings unless `allowDestructiveMigration` is enabled.
 :::
 
 ### Consumer-level config (per-service)
@@ -234,28 +232,19 @@ JetstreamModule.forRoot({
 
 Each consumer only subscribes to the broadcast subjects it has handlers for (via `filter_subject` or `filter_subjects`), so services only receive the broadcast events they care about.
 
-### Default values reference
+:::tip Broadcast scheduling
+To schedule delayed broadcasts, enable `broadcast.stream.allow_msg_schedules: true` — this is a separate opt-in from the event stream flag. See [Scheduling (Delayed Jobs)](/docs/guides/scheduling).
+:::
 
-**Stream defaults (shared):**
+### Default values — the ones you'll actually tune
 
-| Setting | Default | Description |
+| Setting | Default | Why it matters |
 |---|---|---|
-| `retention` | `Limits` | Messages kept until limits exceeded |
-| `storage` | `File` | Persistent file-based storage |
-| `max_msg_size` | 10 MB | Maximum size per message |
-| `max_msgs` | 10,000,000 | Maximum total messages |
-| `max_bytes` | 2 GB | Maximum total stream size |
-| `max_age` | 1 hour | Messages older than this are purged |
-| `duplicate_window` | 2 minutes | Window for publish-side deduplication |
+| `max_age` (stream, shared) | 1 hour | New instances catch up on broadcasts within this window |
+| `max_deliver` (per-service) | 3 | Each service retries independently before dead letter |
+| `ack_wait` (per-service) | 10 seconds | Scoped to each service's broadcast consumer |
 
-**Consumer defaults (per-service):**
-
-| Setting | Default | Description |
-|---|---|---|
-| `ack_policy` | `Explicit` | Handler must ack/nak each message |
-| `ack_wait` | 10 seconds | Time before unacked message is redelivered |
-| `max_deliver` | 3 | Maximum delivery attempts before dead letter |
-| `max_ack_pending` | 100 | Maximum unacknowledged messages in flight |
+See [Default Configs — Broadcast Stream](/docs/reference/default-configs#broadcast-stream) and [Broadcast Consumer](/docs/reference/default-configs#broadcast-consumer) for the complete list.
 
 ## Common use cases
 
@@ -321,11 +310,6 @@ handleFeatureFlag(@Payload() data: FeatureFlagEvent): void {
 }
 ```
 
-## What's next?
+## See also
 
-- [**Events (Workqueue)**](/docs/patterns/events) — single-consumer event delivery
-- [**Dead Letter Queue**](/docs/guides/dead-letter-queue) — handle messages that exhaust all retries
-- [**Lifecycle Hooks**](/docs/guides/lifecycle-hooks) — observe transport events like dead letters and message routing
-- [**Module Configuration**](/docs/getting-started/module-configuration) — full reference for stream and consumer options
-- [**Performance Tuning**](/docs/guides/performance) — concurrency limits for broadcast handlers
-- [**Troubleshooting**](/docs/guides/troubleshooting#consumer-issues) — diagnosing delivery issues
+Broadcast consumers compete with regular event consumers for the same concurrency budget — tune both via [Performance Tuning](/docs/guides/performance#concurrency-control). If a broadcast handler keeps failing, only *that* service's consumer retries; see [Dead Letter Queue](/docs/guides/dead-letter-queue#scope) for per-consumer dead letter semantics.

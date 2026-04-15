@@ -6,7 +6,7 @@ schema:
   headline: "Performance Tuning"
   description: "Tune ackWait, maxAckPending, batch sizes, and ack extension for high-throughput workloads."
   datePublished: "2026-03-26"
-  dateModified: "2026-04-02"
+  dateModified: "2026-04-11"
 ---
 
 # Performance Tuning
@@ -75,7 +75,7 @@ When `concurrency` is set, messages that exceed the limit are buffered in the Rx
 
 ## Ack extension
 
-Long-running handlers risk exceeding the `ack_wait` deadline, causing redelivery of messages that are still being processed. The `ackExtension` option prevents this by periodically extending the ack deadline while the handler is running.
+Long-running handlers risk exceeding the `ack_wait` deadline, causing redelivery of messages that are still being processed. The `ackExtension` option prevents this by periodically extending the ack deadline while the handler is running. This is the right knob when you can't predict handler duration upfront (e.g., slow external APIs, long-running [RPC JetStream mode](/docs/patterns/rpc) calls).
 
 ```typescript
 events: {
@@ -94,7 +94,7 @@ When enabled, the transport calls `msg.working()` at regular intervals (at half 
 
 ## S2 compression
 
-All streams default to [Snappy S2 compression](https://github.com/nats-io/nats-server), reducing disk I/O and storage with negligible CPU overhead (~1-3%). Requires **NATS Server >= 2.10**.
+All streams default to [S2 compression](https://github.com/klauspost/compress/tree/master/s2) (a Snappy-compatible codec), reducing disk I/O and storage with modest CPU overhead. The actual cost varies with payload entropy, message size, and CPU — measure before assuming it's free. Requires **NATS Server >= 2.10**.
 
 See [Default Configs — S2 Compression](/docs/reference/default-configs) for details and how to override per stream kind.
 
@@ -140,19 +140,15 @@ This configuration:
 
 ## Performance expectations
 
-Actual throughput depends heavily on handler complexity, network latency, and NATS deployment. Here are rough ballpark numbers for a single Node.js instance on modern hardware (16-core, 32 GB RAM, local NATS):
+Published benchmark numbers for this library don't exist yet — any figures you see elsewhere are guesses. A real benchmark suite is planned (see the project issues), and this section will be updated with reproducible results when it lands.
 
-| Scenario | Throughput | Notes |
-|----------|-----------|-------|
-| **Event handlers** (fast, no I/O) | 10k–50k msg/s | CPU-bound; concurrency helps up to core count |
-| **Event handlers** (DB write per msg) | 1k–5k msg/s | I/O-bound; increase concurrency and `max_ack_pending` |
-| **RPC Core mode** (fast handler) | 5k–20k req/s | Lowest latency; no stream overhead |
-| **RPC JetStream mode** | 1k–10k req/s | Adds stream write + inbox reply |
-| **Broadcast** (N instances) | Same per-instance as events | Each instance processes independently |
+In the meantime, here is what you can rely on without numbers:
 
-:::info These are guidelines, not guarantees
-Always benchmark your specific workload. The bottleneck is usually the handler, not the transport. Profile your handlers first before tuning transport settings.
-:::
+- **The bottleneck is almost always the handler**, not the transport. Database writes, external API calls, and serialization dominate. Profile the handler first.
+- **Core NATS RPC is the lowest-latency path of the two RPC modes** — no stream write, no inbox routing. Use it when in-cluster latency is the priority.
+- **JetStream RPC adds a stream persist plus an inbox reply** on top of Core NATS. You trade a fixed amount of added latency for the guarantee that the command survives a server restart. Quantify the trade-off on your own workload before planning around it.
+- **Event handler throughput scales with [`concurrency`](/docs/guides/performance#concurrency-control)** up to the point where your downstream dependencies become the bottleneck. CPU-bound handlers generally scale with core count; I/O-bound handlers benefit from higher concurrency and a larger `max_ack_pending`.
+- **Broadcast is not a throughput hit** — each instance processes its copy independently through its own consumer.
 
 ### Measuring your throughput
 

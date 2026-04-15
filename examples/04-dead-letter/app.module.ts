@@ -53,6 +53,17 @@ const dlqLogger = new Logger('DLQ');
           ack_wait: toNanos(2, 'seconds'),
         },
       },
+      // v2.9.0+ — built-in DLQ stream. Exhausted messages are
+      // republished to `billing__microservice_dlq-stream` with tracking
+      // headers (original subject, failure reason, delivery count,
+      // failed-at timestamp). This is the recommended production setup.
+      dlq: {
+        stream: {
+          max_age: toNanos(30, 'days'),
+        },
+      },
+      // Optional: fires as a notification after every successful DLQ
+      // publish and as a fallback if the DLQ publish itself throws.
       onDeadLetter: async (info) => {
         const errorMsg = info.error instanceof Error ? info.error.message : String(info.error);
 

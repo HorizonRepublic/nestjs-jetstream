@@ -6,7 +6,7 @@ schema:
   headline: Testing
   description: "Running unit and integration tests with Vitest and Testcontainers."
   datePublished: "2026-03-21"
-  dateModified: "2026-03-31"
+  dateModified: "2026-04-11"
 ---
 
 # Testing
@@ -43,7 +43,7 @@ This library handles real-time message delivery, consumer lifecycle, and self-he
 
 ### Unit Tests
 
-- **Location:** `src/**/*.spec.ts`
+- **Location:** `src/**/__tests__/*.spec.ts` (and `*.test.ts`) — tests live beside the code they cover in a dedicated `__tests__` folder
 - **Setup file:** `test/setup-unit.ts`
 - **Timeout:** 10 seconds per test
 - **Environment:** Node.js
@@ -99,7 +99,7 @@ Key helpers in `test/integration/`:
 |--------|---------|
 | `startNatsContainer()` | Start a NATS container with JetStream, return container + random port |
 | `createNatsConnection(port)` | Create a standalone NATS connection for assertions |
-| `createTestApp({ name, port }, controllers)` | Bootstrap a full NestJS app with the transport |
+| `createTestApp({ name, port }, controllers, clientTargets?)` | Bootstrap a full NestJS app with the transport. `clientTargets` is an array of service names that will be registered as `forFeature` clients — pass the names you need to `@Inject` in your test. |
 | `cleanupStreams(nc, serviceName)` | Delete streams/consumers created during a test |
 | `waitForCondition(fn, timeoutMs)` | Poll until an async condition is met |
 | `uniqueServiceName()` | Generate a unique service name per test |

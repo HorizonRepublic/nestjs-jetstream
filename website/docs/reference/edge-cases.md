@@ -1,12 +1,14 @@
 ---
 sidebar_position: 3
-title: Edge Cases & FAQ
+sidebar_label: "Edge Cases & FAQ"
+title: "Edge Cases & FAQ — NestJS JetStream Transport"
+description: "NestJS JetStream transport FAQ: publisher-only mode, consumer self-healing, NATS header limits, fire-and-forget messaging, and DeliverPolicy edge cases."
 schema:
   type: Article
-  headline: Edge Cases & FAQ
-  description: "Common questions and non-obvious behaviors of the transport."
+  headline: "Edge Cases & FAQ — NestJS JetStream Transport"
+  description: "NestJS JetStream transport FAQ: publisher-only mode, consumer self-healing, NATS header limits, fire-and-forget messaging, and DeliverPolicy edge cases."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-02"
+  dateModified: "2026-04-11"
 ---
 
 # Edge Cases & FAQ
@@ -17,13 +19,13 @@ Answers to common questions and non-obvious behaviors of the transport.
 
 **Q: How do I send a message without waiting for a response?**
 
-This transport does not implement fire-and-forget on Core NATS (non-JetStream) subjects. If you need fire-and-forget over raw NATS `publish()`, use the standard NestJS NATS transport (`@nestjs/microservices` `ClientProxy`) alongside this library. Both transports can share the same NATS cluster.
-
-For JetStream-based fire-and-forget, use `client.emit()` — this publishes an event to the event stream without expecting a response:
+Use `client.emit()`. This publishes an event to the event stream (JetStream-backed, so it is durable) and returns immediately without waiting for a handler:
 
 ```typescript
 await lastValueFrom(this.client.emit('order.created', { orderId: '123' }));
 ```
+
+If you specifically need non-durable Core NATS `publish()` (truly ephemeral pub/sub), use the standard `@nestjs/microservices` NATS transport alongside this library — both can share the same NATS cluster.
 
 ## Publisher-Only Mode
 
@@ -92,12 +94,12 @@ Specifically:
 
 Each consumer runs a self-healing loop with **exponential backoff**. When the pull-based message iterator ends unexpectedly (stream deletion, NATS restart, network partition), the consumer automatically re-establishes:
 
-1. First retry: **100ms** delay
-2. Each subsequent failure doubles the delay: 200ms, 400ms, 800ms, ...
+1. First retry: **200ms** delay (counter increments to 1 before the delay is computed)
+2. Each subsequent failure doubles the delay: 400ms, 800ms, 1.6s, 3.2s, ...
 3. Maximum delay is capped at **30 seconds**
 4. After a successful consumption cycle, the failure counter resets to zero
 
-The backoff formula is: `min(100ms * 2^failures, 30,000ms)`
+The backoff formula is: `min(100ms * 2^failures, 30_000ms)` — so with 1 failure the delay is 200ms, with 2 failures it is 400ms, and so on.
 
 This applies to all consumer types: event, command, broadcast, and ordered. The transport emits a `TransportEvent.Error` hook on each failure so you can monitor consumer health. See [Lifecycle Hooks](/docs/guides/lifecycle-hooks).
 
@@ -109,7 +111,7 @@ This applies to all consumer types: event, command, broadcast, and ordered. The 
 
 The recovery is **migration-aware**: if a migration backup stream exists (another pod is mid-migration), the consumer is NOT recreated. Instead, self-healing waits with exponential backoff until migration completes and the backup is cleaned up. This prevents consumers from interfering with message restoration on workqueue streams.
 
-During rolling updates, recovery never overwrites a newer pod's consumer configuration — if the consumer already exists (another pod recreated it), it is used as-is without config changes.
+During rolling updates, recovery never recreates a consumer that already exists — if another pod has recreated it, self-healing uses the existing consumer as-is rather than issuing its own create/update call.
 
 Ordered consumers are excluded from auto-recreation — they are ephemeral and managed internally by the nats.js client.
 
@@ -117,10 +119,13 @@ Ordered consumers are excluded from auto-recreation — they are ephemeral and m
 
 **Q: Are there limits on custom headers?**
 
-NATS imposes a total header size limit (default 4 KB per message in most server configurations). The transport uses several [reserved headers](/docs/reference/api/enumerations/JetstreamHeader) (`x-correlation-id`, `x-reply-to`, `x-subject`, `x-caller-name`, `x-error`) that count toward this limit.
+NATS imposes a total header size limit (default 4 KB per message in most server configurations). The transport uses five [transport-managed headers](/docs/reference/api/enumerations/JetstreamHeader) that count toward this limit:
+
+- **Reserved** — `x-correlation-id`, `x-reply-to`, `x-error`. Setting these via `JetstreamRecordBuilder.setHeader()` throws immediately at the call site.
+- **Auto-set** — `x-subject`, `x-caller-name`. The transport populates these on every outbound message; any value you pass via the builder is silently replaced at publish time.
 
 When using `JetstreamRecordBuilder.setHeader()`, keep in mind:
-- Reserved headers (`x-correlation-id`, `x-reply-to`, `x-error`) cannot be overwritten
+- None of the five transport-managed headers above can be overwritten from user code
 - Custom headers are additive — they are included alongside transport-managed headers
 - If the total header size exceeds the NATS server limit, the publish will fail
 

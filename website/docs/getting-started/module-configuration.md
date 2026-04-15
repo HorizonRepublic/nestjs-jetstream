@@ -1,19 +1,21 @@
 ---
 sidebar_position: 1
+sidebar_label: "Module Configuration"
 title: Module Configuration
+description: "forRoot(), forRootAsync(), and forFeature() registration methods with stream, consumer, and connection options."
 schema:
   type: Article
   headline: "Module Configuration"
   description: "forRoot(), forRootAsync(), and forFeature() registration methods with stream, consumer, and connection options."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-02"
+  dateModified: "2026-04-11"
 ---
 
 import Since from '@site/src/components/Since';
 
 # Module Configuration
 
-The library follows NestJS conventions with three registration methods: `forRoot()` for global setup, `forRootAsync()` for async/dynamic configuration, and `forFeature()` for per-module client registration.
+This is the main surface you'll touch day-to-day. The library follows NestJS conventions with three registration methods: `forRoot()` for global setup, `forRootAsync()` for async/dynamic configuration, and `forFeature()` for per-module client registration. If you only read one configuration page, read this one.
 
 ## forRoot()
 
@@ -82,11 +84,15 @@ import { JetstreamModule } from '@horizon-republic/nestjs-jetstream';
       name: 'orders',
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        servers: [config.getOrThrow('NATS_URL')],
-        rpc: { mode: config.get('RPC_MODE', 'core') as 'core' | 'jetstream' },
-        shutdownTimeout: config.get('SHUTDOWN_TIMEOUT', 10_000),
-      }),
+      useFactory: (config: ConfigService) => {
+        const mode = config.get<'core' | 'jetstream'>('RPC_MODE', 'core');
+
+        return {
+          servers: [config.getOrThrow('NATS_URL')],
+          rpc: mode === 'jetstream' ? { mode, timeout: 60_000 } : { mode },
+          shutdownTimeout: config.get('SHUTDOWN_TIMEOUT', 10_000),
+        };
+      },
     }),
   ],
 })
@@ -109,7 +115,7 @@ JetstreamModule.forRootAsync({
 })
 ```
 
-The `NatsConfigService` must be a provider that, when resolved, returns an object matching `Omit<JetstreamModuleOptions, 'name'>`.
+The `NatsConfigService` must be a class-based provider that directly implements `Omit<JetstreamModuleOptions, 'name'>` — the instance itself is used as the options object (NestJS does not call a factory method on it).
 
 ### useClass
 
@@ -177,20 +183,16 @@ export class OrdersService {
 }
 ```
 
-### getClientToken()
+### Injection token
 
-The injection token is simply the service name string. The library exports a `getClientToken()` helper if you prefer explicit token references:
+The injection token is the service name string you passed to `forFeature({ name })`. Use the standard NestJS pattern:
 
 ```typescript
-import { getClientToken } from '@horizon-republic/nestjs-jetstream';
-
-@Inject(getClientToken('users'))
-private readonly usersClient: ClientProxy;
-
-// Equivalent to:
 @Inject('users')
 private readonly usersClient: ClientProxy;
 ```
+
+The library exports a `getClientToken(name)` helper that returns the same string — it exists for code bases that prefer explicit symbolic tokens, but `@Inject('users')` is the canonical form and the one used throughout these docs.
 
 ### Per-client codec override
 
@@ -225,12 +227,14 @@ Below is every field in `JetstreamModuleOptions` with its type, default value, a
 | `codec` | `Codec` | `JsonCodec` | Global message serializer/deserializer. Swap for MessagePack, Protobuf, etc. |
 | `rpc` | `RpcConfig` | `{ mode: 'core' }` | RPC transport mode and configuration. See [RPC Config](#rpcconfig). |
 | `consumer` | `boolean` | `true` | Enable consumer infrastructure. Set to `false` for publisher-only services (e.g., API gateways). |
-| `events` | `StreamConsumerOverrides` | _(production defaults)_ | Overrides for workqueue event stream and consumer config. |
+| `events` | `StreamConsumerOverrides` | _(production defaults)_ | Overrides for workqueue event stream and consumer config. To enable [message scheduling](/docs/guides/scheduling), set `events.stream.allow_msg_schedules: true` (requires NATS >= 2.12). <Since version="2.8.0" /> |
 | `broadcast` | `StreamConsumerOverrides` | _(production defaults)_ | Overrides for broadcast event stream and consumer config. |
 | `ordered` | `OrderedEventOverrides` | _(production defaults)_ | Configuration for ordered event consumers. <Since version="2.4.0" /> |
-| `events.stream.allow_msg_schedules` | `boolean` | `false` | Enable [message scheduling](/docs/guides/scheduling) on the event stream. Requires NATS >= 2.12. <Since version="2.8.0" /> |
 | `hooks` | `Partial<TransportHooks>` | _(none)_ | Transport lifecycle hook handlers. Unset hooks are silently ignored. |
-| `onDeadLetter` | `(info: DeadLetterInfo) => Promise<void>` | _(none)_ | Async callback for dead letter handling. Called when a message exhausts all delivery attempts. <Since version="2.2.0" /> |
+| `onDeadLetter` | `(info: DeadLetterInfo) => Promise<void>` | _(none)_ | Async callback for dead letter handling. Called and awaited when a message exhausts all delivery attempts. <Since version="2.2.0" /> |
+| `dlq` | `{ stream?: StreamConfigOverrides }` | _(none)_ | Built-in Dead Letter Queue stream. When set, exhausted messages are automatically republished to a dedicated DLQ stream with tracking headers. See [Dead Letter Queue](/docs/guides/dead-letter-queue#built-in-dlq-stream). <Since version="2.9.0" /> |
+| `metadata` | `MetadataRegistryOptions` | _(auto-enabled if any handler has `meta`)_ | Handler metadata registry — publishes `@EventPattern` / `@MessagePattern` handler metadata to a NATS KV bucket for cross-service discovery. No-op when `consumer: false` (publisher-only services register nothing). See [Handler Metadata](/docs/patterns/handler-metadata). <Since version="2.9.0" /> |
+| `allowDestructiveMigration` | `boolean` | `false` | Allow automatic blue-green stream recreation for immutable property changes (e.g., `storage`). Without this flag, the transport logs a warning and keeps the existing stream config. See [Stream Migration](/docs/guides/stream-migration). <Since version="2.9.0" /> |
 | `shutdownTimeout` | `number` | `10_000` (10s) | Graceful shutdown timeout in milliseconds. Handlers exceeding this are abandoned. |
 | `connectionOptions` | `Partial<ConnectionOptions>` | _(none)_ | Raw NATS `ConnectionOptions` pass-through for TLS, auth, reconnection, etc. |
 
@@ -240,8 +244,12 @@ RPC configuration is a discriminated union on `mode`:
 
 | Mode | Timeout default | Persistence | Best for |
 |---|---|---|---|
-| `'core'` | 30s | None (in-memory) | Low-latency RPC, simple request/reply |
-| `'jetstream'` | 3 min | JetStream stream | Commands that must survive handler downtime |
+| `'core'` | `30_000` ms (30 s) | None (in-memory) | Low-latency RPC, simple request/reply |
+| `'jetstream'` | `180_000` ms (3 min) | JetStream stream | Commands that must survive handler downtime |
+
+:::note Timeout unit
+The `timeout` field is specified in **milliseconds**, not seconds. Writing `timeout: 30` means 30 ms — almost certainly a bug. Use `timeout: 30_000` for 30 seconds.
+:::
 
 ```typescript
 // Core mode (default) -- NATS native request/reply
@@ -332,12 +340,15 @@ The `name` and `servers` fields from the top-level options take precedence over 
 
 ### TLS
 
+The `tls` block is passed straight through to `@nats-io/transport-node`, so any field supported by its [`TlsOptions`](https://github.com/nats-io/nats.js/tree/main/transport-node) works here — paths (`certFile`, `keyFile`, `caFile`), inline PEM (`cert`, `key`, `ca`), or an empty `tls: {}` for server-only TLS against a broker whose CA your system already trusts.
+
 ```typescript
 JetstreamModule.forRoot({
   name: 'orders',
   servers: ['nats://nats.prod.internal:4222'],
   connectionOptions: {
     tls: {
+      // mTLS with client cert + private key, plus a self-signed CA
       certFile: '/certs/client.crt',
       keyFile: '/certs/client.key',
       caFile: '/certs/ca.crt',
@@ -345,6 +356,8 @@ JetstreamModule.forRoot({
   },
 })
 ```
+
+For server-only TLS (no client certificate) against a publicly-trusted broker, `tls: {}` is enough — it tells the client to upgrade the connection without sending a client identity.
 
 ### Authentication
 

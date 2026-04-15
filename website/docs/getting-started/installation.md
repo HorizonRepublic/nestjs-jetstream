@@ -1,5 +1,6 @@
 ---
 sidebar_position: 1
+sidebar_label: "Installation"
 title: Installation
 description: Install the package, set up NATS with Docker, and configure peer dependencies.
 schema:
@@ -7,10 +8,12 @@ schema:
   headline: "Installation"
   description: "Install the package, set up NATS with Docker, and configure peer dependencies."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-02"
+  dateModified: "2026-04-11"
 ---
 
 # Installation
+
+Get the package installed, NATS running locally, and the peer dependencies lined up. If you already have NATS, skip straight to [Quick Start](./quick-start).
 
 ## Install the package
 
