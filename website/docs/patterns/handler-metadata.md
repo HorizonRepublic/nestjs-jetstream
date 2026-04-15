@@ -1,12 +1,14 @@
 ---
 sidebar_position: 5
-title: "Handler Metadata Registry"
+sidebar_label: "Handler Metadata"
+title: "Handler Metadata Registry — NATS KV Service Discovery for NestJS"
+description: "Publish NestJS handler metadata to a NATS KV bucket for dynamic service discovery, API gateway routing, and automatic catalog generation."
 schema:
   type: Article
-  headline: "Handler Metadata Registry"
-  description: "Publish handler metadata to a NATS KV bucket for dynamic service discovery, API gateway routing, and catalog generation."
+  headline: "Handler Metadata Registry — NATS KV Service Discovery for NestJS"
+  description: "Publish NestJS handler metadata to a NATS KV bucket for dynamic service discovery, API gateway routing, and automatic catalog generation."
   datePublished: "2026-04-02"
-  dateModified: "2026-04-03"
+  dateModified: "2026-04-11"
 ---
 
 import Since from '@site/src/components/Since';
@@ -109,7 +111,7 @@ JetstreamModule.forRoot({
 |---|---|---|
 | `bucket` | `'handler_registry'` | KV bucket name |
 | `replicas` | `1` | Bucket replicas (1, 3, or 5) |
-| `ttl` | `30_000` | Entry TTL in ms — entries expire unless refreshed by heartbeat (min: 5000) |
+| `ttl` | `30_000` | Entry TTL in milliseconds — entries expire unless refreshed by heartbeat (minimum: `5_000` ms). Note: this field is in ms, not nanoseconds. |
 
 :::note Bucket configuration
 The KV bucket is created on first startup. Changing `ttl` or `replicas` after creation requires deleting the existing bucket — NATS KV does not update bucket config in place. Use the NATS CLI: `nats kv rm handler_registry`.
@@ -191,3 +193,11 @@ nats kv get handler_registry orders.ev.order.created
 # Watch for real-time updates
 nats kv watch handler_registry
 ```
+
+If entries are missing or the bucket fails to create, see [Troubleshooting — Handler metadata registry](/docs/guides/troubleshooting#handler-metadata-registry).
+
+## See also
+
+- [Naming Conventions — `metadataKey()`](/docs/reference/naming-conventions#metadatakeyservicename-kind-pattern) — programmatic key construction
+- [Module Configuration](/docs/getting-started/module-configuration) — the `metadata` option in the full options reference
+- [Events (Workqueue)](/docs/patterns/events), [RPC](/docs/patterns/rpc), [Broadcast](/docs/patterns/broadcast), [Ordered Events](/docs/patterns/ordered-events) — any handler type can attach `meta`

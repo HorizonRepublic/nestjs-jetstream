@@ -6,7 +6,7 @@ schema:
   headline: Naming Conventions
   description: "Stream, consumer, and subject naming patterns derived from the service name."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-02"
+  dateModified: "2026-04-11"
 ---
 
 # Naming Conventions
@@ -46,6 +46,7 @@ Given `name: 'orders'`, the transport generates the following names:
 | Command stream | `{name}__microservice_cmd-stream` | `orders__microservice_cmd-stream` |
 | Ordered stream | `{name}__microservice_ordered-stream` | `orders__microservice_ordered-stream` |
 | Broadcast stream | `broadcast-stream` | `broadcast-stream` |
+| [DLQ stream](/docs/guides/dead-letter-queue#built-in-dlq-stream) | `{name}__microservice_dlq-stream` | `orders__microservice_dlq-stream` |
 
 ### Consumers
 
@@ -128,6 +129,27 @@ import { consumerName, StreamKind } from '@horizon-republic/nestjs-jetstream';
 consumerName('orders', StreamKind.Event);     // 'orders__microservice_ev-consumer'
 consumerName('orders', StreamKind.Command);   // 'orders__microservice_cmd-consumer'
 consumerName('orders', StreamKind.Broadcast); // 'orders__microservice_broadcast-consumer'
+```
+
+### `dlqStreamName(serviceName)`
+
+Builds the [Dead Letter Queue stream](/docs/guides/dead-letter-queue#built-in-dlq-stream) name for a given service. Use it to subscribe to the DLQ stream from an external consumer without hardcoding the naming pattern.
+
+```typescript
+import { dlqStreamName } from '@horizon-republic/nestjs-jetstream';
+
+dlqStreamName('orders'); // 'orders__microservice_dlq-stream'
+```
+
+### `metadataKey(serviceName, kind, pattern)`
+
+Builds the KV key used by the [handler metadata registry](/docs/patterns/handler-metadata). External watchers (gateways, dashboards, service catalogs) use this helper to look up specific handlers in the shared `handler_registry` bucket.
+
+```typescript
+import { metadataKey, StreamKind } from '@horizon-republic/nestjs-jetstream';
+
+metadataKey('orders', StreamKind.Event, 'order.created');
+// 'orders.ev.order.created'
 ```
 
 ## Stream Subject Wildcards

@@ -1,12 +1,14 @@
 ---
 sidebar_position: 3
-title: "Health Checks"
+sidebar_label: "Health Checks"
+title: "Health Checks — NestJS Terminus Indicator for NATS JetStream"
+description: "JetstreamHealthIndicator reports NATS connection status and RTT latency for NestJS Kubernetes readiness/liveness probes, with or without @nestjs/terminus."
 schema:
   type: Article
-  headline: "Health Checks"
-  description: "JetstreamHealthIndicator for NestJS Terminus integration with connection status and latency."
+  headline: "Health Checks — NestJS Terminus Indicator for NATS JetStream"
+  description: "JetstreamHealthIndicator reports NATS connection status and RTT latency for NestJS Kubernetes readiness/liveness probes, with or without @nestjs/terminus."
   datePublished: "2026-03-21"
-  dateModified: "2026-03-26"
+  dateModified: "2026-04-11"
 ---
 
 import Since from '@site/src/components/Since';
@@ -15,7 +17,7 @@ import Since from '@site/src/components/Since';
 
 <Since version="2.1.0" />
 
-The library provides a `JetstreamHealthIndicator` that reports the NATS connection status and round-trip latency. It is auto-registered by `forRoot()` and exported from the module — no additional setup required.
+The library provides a `JetstreamHealthIndicator` that reports the NATS connection status and round-trip latency. It is auto-registered by [`forRoot()`](/docs/getting-started/module-configuration#forroot) and exported from the module — no additional setup required.
 
 ## What it checks
 
@@ -194,9 +196,6 @@ export class MonitoringService {
 
 No need to add it to any `providers` array or re-import `JetstreamModule` — it's available globally via `forRoot()`.
 
-## What's next?
+## See also
 
-- [**Lifecycle Hooks**](/docs/guides/lifecycle-hooks) — monitor connection state changes (connect, disconnect, reconnect)
-- [**Graceful Shutdown**](/docs/guides/graceful-shutdown) — drain connections cleanly on termination
-- [**Module Configuration**](/docs/getting-started/module-configuration) — full options reference
-- [**Troubleshooting**](/docs/guides/troubleshooting) — diagnosing connection and consumer issues
+If you want more than a point-in-time check, [lifecycle hooks](/docs/guides/lifecycle-hooks) give you push-based visibility into every `Connect`, `Disconnect`, and `Reconnect` event — useful for streaming connection state into your metrics pipeline alongside the health indicator.

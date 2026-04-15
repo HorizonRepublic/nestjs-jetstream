@@ -52,7 +52,7 @@ export default function Root({ children }) {
   "headline": "Installation",
   "description": "Install the package, set up NATS with Docker, and configure peer dependencies.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-04-02"
+  "dateModified": "2026-04-11"
 },
       
     '/docs/getting-started/module-configuration/': {
@@ -60,7 +60,7 @@ export default function Root({ children }) {
   "headline": "Module Configuration",
   "description": "forRoot(), forRootAsync(), and forFeature() registration methods with stream, consumer, and connection options.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-04-02"
+  "dateModified": "2026-04-11"
 },
       
     '/docs/getting-started/quick-start/': {
@@ -68,7 +68,15 @@ export default function Root({ children }) {
   "headline": "Quick Start",
   "description": "Complete working example in four steps: register the module, connect the transport, define handlers, and send messages.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-03-21"
+  "dateModified": "2026-04-11"
+},
+      
+    '/docs/getting-started/why-jetstream/': {
+  "@type": "Article",
+  "headline": "Why JetStream?",
+  "description": "When the built-in NestJS NATS transport is enough, and when you need JetStream for production-grade messaging.",
+  "datePublished": "2026-04-11",
+  "dateModified": "2026-04-11"
 },
       
     '/docs/guides/custom-codec/': {
@@ -76,15 +84,15 @@ export default function Root({ children }) {
   "headline": "Custom Codec",
   "description": "Replace the default JSON codec with MsgPack, Protobuf, or any custom binary format.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-04-02"
+  "dateModified": "2026-04-11"
 },
       
     '/docs/guides/dead-letter-queue/': {
   "@type": "Article",
   "headline": "Dead Letter Queue",
-  "description": "Handle messages that exhaust all delivery attempts via onDeadLetter callback.",
+  "description": "Handle messages that exhaust all delivery attempts via a first-class DLQ stream or onDeadLetter callback.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-03-21"
+  "dateModified": "2026-04-11"
 },
       
     '/docs/guides/graceful-shutdown/': {
@@ -92,7 +100,7 @@ export default function Root({ children }) {
   "headline": "Graceful Shutdown",
   "description": "Automatic shutdown handling with in-flight message completion and NATS connection drain.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-04-02"
+  "dateModified": "2026-04-11"
 },
       
     '/docs/guides/handler-context/': {
@@ -100,7 +108,7 @@ export default function Root({ children }) {
   "headline": "Handler Context",
   "description": "Access message metadata, headers, and control settlement actions via RpcContext.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-03-30"
+  "dateModified": "2026-04-11"
 },
       
     '/docs/guides/health-checks/': {
@@ -108,7 +116,7 @@ export default function Root({ children }) {
   "headline": "Health Checks",
   "description": "JetstreamHealthIndicator for NestJS Terminus integration with connection status and latency.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-03-26"
+  "dateModified": "2026-04-11"
 },
       
     '/docs/guides/lifecycle-hooks/': {
@@ -116,7 +124,7 @@ export default function Root({ children }) {
   "headline": "Lifecycle Hooks",
   "description": "Transport lifecycle events for connection changes, errors, message routing, and dead letters.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-04-02"
+  "dateModified": "2026-04-11"
 },
       
     '/docs/guides/migration/': {
@@ -124,7 +132,7 @@ export default function Root({ children }) {
   "headline": "Migration Guide",
   "description": "Migrate from the built-in NestJS NATS transport to JetStream with durable delivery.",
   "datePublished": "2026-03-26",
-  "dateModified": "2026-04-02"
+  "dateModified": "2026-04-11"
 },
       
     '/docs/guides/per-message-ttl/': {
@@ -132,7 +140,7 @@ export default function Root({ children }) {
   "headline": "Per-Message TTL",
   "description": "Individual message expiration independent of stream max_age, powered by NATS 2.11 Nats-TTL header.",
   "datePublished": "2026-04-02",
-  "dateModified": "2026-04-02"
+  "dateModified": "2026-04-11"
 },
       
     '/docs/guides/performance/': {
@@ -140,7 +148,7 @@ export default function Root({ children }) {
   "headline": "Performance Tuning",
   "description": "Tune ackWait, maxAckPending, batch sizes, and ack extension for high-throughput workloads.",
   "datePublished": "2026-03-26",
-  "dateModified": "2026-04-02"
+  "dateModified": "2026-04-11"
 },
       
     '/docs/guides/record-builder/': {
@@ -148,7 +156,7 @@ export default function Root({ children }) {
   "headline": "Record Builder & Deduplication",
   "description": "Build messages with custom headers, message IDs, and deduplication via JetstreamRecordBuilder.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-04-02"
+  "dateModified": "2026-04-11"
 },
       
     '/docs/guides/scheduling/': {
@@ -156,7 +164,7 @@ export default function Root({ children }) {
   "headline": "Scheduling (Delayed Jobs)",
   "description": "One-shot delayed message delivery powered by NATS 2.12 message scheduling.",
   "datePublished": "2026-04-01",
-  "dateModified": "2026-04-01"
+  "dateModified": "2026-04-11"
 },
       
     '/docs/guides/stream-migration/': {
@@ -164,7 +172,7 @@ export default function Root({ children }) {
   "headline": "Stream Migration",
   "description": "Safe stream recreation for immutable property changes with automatic message preservation via blue-green sourcing.",
   "datePublished": "2026-04-02",
-  "dateModified": "2026-04-02"
+  "dateModified": "2026-04-11"
 },
       
     '/docs/guides/troubleshooting/': {
@@ -172,7 +180,7 @@ export default function Root({ children }) {
   "headline": "Troubleshooting",
   "description": "Common issues and how to resolve them.",
   "datePublished": "2026-03-26",
-  "dateModified": "2026-03-26"
+  "dateModified": "2026-04-11"
 },
       
     '/docs/': {
@@ -180,7 +188,7 @@ export default function Root({ children }) {
   "headline": "Introduction",
   "description": "Production-grade NestJS transport for NATS JetStream with durable delivery, retry, replay, and dead letter handling.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-04-01"
+  "dateModified": "2026-04-11"
 },
       
     '/docs/patterns/broadcast/': {
@@ -188,7 +196,7 @@ export default function Root({ children }) {
   "headline": "Broadcast Events",
   "description": "Fan-out event delivery to every subscribing service instance.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-04-02"
+  "dateModified": "2026-04-11"
 },
       
     '/docs/patterns/events/': {
@@ -196,7 +204,7 @@ export default function Root({ children }) {
   "headline": "Events (Workqueue)",
   "description": "Workqueue events with at-least-once delivery, automatic retry, deduplication, and dead letter handling.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-04-02"
+  "dateModified": "2026-04-11"
 },
       
     '/docs/patterns/handler-metadata/': {
@@ -204,7 +212,7 @@ export default function Root({ children }) {
   "headline": "Handler Metadata Registry",
   "description": "Publish handler metadata to a NATS KV bucket for dynamic service discovery, API gateway routing, and catalog generation.",
   "datePublished": "2026-04-02",
-  "dateModified": "2026-04-03"
+  "dateModified": "2026-04-11"
 },
       
     '/docs/patterns/ordered-events/': {
@@ -212,7 +220,7 @@ export default function Root({ children }) {
   "headline": "Ordered Events",
   "description": "Strict sequential event delivery with ephemeral consumers and replay policies.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-04-02"
+  "dateModified": "2026-04-11"
 },
       
     '/docs/patterns/rpc/': {
@@ -220,7 +228,7 @@ export default function Root({ children }) {
   "headline": "RPC (Request/Reply)",
   "description": "Synchronous request-reply via Core NATS or JetStream with timeout and error handling.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-03-26"
+  "dateModified": "2026-04-11"
 },
       
     '/docs/reference/default-configs/': {
@@ -228,7 +236,7 @@ export default function Root({ children }) {
   "headline": "Default Configs",
   "description": "Default stream and consumer configurations for every StreamKind.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-04-02"
+  "dateModified": "2026-04-11"
 },
       
     '/docs/reference/edge-cases/': {
@@ -236,7 +244,7 @@ export default function Root({ children }) {
   "headline": "Edge Cases & FAQ",
   "description": "Common questions and non-obvious behaviors of the transport.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-04-02"
+  "dateModified": "2026-04-11"
 },
       
     '/docs/reference/naming-conventions/': {
@@ -244,7 +252,7 @@ export default function Root({ children }) {
   "headline": "Naming Conventions",
   "description": "Stream, consumer, and subject naming patterns derived from the service name.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-04-02"
+  "dateModified": "2026-04-11"
 },
       
 

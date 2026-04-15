@@ -1,5 +1,6 @@
 ---
 sidebar_position: 2
+sidebar_label: "Quick Start"
 title: Quick Start
 description: Complete working example in four steps — register, connect, handle, and send.
 schema:
@@ -7,14 +8,12 @@ schema:
   headline: "Quick Start"
   description: "Complete working example in four steps: register the module, connect the transport, define handlers, and send messages."
   datePublished: "2026-03-21"
-  dateModified: "2026-03-21"
+  dateModified: "2026-04-11"
 ---
 
 # Quick Start
 
-This guide walks you through a complete working example in four steps: register the module, connect the transport, define handlers, and send messages.
-
-By the end, you'll have a NestJS application that sends and receives JetStream messages.
+Five minutes from now you'll have a NestJS service that emits `order.created`, survives a restart without losing the message, and responds to `order.get` RPCs — all over NATS JetStream. Four steps: register the module, connect the transport, define handlers, send messages.
 
 :::info Prerequisites
 Make sure you have [installed the library](/docs/getting-started/installation) and have a NATS server running with JetStream enabled.
@@ -71,6 +70,11 @@ const bootstrap = async () => {
     { inheritAppConfig: true },
   );
 
+  // Required so the JetStream transport drains in-flight handlers on SIGTERM.
+  // Skip this and messages in flight when the pod dies will be redelivered
+  // only after `ack_wait` expires — slower recovery, noisier metrics.
+  app.enableShutdownHooks();
+
   await app.startAllMicroservices();
   await app.listen(3000);
 };
@@ -103,7 +107,7 @@ export class OrdersController {
   @EventPattern('order.created')
   handleOrderCreated(@Payload() data: { orderId: number; total: number }): void {
     this.logger.log(`Processing order ${data.orderId}, total: $${data.total}`);
-    // If this throws, the message is nak'd and redelivered (up to max_deliver times)
+    // If this throws, the message is nak'd and redelivered (up to max_deliver — default 3)
   }
 
   /**
@@ -144,7 +148,7 @@ export class OrdersController {
 Inject the client by the service name you used in `forFeature()` and use the standard `ClientProxy` API:
 
 ```typescript title="src/gateway.controller.ts"
-import { Controller, Get, Inject, Param } from '@nestjs/common';
+import { Controller, Get, Inject, Param, ParseIntPipe } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { Observable } from 'rxjs';
 
@@ -171,8 +175,8 @@ export class GatewayController {
 
   /** Send an RPC command and wait for a response. */
   @Get(':id')
-  getOrder(@Param('id') id: string): Observable<{ id: number; status: string }> {
-    return this.client.send('order.get', { id: Number(id) });
+  getOrder(@Param('id', ParseIntPipe) id: number): Observable<{ id: number; status: string }> {
+    return this.client.send<{ id: number; status: string }>('order.get', { id });
   }
 }
 ```
@@ -211,4 +215,4 @@ curl http://localhost:3000/orders/42
 - [**Module Configuration**](/docs/getting-started/module-configuration) — learn about all configuration options, async setup, and advanced connection settings
 - [**RPC Patterns**](/docs/patterns/rpc) — deep dive into Core vs JetStream RPC modes
 - [**Events & Broadcast**](/docs/patterns/events) — workqueue events, broadcast fan-out, and ordered events
-- [**Record Builder**](/docs/guides/record-builder) — attach custom headers and per-message timeouts
+- [**Record Builder & Deduplication**](/docs/guides/record-builder) — custom headers, deterministic message IDs, per-request RPC timeouts, and deduplication

@@ -4,7 +4,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
   title: '@horizon-republic/nestjs-jetstream',
-  tagline: 'Ship reliable microservices with NATS JetStream and NestJS',
+  tagline: 'The NestJS NATS transport backed by JetStream — durable events, broadcast, ordered delivery, and RPC',
   favicon: 'img/favicon.svg',
   url: 'https://horizonrepublic.github.io',
   baseUrl: '/nestjs-jetstream/',
@@ -80,14 +80,40 @@ const config: Config = {
     ],
   ],
   headTags: [
-    { tagName: 'meta', attributes: { name: 'keywords', content: 'NestJS, NATS, JetStream, microservices, message queue, event-driven, Node.js, TypeScript' } },
+    {
+      tagName: 'meta',
+      attributes: {
+        name: 'keywords',
+        content: 'NestJS NATS, NestJS NATS transport, NestJS JetStream, NATS JetStream, NestJS microservice transport, NestJS NATS transporter, dead letter queue, broadcast events, ordered events, RPC, Node.js, TypeScript',
+      },
+    },
+    {
+      tagName: 'script',
+      attributes: {
+        type: 'application/ld+json',
+      },
+      innerHTML: JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'SoftwareSourceCode',
+        name: '@horizon-republic/nestjs-jetstream',
+        alternateName: 'NestJS NATS Transport',
+        description:
+          'NestJS NATS transport powered by JetStream — durable events, broadcast, ordered delivery, RPC, and dead letter queues for production microservices.',
+        programmingLanguage: 'TypeScript',
+        runtimePlatform: 'Node.js',
+        codeRepository: 'https://github.com/HorizonRepublic/nestjs-jetstream',
+        license: 'https://github.com/HorizonRepublic/nestjs-jetstream/blob/main/LICENSE',
+        keywords:
+          'NestJS NATS, NestJS JetStream, NATS JetStream transport, NestJS microservice',
+      }),
+    },
   ],
   themeConfig: {
     metadata: [
-      { name: 'description', content: 'Events, broadcast, ordered delivery, and RPC for NestJS — powered by NATS JetStream.' },
+      { name: 'description', content: 'NestJS NATS transport powered by JetStream — durable events, broadcast, ordered delivery, RPC, and dead letter queues for production microservices.' },
       { property: 'og:type', content: 'website' },
-      { property: 'og:title', content: '@horizon-republic/nestjs-jetstream' },
-      { property: 'og:description', content: 'Ship reliable microservices with NATS JetStream and NestJS — events, broadcast, ordered delivery, and RPC.' },
+      { property: 'og:title', content: 'NestJS NATS Transport with JetStream' },
+      { property: 'og:description', content: 'NestJS NATS transport backed by JetStream — durable events, broadcast, ordered delivery, and RPC for production microservices.' },
       { name: 'twitter:card', content: 'summary' },
     ],
     mermaid: {

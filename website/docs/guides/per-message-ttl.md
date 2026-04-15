@@ -1,12 +1,14 @@
 ---
 sidebar_position: 4
-title: "Per-Message TTL"
+sidebar_label: "Per-Message TTL"
+title: "Per-Message TTL — NATS JetStream Message Expiration"
+description: "Individual NestJS NATS JetStream message expiration via the Nats-TTL header (NATS 2.11, ADR-43), independent of the stream's max_age."
 schema:
   type: Article
-  headline: "Per-Message TTL"
-  description: "Individual message expiration independent of stream max_age, powered by NATS 2.11 Nats-TTL header."
+  headline: "Per-Message TTL — NATS JetStream Message Expiration"
+  description: "Individual NestJS NATS JetStream message expiration via the Nats-TTL header (NATS 2.11, ADR-43), independent of the stream's max_age."
   datePublished: "2026-04-02"
-  dateModified: "2026-04-02"
+  dateModified: "2026-04-11"
 ---
 
 import Since from '@site/src/components/Since';
@@ -67,25 +69,31 @@ The consumer handles it like any normal event — no changes needed on the recei
 
 ## How it works
 
-1. `ttl(toNanos(30, 'minutes'))` converts to a Go duration string (`"30m"`)
-2. On publish, the library passes `ttl: "30m"` to the NATS JetStream publish options
-3. NATS sets the `Nats-TTL` header on the stored message
-4. After 30 minutes, NATS automatically removes the message from the stream
-5. If a consumer processes the message before expiry, it works normally
+1. `.ttl(toNanos(30, 'minutes'))` passes the TTL through to the NATS JetStream publish options
+2. NATS sets the `Nats-TTL` header on the stored message (see [ADR-43](https://github.com/nats-io/nats-architecture-and-design/blob/main/adr/ADR-43.md))
+3. After 30 minutes, NATS automatically removes the message from the stream
+4. If a consumer processes the message before expiry, it works normally
 
 ## Important: `max_age` interaction
 
 Per-message TTL works **independently** from stream `max_age`:
 
-- A message with `ttl: "5m"` in a stream with `max_age: 7d` expires after 5 minutes
+- A message built with `.ttl(toNanos(5, 'minutes'))` in a stream with `max_age: 7 days` expires after 5 minutes
 - A message without TTL in the same stream expires after 7 days (stream default)
-- If `ttl` exceeds `max_age`, the message still expires at `max_age` (stream wins)
+- If the per-message TTL exceeds `max_age`, the message still expires at `max_age` (stream wins)
 
 ## Limitations
 
 | Limitation | Details |
 |-----------|---------|
-| **Events only** | `ttl()` is ignored for RPC (`client.send()`); a warning is logged |
+| **Events only** | `ttl()` is ignored for RPC ([`client.send()`](/docs/patterns/rpc)); a warning is logged |
 | **NATS >= 2.11** | `allow_msg_ttl` is not supported by older server versions |
 | **Per-stream opt-in** | Each stream must have `allow_msg_ttl: true` explicitly |
 | **No consumer-side awareness** | Consumers don't know if a message has TTL — they process it normally before expiry |
+
+## See also
+
+- [Record Builder & Deduplication](/docs/guides/record-builder) — full `JetstreamRecordBuilder` API including `.ttl()`, `.setMessageId()`, `.scheduleAt()`
+- [Scheduling (Delayed Jobs)](/docs/guides/scheduling) — the sibling feature for one-shot delayed delivery
+- [Default Configs](/docs/reference/default-configs#enable-only-can-be-turned-on-but-never-off) — `allow_msg_ttl` in the enable-only stream properties table
+- [Module Configuration](/docs/getting-started/module-configuration) — where to set `events.stream.allow_msg_ttl`

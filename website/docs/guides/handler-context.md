@@ -1,19 +1,21 @@
 ---
 sidebar_position: 2
-title: "Handler Context"
+sidebar_label: "Handler Context"
+title: "RpcContext — Handler Context & Message Settlement"
+description: "Access JetStream metadata and control ack, retry, and terminate actions in NestJS message handlers via RpcContext."
 schema:
   type: Article
-  headline: "Handler Context"
-  description: "Access message metadata, headers, and control settlement actions via RpcContext."
+  headline: "RpcContext — Handler Context & Message Settlement"
+  description: "Access JetStream metadata and control ack, retry, and terminate actions in NestJS message handlers via RpcContext."
   datePublished: "2026-03-21"
-  dateModified: "2026-03-30"
+  dateModified: "2026-04-11"
 ---
 
 import Since from '@site/src/components/Since';
 
 # Handler Context
 
-Every `@EventPattern` and `@MessagePattern` handler can inject `RpcContext` to access message metadata, JetStream delivery info, and control message settlement. This works identically for both event and RPC handlers.
+Every `@EventPattern` and `@MessagePattern` handler can inject `RpcContext` to access message metadata, JetStream delivery info, and control message settlement.
 
 ## Injecting the context
 
@@ -48,9 +50,9 @@ export class OrdersController {
 | `getHeader(key)` | `string \| undefined` | Value of a single header, or `undefined` if missing |
 | `getHeaders()` | `MsgHdrs \| undefined` | All NATS message headers (the raw NATS `MsgHdrs` object from `@nats-io/transport-node`) |
 | `isJetStream()` | `boolean` | Type guard — returns `true` when the message is a JetStream message |
-| `getMessage()` | `JsMsg \| Msg` | The raw NATS message (type depends on transport mode) |
+| `getMessage()` | `JsMsg \| Msg` | The raw NATS message. Narrowed to `JsMsg` after a successful `isJetStream()` check, or `Msg` when the check returns `false`. |
 
-### JetStream metadata
+### JetStream message info
 
 <Since version="2.7.0" />
 
@@ -76,7 +78,7 @@ Control how the transport acknowledges the message — without throwing errors.
 | `ctx.terminate(reason?)` | `msg.term(reason)` — permanent reject | Message no longer relevant (order cancelled, entity deleted) |
 | *(no action)* | `msg.ack()` — acknowledge | Successful processing (default) |
 
-## JetStream metadata
+## Accessing JetStream metadata
 
 Access delivery info directly without type narrowing:
 
@@ -96,7 +98,9 @@ Use `getDeliveryCount()` for fallback logic on retries:
 ```typescript
 @EventPattern('payment.process')
 async handle(@Payload() data: PaymentDto, @Ctx() ctx: RpcContext) {
-  if (ctx.getDeliveryCount()! >= 3) {
+  const attempt = ctx.getDeliveryCount() ?? 0;
+
+  if (attempt >= 3) {
     // 3rd attempt — try a different payment provider
     await this.fallbackProvider.process(data);
     return;
@@ -170,7 +174,7 @@ flowchart TD
 :::
 
 :::info Scope
-Settlement actions only affect **JetStream event handlers** (workqueue and broadcast). They have no effect on ordered events (auto-acknowledged) or RPC handlers (separate settlement logic).
+Settlement actions only affect **JetStream event handlers** ([workqueue](/docs/patterns/events) and [broadcast](/docs/patterns/broadcast)). They have no effect on [ordered events](/docs/patterns/ordered-events) (auto-acknowledged) or [RPC handlers](/docs/patterns/rpc) (separate settlement logic).
 :::
 
 ## Extracting custom headers
