@@ -4,9 +4,9 @@ title: "Custom Codec"
 schema:
   type: Article
   headline: "Custom Codec"
-  description: "Replace the default JSON codec with MsgPack, Protobuf, or any custom binary format."
+  description: "Replace the default JSON codec with the built-in MessagePack codec, Protobuf, or any custom binary format."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-11"
+  dateModified: "2026-04-16"
 ---
 
 # Custom Codec
@@ -41,30 +41,84 @@ const bytes = codec.encode({ hello: 'world' });   // Uint8Array
 const data = codec.decode(bytes);                  // { hello: 'world' }
 ```
 
-Rule of thumb: stick with JSON until serialization shows up in CPU profiles or your p95 payload exceeds ~10 KB on the wire. That's when a binary codec (MessagePack, Protobuf) starts paying for itself.
+Rule of thumb: stick with JSON until serialization shows up in CPU profiles or your p95 payload exceeds ~1-2 KB on the wire. Below that size, `JsonCodec` wins on constant per-call overhead. Above it, a binary codec like MessagePack starts paying for itself — and the gap widens dramatically as payloads grow.
 
-## MsgPack implementation
+## Built-in: MsgpackCodec
 
-[MessagePack](https://msgpack.org/) produces smaller payloads than JSON with faster serialization. Here is a complete implementation using `@msgpack/msgpack`:
+The library ships a ready-to-use [MessagePack](https://msgpack.org/) codec powered by [`msgpackr`](https://www.npmjs.com/package/msgpackr). MessagePack produces a smaller wire frame than JSON and decodes much faster on structured payloads, while staying cross-language — Python, Go, Java, Rust, and other runtimes all have MessagePack libraries.
 
-```typescript title="src/codec/msgpack.codec.ts"
-import { encode, decode } from '@msgpack/msgpack';
-import type { Codec } from '@horizon-republic/nestjs-jetstream';
+### When to use it
 
-export class MsgPackCodec implements Codec {
-  encode(data: unknown): Uint8Array {
-    return encode(data);
-  }
+`MsgpackCodec` is the right choice when **any** of these apply:
 
-  decode(data: Uint8Array): unknown {
-    return decode(data);
-  }
-}
-```
+- Average payload size exceeds **~1-2 KB**
+- Payloads contain **deep nesting**, **repeated object shapes**, or **long strings**
+- `JSON.parse` is visible in flame graphs on the consumer side
+- Network bandwidth or NATS stream storage is a bottleneck
+
+Stick with `JsonCodec` when:
+
+- Payloads are mostly small (`< 1 KB`) flat objects — JSON is faster there
+- You need a JSON-compatible wire format for tooling (`nats sub`, log aggregators parsing payloads, etc.)
+- A non-Node language in your fleet does not have a maintained MessagePack library
+
+### Decode performance (relative to JSON)
+
+Measured on the library's own codec bench, sync `decode` throughput. Payload buckets refer to the serialized wire size produced by the fixture generator:
+
+| Payload         | Shape          | vs JSON  |
+|-----------------|----------------|----------|
+| tiny (~64 B)    | flat / nested  | JSON wins by 15-34% |
+| small (~1 KB)   | flat / nested  | JSON wins by ~12%   |
+| small (~1 KB)   | string-heavy   | **msgpack +18%**    |
+| medium (~10 KB) | flat           | **msgpack +193%**   |
+| medium (~10 KB) | nested         | **msgpack +104%**   |
+| medium (~10 KB) | string-heavy   | **msgpack +264%**   |
+| large (~100 KB) | flat           | **msgpack +478%**   |
+| large (~100 KB) | string-heavy   | **msgpack +490%**   |
+| huge (~1 MB)    | string-heavy   | **msgpack +325%**   |
+
+### Installation
+
+`msgpackr` is an **optional** peer dependency — install it only if you opt into this codec:
 
 ```bash
-pnpm add @msgpack/msgpack
+npm install msgpackr
+# or: pnpm add msgpackr
+# or: yarn add msgpackr
 ```
+
+### Usage
+
+Pass a pre-constructed `Packr` instance so the library stays decoupled from `msgpackr` internals:
+
+```typescript
+import { JetstreamModule, MsgpackCodec } from '@horizon-republic/nestjs-jetstream';
+import { Packr } from 'msgpackr';
+
+@Module({
+  imports: [
+    JetstreamModule.forRoot({
+      name: 'orders',
+      servers: ['nats://localhost:4222'],
+      codec: new MsgpackCodec(new Packr()),
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+### Record extension (Node-to-Node)
+
+`msgpackr` supports a structured-clone record extension that deduplicates repeated object shapes across messages, yielding extra decode speed under sustained load with a stable payload schema:
+
+```typescript
+codec: new MsgpackCodec(new Packr({ structuredClone: true })),
+```
+
+:::note
+The record extension is a `msgpackr`-specific optimization — use it only when every producer and consumer on the stream also runs `msgpackr` with matching options. Mixed fleets (e.g. a Python consumer) must stick with the plain `new Packr()`.
+:::
 
 ## Protobuf implementation
 
@@ -105,15 +159,15 @@ Pass a codec instance in the `forRoot()` options to use it for all messages:
 
 ```typescript title="src/app.module.ts"
 import { Module } from '@nestjs/common';
-import { JetstreamModule } from '@horizon-republic/nestjs-jetstream';
-import { MsgPackCodec } from './codec/msgpack.codec';
+import { JetstreamModule, MsgpackCodec } from '@horizon-republic/nestjs-jetstream';
+import { Packr } from 'msgpackr';
 
 @Module({
   imports: [
     JetstreamModule.forRoot({
       name: 'orders',
       servers: ['nats://localhost:4222'],
-      codec: new MsgPackCodec(),
+      codec: new MsgpackCodec(new Packr()),
     }),
   ],
 })
@@ -127,14 +181,14 @@ JetstreamModule.forRootAsync({
   name: 'orders',
   useFactory: () => ({
     servers: ['nats://localhost:4222'],
-    codec: new MsgPackCodec(),
+    codec: new MsgpackCodec(new Packr()),
   }),
 })
 ```
 
 ## Per-client override via forFeature
 
-If a specific client needs a different codec (e.g., it talks to a legacy service that uses JSON while the rest of your system uses MsgPack), override it in `forFeature()`:
+If a specific client needs a different codec (e.g., it talks to a legacy service that uses JSON while the rest of your system uses MessagePack), override it in `forFeature()`:
 
 ```typescript title="src/payments/payments.module.ts"
 import { Module } from '@nestjs/common';

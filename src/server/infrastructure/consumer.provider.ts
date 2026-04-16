@@ -257,7 +257,6 @@ export class ConsumerProvider {
         throw new Error('Ordered consumers are ephemeral and should not use durable config');
       /* v8 ignore next 5 -- exhaustive switch guard, unreachable */
       default: {
-        // eslint-disable-next-line @typescript-eslint/naming-convention
         const _exhaustive: never = kind;
 
         throw new Error(`Unexpected StreamKind: ${_exhaustive}`);
@@ -278,7 +277,6 @@ export class ConsumerProvider {
         throw new Error('Ordered consumers are ephemeral and should not use durable config');
       /* v8 ignore next 5 -- exhaustive switch guard, unreachable */
       default: {
-        // eslint-disable-next-line @typescript-eslint/naming-convention
         const _exhaustive: never = kind;
 
         throw new Error(`Unexpected StreamKind: ${_exhaustive}`);

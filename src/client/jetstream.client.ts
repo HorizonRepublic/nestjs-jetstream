@@ -22,8 +22,6 @@ import type {
 } from '../interfaces';
 import { StreamKind } from '../interfaces';
 import {
-  buildBroadcastSubject,
-  buildSubject,
   DEFAULT_JETSTREAM_RPC_TIMEOUT,
   DEFAULT_RPC_TIMEOUT,
   isCoreRpcMode,
@@ -34,6 +32,9 @@ import {
 } from '../jetstream.constants';
 
 import { JetstreamRecord } from './jetstream.record';
+
+/** Broadcast subjects are not scoped to a service and always share this prefix. */
+const BROADCAST_SUBJECT_PREFIX = 'broadcast.';
 
 /**
  * NestJS ClientProxy implementation for the JetStream transport.
@@ -56,6 +57,23 @@ export class JetstreamClient extends ClientProxy {
   /** Pre-cached caller name derived from rootOptions.name, computed once in constructor. */
   private readonly callerName: string;
 
+  /**
+   * Subject prefixes of the form `{serviceName}__microservice.{kind}.` — one
+   * per stream kind this client may publish to. Built once in the constructor
+   * so producing a full subject is a single string concat with the user pattern.
+   */
+  private readonly eventSubjectPrefix: string;
+  private readonly commandSubjectPrefix: string;
+  private readonly orderedSubjectPrefix: string;
+
+  /**
+   * RPC configuration snapshots. The values are derived from rootOptions at
+   * construction time so the publish hot path never has to re-run
+   * isCoreRpcMode / getRpcTimeout on every call.
+   */
+  private readonly isCoreMode: boolean;
+  private readonly defaultRpcTimeout: number;
+
   /** Shared inbox for JetStream-mode RPC responses. */
   private inbox: string | null = null;
   private inboxSubscription: Subscription | null = null;
@@ -69,6 +87,13 @@ export class JetstreamClient extends ClientProxy {
   /** Subscription to connection status events for disconnect handling. */
   private statusSubscription: RxSubscription | null = null;
 
+  /**
+   * Cached readiness flag. Once `connect()` has wired the inbox and status
+   * subscription, subsequent publishes skip the `await connect()` microtask
+   * and reach for the underlying connection synchronously instead.
+   */
+  private readyForPublish = false;
+
   public constructor(
     private readonly rootOptions: JetstreamModuleOptions,
     targetServiceName: string,
@@ -79,6 +104,17 @@ export class JetstreamClient extends ClientProxy {
     super();
     this.targetName = targetServiceName;
     this.callerName = internalName(this.rootOptions.name);
+
+    const targetInternal = internalName(targetServiceName);
+
+    this.eventSubjectPrefix = `${targetInternal}.${StreamKind.Event}.`;
+    this.commandSubjectPrefix = `${targetInternal}.${StreamKind.Command}.`;
+    this.orderedSubjectPrefix = `${targetInternal}.${StreamKind.Ordered}.`;
+
+    this.isCoreMode = isCoreRpcMode(this.rootOptions.rpc);
+    this.defaultRpcTimeout = isJetStreamRpcMode(this.rootOptions.rpc)
+      ? (this.rootOptions.rpc?.timeout ?? DEFAULT_JETSTREAM_RPC_TIMEOUT)
+      : (this.rootOptions.rpc?.timeout ?? DEFAULT_RPC_TIMEOUT);
   }
 
   /**
@@ -92,7 +128,7 @@ export class JetstreamClient extends ClientProxy {
   public async connect(): Promise<NatsConnection> {
     const nc = await this.connection.getConnection();
 
-    if (isJetStreamRpcMode(this.rootOptions.rpc) && !this.inboxSubscription) {
+    if (!this.isCoreMode && !this.inboxSubscription) {
       this.setupInbox(nc);
     }
 
@@ -102,6 +138,8 @@ export class JetstreamClient extends ClientProxy {
       }
     });
 
+    this.readyForPublish = true;
+
     return nc;
   }
 
@@ -109,6 +147,7 @@ export class JetstreamClient extends ClientProxy {
   public async close(): Promise<void> {
     this.statusSubscription?.unsubscribe();
     this.statusSubscription = null;
+    this.readyForPublish = false;
     this.rejectPendingRpcs(new Error('Client closed'));
   }
 
@@ -136,7 +175,7 @@ export class JetstreamClient extends ClientProxy {
    * set to the original event subject.
    */
   protected async dispatchEvent<T = unknown>(packet: ReadPacket): Promise<T> {
-    await this.connect();
+    if (!this.readyForPublish) await this.connect();
     const { data, hdrs, messageId, schedule, ttl } = this.extractRecordData(packet.data);
 
     const eventSubject = this.buildEventSubject(packet.pattern);
@@ -188,7 +227,7 @@ export class JetstreamClient extends ClientProxy {
    * JetStream mode: publishes to stream + waits for inbox response.
    */
   protected publish(packet: ReadPacket, callback: (p: WritePacket) => void): () => void {
-    const subject = buildSubject(this.targetName, StreamKind.Command, packet.pattern);
+    const subject = this.commandSubjectPrefix + packet.pattern;
     const { data, hdrs, timeout, messageId, schedule, ttl } = this.extractRecordData(packet.data);
 
     if (schedule) {
@@ -211,7 +250,7 @@ export class JetstreamClient extends ClientProxy {
     // Track correlation ID for cleanup in JetStream mode
     let jetStreamCorrelationId: string | null = null;
 
-    if (isCoreRpcMode(this.rootOptions.rpc)) {
+    if (this.isCoreMode) {
       this.publishCoreRpc(subject, data, hdrs, timeout, callback).catch(onUnhandled);
     } else {
       jetStreamCorrelationId = nuid.next();
@@ -248,8 +287,10 @@ export class JetstreamClient extends ClientProxy {
     callback: (p: WritePacket) => void,
   ): Promise<void> {
     try {
-      const nc = await this.connect();
-      const effectiveTimeout = timeout ?? this.getRpcTimeout();
+      const nc = this.readyForPublish
+        ? (this.connection.unwrap as NatsConnection)
+        : await this.connect();
+      const effectiveTimeout = timeout ?? this.defaultRpcTimeout;
       const hdrs = this.buildHeaders(customHeaders, { subject });
 
       const response = await nc.request(subject, this.codec.encode(data), {
@@ -286,12 +327,12 @@ export class JetstreamClient extends ClientProxy {
     },
   ): Promise<void> {
     const { headers: customHeaders, correlationId, messageId } = options;
-    const effectiveTimeout = options.timeout ?? this.getRpcTimeout();
+    const effectiveTimeout = options.timeout ?? this.defaultRpcTimeout;
 
     this.pendingMessages.set(correlationId, callback);
 
     try {
-      await this.connect();
+      if (!this.readyForPublish) await this.connect();
 
       // Bail out if cleaned up during connect (e.g. consumer unsubscribed)
       if (!this.pendingMessages.has(correlationId)) return;
@@ -353,6 +394,8 @@ export class JetstreamClient extends ClientProxy {
 
     // Reset inbox — will be recreated on next connect()
     this.inbox = null;
+    // Force the next publish to re-run the full connect setup.
+    this.readyForPublish = false;
   }
 
   /** Reject all pending RPC callbacks, clear timeouts, and tear down inbox. */
@@ -432,21 +475,24 @@ export class JetstreamClient extends ClientProxy {
     }
   }
 
-  /** Build event subject — workqueue, broadcast, or ordered. */
+  /**
+   * Resolve a user pattern to a fully-qualified NATS subject, dispatching
+   * between the event, broadcast, and ordered prefixes.
+   *
+   * The leading-char check short-circuits the `startsWith` comparisons for
+   * patterns that cannot possibly carry a broadcast/ordered marker, which is
+   * the overwhelmingly common case.
+   */
   private buildEventSubject(pattern: string): string {
-    if (pattern.startsWith(PatternPrefix.Broadcast)) {
-      return buildBroadcastSubject(pattern.slice(PatternPrefix.Broadcast.length));
+    if (pattern.charCodeAt(0) === 98 /* 'b' */ && pattern.startsWith(PatternPrefix.Broadcast)) {
+      return BROADCAST_SUBJECT_PREFIX + pattern.slice(PatternPrefix.Broadcast.length);
     }
 
-    if (pattern.startsWith(PatternPrefix.Ordered)) {
-      return buildSubject(
-        this.targetName,
-        StreamKind.Ordered,
-        pattern.slice(PatternPrefix.Ordered.length),
-      );
+    if (pattern.charCodeAt(0) === 111 /* 'o' */ && pattern.startsWith(PatternPrefix.Ordered)) {
+      return this.orderedSubjectPrefix + pattern.slice(PatternPrefix.Ordered.length);
     }
 
-    return buildSubject(this.targetName, StreamKind.Event, pattern);
+    return this.eventSubjectPrefix + pattern;
   }
 
   /** Build NATS headers merging custom headers with transport headers. */
@@ -481,9 +527,11 @@ export class JetstreamClient extends ClientProxy {
   /** Extract data, headers, timeout, and schedule from raw packet data or JetstreamRecord. */
   private extractRecordData(rawData: unknown): ExtractedRecordData {
     if (rawData instanceof JetstreamRecord) {
+      // JetstreamRecord.headers is a ReadonlyMap on an immutable record; the
+      // reference is handed through as-is because buildHeaders only reads it.
       return {
         data: rawData.data,
-        hdrs: rawData.headers.size > 0 ? new Map(rawData.headers) : null,
+        hdrs: rawData.headers.size > 0 ? (rawData.headers as Map<string, string>) : null,
         timeout: rawData.timeout,
         messageId: rawData.messageId,
         schedule: rawData.schedule,
@@ -536,15 +584,5 @@ export class JetstreamClient extends ClientProxy {
     const pattern = withoutPrefix.slice(dotIndex + 1);
 
     return `${targetPrefix}_sch.${pattern}`;
-  }
-
-  private getRpcTimeout(): number {
-    if (!this.rootOptions.rpc) return DEFAULT_RPC_TIMEOUT;
-
-    const defaultTimeout = isJetStreamRpcMode(this.rootOptions.rpc)
-      ? DEFAULT_JETSTREAM_RPC_TIMEOUT
-      : DEFAULT_RPC_TIMEOUT;
-
-    return this.rootOptions.rpc.timeout ?? defaultTimeout;
   }
 }

@@ -1,44 +1,39 @@
 import { isObservable, Observable, Subscription } from 'rxjs';
 
-const RESOLVED_VOID = Promise.resolve(undefined);
-const RESOLVED_NULL = Promise.resolve(null);
-
 /**
- * Unwrap a handler result that may be a Promise, Observable, or nested combination.
+ * Unwrap a handler return value into something the transport can settle on.
  *
- * NestJS-wrapped handlers may return `Promise<Observable>` (e.g. when exception
- * filters convert errors to `throwError()` Observables). This function handles:
+ * Handler results come in several shapes — sync values, Promises, Observables,
+ * and occasionally `Promise<Observable>` when NestJS exception filters convert
+ * errors into `throwError()` streams. This function collapses them into either
+ * the value itself (for sync results) or a Promise that resolves to the first
+ * emitted / resolved value.
  *
- * - `Observable` — subscribe immediately (no await — preserves sync emissions)
- * - `Promise<Observable>` — await Promise, then subscribe
- * - `Promise<value>` — await
- * - `undefined` / `null` — fast path, no microtask
- *
- * Non-async to avoid an extra microtask tick on the hot path.
- *
- * @param result - The raw handler return value.
- * @returns The resolved value after unwrapping all layers.
+ * The return type is `unknown` so callers can check for a thenable with
+ * {@link isPromiseLike} and skip the `await` on sync paths. Awaiting a
+ * non-thenable still works but costs a microtask.
  */
-export const unwrapResult = (result: unknown): Promise<unknown> => {
-  // Fast path: void handlers (most common case)
-  if (result === undefined) return RESOLVED_VOID;
-  if (result === null) return RESOLVED_NULL;
+export const unwrapResult = (result: unknown): unknown => {
+  if (result === undefined || result === null) return result;
 
-  // Direct Observable — subscribe immediately (no microtask yield)
   if (isObservable(result)) {
     return subscribeToFirst(result as Observable<unknown>);
   }
 
-  // Thenable (Promise) — check if it resolves to an Observable
   if (typeof (result as Promise<unknown>).then === 'function') {
     return (result as Promise<unknown>).then((resolved) =>
       isObservable(resolved) ? subscribeToFirst(resolved as Observable<unknown>) : resolved,
     );
   }
 
-  // Sync non-null value
-  return Promise.resolve(result);
+  return result;
 };
+
+/** Thenable type guard used to decide whether {@link unwrapResult}'s output needs `await`. */
+export const isPromiseLike = (value: unknown): value is PromiseLike<unknown> =>
+  value !== null &&
+  typeof value === 'object' &&
+  typeof (value as PromiseLike<unknown>).then === 'function';
 
 /** Subscribe to an Observable and resolve with its first emitted value. */
 const subscribeToFirst = (obs: Observable<unknown>): Promise<unknown> =>
@@ -65,7 +60,8 @@ const subscribeToFirst = (obs: Observable<unknown>): Promise<unknown> =>
       },
     });
 
-    // Handle synchronous emission: next fired before subscribe() returned
+    // `next` may have fired synchronously during subscribe() and already
+    // flipped `done` — unsubscribe immediately if so.
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- mutated in sync callback above
     if (done) {
       subscription.unsubscribe();

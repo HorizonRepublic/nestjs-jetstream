@@ -221,15 +221,23 @@ export class MessageProvider {
     /* eslint-enable @typescript-eslint/naming-convention */
     const userOptions = this.consumeOptionsMap.get(kind) ?? {};
 
-    const messages = await consumer.consume({ ...defaults, ...userOptions } as ConsumeOptions);
+    // Push messages directly into the subject via a sync callback so each
+    // delivery skips the async-iterator next()/{value,done} wrapper allocated
+    // by `for await`. The callback path in @nats-io/jetstream requires the
+    // body to be synchronous — `Subject.next` meets that contract.
+    const messages = await consumer.consume({
+      ...defaults,
+      ...userOptions,
+      callback: (msg: JsMsg): void => {
+        target$.next(msg);
+      },
+    } as ConsumeOptions);
 
     this.activeIterators.add(messages);
     this.monitorConsumerHealth(messages, consumerName);
 
     try {
-      for await (const msg of messages) {
-        target$.next(msg);
-      }
+      await messages.closed();
     } finally {
       this.activeIterators.delete(messages);
     }
@@ -264,7 +272,6 @@ export class MessageProvider {
         return this.orderedMessages$;
       /* v8 ignore next 5 -- exhaustive switch guard, unreachable */
       default: {
-        // eslint-disable-next-line @typescript-eslint/naming-convention
         const _exhaustive: never = kind;
 
         throw new Error(`Unknown stream kind: ${_exhaustive}`);
@@ -349,14 +356,19 @@ export class MessageProvider {
     );
   }
 
-  /** Single iteration: create ordered consumer -> iterate messages. */
+  /** Single iteration: create ordered consumer -> push messages into the subject. */
   private async consumeOrderedOnce(
     streamName: string,
     consumerOpts: Partial<OrderedConsumerOptions>,
   ): Promise<void> {
     const js = this.connection.getJetStreamClient();
     const consumer = await js.consumers.get(streamName, consumerOpts);
-    const messages = await consumer.consume();
+    const orderedMessages$ = this.orderedMessages$;
+    const messages = await consumer.consume({
+      callback: (msg: JsMsg): void => {
+        orderedMessages$.next(msg);
+      },
+    } as ConsumeOptions);
 
     // Signal that the ordered consumer is ready to receive messages
     if (this.orderedReadyResolve) {
@@ -368,9 +380,7 @@ export class MessageProvider {
     this.activeIterators.add(messages);
 
     try {
-      for await (const msg of messages) {
-        this.orderedMessages$.next(msg);
-      }
+      await messages.closed();
     } finally {
       this.activeIterators.delete(messages);
     }

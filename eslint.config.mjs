@@ -171,7 +171,7 @@ export default [
           modifiers: ['const'],
           selector: 'variable',
         },
-        {format: ['camelCase'], selector: 'variableLike'},
+        {format: ['camelCase'], leadingUnderscore: 'allow', selector: 'variableLike'},
         {format: ['camelCase'], leadingUnderscore: 'allow', selector: 'memberLike'},
         {format: ['PascalCase'], selector: 'typeLike'},
         {format: ['PascalCase'], selector: 'enumMember'},
