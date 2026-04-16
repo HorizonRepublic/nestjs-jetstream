@@ -99,7 +99,7 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prefer-arrow": "^1.2.3",
     "eslint-plugin-prettier": "^5.5.5",
-    "eslint-plugin-sonarjs": "^4.0.2",
+    "eslint-plugin-sonarjs": "^4.0.3",
     "eslint-plugin-unused-imports": "^4.4.1",
     "hdr-histogram-js": "^3.0.1",
     "msgpackr": "^1.11.9",
