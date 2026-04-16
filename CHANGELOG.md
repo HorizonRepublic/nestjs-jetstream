@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.9.1](https://github.com/HorizonRepublic/nestjs-jetstream/compare/v2.9.0...v2.9.1) (2026-04-16)
+
+
+### Bug Fixes
+
+* post-v2.9.0 documentation sweep and public API cleanup ([#128](https://github.com/HorizonRepublic/nestjs-jetstream/issues/128)) ([341c02c](https://github.com/HorizonRepublic/nestjs-jetstream/commit/341c02cada00ac251dc565f162de05e75b2bf5d1))
+
+
+### Performance Improvements
+
+* hot-path routing optimizations + MsgpackCodec ([#135](https://github.com/HorizonRepublic/nestjs-jetstream/issues/135)) ([01e6198](https://github.com/HorizonRepublic/nestjs-jetstream/commit/01e6198ed4f36b741d190b9454bc90b7cf5b3938))
+
 ## [2.9.0](https://github.com/HorizonRepublic/nestjs-jetstream/compare/v2.8.0...v2.9.0) (2026-04-10)
 
 
