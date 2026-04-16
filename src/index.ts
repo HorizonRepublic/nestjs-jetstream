@@ -26,7 +26,7 @@ export { JetstreamClient } from './client';
 export { JetstreamRecord, JetstreamRecordBuilder } from './client';
 
 // Codec
-export { JsonCodec } from './codec';
+export { JsonCodec, MsgpackCodec } from './codec';
 
 // Context
 export { RpcContext } from './context';

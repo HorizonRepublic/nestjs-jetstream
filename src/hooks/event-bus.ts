@@ -65,6 +65,16 @@ export class EventBus {
     );
   }
 
+  /**
+   * Check whether a hook is registered for the given event.
+   *
+   * Used by the routing hot path to elide the emit call entirely when the
+   * transport owner did not register a listener.
+   */
+  public hasHook(event: keyof TransportHooks): boolean {
+    return this.hooks[event] !== undefined;
+  }
+
   private callHook(event: string, hook: (...a: unknown[]) => unknown, ...args: unknown[]): void {
     try {
       const result = hook(...args);

@@ -2,4 +2,4 @@ export { resolveAckExtensionInterval, startAckExtensionTimer } from './ack-exten
 
 export { serializeError } from './serialize-error';
 
-export { unwrapResult } from './unwrap-result';
+export { unwrapResult, isPromiseLike } from './unwrap-result';

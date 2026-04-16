@@ -7,7 +7,7 @@ import { EventBus } from '../hooks';
 import { MessageKind } from '../interfaces';
 import type { Codec, JetstreamModuleOptions } from '../interfaces';
 import { internalName, JetstreamHeader } from '../jetstream.constants';
-import { serializeError, unwrapResult } from '../utils';
+import { isPromiseLike, serializeError, unwrapResult } from '../utils';
 
 import { PatternRegistry } from './routing/pattern-registry';
 
@@ -93,7 +93,8 @@ export class CoreRpcServer {
     const ctx = new RpcContext([msg]);
 
     try {
-      const result = await unwrapResult(handler(data, ctx));
+      const raw = unwrapResult(handler(data, ctx));
+      const result = isPromiseLike(raw) ? await raw : raw;
 
       msg.respond(this.codec.encode(result));
     } catch (err) {

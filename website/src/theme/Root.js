@@ -36,7 +36,7 @@ export default function Root({ children }) {
   "headline": "Contributing",
   "description": "How to contribute to the project.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-03-31"
+  "dateModified": "2026-04-11"
 },
       
     '/docs/development/testing/': {
@@ -44,7 +44,7 @@ export default function Root({ children }) {
   "headline": "Testing",
   "description": "Running unit and integration tests with Vitest and Testcontainers.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-03-31"
+  "dateModified": "2026-04-11"
 },
       
     '/docs/getting-started/installation/': {
@@ -73,8 +73,8 @@ export default function Root({ children }) {
       
     '/docs/getting-started/why-jetstream/': {
   "@type": "Article",
-  "headline": "Why JetStream?",
-  "description": "When the built-in NestJS NATS transport is enough, and when you need JetStream for production-grade messaging.",
+  "headline": "Why JetStream? NestJS NATS Transport Comparison",
+  "description": "When the built-in NestJS NATS transport is enough, and when your system outgrows Core NATS and needs JetStream for durable messaging.",
   "datePublished": "2026-04-11",
   "dateModified": "2026-04-11"
 },
@@ -82,15 +82,15 @@ export default function Root({ children }) {
     '/docs/guides/custom-codec/': {
   "@type": "Article",
   "headline": "Custom Codec",
-  "description": "Replace the default JSON codec with MsgPack, Protobuf, or any custom binary format.",
+  "description": "Replace the default JSON codec with the built-in MessagePack codec, Protobuf, or any custom binary format.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-04-11"
+  "dateModified": "2026-04-16"
 },
       
     '/docs/guides/dead-letter-queue/': {
   "@type": "Article",
-  "headline": "Dead Letter Queue",
-  "description": "Handle messages that exhaust all delivery attempts via a first-class DLQ stream or onDeadLetter callback.",
+  "headline": "Dead Letter Queue — NestJS NATS JetStream DLQ Stream & Callback",
+  "description": "Handle NestJS NATS JetStream messages that exhaust all delivery attempts via a dedicated DLQ stream with tracking headers or onDeadLetter callback.",
   "datePublished": "2026-03-21",
   "dateModified": "2026-04-11"
 },
@@ -105,24 +105,24 @@ export default function Root({ children }) {
       
     '/docs/guides/handler-context/': {
   "@type": "Article",
-  "headline": "Handler Context",
-  "description": "Access message metadata, headers, and control settlement actions via RpcContext.",
+  "headline": "RpcContext — Handler Context & Message Settlement",
+  "description": "Access JetStream metadata and control ack, retry, and terminate actions in NestJS message handlers via RpcContext.",
   "datePublished": "2026-03-21",
   "dateModified": "2026-04-11"
 },
       
     '/docs/guides/health-checks/': {
   "@type": "Article",
-  "headline": "Health Checks",
-  "description": "JetstreamHealthIndicator for NestJS Terminus integration with connection status and latency.",
+  "headline": "Health Checks — NestJS Terminus Indicator for NATS JetStream",
+  "description": "JetstreamHealthIndicator reports NATS connection status and RTT latency for NestJS Kubernetes readiness/liveness probes, with or without @nestjs/terminus.",
   "datePublished": "2026-03-21",
   "dateModified": "2026-04-11"
 },
       
     '/docs/guides/lifecycle-hooks/': {
   "@type": "Article",
-  "headline": "Lifecycle Hooks",
-  "description": "Transport lifecycle events for connection changes, errors, message routing, and dead letters.",
+  "headline": "Lifecycle Hooks — NestJS JetStream Transport Events",
+  "description": "Observe NestJS NATS JetStream transport events: connection, disconnect, reconnect, errors, RPC timeouts, message routing, dead letters, and shutdown.",
   "datePublished": "2026-03-21",
   "dateModified": "2026-04-11"
 },
@@ -137,8 +137,8 @@ export default function Root({ children }) {
       
     '/docs/guides/per-message-ttl/': {
   "@type": "Article",
-  "headline": "Per-Message TTL",
-  "description": "Individual message expiration independent of stream max_age, powered by NATS 2.11 Nats-TTL header.",
+  "headline": "Per-Message TTL — NATS JetStream Message Expiration",
+  "description": "Individual NestJS NATS JetStream message expiration via the Nats-TTL header (NATS 2.11, ADR-43), independent of the stream's max_age.",
   "datePublished": "2026-04-02",
   "dateModified": "2026-04-11"
 },
@@ -153,16 +153,16 @@ export default function Root({ children }) {
       
     '/docs/guides/record-builder/': {
   "@type": "Article",
-  "headline": "Record Builder & Deduplication",
-  "description": "Build messages with custom headers, message IDs, and deduplication via JetstreamRecordBuilder.",
+  "headline": "JetstreamRecordBuilder — Headers, Message IDs & Deduplication",
+  "description": "Build NestJS NATS messages with custom headers, deterministic message IDs for publish-side deduplication, and per-request RPC timeouts.",
   "datePublished": "2026-03-21",
   "dateModified": "2026-04-11"
 },
       
     '/docs/guides/scheduling/': {
   "@type": "Article",
-  "headline": "Scheduling (Delayed Jobs)",
-  "description": "One-shot delayed message delivery powered by NATS 2.12 message scheduling.",
+  "headline": "NATS JetStream Scheduling — Delayed Jobs (NATS 2.12)",
+  "description": "One-shot delayed NestJS NATS JetStream message delivery via the Nats-Schedule header (NATS 2.12, ADR-51) — replace Bull or Agenda for simple delayed jobs.",
   "datePublished": "2026-04-01",
   "dateModified": "2026-04-11"
 },
@@ -177,72 +177,72 @@ export default function Root({ children }) {
       
     '/docs/guides/troubleshooting/': {
   "@type": "Article",
-  "headline": "Troubleshooting",
-  "description": "Common issues and how to resolve them.",
+  "headline": "Troubleshooting — NestJS JetStream Transport",
+  "description": "Fix common NestJS JetStream issues: NATS connection errors, consumer lag, RPC timeouts, DLQ publish failures, and stream migration recovery.",
   "datePublished": "2026-03-26",
   "dateModified": "2026-04-11"
 },
       
     '/docs/': {
   "@type": "Article",
-  "headline": "Introduction",
-  "description": "Production-grade NestJS transport for NATS JetStream with durable delivery, retry, replay, and dead letter handling.",
+  "headline": "NestJS NATS Transport with JetStream — Introduction",
+  "description": "A NestJS NATS microservice transport backed by JetStream: durable events, broadcast, ordered delivery, RPC, and dead letter queues.",
   "datePublished": "2026-03-21",
   "dateModified": "2026-04-11"
 },
       
     '/docs/patterns/broadcast/': {
   "@type": "Article",
-  "headline": "Broadcast Events",
-  "description": "Fan-out event delivery to every subscribing service instance.",
+  "headline": "Broadcast Events — NestJS JetStream Fan-Out Delivery",
+  "description": "Fan-out NATS JetStream events to every NestJS service instance via per-service durable consumers on a shared broadcast stream.",
   "datePublished": "2026-03-21",
   "dateModified": "2026-04-11"
 },
       
     '/docs/patterns/events/': {
   "@type": "Article",
-  "headline": "Events (Workqueue)",
-  "description": "Workqueue events with at-least-once delivery, automatic retry, deduplication, and dead letter handling.",
+  "headline": "Workqueue Events — NestJS JetStream At-Least-Once Delivery",
+  "description": "NestJS NATS JetStream workqueue events with at-least-once delivery, automatic retry, publish-side deduplication, and dead letter handling.",
   "datePublished": "2026-03-21",
   "dateModified": "2026-04-11"
 },
       
     '/docs/patterns/handler-metadata/': {
   "@type": "Article",
-  "headline": "Handler Metadata Registry",
-  "description": "Publish handler metadata to a NATS KV bucket for dynamic service discovery, API gateway routing, and catalog generation.",
+  "headline": "Handler Metadata Registry — NATS KV Service Discovery for NestJS",
+  "description": "Publish NestJS handler metadata to a NATS KV bucket for dynamic service discovery, API gateway routing, and automatic catalog generation.",
   "datePublished": "2026-04-02",
   "dateModified": "2026-04-11"
 },
       
     '/docs/patterns/ordered-events/': {
   "@type": "Article",
-  "headline": "Ordered Events",
-  "description": "Strict sequential event delivery with ephemeral consumers and replay policies.",
+  "headline": "Ordered Events — Strict Sequential Delivery in NATS JetStream",
+  "description": "Strict sequential NestJS NATS JetStream event delivery with ephemeral ordered consumers, deliver policies, and CQRS replay patterns.",
   "datePublished": "2026-03-21",
   "dateModified": "2026-04-11"
 },
       
     '/docs/patterns/rpc/': {
   "@type": "Article",
-  "headline": "RPC (Request/Reply)",
-  "description": "Synchronous request-reply via Core NATS or JetStream with timeout and error handling.",
+  "headline": "NestJS NATS RPC — Core vs JetStream Request/Reply",
+  "description": "Synchronous NestJS NATS request-reply in Core NATS or JetStream mode, with timeout handling, error serialization, and per-request overrides.",
   "datePublished": "2026-03-21",
   "dateModified": "2026-04-11"
 },
       
     '/docs/reference/default-configs/': {
   "@type": "Article",
-  "headline": "Default Configs",
-  "description": "Default stream and consumer configurations for every StreamKind.",
+  "headline": "Default Stream & Consumer Configs for NATS JetStream",
+  "description": "Production-ready default stream, consumer, and connection settings for every NestJS JetStream StreamKind (event, broadcast, ordered, command, DLQ).",
   "datePublished": "2026-03-21",
   "dateModified": "2026-04-11"
 },
       
     '/docs/reference/edge-cases/': {
   "@type": "Article",
-  "headline": "Edge Cases & FAQ",
-  "description": "Common questions and non-obvious behaviors of the transport.",
+  "headline": "Edge Cases & FAQ — NestJS JetStream Transport",
+  "description": "NestJS JetStream transport FAQ: publisher-only mode, consumer self-healing, NATS header limits, fire-and-forget messaging, and DeliverPolicy edge cases.",
   "datePublished": "2026-03-21",
   "dateModified": "2026-04-11"
 },

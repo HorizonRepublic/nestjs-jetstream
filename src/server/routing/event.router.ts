@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { MessageHandler } from '@nestjs/microservices';
 import type { JsMsg } from '@nats-io/jetstream';
-import { concatMap, from, mergeMap, Observable, Subscription } from 'rxjs';
+import { Observable, Subscription } from 'rxjs';
 
 import { RpcContext } from '../../context';
 import { EventBus } from '../../hooks';
@@ -16,7 +16,12 @@ import type {
   EventProcessingConfig,
   JetstreamModuleOptions,
 } from '../../interfaces';
-import { resolveAckExtensionInterval, startAckExtensionTimer, unwrapResult } from '../../utils';
+import {
+  isPromiseLike,
+  resolveAckExtensionInterval,
+  startAckExtensionTimer,
+  unwrapResult,
+} from '../../utils';
 
 import { MessageProvider } from '../infrastructure';
 import { PatternRegistry } from './pattern-registry';
@@ -81,24 +86,287 @@ export class EventRouter {
     this.subscriptions.length = 0;
   }
 
-  /** Subscribe to a message stream and route each message. */
+  /** Subscribe to a message stream and route each message to its handler. */
   private subscribeToStream(stream$: Observable<JsMsg>, kind: StreamKind): void {
     const isOrdered = kind === StreamKind.Ordered;
 
-    // Resolve once per stream — these never change after startup
+    const patternRegistry = this.patternRegistry;
+    const codec = this.codec;
+    const eventBus = this.eventBus;
+    const logger = this.logger;
+    const deadLetterConfig = this.deadLetterConfig;
+
     const ackExtensionInterval = isOrdered
       ? null
       : resolveAckExtensionInterval(this.getAckExtensionConfig(kind), this.ackWaitMap?.get(kind));
+    const hasAckExtension = ackExtensionInterval !== null && ackExtensionInterval > 0;
     const concurrency = this.getConcurrency(kind);
+    // Snapshot the config object, not the Map — updateMaxDeliverMap() can
+    // replace maxDeliverByStream wholesale after consumers are ensured.
+    const hasDlqCheck = deadLetterConfig !== undefined;
+    const emitRouted = eventBus.hasHook(TransportEvent.MessageRouted);
 
-    const route = (msg: JsMsg): Observable<void> =>
-      from(
-        isOrdered ? this.handleOrderedSafe(msg) : this.handleSafe(msg, ackExtensionInterval, kind),
+    const isDeadLetter = (msg: JsMsg): boolean => {
+      if (!hasDlqCheck) return false;
+      // updateMaxDeliverMap() populates maxDeliverByStream after consumers are
+      // ensured. Optional chaining guards the brief startup window before it
+      // is assigned — the interface types it as always-present but the runtime
+      // lifecycle allows a brief undefined state.
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- runtime lifecycle guard
+      const maxDeliver = deadLetterConfig.maxDeliverByStream?.get(msg.info.stream);
+
+      if (maxDeliver === undefined || maxDeliver <= 0) return false;
+
+      return msg.info.deliveryCount >= maxDeliver;
+    };
+
+    const handleDeadLetter = hasDlqCheck
+      ? (msg: JsMsg, data: unknown, err: unknown): Promise<void> =>
+          this.handleDeadLetter(msg, data, err)
+      : null;
+
+    const settleSuccess = (msg: JsMsg, ctx: RpcContext): void => {
+      if (ctx.shouldTerminate) msg.term(ctx.terminateReason);
+      else if (ctx.shouldRetry) msg.nak(ctx.retryDelay);
+      else msg.ack();
+    };
+
+    const settleFailure = async (msg: JsMsg, data: unknown, err: unknown): Promise<void> => {
+      if (handleDeadLetter !== null && isDeadLetter(msg)) {
+        await handleDeadLetter(msg, data, err);
+
+        return;
+      }
+
+      msg.nak();
+    };
+
+    /**
+     * Resolve the handler and decode payload for one event.
+     *
+     * Returns `null` when the message cannot be routed (no handler, decode
+     * error, or unexpected pre-dispatch failure) — those branches settle the
+     * message synchronously inside the helper and produce nothing to dispatch.
+     */
+    const resolveEvent = (msg: JsMsg): { handler: MessageHandler; data: unknown } | null => {
+      const subject = msg.subject;
+
+      try {
+        const handler = patternRegistry.getHandler(subject);
+
+        if (!handler) {
+          msg.term(`No handler for event: ${subject}`);
+          logger.error(`No handler for subject: ${subject}`);
+
+          return null;
+        }
+
+        let data: unknown;
+
+        try {
+          data = codec.decode(msg.data);
+        } catch (err) {
+          msg.term('Decode error');
+          logger.error(`Decode error for ${subject}:`, err);
+
+          return null;
+        }
+
+        if (emitRouted) eventBus.emitMessageRouted(subject, MessageKind.Event);
+
+        return { handler, data };
+      } catch (err) {
+        logger.error(`Unexpected error in ${kind} event router`, err);
+        // Terminate the message so NATS does not redeliver into the same
+        // synchronous failure forever. term() itself may throw when the
+        // connection is degraded — swallow that to keep the subscription alive.
+        try {
+          msg.term('Unexpected router error');
+        } catch (termErr) {
+          logger.error(`Failed to terminate message ${subject}:`, termErr);
+        }
+
+        return null;
+      }
+    };
+
+    /**
+     * Run the full event-routing pipeline for one message.
+     *
+     * Returns `undefined` when the whole flow completed synchronously
+     * (sync handler, no awaitable settlement) and a Promise otherwise, so
+     * the concurrency limiter can skip the `.finally()` allocation on the
+     * sync path. The sync branch inlines settlement to avoid per-message
+     * closures that would cost more heap than the Promise they replace.
+     */
+    const handleSafe = (msg: JsMsg): Promise<void> | undefined => {
+      const resolved = resolveEvent(msg);
+
+      if (resolved === null) return undefined;
+
+      const { handler, data } = resolved;
+      const ctx = new RpcContext([msg]);
+      const stopAckExtension = hasAckExtension
+        ? startAckExtensionTimer(msg, ackExtensionInterval)
+        : null;
+
+      let pending: unknown;
+
+      try {
+        pending = unwrapResult(handler(data, ctx));
+      } catch (err) {
+        logger.error(`Event handler error (${msg.subject}) in ${kind} router:`, err);
+        if (stopAckExtension !== null) stopAckExtension();
+
+        return settleFailure(msg, data, err);
+      }
+
+      if (!isPromiseLike(pending)) {
+        settleSuccess(msg, ctx);
+        if (stopAckExtension !== null) stopAckExtension();
+
+        return undefined;
+      }
+
+      return (pending as Promise<unknown>).then(
+        () => {
+          settleSuccess(msg, ctx);
+          if (stopAckExtension !== null) stopAckExtension();
+        },
+        async (err: unknown) => {
+          logger.error(`Event handler error (${msg.subject}) in ${kind} router:`, err);
+          try {
+            await settleFailure(msg, data, err);
+          } finally {
+            if (stopAckExtension !== null) stopAckExtension();
+          }
+        },
       );
+    };
 
-    const subscription = stream$
-      .pipe(isOrdered ? concatMap(route) : mergeMap(route, concurrency))
-      .subscribe();
+    const handleOrderedSafe = (msg: JsMsg): Promise<void> | undefined => {
+      const subject = msg.subject;
+      let handler: MessageHandler | null;
+      let data: unknown;
+
+      try {
+        handler = patternRegistry.getHandler(subject);
+
+        if (!handler) {
+          logger.error(`No handler for subject: ${subject}`);
+
+          return undefined;
+        }
+
+        try {
+          data = codec.decode(msg.data);
+        } catch (err) {
+          logger.error(`Decode error for ${subject}:`, err);
+
+          return undefined;
+        }
+
+        if (emitRouted) eventBus.emitMessageRouted(subject, MessageKind.Event);
+      } catch (err) {
+        logger.error(`Ordered handler error (${subject}):`, err);
+
+        return undefined;
+      }
+
+      const ctx = new RpcContext([msg]);
+
+      const warnIfSettlementAttempted = (): void => {
+        if (ctx.shouldRetry || ctx.shouldTerminate) {
+          logger.warn(
+            `retry()/terminate() ignored for ordered message ${subject} — ordered consumers auto-acknowledge`,
+          );
+        }
+      };
+
+      let pending: unknown;
+
+      try {
+        pending = unwrapResult(handler(data, ctx));
+      } catch (err) {
+        logger.error(`Ordered handler error (${subject}):`, err);
+
+        return undefined;
+      }
+
+      if (!isPromiseLike(pending)) {
+        warnIfSettlementAttempted();
+
+        return undefined;
+      }
+
+      return (pending as Promise<unknown>).then(warnIfSettlementAttempted, (err: unknown) => {
+        logger.error(`Ordered handler error (${subject}):`, err);
+      });
+    };
+
+    const route = isOrdered ? handleOrderedSafe : handleSafe;
+
+    // Concurrency limiter: up to `maxActive` messages are routed in parallel;
+    // anything beyond queues into `backlog` and is drained FIFO as each
+    // in-flight message completes. Ordered streams pin the limit to 1 so
+    // delivery stays strictly sequential.
+    const maxActive = isOrdered ? 1 : (concurrency ?? Number.POSITIVE_INFINITY);
+    const backlogWarnThreshold = 1_000;
+    let active = 0;
+    let backlogWarned = false;
+    const backlog: JsMsg[] = [];
+
+    const onAsyncDone = (): void => {
+      active--;
+      drainBacklog();
+    };
+
+    const drainBacklog = (): void => {
+      while (active < maxActive) {
+        const next = backlog.shift();
+
+        if (next === undefined) return;
+        active++;
+        const result = route(next);
+
+        if (result !== undefined) {
+          void result.finally(onAsyncDone);
+        } else {
+          active--;
+        }
+      }
+
+      if (backlog.length < backlogWarnThreshold) backlogWarned = false;
+    };
+
+    const subscription = stream$.subscribe({
+      next: (msg: JsMsg): void => {
+        if (active >= maxActive) {
+          backlog.push(msg);
+          if (!backlogWarned && backlog.length >= backlogWarnThreshold) {
+            backlogWarned = true;
+            logger.warn(
+              `${kind} backlog reached ${backlog.length} messages — consumer may be falling behind`,
+            );
+          }
+
+          return;
+        }
+
+        active++;
+        const result = route(msg);
+
+        if (result !== undefined) {
+          void result.finally(onAsyncDone);
+        } else {
+          active--;
+          if (backlog.length > 0) drainBacklog();
+        }
+      },
+      error: (err: unknown): void => {
+        logger.error(`Stream error in ${kind} router`, err);
+      },
+    });
 
     this.subscriptions.push(subscription);
   }
@@ -113,120 +381,6 @@ export class EventRouter {
     if (kind === StreamKind.Event) return this.processingConfig?.events?.ackExtension;
     if (kind === StreamKind.Broadcast) return this.processingConfig?.broadcast?.ackExtension;
     return undefined;
-  }
-
-  /** Handle a single event message with error isolation. */
-  private async handleSafe(
-    msg: JsMsg,
-    ackExtensionInterval: number | null,
-    kind: StreamKind,
-  ): Promise<void> {
-    try {
-      const resolved = this.decodeMessage(msg);
-
-      if (!resolved) return;
-
-      await this.executeHandler(
-        resolved.handler,
-        resolved.data,
-        resolved.ctx,
-        msg,
-        ackExtensionInterval,
-      );
-    } catch (err) {
-      this.logger.error(`Unexpected error in ${kind} event router`, err);
-    }
-  }
-
-  /** Handle an ordered message with error isolation. */
-  private async handleOrderedSafe(msg: JsMsg): Promise<void> {
-    try {
-      const resolved = this.decodeMessage(msg, true);
-
-      if (!resolved) return;
-
-      await unwrapResult(resolved.handler(resolved.data, resolved.ctx));
-
-      if (resolved.ctx.shouldRetry || resolved.ctx.shouldTerminate) {
-        this.logger.warn(
-          `retry()/terminate() ignored for ordered message ${msg.subject} — ordered consumers auto-acknowledge`,
-        );
-      }
-    } catch (err) {
-      this.logger.error(`Ordered handler error (${msg.subject}):`, err);
-    }
-  }
-
-  /** Resolve handler, decode payload, and build context. Returns null on failure. */
-  private decodeMessage(
-    msg: JsMsg,
-    isOrdered = false,
-  ): { handler: MessageHandler; data: unknown; ctx: RpcContext } | null {
-    const handler = this.patternRegistry.getHandler(msg.subject);
-
-    if (!handler) {
-      if (!isOrdered) msg.term(`No handler for event: ${msg.subject}`);
-      this.logger.error(`No handler for subject: ${msg.subject}`);
-      return null;
-    }
-
-    let data: unknown;
-
-    try {
-      data = this.codec.decode(msg.data);
-    } catch (err) {
-      if (!isOrdered) msg.term('Decode error');
-      this.logger.error(`Decode error for ${msg.subject}:`, err);
-      return null;
-    }
-
-    this.eventBus.emitMessageRouted(msg.subject, MessageKind.Event);
-
-    return { handler, data, ctx: new RpcContext([msg]) };
-  }
-
-  /** Execute handler, then ack on success or nak/dead-letter on failure. */
-  private async executeHandler(
-    handler: MessageHandler,
-    data: unknown,
-    ctx: RpcContext,
-    msg: JsMsg,
-    ackExtensionInterval: number | null,
-  ): Promise<void> {
-    const stopAckExtension = startAckExtensionTimer(msg, ackExtensionInterval);
-
-    try {
-      await unwrapResult(handler(data, ctx));
-
-      if (ctx.shouldTerminate) {
-        msg.term(ctx.terminateReason);
-      } else if (ctx.shouldRetry) {
-        msg.nak(ctx.retryDelay);
-      } else {
-        msg.ack();
-      }
-    } catch (err) {
-      this.logger.error(`Event handler error (${msg.subject}):`, err);
-
-      if (this.isDeadLetter(msg)) {
-        await this.handleDeadLetter(msg, data, err);
-      } else {
-        msg.nak();
-      }
-    } finally {
-      stopAckExtension?.();
-    }
-  }
-
-  /** Check if the message has exhausted all delivery attempts. */
-  private isDeadLetter(msg: JsMsg): boolean {
-    if (!this.deadLetterConfig) return false;
-
-    const maxDeliver = this.deadLetterConfig.maxDeliverByStream.get(msg.info.stream);
-
-    if (maxDeliver === undefined || maxDeliver <= 0) return false;
-
-    return msg.info.deliveryCount >= maxDeliver;
   }
 
   /** Handle a dead letter: invoke callback, then term or nak based on result. */

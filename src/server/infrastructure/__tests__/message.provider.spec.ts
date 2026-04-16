@@ -49,21 +49,42 @@ const createStatusIterator = (
 };
 
 /**
- * Creates a mock async iterable of JsMsg that can be stopped externally.
- * Simulates the ConsumerMessages object returned by consumer.consume().
+ * Creates a mock ConsumerMessages that supports both the callback-based
+ * and async-iterator consumption modes. `callback` is invoked on `deliver()`;
+ * `closed()` resolves once `stop()` is called.
  */
+interface MockMessages extends ConsumerMessages {
+  /** Push pending messages through the registered callback. */
+  deliver(): void;
+  /** Register the callback passed via `consume({ callback })`. */
+  setCallback(cb: (msg: JsMsg) => void): void;
+}
+
 const createMockMessages = (
   msgs: JsMsg[] = [],
   statusEvents: { type: string; count: number }[] = [],
-): ConsumerMessages => {
+): MockMessages => {
   let stopped = false;
   let resolveWait: (() => void) | null = null;
+  let resolveClosed: (() => void) | null = null;
+  let callback: ((msg: JsMsg) => void) | null = null;
 
-  const mockMessages = {
+  const closedPromise = new Promise<void>((resolve) => {
+    resolveClosed = resolve;
+  });
+
+  const deliverPending = (): void => {
+    if (!callback) return;
+    for (const msg of msgs.splice(0, msgs.length)) callback(msg);
+  };
+
+  const mockMessages: MockMessages = {
     stop: vi.fn(() => {
       stopped = true;
       resolveWait?.();
+      resolveClosed?.();
     }),
+    closed: vi.fn(() => closedPromise),
     status: vi.fn().mockReturnValue({
       [Symbol.asyncIterator]: () => ({
         next: createStatusIterator(
@@ -75,6 +96,16 @@ const createMockMessages = (
         ),
       }),
     }),
+    // eslint-disable-next-line prefer-arrow/prefer-arrow-functions -- method shorthand required by method-signature-style on the MockMessages interface
+    setCallback(cb: (msg: JsMsg) => void): void {
+      callback = cb;
+      // Auto-deliver anything queued before the callback was registered.
+      deliverPending();
+    },
+    // eslint-disable-next-line prefer-arrow/prefer-arrow-functions -- same as above
+    deliver(): void {
+      deliverPending();
+    },
     [Symbol.asyncIterator]: (): AsyncIteratorLike<JsMsg> => {
       let index = 0;
 
@@ -90,7 +121,25 @@ const createMockMessages = (
     },
   };
 
-  return mockMessages as unknown as ConsumerMessages;
+  return mockMessages as unknown as MockMessages;
+};
+
+interface ConsumeOptsWithCallback {
+  callback?(msg: JsMsg): void;
+}
+
+/**
+ * Build a Consumer mock whose `consume()` wires the caller's callback into
+ * the returned mock messages, matching the production callback-mode path.
+ */
+const makeConsumer = (messages: MockMessages): Consumer => {
+  const consume = vi.fn(async (opts?: ConsumeOptsWithCallback) => {
+    if (opts?.callback) messages.setCallback(opts.callback);
+
+    return messages;
+  });
+
+  return createMock<Consumer>({ consume });
 };
 
 describe(MessageProvider, () => {
@@ -112,9 +161,7 @@ describe(MessageProvider, () => {
     describe('when called after start', () => {
       it('should reinitialize subjects so start() can be called again', async () => {
         // Given: a consumer that completes immediately
-        const mockConsumer = createMock<Consumer>({
-          consume: vi.fn().mockResolvedValue(createMockMessages()),
-        });
+        const mockConsumer = makeConsumer(createMockMessages());
 
         const consumerInfo = createMock<ConsumerInfo>({
           name: faker.lorem.word(),
@@ -185,9 +232,7 @@ describe(MessageProvider, () => {
 
         // Given: first call fails, second call succeeds
         const mockMessages = createMockMessages();
-        const mockConsumer = createMock<Consumer>({
-          consume: vi.fn().mockResolvedValue(mockMessages),
-        });
+        const mockConsumer = makeConsumer(mockMessages);
 
         const consumerInfo = createMock<ConsumerInfo>({
           name: faker.lorem.word(),
@@ -281,9 +326,7 @@ describe(MessageProvider, () => {
 
         const mockMessages = createMockMessages([], statusEvents);
 
-        const mockConsumer = createMock<Consumer>({
-          consume: vi.fn().mockResolvedValue(mockMessages),
-        });
+        const mockConsumer = makeConsumer(mockMessages);
 
         const consumerInfo = createMock<ConsumerInfo>({
           name: faker.lorem.word(),
@@ -321,9 +364,7 @@ describe(MessageProvider, () => {
 
         const mockMessages = createMockMessages([], statusEvents);
 
-        const mockConsumer = createMock<Consumer>({
-          consume: vi.fn().mockResolvedValue(mockMessages),
-        });
+        const mockConsumer = makeConsumer(mockMessages);
 
         const consumerInfo = createMock<ConsumerInfo>({
           name: faker.lorem.word(),
@@ -362,9 +403,7 @@ describe(MessageProvider, () => {
 
         // Given: ordered consumer creation fails once, then succeeds
         const mockMessages = createMockMessages();
-        const mockConsumer = createMock<Consumer>({
-          consume: vi.fn().mockResolvedValue(mockMessages),
-        });
+        const mockConsumer = makeConsumer(mockMessages);
 
         const js = {
           consumers: {
@@ -400,9 +439,7 @@ describe(MessageProvider, () => {
         // Given: ordered consumer connects and starts consuming
         const mockMessages = createMockMessages();
 
-        const mockConsumer = createMock<Consumer>({
-          consume: vi.fn().mockResolvedValue(mockMessages),
-        });
+        const mockConsumer = makeConsumer(mockMessages);
 
         const js = {
           consumers: {
@@ -455,9 +492,7 @@ describe(MessageProvider, () => {
 
         const mockMessages = createMockMessages([mockMsg]);
 
-        const mockConsumer = createMock<Consumer>({
-          consume: vi.fn().mockResolvedValue(mockMessages),
-        });
+        const mockConsumer = makeConsumer(mockMessages);
 
         const consumerInfo = createMock<ConsumerInfo>({
           name: faker.lorem.word(),
@@ -513,9 +548,7 @@ describe(MessageProvider, () => {
         );
 
         const mockMessages = createMockMessages();
-        const mockConsumer = createMock<Consumer>({
-          consume: vi.fn().mockResolvedValue(mockMessages),
-        });
+        const mockConsumer = makeConsumer(mockMessages);
 
         const originalConsumerInfo = createMock<ConsumerInfo>({
           name: faker.lorem.word(),
@@ -573,9 +606,7 @@ describe(MessageProvider, () => {
         );
 
         const mockMessages = createMockMessages();
-        const mockConsumer = createMock<Consumer>({
-          consume: vi.fn().mockResolvedValue(mockMessages),
-        });
+        const mockConsumer = makeConsumer(mockMessages);
 
         const consumerInfo = createMock<ConsumerInfo>({
           name: faker.lorem.word(),
