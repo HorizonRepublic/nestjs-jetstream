@@ -276,7 +276,13 @@ describe('Self-Healing Consumer Flow', () => {
       // Then: self-healing recovers, consumer recreated, pending message delivered
       await waitForCondition(() => controller.received.length >= 2, 30_000);
 
-      expect(controller.received).toHaveLength(2);
+      // At least both phases arrived — redelivery after consumer recreation
+      // may add duplicates, which is correct at-least-once behaviour.
+      expect(controller.received.length).toBeGreaterThanOrEqual(2);
+      const phases = controller.received.map((m) => (m as Record<string, unknown>).phase);
+
+      expect(phases).toContain('initial');
+      expect(phases).toContain('during-migration');
     }, 60_000);
 
     it('should recreate event consumer after manual deletion and resume consumption', async () => {
@@ -285,7 +291,7 @@ describe('Self-Healing Consumer Flow', () => {
 
       await waitForCondition(() => controller.received.length >= 1, 10_000);
 
-      expect(controller.received).toHaveLength(1);
+      expect(controller.received.length).toBeGreaterThanOrEqual(1);
 
       // When: delete consumer via NATS
       const evStream = streamName(serviceName, StreamKind.Event);
@@ -296,10 +302,16 @@ describe('Self-Healing Consumer Flow', () => {
       // And: publish another message
       await firstValueFrom(client.emit('healing.check', { phase: 'after-delete' }));
 
-      // Then: self-healing recreates consumer and message is delivered
-      await waitForCondition(() => controller.received.length >= 2, 30_000);
+      // Then: self-healing recreates consumer and message is delivered.
+      // Redelivery of "before-delete" may occur since consumer was deleted
+      // before the ack was persisted — this is correct at-least-once behaviour.
+      const getPhases = (): string[] =>
+        controller.received.map((m) => (m as Record<string, unknown>).phase as string);
 
-      expect(controller.received).toHaveLength(2);
+      await waitForCondition(() => getPhases().includes('after-delete'), 30_000);
+
+      expect(getPhases()).toContain('before-delete');
+      expect(getPhases()).toContain('after-delete');
     }, 60_000);
   });
 });
