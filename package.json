@@ -53,7 +53,7 @@
   "engines": {
     "node": ">= 20.0.0"
   },
-  "packageManager": "pnpm@10.33.0",
+  "packageManager": "pnpm@10.33.2",
   "scripts": {
     "build": "tsup",
     "build:watch": "tsup --watch",
