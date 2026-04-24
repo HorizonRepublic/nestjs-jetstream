@@ -739,8 +739,8 @@ describe(JetstreamClient, () => {
         // Advance past the timeout
         vi.advanceTimersByTime(DEFAULT_JETSTREAM_RPC_TIMEOUT);
 
-        // Then: timeout error as Error instance
-        await expect(resultPromise).rejects.toThrow('RPC timeout');
+        // Then: timeout error surfaces the unified `rpc.timeout` label
+        await expect(resultPromise).rejects.toThrow('rpc.timeout');
         expect(eventBus.emit).toHaveBeenCalledWith(
           TransportEvent.RpcTimeout,
           expect.stringContaining('cmd.slow.handler'),

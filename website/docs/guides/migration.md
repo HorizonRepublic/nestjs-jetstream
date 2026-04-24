@@ -6,7 +6,7 @@ schema:
   headline: "Migration Guide"
   description: "Migrate from the built-in NestJS NATS transport to JetStream with durable delivery."
   datePublished: "2026-03-26"
-  dateModified: "2026-04-11"
+  dateModified: "2026-04-24"
 ---
 
 # Migration Guide
@@ -119,6 +119,23 @@ After migration, you get for free:
 - Ordered sequential delivery mode
 
 ## Upgrading between versions
+
+### v2.9 → v2.10
+
+**New features:**
+- [**Distributed tracing with OpenTelemetry**](/docs/guides/distributed-tracing) — every publish, consume, and RPC round-trip now produces an OpenTelemetry span. W3C Trace Context propagates through NATS message headers, so a single trace flows end-to-end across services. Activates automatically the moment your application registers an OpenTelemetry SDK (Sentry, Datadog, NodeSDK, etc.); zero runtime cost when no SDK is registered. Configurable through `forRoot({ otel: ... })`.
+- [**Header contract**](/docs/reference/header-contract) — formal documentation of the NATS message headers the transport reads and writes. Use this as the integration spec when publishing to (or consuming from) the transport from other languages (Go, Python, etc.).
+
+**Peer dependency (optional):**
+- **`@opentelemetry/api`** is now declared as an **optional peer dependency**. Applications that already register an OpenTelemetry SDK (`@sentry/node`, `@datadog/tracer`, `@opentelemetry/sdk-node`, etc.) bring it in transitively — no action needed. Applications that want to use the library's distributed-tracing feature **and** do not already have an OTel SDK must install `@opentelemetry/api` at the same major version (`^1.9.0`). This avoids the silent "no-op tracer" trap where two copies of the API live in `node_modules` and the global tracer singleton refuses the mismatched version.
+
+**Behavior changes (non-breaking API, observable in logs/APM):**
+- **Reduced internal logging.** Several `logger.error` sites that duplicated existing `TransportHooks` events have been removed. The hook is now the single observability channel for those events. If you relied on those log lines for monitoring, register the relevant hook (`error`, `rpcTimeout`, `deadLetter`).
+- **Error classification on OTel spans.** When OpenTelemetry is enabled, handler throws of `RpcException` and `HttpException` produce `OK` spans with `jetstream.rpc.reply.has_error` and `jetstream.rpc.reply.error.code` attributes — they are treated as expected business outcomes per the RPC contract. Bare `Error` throws produce `ERROR` spans with `recordException`. This keeps APM error rates clean for known business denials while loud-failing on real bugs.
+- **TransportEvent.Error now fires on every handler throw**, both event and RPC paths. Previously only some paths emitted it. If you have an `error` hook registered, it will now receive these (which is what most users want).
+- **`RpcConfig.timeout` in JetStream mode now bounds `connect + RPC`.** Previously the JetStream-mode per-request deadline only started after `await connect()` resolved, which meant a permanent NATS outage could accumulate pending RPCs indefinitely. The deadline is now armed immediately so callers always see a timeout. Core-mode RPC still relies on `nats.js`'s own `nc.request({ timeout })`, which starts after `connect()` resolves; operators running permanent-outage scenarios against Core mode should configure `maxReconnectAttempts` to stop the retry loop at the protocol layer.
+
+No breaking API changes. Existing applications upgrade by bumping the dependency.
 
 ### v2.8 → v2.9
 

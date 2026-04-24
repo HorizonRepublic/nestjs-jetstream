@@ -26,6 +26,15 @@ import {
 import { MessageProvider } from '../infrastructure';
 import { PatternRegistry } from './pattern-registry';
 import { dlqStreamName, JetstreamDlqHeader } from '../../jetstream.constants';
+import {
+  ConsumeKind,
+  deriveOtelAttrs,
+  resolveOtelOptions,
+  withConsumeSpan,
+  withDeadLetterSpan,
+  type ResolvedOtelOptions,
+  type ServerEndpoint,
+} from '../../otel';
 
 /**
  * Routes incoming event messages (workqueue, broadcast, and ordered) to NestJS handlers.
@@ -42,9 +51,34 @@ import { dlqStreamName, JetstreamDlqHeader } from '../../jetstream.constants';
  * - The DLQ stream name is derived from the service name (e.g., `orders__microservice_dlq-stream`).
  * - Original message data and metadata are preserved in the DLQ message, with additional headers indicating the reason for failure.
  */
+/** Narrow consume-kind tag emitted by the event router (no `Rpc` here). */
+type EventConsumeKind = Exclude<ConsumeKind, ConsumeKind.Rpc>;
+
+/**
+ * Resolved routing shape for one incoming event/broadcast/ordered message —
+ * the handler selected for dispatch and the decoded payload. `null` is
+ * returned by {@link EventRouter} resolution helpers when the message cannot
+ * be routed (no handler, decode error, or pre-dispatch failure).
+ */
+interface ResolvedEvent {
+  readonly handler: MessageHandler;
+  readonly data: unknown;
+}
+
+const eventConsumeKindFor = (kind: StreamKind): EventConsumeKind => {
+  if (kind === StreamKind.Broadcast) return ConsumeKind.Broadcast;
+  if (kind === StreamKind.Ordered) return ConsumeKind.Ordered;
+
+  return ConsumeKind.Event;
+};
+
 export class EventRouter {
   private readonly logger = new Logger('Jetstream:EventRouter');
   private readonly subscriptions: Subscription[] = [];
+
+  private readonly otel: ResolvedOtelOptions;
+  private readonly serviceName: string;
+  private readonly serverEndpoint: ServerEndpoint | null;
 
   public constructor(
     private readonly messageProvider: MessageProvider,
@@ -56,7 +90,22 @@ export class EventRouter {
     private readonly ackWaitMap?: Map<StreamKind, number>,
     private readonly connection?: ConnectionProvider,
     private readonly options?: JetstreamModuleOptions,
-  ) {}
+  ) {
+    if (options) {
+      const derived = deriveOtelAttrs(options);
+
+      this.otel = derived.otel;
+      this.serviceName = derived.serviceName;
+      this.serverEndpoint = derived.serverEndpoint;
+    } else {
+      // Unit-test instantiation without options — disable OTel entirely
+      // so span helpers short-circuit on the first line (`config.enabled`)
+      // and never read the placeholder values below.
+      this.otel = resolveOtelOptions({ enabled: false });
+      this.serviceName = '';
+      this.serverEndpoint = null;
+    }
+  }
 
   /**
    * Update the max_deliver thresholds from actual NATS consumer configs.
@@ -95,6 +144,10 @@ export class EventRouter {
     const eventBus = this.eventBus;
     const logger = this.logger;
     const deadLetterConfig = this.deadLetterConfig;
+    const otel = this.otel;
+    const serviceName = this.serviceName;
+    const serverEndpoint = this.serverEndpoint;
+    const spanKind: EventConsumeKind = eventConsumeKindFor(kind);
 
     const ackExtensionInterval = isOrdered
       ? null
@@ -148,7 +201,7 @@ export class EventRouter {
      * error, or unexpected pre-dispatch failure) — those branches settle the
      * message synchronously inside the helper and produce nothing to dispatch.
      */
-    const resolveEvent = (msg: JsMsg): { handler: MessageHandler; data: unknown } | null => {
+    const resolveEvent = (msg: JsMsg): ResolvedEvent | null => {
       const subject = msg.subject;
 
       try {
@@ -213,12 +266,36 @@ export class EventRouter {
       let pending: unknown;
 
       try {
-        pending = unwrapResult(handler(data, ctx));
+        pending = withConsumeSpan(
+          {
+            subject: msg.subject,
+            msg,
+            info: msg.info,
+            kind: spanKind,
+            payloadBytes: msg.data.length,
+            handlerMetadata: { pattern: msg.subject },
+            serviceName,
+            endpoint: serverEndpoint,
+          },
+          otel,
+          () => unwrapResult(handler(data, ctx)),
+        );
       } catch (err) {
-        logger.error(`Event handler error (${msg.subject}) in ${kind} router:`, err);
-        if (stopAckExtension !== null) stopAckExtension();
+        eventBus.emit(
+          TransportEvent.Error,
+          err instanceof Error ? err : new Error(String(err)),
+          `${kind}-handler:${msg.subject}`,
+        );
 
-        return settleFailure(msg, data, err);
+        // Keep ack extension alive across settleFailure() — it may route
+        // through handleDeadLetter → publishToDlq whose JetStream publish
+        // can take longer than the consumer's `ack_wait`. Stopping the
+        // extension early would let NATS redeliver the message mid-DLQ
+        // publish and double-fire onDeadLetter. Mirrors the async branch
+        // below.
+        return settleFailure(msg, data, err).finally(() => {
+          if (stopAckExtension !== null) stopAckExtension();
+        });
       }
 
       if (!isPromiseLike(pending)) {
@@ -234,7 +311,11 @@ export class EventRouter {
           if (stopAckExtension !== null) stopAckExtension();
         },
         async (err: unknown) => {
-          logger.error(`Event handler error (${msg.subject}) in ${kind} router:`, err);
+          eventBus.emit(
+            TransportEvent.Error,
+            err instanceof Error ? err : new Error(String(err)),
+            `${kind}-handler:${msg.subject}`,
+          );
           try {
             await settleFailure(msg, data, err);
           } finally {
@@ -286,7 +367,20 @@ export class EventRouter {
       let pending: unknown;
 
       try {
-        pending = unwrapResult(handler(data, ctx));
+        pending = withConsumeSpan(
+          {
+            subject: msg.subject,
+            msg,
+            info: msg.info,
+            kind: spanKind,
+            payloadBytes: msg.data.length,
+            handlerMetadata: { pattern: msg.subject },
+            serviceName,
+            endpoint: serverEndpoint,
+          },
+          otel,
+          () => unwrapResult(handler(data, ctx)),
+        );
       } catch (err) {
         logger.error(`Ordered handler error (${subject}):`, err);
 
@@ -501,12 +595,24 @@ export class EventRouter {
       timestamp: new Date(msg.info.timestampNanos / 1_000_000).toISOString(),
     };
 
-    this.eventBus.emit(TransportEvent.DeadLetter, info);
+    await withDeadLetterSpan(
+      {
+        msg,
+        finalDeliveryCount: msg.info.deliveryCount,
+        reason: error instanceof Error ? error.message : String(error),
+        serviceName: this.serviceName,
+        endpoint: this.serverEndpoint,
+      },
+      this.otel,
+      async () => {
+        this.eventBus.emit(TransportEvent.DeadLetter, info);
 
-    if (!this.options?.dlq) {
-      await this.fallbackToOnDeadLetterCallback(info, msg);
-    } else {
-      await this.publishToDlq(msg, info, error);
-    }
+        if (!this.options?.dlq) {
+          await this.fallbackToOnDeadLetterCallback(info, msg);
+        } else {
+          await this.publishToDlq(msg, info, error);
+        }
+      },
+    );
   }
 }

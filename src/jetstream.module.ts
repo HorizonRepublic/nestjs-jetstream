@@ -14,6 +14,7 @@ import type { ConsumeOptions, ConsumerInfo } from '@nats-io/jetstream';
 import { JetstreamClient } from './client';
 import { JsonCodec } from './codec';
 import { ConnectionProvider } from './connection';
+import { deriveOtelAttrs, withSelfHealingSpan } from './otel';
 import { EventBus } from './hooks';
 import { JetstreamHealthIndicator } from './health';
 import { StreamKind } from './interfaces';
@@ -324,12 +325,19 @@ export class JetstreamModule implements OnApplicationShutdown {
       // MessageProvider — pull-based message consumption
       {
         provide: MessageProvider,
-        inject: [JETSTREAM_OPTIONS, JETSTREAM_CONNECTION, JETSTREAM_EVENT_BUS, ConsumerProvider],
+        inject: [
+          JETSTREAM_OPTIONS,
+          JETSTREAM_CONNECTION,
+          JETSTREAM_EVENT_BUS,
+          ConsumerProvider,
+          StreamProvider,
+        ],
         useFactory: (
           options: JetstreamModuleOptions,
           connection: ConnectionProvider,
           eventBus: EventBus,
           consumerProvider: ConsumerProvider | null,
+          streamProvider: StreamProvider | null,
         ): MessageProvider | null => {
           if (options.consumer === false) return null;
 
@@ -345,13 +353,27 @@ export class JetstreamModule implements OnApplicationShutdown {
           }
 
           // Recovery callback: recreate consumer when "not found" during self-healing
-          const consumerRecoveryFn: ConsumerRecoveryFn | undefined = consumerProvider
-            ? async (kind: StreamKind): Promise<ConsumerInfo> => {
-                const jsm = await connection.getJetStreamManager();
+          const derived = deriveOtelAttrs(options);
+          const { otel, serverEndpoint: otelEndpoint, serviceName: otelServiceName } = derived;
+          const consumerRecoveryFn: ConsumerRecoveryFn | undefined =
+            consumerProvider && streamProvider
+              ? async (kind: StreamKind): Promise<ConsumerInfo> =>
+                  withSelfHealingSpan(
+                    otel,
+                    {
+                      serviceName: otelServiceName,
+                      endpoint: otelEndpoint,
+                      consumer: consumerProvider.getConsumerName(kind),
+                      stream: streamProvider.getStreamName(kind),
+                      reason: 'consumer not found',
+                    },
+                    async () => {
+                      const jsm = await connection.getJetStreamManager();
 
-                return consumerProvider.recoverConsumer(jsm, kind);
-              }
-            : undefined;
+                      return consumerProvider.recoverConsumer(jsm, kind);
+                    },
+                  )
+              : undefined;
 
           return new MessageProvider(connection, eventBus, consumeOptionsMap, consumerRecoveryFn);
         },
@@ -452,6 +474,7 @@ export class JetstreamModule implements OnApplicationShutdown {
             eventBus,
             rpcOptions,
             ackWaitMap,
+            options,
           );
         },
       },
