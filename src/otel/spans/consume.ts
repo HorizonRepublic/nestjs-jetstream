@@ -144,9 +144,17 @@ export const withConsumeSpan = <T>(
   const start = Date.now();
   let finalized = false;
 
+  // External abort: the RPC router wires its own deadline here so the
+  // span closes even when the handler never settles. The handler's
+  // eventual resolution / rejection is still observed below but becomes
+  // a no-op — `finishOk` / `finishError` respect the `finalized` flag.
+  const { signal, timeoutLabel = 'handler.timeout' } = options;
+  let detachAbort: () => void = () => undefined;
+
   const finishOk = (): void => {
     if (finalized) return;
     finalized = true;
+    detachAbort();
     span.setStatus({ code: SpanStatusCode.OK });
     safelyInvokeHook(HOOK_RESPONSE, config.responseHook, span, {
       subject: ctx.subject,
@@ -158,6 +166,7 @@ export const withConsumeSpan = <T>(
   const finishError = (err: unknown): void => {
     if (finalized) return;
     finalized = true;
+    detachAbort();
     if (config.errorClassifier(err) === 'expected') {
       applyExpectedError(span, err);
     } else {
@@ -172,13 +181,9 @@ export const withConsumeSpan = <T>(
     span.end();
   };
 
-  // External abort: the RPC router wires its own deadline here so the
-  // span closes even when the handler never settles. The handler's
-  // eventual resolution / rejection is still observed below but becomes
-  // a no-op — `finishOk` / `finishError` respect the `finalized` flag.
-  const { signal, timeoutLabel = 'handler.timeout' } = options;
   const onAbort = (): void => {
     if (finalized) return;
+    finalized = true;
     const error = new Error(timeoutLabel);
 
     span.addEvent(timeoutLabel);
@@ -189,13 +194,22 @@ export const withConsumeSpan = <T>(
       durationMs: Date.now() - start,
       error,
     });
-    finalized = true;
     span.end();
   };
 
   if (signal) {
-    if (signal.aborted) onAbort();
-    else signal.addEventListener('abort', onAbort, { once: true });
+    if (signal.aborted) {
+      onAbort();
+    } else {
+      signal.addEventListener('abort', onAbort, { once: true });
+      // Detach when the handler finishes first so the closure (and its
+      // captured `span` / `ctx`) doesn't pin GC for the lifetime of a
+      // long-lived caller signal (e.g. an app-shutdown signal threaded
+      // through many consumes).
+      detachAbort = (): void => {
+        signal.removeEventListener('abort', onAbort);
+      };
+    }
   }
 
   let result: T | Promise<T>;

@@ -13,27 +13,9 @@
 import { ConsoleSpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 
-const sdk = new NodeSDK({
+export const sdk = new NodeSDK({
   serviceName: 'distributed-tracing-example',
   spanProcessors: [new SimpleSpanProcessor(new ConsoleSpanExporter())],
 });
 
 sdk.start();
-
-// Flush pending spans on graceful shutdown so nothing is lost at exit.
-const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
-  try {
-    await sdk.shutdown();
-  } catch (err) {
-    console.error('OTel SDK shutdown failed:', err);
-  } finally {
-    process.exit(signal === 'SIGINT' ? 130 : 143);
-  }
-};
-
-process.once('SIGINT', () => {
-  void shutdown('SIGINT');
-});
-process.once('SIGTERM', () => {
-  void shutdown('SIGTERM');
-});

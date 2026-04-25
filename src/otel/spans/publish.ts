@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { SpanKind, SpanStatusCode, context, trace } from '@opentelemetry/api';
 import type { MsgHdrs } from '@nats-io/transport-node';
 
@@ -16,6 +17,31 @@ import { safelyInvokeHook } from '../internal-utils';
 import { injectContext } from '../propagator';
 import { getTracer } from '../tracer';
 import { JetstreamTrace } from '../trace-kinds';
+
+const logger = new Logger('Jetstream:Otel');
+
+/**
+ * Evaluate `shouldTracePublish` defensively. A throwing user predicate
+ * should never derail a publish — fail-open (assume "trace it") so a buggy
+ * filter doesn't black-hole spans, and surface the failure at debug.
+ */
+const shouldTracePublishSafe = (
+  predicate: ResolvedOtelOptions['shouldTracePublish'],
+  subject: string,
+  record: JetstreamRecord,
+): boolean => {
+  if (!predicate) return true;
+
+  try {
+    return predicate(subject, record);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+
+    logger.debug(`OTel shouldTracePublish threw: ${message}`);
+
+    return true;
+  }
+};
 
 /**
  * Input required to build a publish span. The caller (JetstreamClient)
@@ -63,7 +89,7 @@ export const withPublishSpan = async <T>(
 
   const shouldCreateSpan =
     config.traces.has(JetstreamTrace.Publish) &&
-    (config.shouldTracePublish?.(ctx.subject, ctx.record) ?? true);
+    shouldTracePublishSafe(config.shouldTracePublish, ctx.subject, ctx.record);
 
   if (!shouldCreateSpan) {
     // Propagate the ambient context so downstream consumers stay linked even without a PRODUCER span.
@@ -96,16 +122,22 @@ export const withPublishSpan = async <T>(
   const ctxWithSpan = trace.setSpan(context.active(), span);
 
   injectContext(ctxWithSpan, ctx.headers, hdrsSetter);
-  safelyInvokeHook(HOOK_PUBLISH, config.publishHook, span, {
-    subject: ctx.subject,
-    record: ctx.record,
-    kind: ctx.kind,
-  });
 
   const start = Date.now();
 
   try {
-    const result = await context.with(ctxWithSpan, fn);
+    const result = await context.with(ctxWithSpan, async () => {
+      // Fire publishHook inside the span's active context so any nested
+      // OTel calls (`tracer.startSpan`, `trace.getActiveSpan`) parent under
+      // this PRODUCER span instead of the ambient one.
+      safelyInvokeHook(HOOK_PUBLISH, config.publishHook, span, {
+        subject: ctx.subject,
+        record: ctx.record,
+        kind: ctx.kind,
+      });
+
+      return fn();
+    });
 
     span.setStatus({ code: SpanStatusCode.OK });
     safelyInvokeHook(HOOK_RESPONSE, config.responseHook, span, {

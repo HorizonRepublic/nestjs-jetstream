@@ -1,6 +1,14 @@
 import { randomUUID } from 'node:crypto';
 
-import { Controller, Get, Inject, Logger, Module } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Inject,
+  Injectable,
+  Logger,
+  Module,
+  type OnApplicationShutdown,
+} from '@nestjs/common';
 import { Ctx, EventPattern, MessagePattern, Payload } from '@nestjs/microservices';
 import { firstValueFrom, lastValueFrom } from 'rxjs';
 
@@ -12,7 +20,27 @@ import {
   RpcContext,
 } from '../../src';
 
+import { sdk } from './tracing';
+
 const SERVICE = 'tracing-demo';
+
+/**
+ * Flushes pending spans through the configured exporter when Nest tears
+ * the application down. Wired into the standard `OnApplicationShutdown`
+ * lifecycle so the JetStream transport's own drain logic still runs first.
+ */
+@Injectable()
+class OtelLifecycle implements OnApplicationShutdown {
+  private readonly logger = new Logger('OtelLifecycle');
+
+  public async onApplicationShutdown(): Promise<void> {
+    try {
+      await sdk.shutdown();
+    } catch (err) {
+      this.logger.error('OTel SDK shutdown failed', err);
+    }
+  }
+}
 
 @Controller()
 class OrdersController {
@@ -107,5 +135,6 @@ class HttpController {
     JetstreamModule.forFeature({ name: SERVICE }),
   ],
   controllers: [OrdersController, HttpController],
+  providers: [OtelLifecycle],
 })
 export class AppModule {}

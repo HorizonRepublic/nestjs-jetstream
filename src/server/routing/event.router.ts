@@ -577,6 +577,11 @@ export class EventRouter {
     await withDeadLetterSpan(
       {
         msg,
+        // Pattern resolution mirrors event-routing: when a registered
+        // pattern matches, surface it on the DLQ span so APM can filter
+        // dead letters by handler without parsing the subject. Falls back
+        // to the subject itself when no glob handler is in play.
+        pattern: this.patternRegistry.getHandler(msg.subject) ? msg.subject : undefined,
         finalDeliveryCount: msg.info.deliveryCount,
         reason: error instanceof Error ? error.message : String(error),
         serviceName: this.serviceName,

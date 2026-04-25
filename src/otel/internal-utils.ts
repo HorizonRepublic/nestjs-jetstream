@@ -13,8 +13,11 @@ const logger = new Logger('Jetstream:Otel');
 
 /**
  * Invoke a user hook with a try/catch so a broken hook can't break the
- * message path. Thrown errors are swallowed and logged at `debug` so they
- * don't add noise to prod logs but are still available during diagnosis.
+ * message path. Hooks are documented as synchronous, but TypeScript widens
+ * `Promise<void>` to `void`, so an `async` hook compiles cleanly. Both
+ * synchronous throws and async rejections are swallowed and logged at
+ * `debug` so they don't add noise to prod logs but are still available
+ * during diagnosis.
  */
 export const safelyInvokeHook = <A extends readonly unknown[]>(
   hookName: string,
@@ -22,12 +25,27 @@ export const safelyInvokeHook = <A extends readonly unknown[]>(
   ...args: A
 ): void => {
   if (!hook) return;
-  try {
-    hook(...args);
-  } catch (err) {
+
+  const logHookFailure = (err: unknown): void => {
     const message = err instanceof Error ? err.message : String(err);
 
     logger.debug(`OTel ${hookName} threw: ${message}`);
+  };
+
+  try {
+    // The public hook signature is `(...args) => void`, but TypeScript
+    // assigns `Promise<void>` to `void`, so an async user hook reaches us
+    // returning a thenable. Cast through `unknown` so we can detect that
+    // and forward rejections instead of leaking them as unhandled.
+    const result: unknown = (hook as (...args: A) => unknown)(...args);
+
+    if (result !== null && typeof result === 'object' && 'then' in result) {
+      const promise = result as PromiseLike<unknown>;
+
+      promise.then(undefined, logHookFailure);
+    }
+  } catch (err) {
+    logHookFailure(err);
   }
 };
 
