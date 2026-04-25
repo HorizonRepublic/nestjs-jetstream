@@ -89,4 +89,30 @@ describe('hdrsGetter', () => {
     // Then — values() absent → falls back to single-value get() path
     expect(result).toBe('partial');
   });
+
+  it('should return undefined when values() yields an empty array', () => {
+    // Given — `values(key)` may return `[]` for keys that exist but were
+    // appended with no value (rare, but a real carrier shape).
+    const fakeCarrier = {
+      keys: (): string[] => ['traceparent'],
+      get: (): string => '',
+      values: (): string[] => [],
+    } as unknown as Parameters<typeof hdrsGetter.get>[0];
+
+    // When + Then
+    expect(hdrsGetter.get(fakeCarrier, 'traceparent')).toBeUndefined();
+  });
+
+  it('should return undefined when joined values are an empty string', () => {
+    // Given — single-entry array containing an empty string
+    // (`[''].join(',') === ''`). Treat as missing per the W3C convention.
+    const fakeCarrier = {
+      keys: (): string[] => ['baggage'],
+      get: (): string => '',
+      values: (): string[] => [''],
+    } as unknown as Parameters<typeof hdrsGetter.get>[0];
+
+    // When + Then
+    expect(hdrsGetter.get(fakeCarrier, 'baggage')).toBeUndefined();
+  });
 });

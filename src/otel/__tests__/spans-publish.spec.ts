@@ -141,6 +141,41 @@ describe('withPublishSpan', () => {
       expect(span.status.code).toBe(SpanStatusCode.ERROR);
       expect(span.events.some((event) => event.name === 'exception')).toBe(true);
     });
+
+    it('should wrap non-Error throws into an Error before recording the exception', async () => {
+      // Given — handlers occasionally `throw` primitives or plain objects.
+      const config = resolveOtelOptions();
+
+      // When
+      await expect(
+        withPublishSpan(baseCtx(), config, async () => {
+          throw 'string failure';
+        }),
+      ).rejects.toBeDefined();
+
+      // Then
+      const span = exporter.getFinishedSpans()[0]!;
+
+      expect(span.status.code).toBe(SpanStatusCode.ERROR);
+      expect(span.status.message).toBe('string failure');
+    });
+
+    it('should fail-open when a non-Error is thrown by shouldTracePublish', async () => {
+      // Given
+      const config = resolveOtelOptions({
+        shouldTracePublish: () => {
+          throw 'predicate string failure';
+        },
+      });
+
+      // When
+      await expect(withPublishSpan(baseCtx(), config, async () => 'ok')).resolves.toBe('ok');
+
+      // Then
+      const spans = exporter.getFinishedSpans().filter((s) => s.name.startsWith('publish '));
+
+      expect(spans).toHaveLength(1);
+    });
   });
 
   describe('hooks', () => {

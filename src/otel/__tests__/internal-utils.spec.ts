@@ -35,6 +35,48 @@ describe('safelyInvokeHook', () => {
       safelyInvokeHook('publishHook', hook, 'arg');
     }).not.toThrow();
   });
+
+  it('should swallow non-Error throws from the hook', () => {
+    // Given — a hook that throws a primitive forces the `String(err)` branch
+    const hook = vi.fn().mockImplementation(() => {
+      throw 'string failure';
+    });
+
+    // When + Then
+    expect(() => {
+      safelyInvokeHook('publishHook', hook);
+    }).not.toThrow();
+  });
+
+  it('should forward async hook rejections to the debug logger without leaking', async () => {
+    // Given — `(...args) => void` widens to allow Promise<void>; the
+    // dispatcher must still catch the eventual rejection.
+    const hook = vi.fn().mockImplementation(() => Promise.reject(new Error('async boom')));
+    const unhandled = vi.fn();
+
+    process.on('unhandledRejection', unhandled);
+    try {
+      // When
+      safelyInvokeHook('publishHook', hook as () => void);
+      await new Promise((resolve) => setImmediate(resolve));
+
+      // Then — no unhandledRejection observed.
+      expect(unhandled).not.toHaveBeenCalled();
+    } finally {
+      process.off('unhandledRejection', unhandled);
+    }
+  });
+
+  it('should ignore objects whose `then` is not a function (not actually thenable)', () => {
+    // Given — `'then' in result` is true, but typeof check rules out the
+    // value-as-string footgun before we touch a non-callable property.
+    const hook = vi.fn().mockReturnValue({ then: 'not a function' });
+
+    // When + Then
+    expect(() => {
+      safelyInvokeHook('publishHook', hook as () => void);
+    }).not.toThrow();
+  });
 });
 
 describe('parseServerAddress', () => {
@@ -93,5 +135,21 @@ describe('parseServerAddress', () => {
     // We don't validate the TCP range — that's NATS's job when it tries to
     // connect. We just refuse to emit a nonsense integer as `server.port`.
     expect(parseServerAddress(['nats.local:not-a-number'])).toEqual({ host: 'nats.local' });
+  });
+
+  it('should return null when the bare authority has no host before the port', () => {
+    // `:4222` — port without host. The split yields an empty host string,
+    // and we'd rather drop the attribute than report a blank server.address.
+    expect(parseServerAddress([':4222'])).toBeNull();
+  });
+
+  it('should return null for a scheme-qualified URL whose hostname empties out', () => {
+    // `nats://:4222` — WHATWG URL accepts this but `hostname` is empty,
+    // which is uninformative for APM dashboards.
+    expect(parseServerAddress(['nats://:4222'])).toBeNull();
+  });
+
+  it('should return null when an IPv6 bracket has no closing `]`', () => {
+    expect(parseServerAddress(['[::1'])).toBeNull();
   });
 });

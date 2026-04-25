@@ -141,6 +141,55 @@ describe('infrastructure span helpers', () => {
       expect(spans[0]!.name).toBe('nats.connection');
       expect(spans[0]!.events.some((e) => e.name === 'connection.reconnected')).toBe(true);
     });
+
+    it('should ignore recordEvent calls made after finish (misuse path)', async () => {
+      // Given
+      const config = resolveOtelOptions({ traces: [JetstreamTrace.ConnectionLifecycle] });
+      const handle = beginConnectionLifecycleSpan(config, baseCtx());
+
+      // When
+      handle.finish();
+      handle.recordEvent('connection.disconnected');
+      await provider.forceFlush();
+
+      // Then — span ended cleanly without the post-finish event
+      const spans = exporter.getFinishedSpans();
+
+      expect(spans).toHaveLength(1);
+      expect(spans[0]!.events).toHaveLength(0);
+    });
+
+    it('should mark the span ERROR when finish receives an error', async () => {
+      // Given
+      const config = resolveOtelOptions({ traces: [JetstreamTrace.ConnectionLifecycle] });
+      const handle = beginConnectionLifecycleSpan(config, baseCtx());
+      const error = new Error(faker.lorem.sentence());
+
+      // When
+      handle.finish(error);
+      await provider.forceFlush();
+
+      // Then
+      const spans = exporter.getFinishedSpans();
+
+      expect(spans[0]!.status.code).toBe(SpanStatusCode.ERROR);
+      expect(spans[0]!.events.some((event) => event.name === 'exception')).toBe(true);
+    });
+
+    it('should be idempotent across repeated finish calls', () => {
+      // Given
+      const config = resolveOtelOptions({ traces: [JetstreamTrace.ConnectionLifecycle] });
+      const handle = beginConnectionLifecycleSpan(config, baseCtx());
+
+      // When — second call must be a no-op, not throw or double-end
+      handle.finish();
+
+      // Then
+      expect(() => {
+        handle.finish(new Error('late'));
+      }).not.toThrow();
+      expect(exporter.getFinishedSpans()).toHaveLength(1);
+    });
   });
 
   describe('shutdown helper', () => {

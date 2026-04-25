@@ -246,6 +246,33 @@ describe('withConsumeSpan', () => {
       expect(finished).toHaveLength(1);
       expect(finished[0]!.status.code).toBe(SpanStatusCode.ERROR);
     });
+
+    it('should ignore late handler rejection after the span has been aborted', async () => {
+      // Given
+      const config = resolveOtelOptions();
+      const controller = new AbortController();
+      let rejectFn: (err: unknown) => void = (_err) => undefined;
+      const handlerSettled = new Promise<string>((_, reject) => {
+        rejectFn = reject;
+      });
+
+      // When — abort wins, late rejection must not flip status or fire a
+      // second responseHook (covers `finishError`'s `finalized` guard).
+      const consumePromise = withConsumeSpan(baseCtx(), config, () => handlerSettled, {
+        signal: controller.signal,
+        timeoutLabel: 'rpc.handler.timeout',
+      });
+
+      controller.abort();
+      rejectFn(new Error('late failure'));
+      await expect(consumePromise).rejects.toThrow('late failure');
+
+      // Then — single span recorded by the abort path.
+      const finished = exporter.getFinishedSpans();
+
+      expect(finished).toHaveLength(1);
+      expect(finished[0]!.events.some((event) => event.name === 'rpc.handler.timeout')).toBe(true);
+    });
   });
 
   describe('hooks', () => {

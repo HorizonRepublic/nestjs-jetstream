@@ -114,6 +114,24 @@ describe('withDeadLetterSpan', () => {
       expect(span.status.code).toBe(SpanStatusCode.ERROR);
       expect(span.events.some((event) => event.name === 'exception')).toBe(true);
     });
+
+    it('should wrap non-Error throws into an Error before recording the exception', async () => {
+      // Given
+      const config = resolveOtelOptions();
+
+      // When
+      await expect(
+        withDeadLetterSpan(baseCtx(), config, async () => {
+          throw 'string failure';
+        }),
+      ).rejects.toBeDefined();
+
+      // Then
+      const span = exporter.getFinishedSpans()[0]!;
+
+      expect(span.status.code).toBe(SpanStatusCode.ERROR);
+      expect(span.status.message).toBe('string failure');
+    });
   });
 
   describe('hooks', () => {

@@ -168,6 +168,25 @@ describe('beginRpcClientSpan', () => {
       expect(finished).toHaveLength(1);
       expect(finished[0]!.status.code).toBe(SpanStatusCode.OK);
     });
+
+    it('should fall back to ERROR on an unrecognized outcome instead of throwing', () => {
+      // Given — synthetic outcome simulates a future enum variant slipping
+      // past the type-checker (e.g. via `as unknown as RpcOutcome` in user
+      // code). The helper must close the span gracefully so the caller's
+      // RPC pipeline keeps running.
+      const handle = beginRpcClientSpan(baseCtx(), resolveOtelOptions());
+      const outcome = { kind: 'future-variant' } as unknown as Parameters<typeof handle.finish>[0];
+
+      // When + Then
+      expect(() => {
+        handle.finish(outcome);
+      }).not.toThrow();
+
+      const span = exporter.getFinishedSpans()[0]!;
+
+      expect(span.status.code).toBe(SpanStatusCode.ERROR);
+      expect(span.status.message).toBe('unknown outcome');
+    });
   });
 
   describe('hooks', () => {
