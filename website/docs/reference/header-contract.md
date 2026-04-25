@@ -24,7 +24,7 @@ The contract is **stable across minor versions**. Header names will not change w
 | `traceparent`      | Inbound              | W3C Trace Context  | Parent span id used to link the consume span to the upstream producer. Read on every incoming message. |
 | `tracestate`       | Inbound              | W3C Trace Context  | Vendor-specific trace state. Forwarded as-is.          |
 | `baggage`          | Inbound              | W3C Baggage        | Application-level context propagation. Forwarded.      |
-| `Nats-Msg-Id`      | Inbound              | NATS standard      | Message-id deduplication. Read for the `messaging.message.id` span attribute. |
+| `Nats-Msg-Id`      | Inbound              | NATS standard      | Message-id deduplication. Surfaces on consume spans as the standard `messaging.message.id` attribute, not via the `messaging.header.*` capture path. |
 | `x-correlation-id` | Inbound (RPC)        | Library-internal   | Required on RPC requests; identifies the response.     |
 | `x-reply-to`       | Inbound (RPC)        | Library-internal   | Required on RPC requests; specifies the reply subject. |
 | `x-error`          | Inbound (RPC reply)  | Library-internal   | When `true`, marks the reply payload as an error envelope. |

@@ -1,10 +1,15 @@
 // Public surface — re-exported from `src/index.ts` for library consumers.
 export { TRACER_NAME } from './constants';
 
-// Internal sharing — attribute / span-name constants used across `src/`
-// modules. Not re-exported from `src/index.ts`, so they stay out of the
-// public `.d.ts` / typedoc output.
-export * from './attribute-keys';
+// Internal sharing — only the attribute / event identifiers that are
+// referenced from non-`src/otel/` modules cross this barrel. Everything
+// else stays scoped to `./attribute-keys` so a new identifier doesn't
+// silently leak through the OTel boundary.
+export {
+  ATTR_NATS_CONNECTION_SERVER,
+  EVENT_CONNECTION_DISCONNECTED,
+  EVENT_CONNECTION_RECONNECTED,
+} from './attribute-keys';
 
 export { JetstreamTrace, DEFAULT_TRACES } from './trace-kinds';
 

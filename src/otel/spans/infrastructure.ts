@@ -1,5 +1,12 @@
 import { Logger } from '@nestjs/common';
-import { SpanKind, SpanStatusCode, context, trace, type Span } from '@opentelemetry/api';
+import {
+  SpanKind,
+  SpanStatusCode,
+  context,
+  trace,
+  type AttributeValue,
+  type Span,
+} from '@opentelemetry/api';
 
 import {
   ATTR_JETSTREAM_MIGRATION_REASON,
@@ -24,9 +31,6 @@ import { getTracer } from '../tracer';
 import { JetstreamTrace } from '../trace-kinds';
 
 const logger = new Logger('Jetstream:Otel');
-
-/** Primitive value an OTel span attribute can hold. */
-type AttributeValue = string | number | boolean;
 
 /** Optional attribute map used by infrastructure span builders. */
 type AttributeBag = Record<string, AttributeValue | undefined>;

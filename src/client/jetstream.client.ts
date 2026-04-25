@@ -1,5 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { ClientProxy, ReadPacket, WritePacket } from '@nestjs/microservices';
+import { context } from '@opentelemetry/api';
+import { nuid } from '@nats-io/nuid';
 import {
   createInbox,
   headers as natsHeaders,
@@ -9,7 +11,6 @@ import {
   type NatsConnection,
   type Subscription,
 } from '@nats-io/transport-node';
-import { nuid } from '@nats-io/nuid';
 import { Subscription as RxSubscription } from 'rxjs';
 
 import { ConnectionProvider } from '../connection';
@@ -31,8 +32,6 @@ import {
   JetstreamHeader,
   PatternPrefix,
 } from '../jetstream.constants';
-import { context } from '@opentelemetry/api';
-
 import {
   beginRpcClientSpan,
   deriveOtelAttrs,

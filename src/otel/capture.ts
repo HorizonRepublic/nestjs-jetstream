@@ -31,8 +31,14 @@ const globToRegex = (glob: string): RegExp => {
  * - `false` or empty array — match nothing
  * - `string[]` — case-insensitive glob match. Each pattern supports `*`
  *   wildcards. A leading `!` marks an exclusion that runs after the
- *   include list — `['x-*', '!x-internal-*']` keeps `x-correlation-id`
- *   while dropping `x-internal-secret`.
+ *   include list — `['x-*', '!x-internal-*']` keeps `x-tenant-id` while
+ *   dropping `x-internal-secret`.
+ *
+ * Library-internal headers (`x-correlation-id`, `x-reply-to`, `x-error`,
+ * `x-subject`, `x-caller-name`, `nats-msg-id`) and propagator-owned
+ * headers (`traceparent`, `tracestate`, `baggage`, `sentry-trace`, `b3`,
+ * Jaeger format) are filtered downstream in {@link captureMatchingHeaders}
+ * regardless of the matcher result, so passing them here has no effect.
  */
 export const compileHeaderAllowlist = (allowlist: readonly string[] | boolean): HeaderMatcher => {
   if (allowlist === true) return () => true;

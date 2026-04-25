@@ -97,9 +97,6 @@ otel?: {
   /** Master kill switch. @default true */
   enabled?: boolean;
 
-  /** Override the OTel instrumentation scope name. @default '@horizon-republic/nestjs-jetstream' */
-  tracerName?: string;
-
   /** Which trace kinds to emit. @default 'default' */
   traces?: JetstreamTrace[] | 'default' | 'all' | 'none';
 
@@ -161,7 +158,9 @@ Two configuration knobs deal with potentially sensitive data. Both default to sa
 
 ### `captureHeaders`
 
-Captures matching message headers as `messaging.header.<name>` span attributes. Default allowlist is `['x-correlation-id', 'x-request-id']`. Glob wildcards (`x-*`, `*-id`) and exclusions (`!x-internal-*`) are supported.
+Captures matching message headers as `messaging.header.<name>` span attributes. Default allowlist is `['x-request-id']`. Glob wildcards (`x-*`, `*-id`) and exclusions (`!x-internal-*`) are supported.
+
+The library-internal `x-correlation-id` is never emitted as a `messaging.header.*` attribute even if added to the allowlist — it surfaces on RPC spans as the standard `messaging.message.conversation_id` attribute instead, which keeps the OpenTelemetry semantic-conventions contract intact and avoids duplicating the same value under two keys.
 
 :::warning
 Headers frequently carry authentication tokens, session identifiers, and other sensitive data. Captured values are exported to your OTel backend (Sentry, Datadog, etc.). **Never set `captureHeaders: true` in production** — that captures every header. Use an explicit allowlist.

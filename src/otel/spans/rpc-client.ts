@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { SpanKind, SpanStatusCode, context, trace, type Context } from '@opentelemetry/api';
 import type { MsgHdrs } from '@nats-io/transport-node';
 
@@ -10,6 +11,8 @@ import { safelyInvokeHook } from '../internal-utils';
 import { injectContext } from '../propagator';
 import { getTracer } from '../tracer';
 import { JetstreamTrace } from '../trace-kinds';
+
+const logger = new Logger('Jetstream:Otel');
 
 export interface RpcClientSpanContext {
   readonly subject: string;
@@ -156,17 +159,26 @@ export const beginRpcClientSpan = (
         span.setStatus({ code: SpanStatusCode.ERROR, message: outcome.error.message });
         break;
       default: {
-        const _exhaustive: never = outcome;
+        // Should be unreachable given the `RpcOutcome` union — log instead
+        // of throwing so a stray outcome from a future variant doesn't tear
+        // down the caller's RPC pipeline. The span still ends below.
+        const unknownOutcome = outcome as { readonly kind?: unknown };
 
-        throw new Error(`Unhandled RPC outcome: ${_exhaustive as string}`);
+        logger.error(`Unhandled RPC outcome: ${String(unknownOutcome.kind)}`);
+        span.setStatus({ code: SpanStatusCode.ERROR, message: 'unknown outcome' });
       }
     }
 
-    safelyInvokeHook(HOOK_RESPONSE, config.responseHook, span, {
-      subject: ctx.subject,
-      durationMs: Date.now() - start,
-      reply,
-      error,
+    // Run inside the span's active context so hooks that create child
+    // spans see this CLIENT span as the parent — symmetric with
+    // `withPublishSpan` / `withConsumeSpan`.
+    context.with(ctxWithSpan, () => {
+      safelyInvokeHook(HOOK_RESPONSE, config.responseHook, span, {
+        subject: ctx.subject,
+        durationMs: Date.now() - start,
+        reply,
+        error,
+      });
     });
     span.end();
   };

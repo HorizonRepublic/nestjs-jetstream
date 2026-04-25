@@ -133,13 +133,6 @@ export const withConsumeSpan = <T>(
     parentCtx,
   );
 
-  safelyInvokeHook(HOOK_CONSUME, config.consumeHook, span, {
-    subject: ctx.subject,
-    msg: ctx.msg,
-    handlerMetadata: ctx.handlerMetadata,
-    kind: ctx.kind,
-  });
-
   const ctxWithSpan = trace.setSpan(parentCtx, span);
   const start = Date.now();
   let finalized = false;
@@ -149,35 +142,41 @@ export const withConsumeSpan = <T>(
   // eventual resolution / rejection is still observed below but becomes
   // a no-op — `finishOk` / `finishError` respect the `finalized` flag.
   const { signal, timeoutLabel = 'handler.timeout' } = options;
-  let detachAbort: () => void = () => undefined;
+  let detachAbort: (() => void) | null = null;
+
+  const invokeResponseHook = (durationMs: number, error?: Error): void => {
+    // Run inside the span's active context so hooks that create child
+    // spans (`tracer.startSpan`, `trace.getActiveSpan`) parent under this
+    // CONSUMER span instead of the ambient one.
+    context.with(ctxWithSpan, () => {
+      safelyInvokeHook(HOOK_RESPONSE, config.responseHook, span, {
+        subject: ctx.subject,
+        durationMs,
+        error,
+      });
+    });
+  };
 
   const finishOk = (): void => {
     if (finalized) return;
     finalized = true;
-    detachAbort();
+    detachAbort?.();
     span.setStatus({ code: SpanStatusCode.OK });
-    safelyInvokeHook(HOOK_RESPONSE, config.responseHook, span, {
-      subject: ctx.subject,
-      durationMs: Date.now() - start,
-    });
+    invokeResponseHook(Date.now() - start);
     span.end();
   };
 
   const finishError = (err: unknown): void => {
     if (finalized) return;
     finalized = true;
-    detachAbort();
+    detachAbort?.();
     if (config.errorClassifier(err) === 'expected') {
       applyExpectedError(span, err);
     } else {
       applyUnexpectedError(span, err);
     }
 
-    safelyInvokeHook(HOOK_RESPONSE, config.responseHook, span, {
-      subject: ctx.subject,
-      durationMs: Date.now() - start,
-      error: err instanceof Error ? err : new Error(String(err)),
-    });
+    invokeResponseHook(Date.now() - start, err instanceof Error ? err : new Error(String(err)));
     span.end();
   };
 
@@ -189,11 +188,7 @@ export const withConsumeSpan = <T>(
     span.addEvent(timeoutLabel);
     span.recordException(error);
     span.setStatus({ code: SpanStatusCode.ERROR, message: timeoutLabel });
-    safelyInvokeHook(HOOK_RESPONSE, config.responseHook, span, {
-      subject: ctx.subject,
-      durationMs: Date.now() - start,
-      error,
-    });
+    invokeResponseHook(Date.now() - start, error);
     span.end();
   };
 
@@ -215,7 +210,20 @@ export const withConsumeSpan = <T>(
   let result: T | Promise<T>;
 
   try {
-    result = context.with(ctxWithSpan, fn);
+    // consumeHook fires inside the span's active context so any nested
+    // OTel work (`tracer.startSpan`, `trace.getActiveSpan`) parents under
+    // this CONSUMER span instead of the ambient one — symmetric with
+    // `withPublishSpan`'s `publishHook` placement.
+    result = context.with(ctxWithSpan, () => {
+      safelyInvokeHook(HOOK_CONSUME, config.consumeHook, span, {
+        subject: ctx.subject,
+        msg: ctx.msg,
+        handlerMetadata: ctx.handlerMetadata,
+        kind: ctx.kind,
+      });
+
+      return fn();
+    });
   } catch (err) {
     finishError(err);
     throw err;

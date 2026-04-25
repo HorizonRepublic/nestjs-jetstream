@@ -124,6 +124,18 @@ export const withPublishSpan = async <T>(
   injectContext(ctxWithSpan, ctx.headers, hdrsSetter);
 
   const start = Date.now();
+  const invokeResponseHook = (error?: Error): void => {
+    // Run inside the span's active context so hooks that create child
+    // spans see this PRODUCER span as the parent — symmetric with
+    // `publishHook` below.
+    context.with(ctxWithSpan, () => {
+      safelyInvokeHook(HOOK_RESPONSE, config.responseHook, span, {
+        subject: ctx.subject,
+        durationMs: Date.now() - start,
+        error,
+      });
+    });
+  };
 
   try {
     const result = await context.with(ctxWithSpan, async () => {
@@ -140,10 +152,7 @@ export const withPublishSpan = async <T>(
     });
 
     span.setStatus({ code: SpanStatusCode.OK });
-    safelyInvokeHook(HOOK_RESPONSE, config.responseHook, span, {
-      subject: ctx.subject,
-      durationMs: Date.now() - start,
-    });
+    invokeResponseHook();
 
     return result;
   } catch (err) {
@@ -151,11 +160,7 @@ export const withPublishSpan = async <T>(
 
     span.recordException(error);
     span.setStatus({ code: SpanStatusCode.ERROR, message: error.message });
-    safelyInvokeHook(HOOK_RESPONSE, config.responseHook, span, {
-      subject: ctx.subject,
-      durationMs: Date.now() - start,
-      error,
-    });
+    invokeResponseHook(error);
 
     throw err;
   } finally {

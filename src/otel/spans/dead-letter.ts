@@ -56,15 +56,23 @@ export const withDeadLetterSpan = async <T>(
 
   const ctxWithSpan = trace.setSpan(parentCtx, span);
   const start = Date.now();
+  const invokeResponseHook = (error?: Error): void => {
+    // Run inside the span's active context so hooks that create child
+    // spans see this dead-letter span as the parent.
+    context.with(ctxWithSpan, () => {
+      safelyInvokeHook(HOOK_RESPONSE, config.responseHook, span, {
+        subject: ctx.msg.subject,
+        durationMs: Date.now() - start,
+        error,
+      });
+    });
+  };
 
   try {
     const result = await context.with(ctxWithSpan, fn);
 
     span.setStatus({ code: SpanStatusCode.OK });
-    safelyInvokeHook(HOOK_RESPONSE, config.responseHook, span, {
-      subject: ctx.msg.subject,
-      durationMs: Date.now() - start,
-    });
+    invokeResponseHook();
 
     return result;
   } catch (err) {
@@ -72,11 +80,7 @@ export const withDeadLetterSpan = async <T>(
 
     span.recordException(error);
     span.setStatus({ code: SpanStatusCode.ERROR, message: error.message });
-    safelyInvokeHook(HOOK_RESPONSE, config.responseHook, span, {
-      subject: ctx.msg.subject,
-      durationMs: Date.now() - start,
-      error,
-    });
+    invokeResponseHook(error);
 
     throw err;
   } finally {

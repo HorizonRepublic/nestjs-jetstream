@@ -39,10 +39,13 @@ export const safelyInvokeHook = <A extends readonly unknown[]>(
     // and forward rejections instead of leaking them as unhandled.
     const result: unknown = (hook as (...args: A) => unknown)(...args);
 
-    if (result !== null && typeof result === 'object' && 'then' in result) {
-      const promise = result as PromiseLike<unknown>;
-
-      promise.then(undefined, logHookFailure);
+    if (
+      result !== null &&
+      typeof result === 'object' &&
+      'then' in result &&
+      typeof (result as { then: unknown }).then === 'function'
+    ) {
+      (result as PromiseLike<unknown>).then(undefined, logHookFailure);
     }
   } catch (err) {
     logHookFailure(err);
