@@ -201,9 +201,14 @@ export class JetstreamRecordBuilder<TData = unknown> {
     );
   }
 
-  /** Validate that a header key is not reserved. */
+  /**
+   * Validate that a header key is not reserved. NATS treats header names
+   * case-insensitively, so the check is against the lowercase form to keep
+   * `'X-Correlation-ID'`, `'x-correlation-id'`, and any other casing in
+   * lockstep. `RESERVED_HEADERS` is defined as an all-lowercase set.
+   */
   private validateHeaderKey(key: string): void {
-    if (RESERVED_HEADERS.has(key)) {
+    if (RESERVED_HEADERS.has(key.toLowerCase())) {
       throw new Error(
         `Header "${key}" is reserved by the JetStream transport and cannot be set manually. ` +
           `Reserved headers: ${[...RESERVED_HEADERS].join(', ')}`,

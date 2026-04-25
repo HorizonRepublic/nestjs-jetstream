@@ -51,7 +51,7 @@ The transport reserves specific header names for internal use. Names are matched
 
 **Rejected at `JetstreamRecordBuilder.setHeader()` (`RESERVED_HEADERS`):**
 
-Setting any of these via the builder throws `Reserved header cannot be overridden`. They are populated by the library at publish time.
+Setting any of these via the builder throws a reserved-header error (`Header "<key>" is reserved by the JetStream transport and cannot be set manually.`). They are populated by the library at publish time.
 
 - `x-correlation-id` — RPC request identifier
 - `x-reply-to` — RPC response inbox subject
