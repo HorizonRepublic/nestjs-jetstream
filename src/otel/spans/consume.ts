@@ -170,7 +170,19 @@ export const withConsumeSpan = <T>(
     if (finalized) return;
     finalized = true;
     detachAbort?.();
-    if (config.errorClassifier(err) === 'expected') {
+
+    // Wrap the user classifier so a throwing implementation can't leak the
+    // span (un-`end`ed → never exported) or shadow the original error on
+    // the rethrow path. Symmetric with `safelyInvokeHook` for the hooks.
+    let classification: 'expected' | 'unexpected' = 'unexpected';
+
+    try {
+      classification = config.errorClassifier(err);
+    } catch {
+      // Fall through with 'unexpected'.
+    }
+
+    if (classification === 'expected') {
       applyExpectedError(span, err);
     } else {
       applyUnexpectedError(span, err);

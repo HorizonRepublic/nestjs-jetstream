@@ -34,10 +34,14 @@ export const hdrsGetter: TextMapGetter<MsgHdrs | undefined> = {
     const all = typeof headers.values === 'function' ? headers.values(key) : undefined;
 
     if (Array.isArray(all)) {
-      if (all.length === 0) return undefined;
-      const joined = all.join(',');
+      // Drop empty entries before joining so `['', 'x']` yields `'x'` (not
+      // `',x'`) and `['', '']` yields `undefined` (not the literal `,`),
+      // matching the single-value branch's empty-string treatment.
+      const nonEmpty = all.filter((value) => value !== '');
 
-      return joined === '' ? undefined : joined;
+      if (nonEmpty.length === 0) return undefined;
+
+      return nonEmpty.join(',');
     }
 
     const single = headers.get(key);

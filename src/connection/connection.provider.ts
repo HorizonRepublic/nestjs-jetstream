@@ -205,9 +205,12 @@ export class ConnectionProvider {
     try {
       const nc = await connect({
         ...DEFAULT_OPTIONS,
+        // Default the NATS connection name to the OTel-derived service name so
+        // `nats server info` lines up with span attributes, but let user-supplied
+        // `connectionOptions.name` win when set.
+        name: this.otelServiceName,
         ...this.options.connectionOptions,
         servers: this.options.servers,
-        name: this.otelServiceName,
       } as ConnectionOptions);
 
       this.connection = nc;

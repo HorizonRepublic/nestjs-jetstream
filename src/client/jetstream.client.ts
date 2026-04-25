@@ -238,6 +238,17 @@ export class JetstreamClient extends ClientProxy {
       },
       this.otel,
       async () => {
+        const warnIfDuplicate = (
+          kindLabel: string,
+          ack: { readonly duplicate: boolean; readonly seq: number },
+        ): void => {
+          if (ack.duplicate) {
+            this.logger.warn(
+              `Duplicate ${kindLabel} publish detected: ${publishSubject} (seq: ${ack.seq})`,
+            );
+          }
+        };
+
         if (schedule) {
           const ack = await this.connection.getJetStreamClient().publish(publishSubject, encoded, {
             headers: msgHeaders,
@@ -249,11 +260,7 @@ export class JetstreamClient extends ClientProxy {
             },
           });
 
-          if (ack.duplicate) {
-            this.logger.warn(
-              `Duplicate scheduled publish detected: ${publishSubject} (seq: ${ack.seq})`,
-            );
-          }
+          warnIfDuplicate('scheduled', ack);
 
           return;
         }
@@ -264,9 +271,7 @@ export class JetstreamClient extends ClientProxy {
           ttl,
         });
 
-        if (ack.duplicate) {
-          this.logger.warn(`Duplicate event publish detected: ${publishSubject} (seq: ${ack.seq})`);
-        }
+        warnIfDuplicate('event', ack);
       },
     );
 

@@ -115,4 +115,29 @@ describe('hdrsGetter', () => {
     // When + Then
     expect(hdrsGetter.get(fakeCarrier, 'baggage')).toBeUndefined();
   });
+
+  it('should return undefined when every entry in a multi-value array is empty', () => {
+    // Given — `['', ''].join(',') === ','` would otherwise leak a stray
+    // comma to the propagator. Filter empties before joining.
+    const fakeCarrier = {
+      keys: (): string[] => ['baggage'],
+      get: (): string => '',
+      values: (): string[] => ['', ''],
+    } as unknown as Parameters<typeof hdrsGetter.get>[0];
+
+    // When + Then
+    expect(hdrsGetter.get(fakeCarrier, 'baggage')).toBeUndefined();
+  });
+
+  it('should drop empty entries when joining a partially-empty array', () => {
+    // Given — only the non-empty entry survives.
+    const fakeCarrier = {
+      keys: (): string[] => ['baggage'],
+      get: (): string => '',
+      values: (): string[] => ['', 'tenant=acme'],
+    } as unknown as Parameters<typeof hdrsGetter.get>[0];
+
+    // When + Then
+    expect(hdrsGetter.get(fakeCarrier, 'baggage')).toBe('tenant=acme');
+  });
 });

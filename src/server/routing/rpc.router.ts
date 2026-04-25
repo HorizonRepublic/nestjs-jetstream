@@ -229,6 +229,16 @@ export class RpcRouter {
         ? startAckExtensionTimer(msg, ackExtensionInterval)
         : null;
 
+      const reportHandlerError = (err: unknown): void => {
+        eventBus.emit(
+          TransportEvent.Error,
+          err instanceof Error ? err : new Error(String(err)),
+          `rpc-handler:${subject}`,
+        );
+        publishErrorReply(replyTo, correlationId, subject, err);
+        msg.term(`Handler error: ${subject}`);
+      };
+
       // Abort wire that the handler-deadline timer uses to close the
       // CONSUMER span early. Handlers that hang past the deadline would
       // otherwise keep their span open indefinitely.
@@ -253,13 +263,7 @@ export class RpcRouter {
         );
       } catch (err) {
         if (stopAckExtension !== null) stopAckExtension();
-        eventBus.emit(
-          TransportEvent.Error,
-          err instanceof Error ? err : new Error(String(err)),
-          `rpc-handler:${subject}`,
-        );
-        publishErrorReply(replyTo, correlationId, subject, err);
-        msg.term(`Handler error: ${subject}`);
+        reportHandlerError(err);
 
         return undefined;
       }
@@ -302,13 +306,7 @@ export class RpcRouter {
           // Handler error is surfaced via the OTel CONSUMER span (recordException
           // on unexpected errors, OK + attributes on classified-expected errors)
           // and via the transport-error reply. No separate log.
-          eventBus.emit(
-            TransportEvent.Error,
-            err instanceof Error ? err : new Error(String(err)),
-            `rpc-handler:${subject}`,
-          );
-          publishErrorReply(replyTo, correlationId, subject, err);
-          msg.term(`Handler error: ${subject}`);
+          reportHandlerError(err);
         },
       );
     };

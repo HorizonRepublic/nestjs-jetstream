@@ -11,7 +11,7 @@ import {
 import { headers } from '@nats-io/transport-node';
 
 import { JetstreamRecord } from '../../client';
-import { PublishKind, resolveOtelOptions } from '../config';
+import { PublishKind, resolveOtelOptions, type OtelOptions } from '../config';
 import { withPublishSpan, type PublishSpanContext } from '../spans/publish';
 import { JetstreamTrace } from '../trace-kinds';
 
@@ -198,15 +198,15 @@ describe('withPublishSpan', () => {
     });
 
     it('should swallow async hook rejections without leaking unhandled rejections', async () => {
-      // Given
+      // Given — `publishHook` is typed as `void`-returning, but TypeScript
+      // assigns `Promise<void>` to `void`, so an `async` user hook compiles
+      // cleanly. `safelyInvokeHook` must catch its rejection.
+      const asyncHook = async (): Promise<void> => {
+        throw new Error('bad hook');
+      };
+
       const config = resolveOtelOptions({
-        publishHook: (() => Promise.reject(new Error('bad hook'))) as unknown as Parameters<
-          typeof resolveOtelOptions
-        >[0] extends infer Opts
-          ? Opts extends { publishHook?: infer H }
-            ? H
-            : never
-          : never,
+        publishHook: asyncHook as unknown as OtelOptions['publishHook'],
       });
 
       // When + Then

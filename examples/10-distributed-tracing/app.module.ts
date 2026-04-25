@@ -121,8 +121,9 @@ class HttpController {
       name: SERVICE,
       servers: ['nats://localhost:4222'],
       otel: {
-        // Default trace set is fine — but flip on the connection lifecycle
-        // span so you can see the connect/disconnect pattern in your APM too.
+        // `traces` replaces DEFAULT_TRACES entirely — we re-list every default
+        // here and add `ConnectionLifecycle` so the demo also shows the
+        // connect/disconnect pattern in the APM. Drop any kind you don't want.
         traces: [
           JetstreamTrace.Publish,
           JetstreamTrace.Consume,

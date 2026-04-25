@@ -16,7 +16,13 @@ import type { StartedTestContainer } from 'testcontainers';
 
 import { getClientToken } from '../../src';
 
-import { cleanupStreams, createNatsConnection, createTestApp, uniqueServiceName } from './helpers';
+import {
+  cleanupStreams,
+  createNatsConnection,
+  createTestApp,
+  uniqueServiceName,
+  waitForCondition,
+} from './helpers';
 import { startNatsContainer } from './nats-container';
 
 @Controller()
@@ -180,15 +186,19 @@ describe('OTel RPC integration', () => {
     it('should close the CONSUMER span early when the handler exceeds the RPC deadline', async () => {
       // When — client times out while handler is still pending (never resolves).
       await expect(firstValueFrom(client.send('users.slow', {}))).rejects.toBeDefined();
-      // Give the server-side timeout path a tick to fire `abort()` on the signal.
-      await new Promise((r) => setTimeout(r, 200));
-      await provider.forceFlush();
+
+      // Poll until the server-side timeout path has fired `abort()` and the
+      // CONSUMER span has reached the exporter — avoids a fixed sleep.
+      await waitForCondition(async () => {
+        await provider.forceFlush();
+
+        return exporter.getFinishedSpans().some((s) => s.kind === SpanKind.CONSUMER);
+      }, 5_000);
 
       // Then — the CONSUMER span was ended by the abort branch with an
       // `rpc.timeout` / `rpc.handler.timeout` event (not left open until
       // the handler eventually resolves).
-      const spans = exporter.getFinishedSpans();
-      const consume = spans.find((s) => s.kind === SpanKind.CONSUMER);
+      const consume = exporter.getFinishedSpans().find((s) => s.kind === SpanKind.CONSUMER);
 
       expect(consume).toBeDefined();
       expect(consume!.status.code).toBe(SpanStatusCode.ERROR);

@@ -10,7 +10,7 @@ import {
 } from '@opentelemetry/sdk-trace-base';
 import { headers } from '@nats-io/transport-node';
 
-import { ConsumeKind, resolveOtelOptions } from '../config';
+import { ConsumeKind, resolveOtelOptions, type OtelOptions } from '../config';
 import { withConsumeSpan, type ConsumeSpanContext } from '../spans/consume';
 import { JetstreamTrace } from '../trace-kinds';
 
@@ -161,6 +161,32 @@ describe('withConsumeSpan', () => {
       expect(span.status.code).toBe(SpanStatusCode.ERROR);
     });
 
+    it('should default to "unexpected" when the user errorClassifier itself throws', async () => {
+      // Given — a buggy classifier that crashes on inspection. The span
+      // helper must absorb that and still finalize cleanly with an ERROR
+      // status, otherwise the span would leak un-`end`ed.
+      const config = resolveOtelOptions({
+        errorClassifier: () => {
+          throw new Error('classifier crash');
+        },
+      });
+      const handlerError = new Error('handler boom');
+
+      // When
+      await expect(
+        withConsumeSpan(baseCtx(), config, async () => {
+          throw handlerError;
+        }),
+      ).rejects.toBe(handlerError);
+
+      // Then — span ended (exporter saw it) and reflects the original error,
+      // not the classifier failure.
+      const span = exporter.getFinishedSpans()[0]!;
+
+      expect(span.status.code).toBe(SpanStatusCode.ERROR);
+      expect(span.events.some((event) => event.name === 'exception')).toBe(true);
+    });
+
     it('should classify expected errors as OK + has_error attribute', async () => {
       // Given
       const config = resolveOtelOptions({ errorClassifier: () => 'expected' });
@@ -295,16 +321,15 @@ describe('withConsumeSpan', () => {
     });
 
     it('should swallow async hook rejections without leaking unhandled rejections', async () => {
-      // Given
+      // Given — `consumeHook` is typed as `void`-returning, but TypeScript
+      // assigns `Promise<void>` to `void`, so an `async` user hook compiles
+      // cleanly. `safelyInvokeHook` must catch its rejection.
+      const asyncHook = async (): Promise<void> => {
+        throw new Error('bad hook');
+      };
+
       const config = resolveOtelOptions({
-        consumeHook: (() =>
-          Promise.reject(new Error('bad hook'))) as unknown as typeof resolveOtelOptions extends (
-          opts?: infer O,
-        ) => unknown
-          ? O extends { consumeHook?: infer H }
-            ? H
-            : never
-          : never,
+        consumeHook: asyncHook as unknown as OtelOptions['consumeHook'],
       });
 
       // When + Then — must not throw, span still finalizes.

@@ -68,9 +68,10 @@ Builder accepts values for these, but the value is replaced by the transport's o
 
 - `x-dead-letter-reason`, `x-original-subject`, `x-original-stream`, `x-failed-at`, `x-delivery-count`
 
-**NATS server-level (`Nats-*` prefix):**
+**NATS server-interpreted (`Nats-*` prefix):**
 
-- Managed by the NATS server itself (`Nats-Msg-Id`, `Nats-TTL`, `Nats-Schedule`, …). Do not override.
+- `Nats-Msg-Id` — publisher-supplied deduplication key. Set it via `JetstreamRecordBuilder.setMessageId()` from this library, or directly on the headers map from external publishers (Go, Python, …). Do not set it both ways on the same publish — pick one.
+- `Nats-TTL`, `Nats-Schedule`, `Nats-Expected-*`, `Nats-Rollup`, … — interpreted by the NATS server, not by the library. Set them per the NATS docs when you need their semantics; otherwise leave them alone.
 
 User-defined headers should use a distinct prefix or name (e.g. `x-tenant-id`, `x-request-id`, `application-foo`) and avoid the reserved names above.
 
