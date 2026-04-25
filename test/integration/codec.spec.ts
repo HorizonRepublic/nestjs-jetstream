@@ -18,10 +18,8 @@ import {
 } from './helpers';
 import { startNatsContainer } from './nats-container';
 
-// ---------------------------------------------------------------------------
 // Custom test codec: Base64-encoded JSON
 // Proves the codec is actually used end-to-end (not just the default JSON).
-// ---------------------------------------------------------------------------
 
 class Base64JsonCodec implements Codec {
   encode(data: unknown): Uint8Array {
@@ -38,10 +36,6 @@ class Base64JsonCodec implements Codec {
     return JSON.parse(json);
   }
 }
-
-// ---------------------------------------------------------------------------
-// Test Controllers
-// ---------------------------------------------------------------------------
 
 @Controller()
 class CodecRpcController {
@@ -60,10 +54,6 @@ class CodecEventController {
     this.received.push(data);
   }
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('Codec Round-Trip', () => {
   let nc: NatsConnection;

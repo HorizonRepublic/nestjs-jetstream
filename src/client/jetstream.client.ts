@@ -1,14 +1,16 @@
 import { Logger } from '@nestjs/common';
 import { ClientProxy, ReadPacket, WritePacket } from '@nestjs/microservices';
+import { context } from '@opentelemetry/api';
+import { nuid } from '@nats-io/nuid';
 import {
   createInbox,
   headers as natsHeaders,
+  TimeoutError,
   type Msg,
   type MsgHdrs,
   type NatsConnection,
   type Subscription,
 } from '@nats-io/transport-node';
-import { nuid } from '@nats-io/nuid';
 import { Subscription as RxSubscription } from 'rxjs';
 
 import { ConnectionProvider } from '../connection';
@@ -30,11 +32,32 @@ import {
   JetstreamHeader,
   PatternPrefix,
 } from '../jetstream.constants';
+import {
+  beginRpcClientSpan,
+  deriveOtelAttrs,
+  PublishKind,
+  RPC_TIMEOUT_MESSAGE,
+  RpcOutcomeKind,
+  withPublishSpan,
+  type ResolvedOtelOptions,
+  type ServerEndpoint,
+} from '../otel';
 
 import { JetstreamRecord } from './jetstream.record';
 
 /** Broadcast subjects are not scoped to a service and always share this prefix. */
 const BROADCAST_SUBJECT_PREFIX = 'broadcast.';
+
+/** Narrow publish-kind tag emitted on the event path (no RPC request here). */
+type EventPublishKind = Exclude<PublishKind, PublishKind.RpcRequest>;
+
+/** Map a user event pattern to the publish-context `kind` reported in OTel spans. */
+const detectEventKind = (pattern: string): EventPublishKind => {
+  if (pattern.startsWith(PatternPrefix.Broadcast)) return PublishKind.Broadcast;
+  if (pattern.startsWith(PatternPrefix.Ordered)) return PublishKind.Ordered;
+
+  return PublishKind.Event;
+};
 
 /**
  * NestJS ClientProxy implementation for the JetStream transport.
@@ -73,6 +96,12 @@ export class JetstreamClient extends ClientProxy {
    */
   private readonly isCoreMode: boolean;
   private readonly defaultRpcTimeout: number;
+
+  /** Resolved OpenTelemetry configuration, computed once in the constructor. */
+  private readonly otel: ResolvedOtelOptions;
+
+  /** Server endpoint parts used for `server.address` / `server.port` span attributes. */
+  private readonly serverEndpoint: ServerEndpoint | null;
 
   /** Shared inbox for JetStream-mode RPC responses. */
   private inbox: string | null = null;
@@ -115,6 +144,11 @@ export class JetstreamClient extends ClientProxy {
     this.defaultRpcTimeout = isJetStreamRpcMode(this.rootOptions.rpc)
       ? (this.rootOptions.rpc?.timeout ?? DEFAULT_JETSTREAM_RPC_TIMEOUT)
       : (this.rootOptions.rpc?.timeout ?? DEFAULT_RPC_TIMEOUT);
+
+    const derived = deriveOtelAttrs(this.rootOptions);
+
+    this.otel = derived.otel;
+    this.serverEndpoint = derived.serverEndpoint;
   }
 
   /**
@@ -179,43 +213,67 @@ export class JetstreamClient extends ClientProxy {
     const { data, hdrs, messageId, schedule, ttl } = this.extractRecordData(packet.data);
 
     const eventSubject = this.buildEventSubject(packet.pattern);
+    // Replace kind segment with _sch: {svc}.ev.{pattern} → {svc}._sch.{pattern}
+    // For broadcast: broadcast.{pattern} → broadcast._sch.{pattern}
+    const publishSubject = schedule ? this.buildScheduleSubject(eventSubject) : eventSubject;
     const msgHeaders = this.buildHeaders(hdrs, { subject: eventSubject });
+    const encoded = this.codec.encode(data);
+    const effectiveMsgId = messageId ?? nuid.next();
+    const record =
+      packet.data instanceof JetstreamRecord ? packet.data : new JetstreamRecord(data, new Map());
 
-    if (schedule) {
-      // Replace kind segment with _sch: {svc}.ev.{pattern} → {svc}._sch.{pattern}
-      // For broadcast: broadcast.{pattern} → broadcast._sch.{pattern}
-      const scheduleSubject = this.buildScheduleSubject(eventSubject);
+    await withPublishSpan(
+      {
+        subject: publishSubject,
+        pattern: packet.pattern,
+        record,
+        kind: detectEventKind(packet.pattern),
+        payloadBytes: encoded.length,
+        payload: encoded,
+        messageId: effectiveMsgId,
+        headers: msgHeaders,
+        serviceName: this.callerName,
+        endpoint: this.serverEndpoint,
+        scheduleTarget: schedule ? eventSubject : undefined,
+      },
+      this.otel,
+      async () => {
+        const warnIfDuplicate = (
+          kindLabel: string,
+          ack: { readonly duplicate: boolean; readonly seq: number },
+        ): void => {
+          if (ack.duplicate) {
+            this.logger.warn(
+              `Duplicate ${kindLabel} publish detected: ${publishSubject} (seq: ${ack.seq})`,
+            );
+          }
+        };
 
-      const ack = await this.connection
-        .getJetStreamClient()
-        .publish(scheduleSubject, this.codec.encode(data), {
+        if (schedule) {
+          const ack = await this.connection.getJetStreamClient().publish(publishSubject, encoded, {
+            headers: msgHeaders,
+            msgID: effectiveMsgId,
+            ttl,
+            schedule: {
+              specification: schedule.at,
+              target: eventSubject,
+            },
+          });
+
+          warnIfDuplicate('scheduled', ack);
+
+          return;
+        }
+
+        const ack = await this.connection.getJetStreamClient().publish(publishSubject, encoded, {
           headers: msgHeaders,
-          msgID: messageId ?? nuid.next(),
+          msgID: effectiveMsgId,
           ttl,
-          schedule: {
-            specification: schedule.at,
-            target: eventSubject,
-          },
         });
 
-      if (ack.duplicate) {
-        this.logger.warn(
-          `Duplicate scheduled publish detected: ${scheduleSubject} (seq: ${ack.seq})`,
-        );
-      }
-    } else {
-      const ack = await this.connection
-        .getJetStreamClient()
-        .publish(eventSubject, this.codec.encode(data), {
-          headers: msgHeaders,
-          msgID: messageId ?? nuid.next(),
-          ttl,
-        });
-
-      if (ack.duplicate) {
-        this.logger.warn(`Duplicate event publish detected: ${eventSubject} (seq: ${ack.seq})`);
-      }
-    }
+        warnIfDuplicate('event', ack);
+      },
+    );
 
     return undefined as T;
   }
@@ -286,30 +344,57 @@ export class JetstreamClient extends ClientProxy {
     timeout: number | undefined,
     callback: (p: WritePacket) => void,
   ): Promise<void> {
+    const effectiveTimeout = timeout ?? this.defaultRpcTimeout;
+    const hdrs = this.buildHeaders(customHeaders, { subject });
+    const encoded = this.codec.encode(data);
+    const spanHandle = beginRpcClientSpan(
+      {
+        subject,
+        payloadBytes: encoded.length,
+        payload: encoded,
+        headers: hdrs,
+        serviceName: this.callerName,
+        endpoint: this.serverEndpoint,
+      },
+      this.otel,
+    );
+
     try {
       const nc = this.readyForPublish
         ? (this.connection.unwrap as NatsConnection)
         : await this.connect();
-      const effectiveTimeout = timeout ?? this.defaultRpcTimeout;
-      const hdrs = this.buildHeaders(customHeaders, { subject });
 
-      const response = await nc.request(subject, this.codec.encode(data), {
-        timeout: effectiveTimeout,
-        headers: hdrs,
-      });
+      // Run the round-trip under the CLIENT span's context so any handler
+      // / interceptor spans triggered by the NATS reply decode nest under
+      // this span instead of the pre-existing ambient one.
+      const response = await context.with(spanHandle.activeContext, () =>
+        nc.request(subject, encoded, {
+          timeout: effectiveTimeout,
+          headers: hdrs,
+        }),
+      );
 
       const decoded = this.codec.decode(response.data);
 
       if (response.headers?.get(JetstreamHeader.Error)) {
+        spanHandle.finish({ kind: RpcOutcomeKind.ReplyError, replyPayload: decoded });
         callback({ err: decoded, response: null, isDisposed: true });
       } else {
+        spanHandle.finish({ kind: RpcOutcomeKind.Ok, reply: decoded });
         callback({ err: null, response: decoded, isDisposed: true });
       }
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Unknown error');
 
-      this.logger.error(`Core RPC error (${subject}):`, err);
-      this.eventBus.emit(TransportEvent.Error, error, 'client-rpc');
+      if (error instanceof TimeoutError) {
+        spanHandle.finish({ kind: RpcOutcomeKind.Timeout });
+        this.eventBus.emit(TransportEvent.RpcTimeout, subject, '');
+      } else {
+        spanHandle.finish({ kind: RpcOutcomeKind.Error, error });
+        // Error hook + OTel CLIENT span are the canonical signals — no separate log.
+        this.eventBus.emit(TransportEvent.Error, error, 'client-rpc');
+      }
+
       callback({ err: error, response: null, isDisposed: true });
     }
   }
@@ -328,17 +413,76 @@ export class JetstreamClient extends ClientProxy {
   ): Promise<void> {
     const { headers: customHeaders, correlationId, messageId } = options;
     const effectiveTimeout = options.timeout ?? this.defaultRpcTimeout;
+    const hdrs = this.buildHeaders(customHeaders, {
+      subject,
+      correlationId,
+      replyTo: this.inbox ?? '',
+    });
+    const encoded = this.codec.encode(data);
+    const spanHandle = beginRpcClientSpan(
+      {
+        subject,
+        correlationId,
+        payloadBytes: encoded.length,
+        payload: encoded,
+        messageId,
+        headers: hdrs,
+        serviceName: this.callerName,
+        endpoint: this.serverEndpoint,
+      },
+      this.otel,
+    );
 
-    this.pendingMessages.set(correlationId, callback);
+    this.pendingMessages.set(correlationId, (packet: WritePacket) => {
+      // Translate the inbox-callback WritePacket into an RPC outcome. A native
+      // `Error` instance reaches this path from `rejectPendingRpcs` (disconnect,
+      // client close) or a decode failure in `routeInboxReply` — both are
+      // transport-level failures. Any other non-empty `err` is a decoded
+      // business error envelope returned by the server.
+      if (packet.err) {
+        if (packet.err instanceof Error) {
+          spanHandle.finish({ kind: RpcOutcomeKind.Error, error: packet.err });
+        } else {
+          spanHandle.finish({ kind: RpcOutcomeKind.ReplyError, replyPayload: packet.err });
+        }
+      } else {
+        spanHandle.finish({ kind: RpcOutcomeKind.Ok, reply: packet.response });
+      }
+
+      callback(packet);
+    });
+
+    // Arm the deadline BEFORE awaiting connect() so a permanent NATS outage
+    // (where `maxReconnectAttempts: -1` keeps connect() pending forever) still
+    // settles the span, the pending-message entry, and the caller's
+    // subscription instead of leaking them for the life of the process.
+    // `effectiveTimeout` therefore bounds connect + RPC, not just RPC.
+    const timeoutId = setTimeout(() => {
+      if (!this.pendingMessages.has(correlationId)) return;
+
+      this.pendingTimeouts.delete(correlationId);
+      this.pendingMessages.delete(correlationId);
+      spanHandle.finish({ kind: RpcOutcomeKind.Timeout });
+      // RpcTimeout hook + OTel CLIENT span are the canonical signals — no separate log.
+      this.eventBus.emit(TransportEvent.RpcTimeout, subject, correlationId);
+      callback({ err: new Error(RPC_TIMEOUT_MESSAGE), response: null, isDisposed: true });
+    }, effectiveTimeout);
+
+    this.pendingTimeouts.set(correlationId, timeoutId);
 
     try {
       if (!this.readyForPublish) await this.connect();
 
-      // Bail out if cleaned up during connect (e.g. consumer unsubscribed)
+      // Bail out if cleaned up during connect (timeout fired, or consumer unsubscribed)
       if (!this.pendingMessages.has(correlationId)) return;
 
       if (!this.inbox) {
+        clearTimeout(timeoutId);
+        this.pendingTimeouts.delete(correlationId);
         this.pendingMessages.delete(correlationId);
+        const inboxError = new Error('Inbox not initialized');
+
+        spanHandle.finish({ kind: RpcOutcomeKind.Error, error: inboxError });
         callback({
           err: new Error('Inbox not initialized — JetStream RPC mode requires a connected inbox'),
           response: null,
@@ -347,29 +491,15 @@ export class JetstreamClient extends ClientProxy {
         return;
       }
 
-      // Start timeout AFTER connect — measures actual RPC wait time, not connect + RPC
-      const timeoutId = setTimeout(() => {
-        if (!this.pendingMessages.has(correlationId)) return;
-
-        this.pendingTimeouts.delete(correlationId);
-        this.pendingMessages.delete(correlationId);
-        this.logger.error(`JetStream RPC timeout (${effectiveTimeout}ms): ${subject}`);
-        this.eventBus.emit(TransportEvent.RpcTimeout, subject, correlationId);
-        callback({ err: new Error('RPC timeout'), response: null, isDisposed: true });
-      }, effectiveTimeout);
-
-      this.pendingTimeouts.set(correlationId, timeoutId);
-
-      const hdrs = this.buildHeaders(customHeaders, {
-        subject,
-        correlationId,
-        replyTo: this.inbox,
-      });
-
-      await this.connection.getJetStreamClient().publish(subject, this.codec.encode(data), {
-        headers: hdrs,
-        msgID: messageId ?? nuid.next(),
-      });
+      // Run the publish under the CLIENT span's context so any handler /
+      // interceptor spans around the publish itself nest under the CLIENT
+      // round-trip span rather than the ambient context.
+      await context.with(spanHandle.activeContext, () =>
+        this.connection.getJetStreamClient().publish(subject, encoded, {
+          headers: hdrs,
+          msgID: messageId ?? nuid.next(),
+        }),
+      );
     } catch (err) {
       const existingTimeout = this.pendingTimeouts.get(correlationId);
 
@@ -383,7 +513,8 @@ export class JetstreamClient extends ClientProxy {
       this.pendingMessages.delete(correlationId);
       const error = err instanceof Error ? err : new Error('Unknown error');
 
-      this.logger.error(`JetStream RPC publish error (${subject}):`, err);
+      spanHandle.finish({ kind: RpcOutcomeKind.Error, error });
+      this.eventBus.emit(TransportEvent.Error, error, `jetstream-rpc-publish:${subject}`);
       callback({ err: error, response: null, isDisposed: true });
     }
   }

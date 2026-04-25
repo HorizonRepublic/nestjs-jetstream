@@ -79,3 +79,18 @@ export { NatsErrorCode } from './server/infrastructure/nats-error-codes';
 
 // Server (for advanced use cases)
 export { JetstreamStrategy } from './server';
+
+// OpenTelemetry integration
+export { ConsumeKind, DEFAULT_TRACES, JetstreamTrace, PublishKind, TRACER_NAME } from './otel';
+
+export type {
+  CaptureBodyOptions,
+  ConsumeSourceMsg,
+  ErrorClassification,
+  HandlerMetadata,
+  JetstreamConsumeContext,
+  JetstreamPublishContext,
+  JetstreamResponseContext,
+  OtelOptions,
+  ServerEndpoint,
+} from './otel';

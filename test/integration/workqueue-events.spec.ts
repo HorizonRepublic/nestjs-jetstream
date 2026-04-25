@@ -17,10 +17,6 @@ import {
 } from './helpers';
 import { startNatsContainer } from './nats-container';
 
-// ---------------------------------------------------------------------------
-// Test Controllers
-// ---------------------------------------------------------------------------
-
 @Controller()
 class EventController {
   public readonly received: unknown[] = [];
@@ -47,10 +43,6 @@ class FailingEventController {
     this.received.push(data);
   }
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('Workqueue Event Delivery', () => {
   let nc: NatsConnection;

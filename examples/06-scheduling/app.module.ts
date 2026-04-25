@@ -9,8 +9,6 @@ import {
   JetstreamRecordBuilder,
 } from '../../src';
 
-// -- Handler -----------------------------------------------------------------
-
 @Controller()
 class ReminderHandler {
   private readonly logger = new Logger('Handlers');
@@ -21,8 +19,6 @@ class ReminderHandler {
     this.logger.log(`Reminder delivered: user=${data.userId} — "${data.message}"`);
   }
 }
-
-// -- HTTP (publish side) -----------------------------------------------------
 
 @Controller()
 class HttpController {
@@ -52,8 +48,6 @@ class HttpController {
     return `Scheduled — will deliver at ${deliverAt.toISOString()}`;
   }
 }
-
-// -- Module (requires NATS >= 2.12) ------------------------------------------
 
 @Module({
   imports: [

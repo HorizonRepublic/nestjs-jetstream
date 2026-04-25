@@ -9,15 +9,6 @@ import { StreamKind, TransportEvent } from '../../../interfaces';
 
 import { MessageProvider } from '../message.provider';
 
-interface MockIteratorResult<T> {
-  done: boolean;
-  value: T | undefined;
-}
-
-interface AsyncIteratorLike<T> {
-  next(): Promise<MockIteratorResult<T>>;
-}
-
 /**
  * Creates a simple async iterator next() function for status events.
  * Yields events from the array, then blocks until stopped.
@@ -26,12 +17,12 @@ const createStatusIterator = (
   events: { type: string; count: number }[],
   isStopped: () => boolean,
   onBlock: (unblock: () => void) => void,
-): (() => Promise<MockIteratorResult<{ type: string; count: number }>>) => {
+): (() => Promise<IteratorResult<{ type: string; count: number }>>) => {
   let i = 0;
 
-  return async (): Promise<MockIteratorResult<{ type: string; count: number }>> => {
+  return async (): Promise<IteratorResult<{ type: string; count: number }>> => {
     if (i < events.length) {
-      return { done: false, value: events[i++] };
+      return { done: false, value: events[i++]! };
     }
 
     return new Promise((resolve) => {
@@ -84,7 +75,17 @@ const createMockMessages = (
       resolveWait?.();
       resolveClosed?.();
     }),
+    close: vi.fn(() => {
+      stopped = true;
+      resolveWait?.();
+      resolveClosed?.();
+
+      return closedPromise;
+    }),
     closed: vi.fn(() => closedPromise),
+    getProcessed: vi.fn(() => 0),
+    getPending: vi.fn(() => msgs.length),
+    getReceived: vi.fn(() => 0),
     status: vi.fn().mockReturnValue({
       [Symbol.asyncIterator]: () => ({
         next: createStatusIterator(
@@ -106,16 +107,16 @@ const createMockMessages = (
     deliver(): void {
       deliverPending();
     },
-    [Symbol.asyncIterator]: (): AsyncIteratorLike<JsMsg> => {
+    [Symbol.asyncIterator]: (): AsyncIterator<JsMsg> => {
       let index = 0;
 
       return {
-        next: async (): Promise<MockIteratorResult<JsMsg>> => {
+        next: async (): Promise<IteratorResult<JsMsg>> => {
           if (stopped || index >= msgs.length) {
             return { done: true, value: undefined };
           }
 
-          return { done: false, value: msgs[index++] };
+          return { done: false, value: msgs[index++]! };
         },
       };
     },

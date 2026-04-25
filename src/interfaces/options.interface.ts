@@ -6,6 +6,7 @@ import type { ConsumerConfig, ConsumeOptions, StreamConfig } from '@nats-io/jets
 import { Codec } from './codec.interface';
 import type { DeadLetterInfo } from './hooks.interface';
 import { TransportHooks } from './hooks.interface';
+import type { OtelOptions } from '../otel';
 
 /**
  * Stream config overrides exposed to users.
@@ -306,6 +307,17 @@ export interface JetstreamModuleOptions {
    * Merged with `name` and `servers` — those take precedence.
    */
   connectionOptions?: Partial<ConnectionOptions>;
+
+  /**
+   * OpenTelemetry integration. When omitted, sensible defaults are applied:
+   * tracing is enabled, default trace kinds are emitted, only standard
+   * correlation headers are captured. If no OTel SDK is registered in the
+   * consuming application, all tracer calls are no-ops — there is no
+   * runtime cost.
+   *
+   * @see OtelOptions
+   */
+  otel?: OtelOptions;
 }
 
 /** Options for `JetstreamModule.forFeature()`. */

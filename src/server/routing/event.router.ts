@@ -26,25 +26,44 @@ import {
 import { MessageProvider } from '../infrastructure';
 import { PatternRegistry } from './pattern-registry';
 import { dlqStreamName, JetstreamDlqHeader } from '../../jetstream.constants';
+import {
+  ConsumeKind,
+  deriveOtelAttrs,
+  resolveOtelOptions,
+  withConsumeSpan,
+  withDeadLetterSpan,
+  type ResolvedOtelOptions,
+  type ServerEndpoint,
+} from '../../otel';
+
+/** Narrow consume-kind tag emitted by the event router (no `Rpc` here). */
+type EventConsumeKind = Exclude<ConsumeKind, ConsumeKind.Rpc>;
 
 /**
- * Routes incoming event messages (workqueue, broadcast, and ordered) to NestJS handlers.
- *
- * **Workqueue & Broadcast** — at-least-once delivery:
- * - Success -> ack | Error -> nak (retry) | Dead letter -> term
- *
- * **Ordered** — strict sequential delivery:
- * - No ack/nak/DLQ — nats.js auto-acknowledges ordered consumer messages.
- * - Handler errors are logged but do not affect delivery.
- *
- * **Dead-Letter Queue (DLQ) - for handling failed message deliveries**
- * - If `options.dlq` is configured, messages that exhaust their max delivery attempts are published to a DLQ stream.
- * - The DLQ stream name is derived from the service name (e.g., `orders__microservice_dlq-stream`).
- * - Original message data and metadata are preserved in the DLQ message, with additional headers indicating the reason for failure.
+ * Resolved routing shape for one incoming event/broadcast/ordered message —
+ * the handler selected for dispatch and the decoded payload. `null` is
+ * returned by {@link EventRouter} resolution helpers when the message cannot
+ * be routed (no handler, decode error, or pre-dispatch failure).
  */
+interface ResolvedEvent {
+  readonly handler: MessageHandler;
+  readonly data: unknown;
+}
+
+const eventConsumeKindFor = (kind: StreamKind): EventConsumeKind => {
+  if (kind === StreamKind.Broadcast) return ConsumeKind.Broadcast;
+  if (kind === StreamKind.Ordered) return ConsumeKind.Ordered;
+
+  return ConsumeKind.Event;
+};
+
 export class EventRouter {
   private readonly logger = new Logger('Jetstream:EventRouter');
   private readonly subscriptions: Subscription[] = [];
+
+  private readonly otel: ResolvedOtelOptions;
+  private readonly serviceName: string;
+  private readonly serverEndpoint: ServerEndpoint | null;
 
   public constructor(
     private readonly messageProvider: MessageProvider,
@@ -56,7 +75,22 @@ export class EventRouter {
     private readonly ackWaitMap?: Map<StreamKind, number>,
     private readonly connection?: ConnectionProvider,
     private readonly options?: JetstreamModuleOptions,
-  ) {}
+  ) {
+    if (options) {
+      const derived = deriveOtelAttrs(options);
+
+      this.otel = derived.otel;
+      this.serviceName = derived.serviceName;
+      this.serverEndpoint = derived.serverEndpoint;
+    } else {
+      // Unit-test instantiation without options — disable OTel entirely
+      // so span helpers short-circuit on the first line (`config.enabled`)
+      // and never read the placeholder values below.
+      this.otel = resolveOtelOptions({ enabled: false });
+      this.serviceName = '';
+      this.serverEndpoint = null;
+    }
+  }
 
   /**
    * Update the max_deliver thresholds from actual NATS consumer configs.
@@ -95,6 +129,10 @@ export class EventRouter {
     const eventBus = this.eventBus;
     const logger = this.logger;
     const deadLetterConfig = this.deadLetterConfig;
+    const otel = this.otel;
+    const serviceName = this.serviceName;
+    const serverEndpoint = this.serverEndpoint;
+    const spanKind: EventConsumeKind = eventConsumeKindFor(kind);
 
     const ackExtensionInterval = isOrdered
       ? null
@@ -148,7 +186,7 @@ export class EventRouter {
      * error, or unexpected pre-dispatch failure) — those branches settle the
      * message synchronously inside the helper and produce nothing to dispatch.
      */
-    const resolveEvent = (msg: JsMsg): { handler: MessageHandler; data: unknown } | null => {
+    const resolveEvent = (msg: JsMsg): ResolvedEvent | null => {
       const subject = msg.subject;
 
       try {
@@ -213,12 +251,36 @@ export class EventRouter {
       let pending: unknown;
 
       try {
-        pending = unwrapResult(handler(data, ctx));
+        pending = withConsumeSpan(
+          {
+            subject: msg.subject,
+            msg,
+            info: msg.info,
+            kind: spanKind,
+            payloadBytes: msg.data.length,
+            handlerMetadata: { pattern: msg.subject },
+            serviceName,
+            endpoint: serverEndpoint,
+          },
+          otel,
+          () => unwrapResult(handler(data, ctx)),
+        );
       } catch (err) {
-        logger.error(`Event handler error (${msg.subject}) in ${kind} router:`, err);
-        if (stopAckExtension !== null) stopAckExtension();
+        eventBus.emit(
+          TransportEvent.Error,
+          err instanceof Error ? err : new Error(String(err)),
+          `${kind}-handler:${msg.subject}`,
+        );
 
-        return settleFailure(msg, data, err);
+        // Keep ack extension alive across settleFailure() — it may route
+        // through handleDeadLetter → publishToDlq whose JetStream publish
+        // can take longer than the consumer's `ack_wait`. Stopping the
+        // extension early would let NATS redeliver the message mid-DLQ
+        // publish and double-fire onDeadLetter. Mirrors the async branch
+        // below.
+        return settleFailure(msg, data, err).finally(() => {
+          if (stopAckExtension !== null) stopAckExtension();
+        });
       }
 
       if (!isPromiseLike(pending)) {
@@ -234,7 +296,11 @@ export class EventRouter {
           if (stopAckExtension !== null) stopAckExtension();
         },
         async (err: unknown) => {
-          logger.error(`Event handler error (${msg.subject}) in ${kind} router:`, err);
+          eventBus.emit(
+            TransportEvent.Error,
+            err instanceof Error ? err : new Error(String(err)),
+            `${kind}-handler:${msg.subject}`,
+          );
           try {
             await settleFailure(msg, data, err);
           } finally {
@@ -286,7 +352,20 @@ export class EventRouter {
       let pending: unknown;
 
       try {
-        pending = unwrapResult(handler(data, ctx));
+        pending = withConsumeSpan(
+          {
+            subject: msg.subject,
+            msg,
+            info: msg.info,
+            kind: spanKind,
+            payloadBytes: msg.data.length,
+            handlerMetadata: { pattern: msg.subject },
+            serviceName,
+            endpoint: serverEndpoint,
+          },
+          otel,
+          () => unwrapResult(handler(data, ctx)),
+        );
       } catch (err) {
         logger.error(`Ordered handler error (${subject}):`, err);
 
@@ -383,15 +462,11 @@ export class EventRouter {
     return undefined;
   }
 
-  /** Handle a dead letter: invoke callback, then term or nak based on result. */
-
   /**
-   * Fallback execution for a dead letter when DLQ is disabled, or when
-   * publishing to the DLQ stream fails (due to network or NATS errors).
-   *
-   * Triggers the user-provided `onDeadLetter` hook for logging/alerting.
-   * On success, terminates the message. On error, leaves it unacknowledged (nak)
-   * so NATS can retry the delivery on the next cycle.
+   * Last-resort path for a dead letter: invoke `onDeadLetter`, then `term` on
+   * success or `nak` on hook failure so NATS retries on the next delivery
+   * cycle. Used when DLQ stream isn't configured, or when publishing to it
+   * failed and we still have to surface the message somewhere observable.
    */
   private async fallbackToOnDeadLetterCallback(info: DeadLetterInfo, msg: JsMsg): Promise<void> {
     // Safety net: deadLetterConfig is guaranteed by isDeadLetter() guard,
@@ -463,8 +538,6 @@ export class EventRouter {
       await js.publish(destinationSubject, msg.data, { headers: hdrs });
       this.logger.log(`Message sent to DLQ: ${msg.subject}`);
 
-      /** Republish succeeds - call onDeadLetter for notification/logging */
-
       if (this.deadLetterConfig?.onDeadLetter) {
         try {
           await this.deadLetterConfig.onDeadLetter(info);
@@ -501,12 +574,29 @@ export class EventRouter {
       timestamp: new Date(msg.info.timestampNanos / 1_000_000).toISOString(),
     };
 
-    this.eventBus.emit(TransportEvent.DeadLetter, info);
+    await withDeadLetterSpan(
+      {
+        msg,
+        // Pattern resolution mirrors event-routing: when a registered
+        // pattern matches, surface it on the DLQ span so APM can filter
+        // dead letters by handler without parsing the subject. Falls back
+        // to the subject itself when no glob handler is in play.
+        pattern: this.patternRegistry.getHandler(msg.subject) ? msg.subject : undefined,
+        finalDeliveryCount: msg.info.deliveryCount,
+        reason: error instanceof Error ? error.message : String(error),
+        serviceName: this.serviceName,
+        endpoint: this.serverEndpoint,
+      },
+      this.otel,
+      async () => {
+        this.eventBus.emit(TransportEvent.DeadLetter, info);
 
-    if (!this.options?.dlq) {
-      await this.fallbackToOnDeadLetterCallback(info, msg);
-    } else {
-      await this.publishToDlq(msg, info, error);
-    }
+        if (!this.options?.dlq) {
+          await this.fallbackToOnDeadLetterCallback(info, msg);
+        } else {
+          await this.publishToDlq(msg, info, error);
+        }
+      },
+    );
   }
 }

@@ -18,20 +18,12 @@ import {
 } from './helpers';
 import { startNatsContainer } from './nats-container';
 
-// ---------------------------------------------------------------------------
-// Test metadata
-// ---------------------------------------------------------------------------
-
 const EVENT_META = { http: { method: 'POST', path: '/orders' } };
 const RPC_META = { http: { method: 'GET', path: '/orders/:id' }, auth: 'bearer' };
 const BROADCAST_META = { scope: 'global' };
 
 /** Short TTL for tests — must be >= MIN_METADATA_TTL (5s). */
 const TEST_TTL = 5_000;
-
-// ---------------------------------------------------------------------------
-// Test Controllers
-// ---------------------------------------------------------------------------
 
 @Controller()
 class MetaController {
@@ -56,16 +48,8 @@ class NoMetaController {
   handleShipped(@Payload() _data: unknown): void {}
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 /** KV bucket underlying stream name follows NATS convention: KV_{bucket}. */
 const KV_STREAM_NAME = `KV_${DEFAULT_METADATA_BUCKET}`;
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('Handler Metadata Registry', { timeout: 60_000 }, () => {
   let nc: NatsConnection;

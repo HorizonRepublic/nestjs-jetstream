@@ -18,10 +18,6 @@ import {
 } from './helpers';
 import { startNatsContainer } from './nats-container';
 
-// ---------------------------------------------------------------------------
-// Test Controllers
-// ---------------------------------------------------------------------------
-
 @Controller()
 class OrderedController {
   public readonly received: unknown[] = [];
@@ -92,10 +88,6 @@ class OrderedWithDlqController {
     throw new Error('Workqueue handler fails');
   }
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('Ordered Event Delivery', () => {
   let nc: NatsConnection;

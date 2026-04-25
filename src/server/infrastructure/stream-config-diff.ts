@@ -1,9 +1,5 @@
 import type { StreamConfig } from '@nats-io/jetstream';
 
-// ---------------------------------------------------------------------------
-// Mutability Classification
-// ---------------------------------------------------------------------------
-
 /** Mutability categories for stream config properties. */
 export type StreamPropertyMutability =
   | 'mutable'
@@ -27,10 +23,6 @@ export interface StreamConfigDiffResult {
   hasTransportControlledConflicts: boolean;
   changes: StreamConfigChange[];
 }
-
-// ---------------------------------------------------------------------------
-// Property Classification (compile-time enforced via keyof StreamConfig)
-// ---------------------------------------------------------------------------
 
 /**
  * Stream properties controlled by the transport layer.
@@ -65,10 +57,6 @@ const ENABLE_ONLY_PROPERTIES: ReadonlySet<keyof StreamConfig> = new Set([
   'deny_delete',
   'deny_purge',
 ] as const satisfies (keyof StreamConfig)[]);
-
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
 
 /**
  * Compare current (from NATS) vs desired (from forRoot config) stream configuration.
@@ -113,10 +101,6 @@ export const compareStreamConfig = (
     changes,
   };
 };
-
-// ---------------------------------------------------------------------------
-// Internal Helpers
-// ---------------------------------------------------------------------------
 
 const classifyMutability = (
   key: keyof StreamConfig,
