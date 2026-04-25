@@ -290,6 +290,16 @@ describe(JetstreamRecordBuilder, () => {
       it('should include the header name in the error message', () => {
         expect(() => sut.setHeader(JetstreamHeader.CorrelationId, 'x')).toThrow(/x-correlation-id/);
       });
+
+      it.each(['X-Correlation-ID', 'X-Reply-To', 'X-ERROR', 'X-Correlation-Id'])(
+        'should reject mixed-case casing of a reserved header (%s)',
+        (header) => {
+          // NATS treats header names case-insensitively, so the validator must
+          // normalize before the Set lookup. Otherwise a publisher could bypass
+          // the reserved-header guard by capitalizing the key.
+          expect(() => sut.setHeader(header, 'value')).toThrow(/reserved/i);
+        },
+      );
     });
 
     describe('when setting reserved headers via setHeaders()', () => {

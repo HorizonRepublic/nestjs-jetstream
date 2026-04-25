@@ -4,8 +4,6 @@ import { lastValueFrom } from 'rxjs';
 
 import { getClientToken, JetstreamClient, JetstreamModule } from '../../src';
 
-// -- Handler -----------------------------------------------------------------
-
 @Controller()
 class OrderProjection {
   private readonly logger = new Logger('Projection');
@@ -16,8 +14,6 @@ class OrderProjection {
     this.logger.log(`Order #${data.orderId}: ${data.status} (seq=${data.seq})`);
   }
 }
-
-// -- HTTP (publish side) -----------------------------------------------------
 
 @Controller()
 class HttpController {
@@ -48,8 +44,6 @@ class HttpController {
     return 'OK — check console for sequential delivery';
   }
 }
-
-// -- Module ------------------------------------------------------------------
 
 @Module({
   imports: [

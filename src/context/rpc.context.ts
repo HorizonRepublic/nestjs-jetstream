@@ -38,10 +38,6 @@ export class RpcContext extends BaseRpcContext<[NatsMessage]> {
   private _shouldTerminate = false;
   private _terminateReason: string | undefined;
 
-  // ---------------------------------------------------------------------------
-  // Message accessors
-  // ---------------------------------------------------------------------------
-
   /**
    * Get the underlying NATS message.
    *
@@ -81,10 +77,6 @@ export class RpcContext extends BaseRpcContext<[NatsMessage]> {
     return 'ack' in this.args[0];
   }
 
-  // ---------------------------------------------------------------------------
-  // JetStream metadata (return undefined for Core NATS messages)
-  // ---------------------------------------------------------------------------
-
   /** How many times this message has been delivered. */
   public getDeliveryCount(): number | undefined {
     return this.asJetStream()?.info.deliveryCount;
@@ -111,10 +103,6 @@ export class RpcContext extends BaseRpcContext<[NatsMessage]> {
   public getCallerName(): string | undefined {
     return this.getHeader(JetstreamHeader.CallerName);
   }
-
-  // ---------------------------------------------------------------------------
-  // Handler-controlled settlement
-  // ---------------------------------------------------------------------------
 
   /**
    * Signal the transport to retry (nak) this message instead of acknowledging it.
@@ -167,10 +155,6 @@ export class RpcContext extends BaseRpcContext<[NatsMessage]> {
       throw new Error(`${method}() is only available for JetStream messages`);
     }
   }
-
-  // ---------------------------------------------------------------------------
-  // Transport-facing state (read by EventRouter)
-  // ---------------------------------------------------------------------------
 
   /** @internal */
   public get shouldRetry(): boolean {

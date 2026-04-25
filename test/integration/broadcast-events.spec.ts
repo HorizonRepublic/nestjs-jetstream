@@ -17,10 +17,6 @@ import {
 } from './helpers';
 import { startNatsContainer } from './nats-container';
 
-// ---------------------------------------------------------------------------
-// Test Controllers (one per "service")
-// ---------------------------------------------------------------------------
-
 @Controller()
 class BroadcastControllerA {
   public readonly received: unknown[] = [];
@@ -40,10 +36,6 @@ class BroadcastControllerB {
     this.received.push(data);
   }
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('Broadcast Event Delivery', () => {
   let nc: NatsConnection;

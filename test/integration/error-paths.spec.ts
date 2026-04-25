@@ -10,10 +10,6 @@ import { internalName, JsonCodec } from '../../src';
 import { cleanupStreams, createNatsConnection, createTestApp, uniqueServiceName } from './helpers';
 import { startNatsContainer } from './nats-container';
 
-// ---------------------------------------------------------------------------
-// Test Controllers
-// ---------------------------------------------------------------------------
-
 @Controller()
 class ErrorPathRpcController {
   public callCount = 0;
@@ -25,10 +21,6 @@ class ErrorPathRpcController {
     return 'ok';
   }
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('Error Paths', () => {
   let nc: NatsConnection;

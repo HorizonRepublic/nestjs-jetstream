@@ -48,10 +48,6 @@ describe(StreamProvider, () => {
 
   afterEach(vi.resetAllMocks);
 
-  // ---------------------------------------------------------------------------
-  // getStreamName
-  // ---------------------------------------------------------------------------
-
   describe('getStreamName', () => {
     describe('when kind is Event', () => {
       it('should return the correct stream name', () => {
@@ -73,10 +69,6 @@ describe(StreamProvider, () => {
       });
     });
   });
-
-  // ---------------------------------------------------------------------------
-  // getSubjects — Event
-  // ---------------------------------------------------------------------------
 
   describe('getSubjects', () => {
     describe('when kind is Event without allow_msg_schedules', () => {
@@ -187,10 +179,6 @@ describe(StreamProvider, () => {
       });
     });
   });
-
-  // ---------------------------------------------------------------------------
-  // ensureStreams
-  // ---------------------------------------------------------------------------
 
   describe('ensureStreams', () => {
     describe('when the stream does not exist', () => {
@@ -388,10 +376,6 @@ describe(StreamProvider, () => {
       });
     });
 
-    // ---------------------------------------------------------------------------
-    // DLQ stream (ensureDlqStream)
-    // ---------------------------------------------------------------------------
-
     describe('when options.dlq is enabled', () => {
       describe('when the DLQ stream does not exist', () => {
         it('should create the DLQ stream', async () => {
@@ -495,10 +479,6 @@ describe(StreamProvider, () => {
       });
     });
   });
-
-  // ---------------------------------------------------------------------------
-  // getOverrides — Command and Ordered
-  // ---------------------------------------------------------------------------
 
   describe('getSubjects (via ensureStreams)', () => {
     describe('when kind is Command with rpc.mode=jetstream and stream overrides', () => {

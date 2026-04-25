@@ -18,10 +18,6 @@ import {
 // Fixed port for the shutdown-during-reconnect test — must survive container.restart()
 const SHUTDOWN_RECONNECT_PORT = 14_223;
 
-// ---------------------------------------------------------------------------
-// Test Controllers
-// ---------------------------------------------------------------------------
-
 @Controller()
 class ShutdownEventController {
   @EventPattern('order.created')
@@ -35,10 +31,6 @@ class ShutdownRpcController {
     return { id: 1 };
   }
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('Graceful Shutdown', () => {
   let nc: NatsConnection;

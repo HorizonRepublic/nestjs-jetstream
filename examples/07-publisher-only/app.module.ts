@@ -3,8 +3,6 @@ import { Observable } from 'rxjs';
 
 import { getClientToken, JetstreamClient, JetstreamModule } from '../../src';
 
-// -- HTTP-only controller (no @EventPattern / @MessagePattern) ---------------
-
 @Controller()
 class GatewayController {
   private readonly logger = new Logger('Gateway');
@@ -24,8 +22,6 @@ class GatewayController {
     });
   }
 }
-
-// -- Module ------------------------------------------------------------------
 
 /**
  * Publisher-only mode: `consumer: false` skips all stream/consumer

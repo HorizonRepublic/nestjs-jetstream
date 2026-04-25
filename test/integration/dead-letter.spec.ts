@@ -19,10 +19,6 @@ import {
 } from './helpers';
 import { startNatsContainer } from './nats-container';
 
-// ---------------------------------------------------------------------------
-// Test Controllers
-// ---------------------------------------------------------------------------
-
 @Controller()
 class AlwaysFailingController {
   public attempts = 0;
@@ -33,10 +29,6 @@ class AlwaysFailingController {
     throw new Error('Permanent failure');
   }
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('Dead Letter Queue Hook', () => {
   let nc: NatsConnection;

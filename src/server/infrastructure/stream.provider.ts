@@ -14,6 +14,13 @@ import {
   dlqStreamName,
   DEFAULT_DLQ_STREAM_CONFIG,
 } from '../../jetstream.constants';
+import {
+  deriveOtelAttrs,
+  withMigrationSpan,
+  withProvisioningSpan,
+  type ResolvedOtelOptions,
+  type ServerEndpoint,
+} from '../../otel';
 import { NatsErrorCode } from './nats-error-codes';
 import { compareStreamConfig, type StreamConfigDiffResult } from './stream-config-diff';
 import { StreamMigration } from './stream-migration';
@@ -32,10 +39,20 @@ export class StreamProvider {
   private readonly logger = new Logger('Jetstream:Stream');
   private readonly migration = new StreamMigration();
 
+  private readonly otel: ResolvedOtelOptions;
+  private readonly otelServiceName: string;
+  private readonly otelEndpoint: ServerEndpoint | null;
+
   public constructor(
     private readonly options: JetstreamModuleOptions,
     private readonly connection: ConnectionProvider,
-  ) {}
+  ) {
+    const derived = deriveOtelAttrs(options);
+
+    this.otel = derived.otel;
+    this.otelServiceName = derived.serviceName;
+    this.otelEndpoint = derived.serverEndpoint;
+  }
 
   /**
    * Ensure all required streams exist with correct configuration.
@@ -100,23 +117,35 @@ export class StreamProvider {
   ): Promise<StreamInfo> {
     const config = this.buildConfig(kind);
 
-    this.logger.log(`Ensuring stream: ${config.name}`);
+    return withProvisioningSpan(
+      this.otel,
+      {
+        serviceName: this.otelServiceName,
+        endpoint: this.otelEndpoint,
+        entity: 'stream',
+        name: config.name,
+        action: 'ensure',
+      },
+      async () => {
+        this.logger.log(`Ensuring stream: ${config.name}`);
 
-    try {
-      const currentInfo = await jsm.streams.info(config.name);
+        try {
+          const currentInfo = await jsm.streams.info(config.name);
 
-      return await this.handleExistingStream(jsm, currentInfo, config);
-    } catch (err) {
-      if (
-        err instanceof JetStreamApiError &&
-        err.apiError().err_code === NatsErrorCode.StreamNotFound
-      ) {
-        this.logger.log(`Creating stream: ${config.name}`);
-        return await jsm.streams.add(config as StreamConfig);
-      }
+          return await this.handleExistingStream(jsm, currentInfo, config);
+        } catch (err) {
+          if (
+            err instanceof JetStreamApiError &&
+            err.apiError().err_code === NatsErrorCode.StreamNotFound
+          ) {
+            this.logger.log(`Creating stream: ${config.name}`);
+            return await jsm.streams.add(config as StreamConfig);
+          }
 
-      throw err;
-    }
+          throw err;
+        }
+      },
+    );
   }
 
   /** Ensure a dead-letter queue stream exists, creating or updating as needed. */
@@ -125,23 +154,35 @@ export class StreamProvider {
   ): Promise<StreamInfo> {
     const config = this.buildDlqConfig();
 
-    this.logger.log(`Ensuring DLQ stream: ${config.name}`);
+    return withProvisioningSpan(
+      this.otel,
+      {
+        serviceName: this.otelServiceName,
+        endpoint: this.otelEndpoint,
+        entity: 'stream',
+        name: config.name,
+        action: 'ensure',
+      },
+      async () => {
+        this.logger.log(`Ensuring DLQ stream: ${config.name}`);
 
-    try {
-      const currentInfo = await jsm.streams.info(config.name);
+        try {
+          const currentInfo = await jsm.streams.info(config.name);
 
-      return await this.handleExistingStream(jsm, currentInfo, config);
-    } catch (err) {
-      if (
-        err instanceof JetStreamApiError &&
-        err.apiError().err_code === NatsErrorCode.StreamNotFound
-      ) {
-        this.logger.log(`Creating DLQ stream: ${config.name}`);
-        return await jsm.streams.add(config as StreamConfig);
-      }
+          return await this.handleExistingStream(jsm, currentInfo, config);
+        } catch (err) {
+          if (
+            err instanceof JetStreamApiError &&
+            err.apiError().err_code === NatsErrorCode.StreamNotFound
+          ) {
+            this.logger.log(`Creating DLQ stream: ${config.name}`);
+            return await jsm.streams.add(config as StreamConfig);
+          }
 
-      throw err;
-    }
+          throw err;
+        }
+      },
+    );
   }
 
   private async handleExistingStream(
@@ -194,7 +235,21 @@ export class StreamProvider {
     }
 
     // Destructive migration
-    await this.migration.migrate(jsm, config.name, config);
+    await withMigrationSpan(
+      this.otel,
+      {
+        serviceName: this.otelServiceName,
+        endpoint: this.otelEndpoint,
+        stream: config.name,
+        reason: diff.changes
+          .filter((c) => c.mutability === 'immutable')
+          .map((c) => c.property)
+          .join(', '),
+      },
+      async () => {
+        await this.migration.migrate(jsm, config.name, config);
+      },
+    );
 
     return await jsm.streams.info(config.name);
   }

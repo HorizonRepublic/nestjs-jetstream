@@ -11,8 +11,6 @@ import {
   toNanos,
 } from '../../src';
 
-// -- Handler -----------------------------------------------------------------
-
 @Controller()
 class PaymentController {
   private readonly logger = new Logger('Handlers');
@@ -29,8 +27,6 @@ class PaymentController {
     return { status: 'processed', requestId };
   }
 }
-
-// -- HTTP (publish side) -----------------------------------------------------
 
 @Controller()
 class HttpController {
@@ -50,8 +46,6 @@ class HttpController {
     return this.client.send('payment.process', record);
   }
 }
-
-// -- Module ------------------------------------------------------------------
 
 @Module({
   imports: [

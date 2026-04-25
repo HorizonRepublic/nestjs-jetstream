@@ -12,10 +12,6 @@ import type { ConsumerConfig, StreamConfig } from '@nats-io/jetstream';
 import { StreamKind } from './interfaces';
 import type { RpcConfig, SubjectKind } from './interfaces';
 
-// ---------------------------------------------------------------------------
-// Injection Tokens
-// ---------------------------------------------------------------------------
-
 /** Token for the resolved JetstreamModuleOptions. */
 export const JETSTREAM_OPTIONS = Symbol('JETSTREAM_OPTIONS');
 
@@ -50,10 +46,6 @@ export const JETSTREAM_EVENT_BUS = Symbol('JETSTREAM_EVENT_BUS');
  */
 export const getClientToken = (name: string): string => name;
 
-// ---------------------------------------------------------------------------
-// Size & Time Helpers
-// ---------------------------------------------------------------------------
-
 const KB = 1024;
 const MB = 1024 * KB;
 const GB = 1024 * MB;
@@ -84,10 +76,6 @@ const NANOS_PER: Record<TimeUnit, number> = {
  * ```
  */
 export const toNanos = (value: number, unit: TimeUnit): number => value * NANOS_PER[unit];
-
-// ---------------------------------------------------------------------------
-// Default Stream Configurations
-// ---------------------------------------------------------------------------
 
 /* eslint-disable @typescript-eslint/naming-convention -- NATS API uses snake_case property names */
 
@@ -169,10 +157,6 @@ export const DEFAULT_DLQ_STREAM_CONFIG: Partial<StreamConfig> = {
   duplicate_window: toNanos(2, 'minutes'),
 };
 
-// ---------------------------------------------------------------------------
-// Default Consumer Configurations
-// ---------------------------------------------------------------------------
-
 /** Default config for workqueue event consumers. */
 export const DEFAULT_EVENT_CONSUMER_CONFIG: Partial<ConsumerConfig> = {
   ack_wait: toNanos(10, 'seconds'),
@@ -205,10 +189,6 @@ export const DEFAULT_BROADCAST_CONSUMER_CONFIG: Partial<ConsumerConfig> = {
 
 /* eslint-enable @typescript-eslint/naming-convention */
 
-// ---------------------------------------------------------------------------
-// Default Module Options
-// ---------------------------------------------------------------------------
-
 /** Default RPC timeout for Core mode (30 seconds). */
 export const DEFAULT_RPC_TIMEOUT = 30_000;
 
@@ -217,10 +197,6 @@ export const DEFAULT_JETSTREAM_RPC_TIMEOUT = 180_000;
 
 /** Default graceful shutdown timeout (10 seconds). */
 export const DEFAULT_SHUTDOWN_TIMEOUT = 10_000;
-
-// ---------------------------------------------------------------------------
-// Metadata Registry Defaults
-// ---------------------------------------------------------------------------
 
 /** Default KV bucket name for handler metadata. */
 export const DEFAULT_METADATA_BUCKET = 'handler_registry';
@@ -247,10 +223,6 @@ export const MIN_METADATA_TTL = 5_000;
  */
 export const metadataKey = (serviceName: string, kind: StreamKind, pattern: string): string =>
   `${serviceName}.${kind}.${pattern}`;
-
-// ---------------------------------------------------------------------------
-// Reserved Headers
-// ---------------------------------------------------------------------------
 
 /**
  * NATS headers managed by the transport.
@@ -291,10 +263,6 @@ export const RESERVED_HEADERS = new Set<string>([
   JetstreamHeader.ReplyTo,
   JetstreamHeader.Error,
 ]);
-
-// ---------------------------------------------------------------------------
-// Naming Helpers
-// ---------------------------------------------------------------------------
 
 /**
  * Build the internal service name with microservice suffix.
@@ -357,10 +325,6 @@ export const consumerName = (serviceName: string, kind: StreamKind): string => {
   return `${internalName(serviceName)}_${kind}-consumer`;
 };
 
-// ---------------------------------------------------------------------------
-// Pattern Prefixes
-// ---------------------------------------------------------------------------
-
 /**
  * Prefixes used in event patterns to route to specific stream types.
  * Applied by the user when emitting events (e.g. `client.emit('broadcast:config.updated', data)`).
@@ -371,10 +335,6 @@ export enum PatternPrefix {
   /** Route to the ordered stream. */
   Ordered = 'ordered:',
 }
-
-// ---------------------------------------------------------------------------
-// RPC Mode Helpers
-// ---------------------------------------------------------------------------
 
 /** Check if the RPC config specifies JetStream mode. */
 export const isJetStreamRpcMode = (rpc: RpcConfig | undefined): boolean =>

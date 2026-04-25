@@ -3,8 +3,6 @@ import { EventPattern, MessagePattern, Payload } from '@nestjs/microservices';
 
 import { JetstreamModule } from '../../src';
 
-// -- Handlers ----------------------------------------------------------------
-
 @Controller()
 class OrderHandler {
   private readonly logger = new Logger('Handlers');
@@ -28,8 +26,6 @@ class OrderHandler {
     // No meta — will not appear in KV bucket
   }
 }
-
-// -- Module ------------------------------------------------------------------
 
 @Module({
   imports: [

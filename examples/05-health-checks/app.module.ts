@@ -3,8 +3,6 @@ import { Controller, Get, Module } from '@nestjs/common';
 import { JetstreamHealthIndicator, JetstreamModule } from '../../src';
 import type { JetstreamHealthStatus } from '../../src';
 
-// -- Health endpoint ---------------------------------------------------------
-
 @Controller('health')
 class HealthController {
   constructor(private readonly health: JetstreamHealthIndicator) {}
@@ -27,8 +25,6 @@ class HealthController {
     return this.health.isHealthy();
   }
 }
-
-// -- Module ------------------------------------------------------------------
 
 @Module({
   imports: [

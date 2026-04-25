@@ -8,8 +8,16 @@ import { ConnectionProvider } from '../../connection';
 import { RpcContext } from '../../context';
 import { EventBus } from '../../hooks';
 import { MessageKind, StreamKind, TransportEvent } from '../../interfaces';
-import type { Codec, RpcRouterOptions } from '../../interfaces';
+import type { Codec, JetstreamModuleOptions, RpcRouterOptions } from '../../interfaces';
 import { DEFAULT_JETSTREAM_RPC_TIMEOUT, JetstreamHeader } from '../../jetstream.constants';
+import {
+  ConsumeKind,
+  deriveOtelAttrs,
+  resolveOtelOptions,
+  withConsumeSpan,
+  type ResolvedOtelOptions,
+  type ServerEndpoint,
+} from '../../otel';
 import {
   isPromiseLike,
   resolveAckExtensionInterval,
@@ -20,6 +28,19 @@ import {
 
 import { MessageProvider } from '../infrastructure';
 import { PatternRegistry } from './pattern-registry';
+
+/**
+ * Resolved routing shape for one incoming RPC command — the handler selected
+ * for dispatch, the decoded payload, and the reply coordinates read from the
+ * message headers. `null` is returned by {@link RpcRouter} resolution helpers
+ * when the message cannot be routed and has already been settled.
+ */
+interface ResolvedCommand {
+  readonly handler: MessageHandler;
+  readonly data: unknown;
+  readonly replyTo: string;
+  readonly correlationId: string;
+}
 
 /**
  * Routes RPC command messages in JetStream mode.
@@ -41,6 +62,10 @@ export class RpcRouter {
   private subscription: Subscription | null = null;
   private cachedNc: NatsConnection | null = null;
 
+  private readonly otel: ResolvedOtelOptions;
+  private readonly serviceName: string;
+  private readonly serverEndpoint: ServerEndpoint | null;
+
   public constructor(
     private readonly messageProvider: MessageProvider,
     private readonly patternRegistry: PatternRegistry,
@@ -49,9 +74,24 @@ export class RpcRouter {
     private readonly eventBus: EventBus,
     private readonly rpcOptions?: RpcRouterOptions,
     private readonly ackWaitMap?: Map<StreamKind, number>,
+    options?: JetstreamModuleOptions,
   ) {
     this.timeout = rpcOptions?.timeout ?? DEFAULT_JETSTREAM_RPC_TIMEOUT;
     this.concurrency = rpcOptions?.concurrency;
+    if (options) {
+      const derived = deriveOtelAttrs(options);
+
+      this.otel = derived.otel;
+      this.serviceName = derived.serviceName;
+      this.serverEndpoint = derived.serverEndpoint;
+    } else {
+      // Unit-test instantiation without options — disable OTel entirely
+      // so span helpers short-circuit on `config.enabled` before touching
+      // the placeholder values. See EventRouter for the same pattern.
+      this.otel = resolveOtelOptions({ enabled: false });
+      this.serviceName = '';
+      this.serverEndpoint = null;
+    }
   }
 
   /** Lazily resolve the ack extension interval (needs ackWaitMap populated at runtime). */
@@ -77,6 +117,9 @@ export class RpcRouter {
     const ackExtensionInterval = this.ackExtensionInterval;
     const hasAckExtension = ackExtensionInterval !== null && ackExtensionInterval > 0;
     const maxActive = this.concurrency ?? Number.POSITIVE_INFINITY;
+    const otel = this.otel;
+    const serviceName = this.serviceName;
+    const serverEndpoint = this.serverEndpoint;
 
     const emitRpcTimeout = (subject: string, correlationId: string): void => {
       eventBus.emit(TransportEvent.RpcTimeout, subject, correlationId);
@@ -110,14 +153,7 @@ export class RpcRouter {
       }
     };
 
-    const resolveCommand = (
-      msg: JsMsg,
-    ): {
-      handler: MessageHandler;
-      data: unknown;
-      replyTo: string;
-      correlationId: string;
-    } | null => {
+    const resolveCommand = (msg: JsMsg): ResolvedCommand | null => {
       const subject = msg.subject;
 
       try {
@@ -193,15 +229,41 @@ export class RpcRouter {
         ? startAckExtensionTimer(msg, ackExtensionInterval)
         : null;
 
+      const reportHandlerError = (err: unknown): void => {
+        eventBus.emit(
+          TransportEvent.Error,
+          err instanceof Error ? err : new Error(String(err)),
+          `rpc-handler:${subject}`,
+        );
+        publishErrorReply(replyTo, correlationId, subject, err);
+        msg.term(`Handler error: ${subject}`);
+      };
+
+      // Abort wire that the handler-deadline timer uses to close the
+      // CONSUMER span early. Handlers that hang past the deadline would
+      // otherwise keep their span open indefinitely.
+      const abortController = new AbortController();
       let pending: unknown;
 
       try {
-        pending = unwrapResult(handler(data, ctx));
+        pending = withConsumeSpan(
+          {
+            subject,
+            msg,
+            info: msg.info,
+            kind: ConsumeKind.Rpc,
+            payloadBytes: msg.data.length,
+            handlerMetadata: { pattern: subject },
+            serviceName,
+            endpoint: serverEndpoint,
+          },
+          otel,
+          () => unwrapResult(handler(data, ctx)),
+          { signal: abortController.signal, timeoutLabel: 'rpc.handler.timeout' },
+        );
       } catch (err) {
         if (stopAckExtension !== null) stopAckExtension();
-        logger.error(`RPC handler error (${subject}):`, err);
-        publishErrorReply(replyTo, correlationId, subject, err);
-        msg.term(`Handler error: ${subject}`);
+        reportHandlerError(err);
 
         return undefined;
       }
@@ -219,7 +281,10 @@ export class RpcRouter {
         if (settled) return;
         settled = true;
         if (stopAckExtension !== null) stopAckExtension();
-        logger.error(`RPC timeout (${timeout}ms): ${subject}`);
+        // Close the CONSUMER span early via the abort signal; the handler's
+        // eventual resolution is ignored (span is idempotent after first finish).
+        abortController.abort();
+        // RpcTimeout hook is the canonical signal here — no separate log.
         emitRpcTimeout(subject, correlationId);
         msg.term('Handler timeout');
       }, timeout);
@@ -238,9 +303,10 @@ export class RpcRouter {
           settled = true;
           clearTimeout(timeoutId);
           if (stopAckExtension !== null) stopAckExtension();
-          logger.error(`RPC handler error (${subject}):`, err);
-          publishErrorReply(replyTo, correlationId, subject, err);
-          msg.term(`Handler error: ${subject}`);
+          // Handler error is surfaced via the OTel CONSUMER span (recordException
+          // on unexpected errors, OK + attributes on classified-expected errors)
+          // and via the transport-error reply. No separate log.
+          reportHandlerError(err);
         },
       );
     };

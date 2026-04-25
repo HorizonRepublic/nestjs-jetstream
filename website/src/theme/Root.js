@@ -95,6 +95,14 @@ export default function Root({ children }) {
   "dateModified": "2026-04-11"
 },
       
+    '/docs/guides/distributed-tracing/': {
+  "@type": "Article",
+  "headline": "Distributed Tracing with OpenTelemetry — NestJS JetStream Transport",
+  "description": "Built-in W3C Trace Context propagation and OpenTelemetry spans for every publish, consume, and RPC round-trip.",
+  "datePublished": "2026-04-24",
+  "dateModified": "2026-04-24"
+},
+      
     '/docs/guides/graceful-shutdown/': {
   "@type": "Article",
   "headline": "Graceful Shutdown",
@@ -132,7 +140,7 @@ export default function Root({ children }) {
   "headline": "Migration Guide",
   "description": "Migrate from the built-in NestJS NATS transport to JetStream with durable delivery.",
   "datePublished": "2026-03-26",
-  "dateModified": "2026-04-11"
+  "dateModified": "2026-04-24"
 },
       
     '/docs/guides/per-message-ttl/': {
@@ -245,6 +253,14 @@ export default function Root({ children }) {
   "description": "NestJS JetStream transport FAQ: publisher-only mode, consumer self-healing, NATS header limits, fire-and-forget messaging, and DeliverPolicy edge cases.",
   "datePublished": "2026-03-21",
   "dateModified": "2026-04-11"
+},
+      
+    '/docs/reference/header-contract/': {
+  "@type": "Article",
+  "headline": "Header Contract — NATS Message Headers Used by the Transport",
+  "description": "Stable contract for NATS message headers the transport reads and writes.",
+  "datePublished": "2026-04-24",
+  "dateModified": "2026-04-24"
 },
       
     '/docs/reference/naming-conventions/': {

@@ -32,3 +32,4 @@ npx tsx --tsconfig examples/tsconfig.json examples/03-ordered-events/main.ts
 | 07 | [publisher-only](./07-publisher-only) | 3006 | consumer: false, API gateway pattern | `GET /place-order` |
 | 08 | [per-message-ttl](./08-per-message-ttl) | 3007 | Individual message expiration (NATS >= 2.11) | `GET /token` |
 | 09 | [handler-metadata](./09-handler-metadata) | 3008 | KV metadata registry, service discovery | — |
+| 10 | [distributed-tracing](./10-distributed-tracing) | 3009 | Built-in OpenTelemetry spans, ConsoleSpanExporter, full trace through publish + RPC + event flow | `GET /` |

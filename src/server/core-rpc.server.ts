@@ -4,9 +4,16 @@ import { headers as natsHeaders, type Msg, type Subscription } from '@nats-io/tr
 import { ConnectionProvider } from '../connection';
 import { RpcContext } from '../context';
 import { EventBus } from '../hooks';
-import { MessageKind } from '../interfaces';
+import { MessageKind, TransportEvent } from '../interfaces';
 import type { Codec, JetstreamModuleOptions } from '../interfaces';
-import { internalName, JetstreamHeader } from '../jetstream.constants';
+import { JetstreamHeader } from '../jetstream.constants';
+import {
+  ConsumeKind,
+  deriveOtelAttrs,
+  withConsumeSpan,
+  type ResolvedOtelOptions,
+  type ServerEndpoint,
+} from '../otel';
 import { isPromiseLike, serializeError, unwrapResult } from '../utils';
 
 import { PatternRegistry } from './routing/pattern-registry';
@@ -23,20 +30,29 @@ export class CoreRpcServer {
   private readonly logger = new Logger('Jetstream:CoreRpc');
   private subscription: Subscription | null = null;
 
+  private readonly otel: ResolvedOtelOptions;
+  private readonly serviceName: string;
+  private readonly serverEndpoint: ServerEndpoint | null;
+
   public constructor(
-    private readonly options: JetstreamModuleOptions,
+    options: JetstreamModuleOptions,
     private readonly connection: ConnectionProvider,
     private readonly patternRegistry: PatternRegistry,
     private readonly codec: Codec,
     private readonly eventBus: EventBus,
-  ) {}
+  ) {
+    const derived = deriveOtelAttrs(options);
+
+    this.otel = derived.otel;
+    this.serviceName = derived.serviceName;
+    this.serverEndpoint = derived.serverEndpoint;
+  }
 
   /** Start listening for RPC requests on the command subject. */
   public async start(): Promise<void> {
     const nc = await this.connection.getConnection();
-    const serviceName = internalName(this.options.name);
-    const subject = `${serviceName}.cmd.>`;
-    const queue = `${serviceName}_cmd_queue`;
+    const subject = `${this.serviceName}.cmd.>`;
+    const queue = `${this.serviceName}_cmd_queue`;
 
     this.subscription = nc.subscribe(subject, {
       queue,
@@ -93,12 +109,31 @@ export class CoreRpcServer {
     const ctx = new RpcContext([msg]);
 
     try {
-      const raw = unwrapResult(handler(data, ctx));
-      const result = isPromiseLike(raw) ? await raw : raw;
+      const raw = await withConsumeSpan(
+        {
+          subject: msg.subject,
+          msg,
+          kind: ConsumeKind.Rpc,
+          payloadBytes: msg.data.length,
+          handlerMetadata: { pattern: msg.subject },
+          serviceName: this.serviceName,
+          endpoint: this.serverEndpoint,
+        },
+        this.otel,
+        () => {
+          const out = unwrapResult(handler(data, ctx));
 
-      msg.respond(this.codec.encode(result));
+          return isPromiseLike(out) ? (out as Promise<unknown>) : out;
+        },
+      );
+
+      msg.respond(this.codec.encode(raw));
     } catch (err) {
-      this.logger.error(`Handler error for Core RPC ${msg.subject}:`, err);
+      this.eventBus.emit(
+        TransportEvent.Error,
+        err instanceof Error ? err : new Error(String(err)),
+        `core-rpc-handler:${msg.subject}`,
+      );
       this.respondWithError(msg, err);
     }
   }

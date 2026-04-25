@@ -11,6 +11,12 @@ import {
   DEFAULT_EVENT_CONSUMER_CONFIG,
   internalName,
 } from '../../jetstream.constants';
+import {
+  deriveOtelAttrs,
+  withProvisioningSpan,
+  type ResolvedOtelOptions,
+  type ServerEndpoint,
+} from '../../otel';
 import { PatternRegistry } from '../routing';
 
 import { NatsErrorCode } from './nats-error-codes';
@@ -26,12 +32,22 @@ import { StreamProvider } from './stream.provider';
 export class ConsumerProvider {
   private readonly logger = new Logger('Jetstream:Consumer');
 
+  private readonly otel: ResolvedOtelOptions;
+  private readonly otelServiceName: string;
+  private readonly otelEndpoint: ServerEndpoint | null;
+
   public constructor(
     private readonly options: JetstreamModuleOptions,
     private readonly connection: ConnectionProvider,
     private readonly streamProvider: StreamProvider,
     private readonly patternRegistry: PatternRegistry,
-  ) {}
+  ) {
+    const derived = deriveOtelAttrs(options);
+
+    this.otel = derived.otel;
+    this.otelServiceName = derived.serviceName;
+    this.otelEndpoint = derived.serverEndpoint;
+  }
 
   /**
    * Ensure consumers exist for the specified kinds.
@@ -71,23 +87,35 @@ export class ConsumerProvider {
     const config = this.buildConfig(kind);
     const name = config.durable_name;
 
-    this.logger.log(`Ensuring consumer: ${name} on stream: ${stream}`);
+    return withProvisioningSpan(
+      this.otel,
+      {
+        serviceName: this.otelServiceName,
+        endpoint: this.otelEndpoint,
+        entity: 'consumer',
+        name,
+        action: 'ensure',
+      },
+      async () => {
+        this.logger.log(`Ensuring consumer: ${name} on stream: ${stream}`);
 
-    try {
-      await jsm.consumers.info(stream, name);
-      this.logger.debug(`Consumer exists, updating: ${name}`);
+        try {
+          await jsm.consumers.info(stream, name);
+          this.logger.debug(`Consumer exists, updating: ${name}`);
 
-      return await jsm.consumers.update(stream, name, config);
-    } catch (err) {
-      if (
-        !(err instanceof JetStreamApiError) ||
-        err.apiError().err_code !== NatsErrorCode.ConsumerNotFound
-      ) {
-        throw err;
-      }
+          return await jsm.consumers.update(stream, name, config);
+        } catch (err) {
+          if (
+            !(err instanceof JetStreamApiError) ||
+            err.apiError().err_code !== NatsErrorCode.ConsumerNotFound
+          ) {
+            throw err;
+          }
 
-      return await this.createConsumer(jsm, stream, name, config);
-    }
+          return await this.createConsumer(jsm, stream, name, config);
+        }
+      },
+    );
   }
 
   /**
@@ -111,24 +139,36 @@ export class ConsumerProvider {
     const config = this.buildConfig(kind);
     const name = config.durable_name;
 
-    this.logger.log(`Recovering consumer: ${name} on stream: ${stream}`);
+    return withProvisioningSpan(
+      this.otel,
+      {
+        serviceName: this.otelServiceName,
+        endpoint: this.otelEndpoint,
+        entity: 'consumer',
+        name,
+        action: 'recover',
+      },
+      async () => {
+        this.logger.log(`Recovering consumer: ${name} on stream: ${stream}`);
 
-    // Check if another pod is mid-migration — backup stream acts as a lock
-    await this.assertNoMigrationInProgress(jsm, stream);
+        // Check if another pod is mid-migration — backup stream acts as a lock
+        await this.assertNoMigrationInProgress(jsm, stream);
 
-    try {
-      // Consumer already exists (another pod may have recreated it) — use as-is
-      return await jsm.consumers.info(stream, name);
-    } catch (err) {
-      if (
-        !(err instanceof JetStreamApiError) ||
-        err.apiError().err_code !== NatsErrorCode.ConsumerNotFound
-      ) {
-        throw err;
-      }
+        try {
+          // Consumer already exists (another pod may have recreated it) — use as-is
+          return await jsm.consumers.info(stream, name);
+        } catch (err) {
+          if (
+            !(err instanceof JetStreamApiError) ||
+            err.apiError().err_code !== NatsErrorCode.ConsumerNotFound
+          ) {
+            throw err;
+          }
 
-      return await this.createConsumer(jsm, stream, name, config);
-    }
+          return await this.createConsumer(jsm, stream, name, config);
+        }
+      },
+    );
   }
 
   /**

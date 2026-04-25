@@ -4,8 +4,6 @@ import { Observable } from 'rxjs';
 
 import { getClientToken, JetstreamClient, JetstreamModule, RpcContext } from '../../src';
 
-// -- Handlers ----------------------------------------------------------------
-
 @Controller()
 class EventController {
   private readonly logger = new Logger('Handlers');
@@ -27,8 +25,6 @@ class EventController {
     return { id: data.id, name: 'John Doe' };
   }
 }
-
-// -- HTTP (publish side) -----------------------------------------------------
 
 @Controller()
 class HttpController {
@@ -52,8 +48,6 @@ class HttpController {
     return this.client.send('user.get', { id: 1 });
   }
 }
-
-// -- Module ------------------------------------------------------------------
 
 @Module({
   imports: [
