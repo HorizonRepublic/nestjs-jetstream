@@ -281,20 +281,16 @@ const DEFAULT_CAPTURE_BODY_MAX_BYTES = 4096;
 /**
  * NestJS wraps a bare `throw new Error(...)` from a `@MessagePattern` handler
  * into `{ status: 'error', message: 'Internal server error' }` before it
- * reaches the consume-span catch block. Match that exact two-field shape so
- * the classifier keeps marking it as an infrastructure failure.
+ * reaches the consume-span catch block. Match the exact `status` / `message`
+ * pair used by NestJS's internal error normalization — checking just the
+ * shape (and not `keys.length === 2`) keeps the sentinel detection working
+ * if NestJS extends the wrapper with extra diagnostic fields in a future
+ * minor release.
  */
-const isNestjsBareErrorSentinel = (obj: Record<string, unknown>): boolean => {
-  const keys = Object.keys(obj);
+const NESTJS_BARE_ERROR_MESSAGE = 'Internal server error';
 
-  return (
-    keys.length === 2 &&
-    keys.includes('status') &&
-    keys.includes('message') &&
-    obj.status === 'error' &&
-    typeof obj.message === 'string'
-  );
-};
+const isNestjsBareErrorSentinel = (obj: Record<string, unknown>): boolean =>
+  obj.status === 'error' && obj.message === NESTJS_BARE_ERROR_MESSAGE;
 
 /**
  * Default classifier. Recognizes `RpcException` / `HttpException` (and

@@ -61,13 +61,12 @@ export const withPublishSpan = async <T>(
 ): Promise<T> => {
   if (!config.enabled) return fn();
 
-  // Even when we skip span creation we still want to propagate the ambient
-  // trace context so downstream consumers remain linked to whatever is currently active.
   const shouldCreateSpan =
     config.traces.has(JetstreamTrace.Publish) &&
     (config.shouldTracePublish?.(ctx.subject, ctx.record) ?? true);
 
   if (!shouldCreateSpan) {
+    // Propagate the ambient context so downstream consumers stay linked even without a PRODUCER span.
     injectContext(context.active(), ctx.headers, hdrsSetter);
 
     return fn();

@@ -14,10 +14,6 @@ import {
 
 import { MetadataProvider } from '../metadata.provider';
 
-// ---------------------------------------------------------------------------
-// Mocks
-// ---------------------------------------------------------------------------
-
 const mockPut = vi.fn<(k: string, data: string) => Promise<number>>();
 
 const mockKv = { put: mockPut };
@@ -32,10 +28,6 @@ vi.mock('@nats-io/kv', () => {
 
   return { Kvm: KvmImpl };
 });
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe(MetadataProvider, () => {
   let sut: MetadataProvider;

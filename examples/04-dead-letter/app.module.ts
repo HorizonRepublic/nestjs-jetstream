@@ -4,8 +4,6 @@ import { Observable } from 'rxjs';
 
 import { getClientToken, JetstreamClient, JetstreamModule, toNanos } from '../../src';
 
-// -- Handler -----------------------------------------------------------------
-
 @Controller()
 class FailingHandler {
   private readonly logger = new Logger('Handlers');
@@ -22,8 +20,6 @@ class FailingHandler {
   }
 }
 
-// -- HTTP (publish side) -----------------------------------------------------
-
 @Controller()
 class HttpController {
   constructor(
@@ -36,8 +32,6 @@ class HttpController {
     return this.client.emit('invoice.generate', { invoiceId: 42 });
   }
 }
-
-// -- Module ------------------------------------------------------------------
 
 const dlqLogger = new Logger('DLQ');
 

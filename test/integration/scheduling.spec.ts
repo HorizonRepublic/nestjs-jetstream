@@ -17,10 +17,6 @@ import {
 } from './helpers';
 import { startNatsContainer } from './nats-container';
 
-// ---------------------------------------------------------------------------
-// Test Controllers
-// ---------------------------------------------------------------------------
-
 @Controller()
 class ScheduledEventController {
   public readonly received: unknown[] = [];
@@ -63,10 +59,6 @@ class HeaderCapturingController {
     });
   }
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('Message Scheduling (Delayed Jobs)', () => {
   let nc: NatsConnection;

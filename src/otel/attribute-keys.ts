@@ -1,24 +1,10 @@
 /**
- * Span attribute keys the library emits. One file, one source of truth —
- * so a rename in the OTel semconv (or in our own `jetstream.*` namespace)
- * is a single-file change, not a project-wide grep.
- *
- * Grouped by origin:
- *
- * - OTel messaging semantic conventions — stable / unstable keys we emit
- *   against the spec. Bumping the OTel major or swapping for the upstream
- *   `@opentelemetry/semantic-conventions` package only touches this file.
- * - OTel generic attributes (`server.*`) — same idea.
- * - Library-custom `jetstream.*` namespace — kept separate so external
- *   consumers can tell at a glance which keys are ours vs. OTel-mandated.
- * - Span-name prefixes — the verb that precedes the subject / resource in
- *   `span.name` (per OTel messaging convention `{operation} {destination}`).
- *
- * Every identifier is a literal `as const` so downstream `Attributes`
- * objects remain structurally typed.
+ * Span attribute keys the library emits. Centralized so a rename in the OTel
+ * semconv (or in the `jetstream.*` namespace) is a single-file change, and
+ * swapping to `@opentelemetry/semantic-conventions` later only touches here.
+ * Every identifier is `as const` so downstream `Attributes` objects stay
+ * structurally typed.
  */
-
-// ---- OTel messaging + generic attribute keys ---------------------------------
 
 export const ATTR_MESSAGING_SYSTEM = 'messaging.system' as const;
 
@@ -60,8 +46,6 @@ export const ATTR_SERVER_ADDRESS = 'server.address' as const;
 
 export const ATTR_SERVER_PORT = 'server.port' as const;
 
-// ---- Library-custom `jetstream.*` keys ---------------------------------------
-
 export const ATTR_JETSTREAM_SERVICE_NAME = 'jetstream.service.name' as const;
 
 export const ATTR_JETSTREAM_KIND = 'jetstream.kind' as const;
@@ -86,22 +70,19 @@ export const ATTR_JETSTREAM_SCHEDULE_TARGET = 'jetstream.schedule.target' as con
 
 export const ATTR_NATS_CONNECTION_SERVER = 'nats.connection.server' as const;
 
-// ---- NATS server-level header names (read by the transport) -----------------
-
 /** Canonical MIME form of the NATS dedup header (`Nats-Msg-Id`). */
 export const NATS_MSG_ID_HEADER = 'Nats-Msg-Id' as const;
 
-// ---- Hook identifier tokens -------------------------------------------------
-// Passed to `safelyInvokeHook(hookName, ...)` so a failing hook's debug log
-// identifies which hook misbehaved without hard-coding strings at call sites.
-
+/**
+ * Hook identifier tokens passed to `safelyInvokeHook` so a failing hook's
+ * debug log identifies which hook misbehaved without hard-coding strings
+ * at call sites.
+ */
 export const HOOK_PUBLISH = 'publishHook' as const;
 
 export const HOOK_CONSUME = 'consumeHook' as const;
 
 export const HOOK_RESPONSE = 'responseHook' as const;
-
-// ---- Span / event name builders ---------------------------------------------
 
 /** Operation verbs that precede the subject / resource in `span.name`. */
 export const SPAN_NAME_PUBLISH = 'publish' as const;

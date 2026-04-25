@@ -10,8 +10,6 @@ import {
   toNanos,
 } from '../../src';
 
-// -- Handler -----------------------------------------------------------------
-
 @Controller()
 class SessionHandler {
   private readonly logger = new Logger('Handlers');
@@ -21,8 +19,6 @@ class SessionHandler {
     this.logger.log(`Session token received: user=${data.userId}`);
   }
 }
-
-// -- HTTP (publish side) -----------------------------------------------------
 
 @Controller()
 class HttpController {
@@ -50,8 +46,6 @@ class HttpController {
     return 'Published — message will expire from stream after 30 seconds';
   }
 }
-
-// -- Module (requires NATS >= 2.11) ------------------------------------------
 
 @Module({
   imports: [

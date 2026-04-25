@@ -12,10 +12,6 @@ import { getClientToken, JetstreamRecordBuilder, RpcContext } from '../../src';
 import { cleanupStreams, createNatsConnection, createTestApp, uniqueServiceName } from './helpers';
 import { startNatsContainer } from './nats-container';
 
-// ---------------------------------------------------------------------------
-// Test Controllers
-// ---------------------------------------------------------------------------
-
 @Controller()
 class JsRpcController {
   @MessagePattern('user.get')
@@ -36,10 +32,6 @@ class JsRpcController {
     return { id: data.id, tenant: ctx.getHeader('x-tenant') };
   }
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('JetStream RPC Round-Trip', () => {
   let nc: NatsConnection;

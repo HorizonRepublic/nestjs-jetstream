@@ -17,10 +17,6 @@ import {
 } from './helpers';
 import { startNatsContainer } from './nats-container';
 
-// ---------------------------------------------------------------------------
-// Test Controllers
-// ---------------------------------------------------------------------------
-
 @Controller()
 class RetryController {
   public attempts = 0;
@@ -87,10 +83,6 @@ class MetadataController {
     this.callerName = ctx.getCallerName();
   }
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('Handler Context', () => {
   let nc: NatsConnection;

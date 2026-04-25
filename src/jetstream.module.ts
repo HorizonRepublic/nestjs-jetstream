@@ -94,10 +94,6 @@ export class JetstreamModule implements OnApplicationShutdown {
     @Optional() @Inject(JetstreamStrategy) private readonly strategy?: JetstreamStrategy | null,
   ) {}
 
-  // -------------------------------------------------------------------
-  // forRoot — global module registration
-  // -------------------------------------------------------------------
-
   /**
    * Register the JetStream transport globally.
    *
@@ -125,10 +121,6 @@ export class JetstreamModule implements OnApplicationShutdown {
       ],
     };
   }
-
-  // -------------------------------------------------------------------
-  // forRootAsync — async global module registration
-  // -------------------------------------------------------------------
 
   /**
    * Register the JetStream transport globally with async configuration.
@@ -159,10 +151,6 @@ export class JetstreamModule implements OnApplicationShutdown {
       ],
     };
   }
-
-  // -------------------------------------------------------------------
-  // forFeature — per-module client registration
-  // -------------------------------------------------------------------
 
   /**
    * Register a lightweight client proxy for a target service.
@@ -197,10 +185,6 @@ export class JetstreamModule implements OnApplicationShutdown {
       exports: [clientToken],
     };
   }
-
-  // -------------------------------------------------------------------
-  // Provider factories
-  // -------------------------------------------------------------------
 
   private static createCoreProviders(options: JetstreamModuleOptions): Provider[] {
     return [
@@ -270,10 +254,8 @@ export class JetstreamModule implements OnApplicationShutdown {
         },
       },
 
-      // ---------------------------------------------------------------
       // Consumer infrastructure — only created when consumer !== false.
       // Providers return null when consumer is disabled (publisher-only mode).
-      // ---------------------------------------------------------------
 
       // PatternRegistry — subject-to-handler mapping
       {
@@ -611,10 +593,6 @@ export class JetstreamModule implements OnApplicationShutdown {
       },
     ];
   }
-
-  // -------------------------------------------------------------------
-  // Lifecycle hooks
-  // -------------------------------------------------------------------
 
   /**
    * Gracefully shut down the transport on application termination.

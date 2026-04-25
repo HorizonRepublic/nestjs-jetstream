@@ -85,6 +85,9 @@
     "rxjs": "^7.8.0"
   },
   "peerDependenciesMeta": {
+    "@opentelemetry/api": {
+      "optional": true
+    },
     "msgpackr": {
       "optional": true
     }

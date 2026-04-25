@@ -18,10 +18,6 @@ import {
 } from './helpers';
 import { startNatsContainer } from './nats-container';
 
-// ---------------------------------------------------------------------------
-// Test Controllers
-// ---------------------------------------------------------------------------
-
 @Controller()
 class SelfHealingController {
   public readonly received: unknown[] = [];
@@ -41,10 +37,6 @@ class DestroyRestartController {
     this.received.push(data);
   }
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('Self-Healing Consumer Flow', () => {
   describe('consumer recovery after deletion', () => {

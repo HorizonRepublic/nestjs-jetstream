@@ -84,28 +84,21 @@ export const beginRpcClientSpan = (
   ctx: RpcClientSpanContext,
   config: ResolvedOtelOptions,
 ): RpcClientSpanHandle => {
-  // Kill switch: per the documented `otel.enabled: false` semantics no
-  // propagation is attempted either, so skip `injectContext` entirely.
+  // Kill switch — `otel.enabled: false` opts out of propagation too.
   if (!config.enabled) {
     return {
       activeContext: context.active(),
-      finish: (): void => {
-        /* no-op when tracing is disabled */
-      },
+      finish: () => undefined,
     };
   }
 
-  // Trace kind filtered off but library still enabled — inject the active
-  // context so downstream consumers keep the trace chain even without a
-  // CLIENT span on the caller side.
   if (!config.traces.has(JetstreamTrace.RpcClientSend)) {
+    // Span suppressed but trace context still propagates so downstream consumers stay linked.
     injectContext(context.active(), ctx.headers, hdrsSetter);
 
     return {
       activeContext: context.active(),
-      finish: (): void => {
-        /* no-op when this trace kind is filtered out */
-      },
+      finish: () => undefined,
     };
   }
 
@@ -116,7 +109,7 @@ export const beginRpcClientSpan = (
       ...buildRpcClientAttributes({
         subject: ctx.subject,
         pattern: ctx.pattern,
-        correlationId: ctx.correlationId ?? '',
+        correlationId: ctx.correlationId,
         payloadBytes: ctx.payloadBytes,
         messageId: ctx.messageId,
         serviceName: ctx.serviceName,
@@ -131,11 +124,7 @@ export const beginRpcClientSpan = (
   const ctxWithSpan = trace.setSpan(context.active(), span);
 
   injectContext(ctxWithSpan, ctx.headers, hdrsSetter);
-  // Note: publishHook is intentionally not fired for the RPC-client path. The
-  // span kind here is CLIENT (full round-trip), not PRODUCER, and the handle
-  // surfaces reply / error outcomes via responseHook. Users who need per-
-  // publish enrichment can attach it via publishHook on the PRODUCER path.
-
+  // publishHook deliberately skipped — this is a CLIENT round-trip span, not a PRODUCER span.
   const start = Date.now();
   let finalized = false;
 

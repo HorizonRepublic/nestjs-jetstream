@@ -12,11 +12,10 @@ import { TRACER_NAME } from './constants';
 declare const __PACKAGE_VERSION__: string;
 const PACKAGE_VERSION = typeof __PACKAGE_VERSION__ === 'string' ? __PACKAGE_VERSION__ : '0.0.0';
 
-let cached: Tracer | undefined;
-
 /**
- * Returns the OpenTelemetry tracer for the library's instrumentation
- * scope. When no TracerProvider is registered the returned tracer is a
- * no-op and calls are effectively free.
+ * Resolve the OpenTelemetry tracer for the library's instrumentation scope.
+ * `trace.getTracer` already caches the per-provider instance internally — a
+ * second cache here would freeze a no-op tracer for the rest of the process
+ * if the host application registers an SDK after the first call.
  */
-export const getTracer = (): Tracer => (cached ??= trace.getTracer(TRACER_NAME, PACKAGE_VERSION));
+export const getTracer = (): Tracer => trace.getTracer(TRACER_NAME, PACKAGE_VERSION);

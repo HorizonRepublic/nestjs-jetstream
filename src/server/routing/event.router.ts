@@ -36,21 +36,6 @@ import {
   type ServerEndpoint,
 } from '../../otel';
 
-/**
- * Routes incoming event messages (workqueue, broadcast, and ordered) to NestJS handlers.
- *
- * **Workqueue & Broadcast** — at-least-once delivery:
- * - Success -> ack | Error -> nak (retry) | Dead letter -> term
- *
- * **Ordered** — strict sequential delivery:
- * - No ack/nak/DLQ — nats.js auto-acknowledges ordered consumer messages.
- * - Handler errors are logged but do not affect delivery.
- *
- * **Dead-Letter Queue (DLQ) - for handling failed message deliveries**
- * - If `options.dlq` is configured, messages that exhaust their max delivery attempts are published to a DLQ stream.
- * - The DLQ stream name is derived from the service name (e.g., `orders__microservice_dlq-stream`).
- * - Original message data and metadata are preserved in the DLQ message, with additional headers indicating the reason for failure.
- */
 /** Narrow consume-kind tag emitted by the event router (no `Rpc` here). */
 type EventConsumeKind = Exclude<ConsumeKind, ConsumeKind.Rpc>;
 
@@ -477,15 +462,11 @@ export class EventRouter {
     return undefined;
   }
 
-  /** Handle a dead letter: invoke callback, then term or nak based on result. */
-
   /**
-   * Fallback execution for a dead letter when DLQ is disabled, or when
-   * publishing to the DLQ stream fails (due to network or NATS errors).
-   *
-   * Triggers the user-provided `onDeadLetter` hook for logging/alerting.
-   * On success, terminates the message. On error, leaves it unacknowledged (nak)
-   * so NATS can retry the delivery on the next cycle.
+   * Last-resort path for a dead letter: invoke `onDeadLetter`, then `term` on
+   * success or `nak` on hook failure so NATS retries on the next delivery
+   * cycle. Used when DLQ stream isn't configured, or when publishing to it
+   * failed and we still have to surface the message somewhere observable.
    */
   private async fallbackToOnDeadLetterCallback(info: DeadLetterInfo, msg: JsMsg): Promise<void> {
     // Safety net: deadLetterConfig is guaranteed by isDeadLetter() guard,
@@ -556,8 +537,6 @@ export class EventRouter {
 
       await js.publish(destinationSubject, msg.data, { headers: hdrs });
       this.logger.log(`Message sent to DLQ: ${msg.subject}`);
-
-      /** Republish succeeds - call onDeadLetter for notification/logging */
 
       if (this.deadLetterConfig?.onDeadLetter) {
         try {

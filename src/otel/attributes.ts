@@ -29,7 +29,7 @@ import {
   SPAN_NAME_SEND,
 } from './attribute-keys';
 import type { ConsumeSourceMsg, JetstreamPublishContext, JetstreamConsumeContext } from './config';
-import { PublishKind } from './config';
+import { ConsumeKind, PublishKind } from './config';
 
 // `messaging.system` isn't in the OTel registry yet; "nats" is the
 // community convention used by opentelemetry-js-contrib and third-party
@@ -71,7 +71,7 @@ export interface PublishAttributeContext extends MessagingBaseContext {
 }
 
 const jetstreamKindForPublish = (kind: JetstreamPublishContext['kind']): string =>
-  kind === PublishKind.RpcRequest ? 'rpc' : kind;
+  kind === PublishKind.RpcRequest ? ConsumeKind.Rpc : kind;
 
 export const buildPublishAttributes = (ctx: PublishAttributeContext): Attributes => {
   const attrs: Attributes = {
@@ -122,7 +122,8 @@ export const buildConsumeAttributes = (ctx: ConsumeAttributeContext): Attributes
 };
 
 export interface RpcClientAttributeContext extends MessagingBaseContext {
-  readonly correlationId: string;
+  /** Absent on Core RPC — NATS request/reply uses an internal muxer instead. */
+  readonly correlationId?: string;
   readonly payloadBytes: number;
   readonly messageId?: string;
 }
@@ -133,10 +134,10 @@ export const buildRpcClientAttributes = (ctx: RpcClientAttributeContext): Attrib
     [ATTR_MESSAGING_OPERATION_NAME]: SPAN_NAME_SEND,
     [ATTR_MESSAGING_OPERATION_TYPE]: SPAN_NAME_SEND,
     [ATTR_MESSAGING_MESSAGE_BODY_SIZE]: ctx.payloadBytes,
-    [ATTR_MESSAGING_MESSAGE_CONVERSATION_ID]: ctx.correlationId,
-    [ATTR_JETSTREAM_KIND]: 'rpc',
+    [ATTR_JETSTREAM_KIND]: ConsumeKind.Rpc,
   };
 
+  if (ctx.correlationId) attrs[ATTR_MESSAGING_MESSAGE_CONVERSATION_ID] = ctx.correlationId;
   if (ctx.messageId) attrs[ATTR_MESSAGING_MESSAGE_ID] = ctx.messageId;
 
   return attrs;

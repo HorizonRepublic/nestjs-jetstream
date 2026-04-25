@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import { SpanKind, SpanStatusCode, type Span } from '@opentelemetry/api';
+import { SpanKind, SpanStatusCode, context, trace, type Span } from '@opentelemetry/api';
 
 import {
   ATTR_JETSTREAM_MIGRATION_REASON,
@@ -42,12 +42,12 @@ export interface InfrastructureSpanContext {
 
 const startInfraSpan = (
   config: ResolvedOtelOptions,
-  trace: JetstreamTrace,
+  traceKind: JetstreamTrace,
   name: string,
   ctx: InfrastructureSpanContext,
   extraAttributes: AttributeBag = {},
 ): Span | null => {
-  if (!config.enabled || !config.traces.has(trace)) return null;
+  if (!config.enabled || !config.traces.has(traceKind)) return null;
 
   const tracer = getTracer();
   const attributes: Record<string, AttributeValue> = {
@@ -78,24 +78,29 @@ const finishError = (span: Span, err: unknown): void => {
 };
 
 /**
- * Run `op` inside an INTERNAL span gated by a `JetstreamTrace` toggle. On
- * throw the span is marked ERROR and the error rethrows. When the toggle is
- * off `op` runs directly with no span.
+ * Run `op` inside an INTERNAL span gated by a `JetstreamTrace` toggle. The
+ * span is set as the active context for the operation so any nested OTel
+ * work (NATS publishes, downstream HTTP, library spans) parents under it
+ * instead of the ambient context. On throw the span is marked ERROR and
+ * the error rethrows. When the toggle is off `op` runs directly with no
+ * span and no context switch.
  */
 const wrapInfra = async <T>(
   config: ResolvedOtelOptions,
-  trace: JetstreamTrace,
+  traceKind: JetstreamTrace,
   name: string,
   ctx: InfrastructureSpanContext,
   attributes: AttributeBag,
   op: () => Promise<T>,
 ): Promise<T> => {
-  const span = startInfraSpan(config, trace, name, ctx, attributes);
+  const span = startInfraSpan(config, traceKind, name, ctx, attributes);
 
   if (!span) return op();
 
+  const ctxWithSpan = trace.setSpan(context.active(), span);
+
   try {
-    const result = await op();
+    const result = await context.with(ctxWithSpan, op);
 
     finishOk(span);
 
