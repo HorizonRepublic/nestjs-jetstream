@@ -131,8 +131,17 @@ const HEADER_DENYLIST = new Set<string>([
   'x-error',
   'x-subject',
   'x-caller-name',
-  'nats-msg-id',
 ]);
+
+/**
+ * Server-managed `Nats-*` headers (`Nats-Msg-Id`, `Nats-TTL`, `Nats-Schedule`,
+ * `Nats-Expected-*`, `Nats-Rollup`, …) are populated by the broker itself
+ * and never user-meaningful as `messaging.header.*` attributes — exposing
+ * them is at best noise and at worst leaks scheduling / dedup metadata
+ * into APM. Whitelisted via prefix so future `Nats-Foo` headers added by
+ * the server don't silently start surfacing.
+ */
+const isNatsServerHeader = (lower: string): boolean => lower.startsWith('nats-');
 
 /**
  * Read the headers that pass the allowlist matcher and return them as
@@ -149,6 +158,7 @@ export const captureMatchingHeaders = (
     const lower = key.toLowerCase();
 
     if (HEADER_DENYLIST.has(lower)) continue;
+    if (isNatsServerHeader(lower)) continue;
     if (!matcher(key)) continue;
     const value = headers.get(key);
 
