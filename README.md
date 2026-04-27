@@ -11,21 +11,11 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@horizon-republic/nestjs-jetstream">
-    <img src="https://img.shields.io/npm/v/@horizon-republic/nestjs-jetstream?style=flat-square&color=5DE39C&labelColor=1a1a1b" alt="npm"/>
-  </a>
-  <a href="https://codecov.io/github/HorizonRepublic/nestjs-jetstream">
-    <img src="https://img.shields.io/codecov/c/github/HorizonRepublic/nestjs-jetstream?style=flat-square&color=5DE39C&labelColor=1a1a1b&token=40IPSWFMT4" alt="coverage"/>
-  </a>
-  <a href="https://nodejs.org/">
-    <img src="https://img.shields.io/badge/node-%E2%89%A5%2020-7DD3FC?style=flat-square&labelColor=1a1a1b" alt="node"/>
-  </a>
-  <a href="https://nestjs.com/">
-    <img src="https://img.shields.io/badge/nestjs-10%2B-FFB347?style=flat-square&labelColor=1a1a1b" alt="nestjs"/>
-  </a>
-  <a href="https://opensource.org/licenses/MIT">
-    <img src="https://img.shields.io/badge/license-MIT-c0c0c0?style=flat-square&labelColor=1a1a1b" alt="license"/>
-  </a>
+  <a href="https://www.npmjs.com/package/@horizon-republic/nestjs-jetstream"><img src="https://img.shields.io/npm/v/@horizon-republic/nestjs-jetstream?style=flat-square&color=5DE39C&labelColor=1a1a1b&logo=npm&logoColor=white" alt="npm"/></a>
+  <a href="https://codecov.io/github/HorizonRepublic/nestjs-jetstream"><img src="https://img.shields.io/codecov/c/github/HorizonRepublic/nestjs-jetstream?style=flat-square&color=5DE39C&labelColor=1a1a1b&token=40IPSWFMT4&logo=codecov&logoColor=white" alt="coverage"/></a>
+  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%E2%89%A5%2020-7DD3FC?style=flat-square&labelColor=1a1a1b&logo=nodedotjs&logoColor=white" alt="node"/></a>
+  <a href="https://nestjs.com/"><img src="https://img.shields.io/badge/nestjs-10%2B-E0234E?style=flat-square&labelColor=1a1a1b&logo=nestjs&logoColor=white" alt="nestjs"/></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-c0c0c0?style=flat-square&labelColor=1a1a1b&logo=opensourceinitiative&logoColor=white" alt="license"/></a>
 </p>
 
 <p align="center">
