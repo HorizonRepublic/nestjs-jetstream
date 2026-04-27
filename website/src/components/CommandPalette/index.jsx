@@ -36,20 +36,20 @@ export default function CommandPalette({ items = DEFAULT_ITEMS }) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setOpen((v) => !v);
-      } else if (e.key === "Escape" && open) {
+      } else if (e.key === "Escape") {
         setOpen(false);
       }
     };
-    const onToggle = () => setOpen((v) => !v);
+    const onOpen = () => setOpen(true);
 
     window.addEventListener("keydown", onKey);
-    window.addEventListener("jt:open-command-palette", onToggle);
+    window.addEventListener("jt:open-command-palette", onOpen);
 
     return () => {
       window.removeEventListener("keydown", onKey);
-      window.removeEventListener("jt:open-command-palette", onToggle);
+      window.removeEventListener("jt:open-command-palette", onOpen);
     };
-  }, [open]);
+  }, []);
 
   // focus input when opened
   useEffect(() => {
@@ -92,8 +92,8 @@ export default function CommandPalette({ items = DEFAULT_ITEMS }) {
 
   const go = (item) => {
     setOpen(false);
-    if (item.to.startsWith("http")) {
-      window.open(item.to, "_blank", "noopener");
+    if (/^https?:\/\//i.test(item.to)) {
+      window.open(item.to, "_blank", "noopener,noreferrer");
     } else {
       history.push(`${baseUrlNoSlash}${item.to}`);
     }
@@ -122,25 +122,30 @@ export default function CommandPalette({ items = DEFAULT_ITEMS }) {
 
         <div className={styles.results}>
           {flat.length === 0 && <div className={styles.empty}>No results for &ldquo;{query}&rdquo;</div>}
-          {Object.entries(grouped).map(([section, list]) => (
-            <div key={section}>
-              <div className={styles.section}>{section}</div>
-              {list.map((item) => {
-                const idx = flat.indexOf(item);
-                return (
-                  <div
-                    key={item.label}
-                    className={`${styles.item} ${idx === activeIdx ? styles.active : ""}`}
-                    onMouseEnter={() => setActiveIdx(idx)}
-                    onClick={() => go(item)}
-                  >
-                    <span>{item.label}</span>
-                    <span className={styles.itemKind}>{item.kind}</span>
-                  </div>
-                );
-              })}
-            </div>
-          ))}
+          {(() => {
+            let runningIdx = 0;
+
+            return Object.entries(grouped).map(([section, list]) => (
+              <div key={section}>
+                <div className={styles.section}>{section}</div>
+                {list.map((item) => {
+                  const idx = runningIdx++;
+
+                  return (
+                    <div
+                      key={item.label}
+                      className={`${styles.item} ${idx === activeIdx ? styles.active : ""}`}
+                      onMouseEnter={() => setActiveIdx(idx)}
+                      onClick={() => go(item)}
+                    >
+                      <span>{item.label}</span>
+                      <span className={styles.itemKind}>{item.kind}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            ));
+          })()}
         </div>
 
         <div className={styles.foot}>

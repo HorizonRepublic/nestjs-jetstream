@@ -23,7 +23,7 @@ const parsePeerMajors = (range) => {
 };
 
 const NODE_MAJOR = parseNodeMajor(rootPkg.engines?.node);
-const NESTJS_MAJORS = '10+';
+const NESTJS_MAJORS = parsePeerMajors(rootPkg.peerDependencies?.['@nestjs/common']) ?? '10+';
 const FALLBACK_VERSION = rootPkg.version;
 
 const useLiveVersion = (initial) => {

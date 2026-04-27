@@ -89,7 +89,7 @@ The full configuration surface, every pattern, and the production checklist live
 
 ## Quality
 
-The transport is covered by an extensive test suite (unit and integration) — see the [codecove report](https://codecov.io/github/HorizonRepublic/nestjs-jetstream) above. 
+The transport is covered by an extensive test suite (unit and integration) — see the [Codecov report](https://codecov.io/github/HorizonRepublic/nestjs-jetstream) above. 
 
 Runnable demos for most supported patterns live under [`examples/`](./examples).
 

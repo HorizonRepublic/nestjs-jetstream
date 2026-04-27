@@ -43,7 +43,7 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
-      label: 'Production basics',
+      label: 'Production Basics',
       collapsed: false,
       items: [
         'getting-started/module-configuration',
