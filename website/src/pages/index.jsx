@@ -12,18 +12,8 @@ const parseNodeMajor = (range) => {
   return m ? m[1] : null;
 };
 
-const parsePeerMajors = (range) => {
-  const matches = [...String(range || '').matchAll(/\^(\d+)/g)];
-
-  if (!matches.length) return null;
-
-  const majors = matches.map((m) => parseInt(m[1], 10)).sort((a, b) => a - b);
-
-  return `${majors[0]}+`;
-};
-
 const NODE_MAJOR = parseNodeMajor(rootPkg.engines?.node);
-const NESTJS_MAJORS = parsePeerMajors(rootPkg.peerDependencies?.['@nestjs/common']) ?? '10+';
+const NESTJS_MAJORS = '10+';
 const FALLBACK_VERSION = rootPkg.version;
 
 const useLiveVersion = (initial) => {
