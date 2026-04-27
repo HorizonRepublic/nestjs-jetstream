@@ -12,6 +12,8 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@horizon-republic/nestjs-jetstream"><img src="https://img.shields.io/npm/v/@horizon-republic/nestjs-jetstream?style=flat&color=f5f5f5&labelColor=CB3837&logo=npm&logoColor=white" alt="npm"/></a>&nbsp;
+  <a href="https://www.npmjs.com/package/@horizon-republic/nestjs-jetstream"><img src="https://img.shields.io/npm/dm/@horizon-republic/nestjs-jetstream?style=flat&color=f5f5f5&labelColor=CB3837&logo=npm&logoColor=white" alt="npm downloads"/></a>&nbsp;
+  <a href="https://github.com/HorizonRepublic/nestjs-jetstream/actions/workflows/coverage.yml"><img src="https://img.shields.io/github/actions/workflow/status/HorizonRepublic/nestjs-jetstream/coverage.yml?branch=main&style=flat&color=f5f5f5&labelColor=181717&logo=githubactions&logoColor=white&label=ci" alt="CI"/></a>&nbsp;
   <a href="https://codecov.io/github/HorizonRepublic/nestjs-jetstream"><img src="https://img.shields.io/codecov/c/github/HorizonRepublic/nestjs-jetstream?style=flat&color=f5f5f5&labelColor=F01F7A&token=40IPSWFMT4&logo=codecov&logoColor=white" alt="coverage"/></a>&nbsp;
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%E2%89%A5%2020-f5f5f5?style=flat&labelColor=339933&logo=nodedotjs&logoColor=white" alt="node"/></a>&nbsp;
   <a href="https://nestjs.com/"><img src="https://img.shields.io/badge/nestjs-10%2B-f5f5f5?style=flat&labelColor=E0234E&logo=nestjs&logoColor=white" alt="nestjs"/></a>&nbsp;
