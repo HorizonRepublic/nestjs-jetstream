@@ -13,6 +13,9 @@ schema:
 
 # RPC (Request/Reply)
 
+> **Use when:** one service needs a response from another within a timeout window (queries, lookups, commands with results).
+> **You pick:** **Core** mode for sub-millisecond replies, **JetStream** mode for commands that must survive a restart. Same `@MessagePattern` either way.
+
 Your API gateway needs to fetch an order from the orders microservice. The client sends a command, the handler processes it, and the response travels back within a timeout window. This is request/reply (RPC), and the library offers two modes: **Core** for lowest latency, **JetStream** for persistence.
 
 ## Core Mode (Default)
@@ -76,9 +79,7 @@ export class OrdersController {
 }
 ```
 
-:::tip
-Handlers can return a plain value, a `Promise`, or an `Observable`. When returning an Observable, the transport takes the **first emitted value** as the response.
-:::
+Handlers can return a plain value, a `Promise`, or an `Observable`. For an Observable, the transport takes the **first emitted value** as the response.
 
 ### Error behavior
 
@@ -163,9 +164,7 @@ RPC commands are **never** redelivered via `nak()`. Retrying a command could cau
 | **Load balancing** | NATS queue group | JetStream consumer (one delivery) |
 | **Use case** | Low-latency queries, real-time lookups | Commands that must not be lost (payments, state changes) |
 
-:::tip Choosing a mode
 **Start with Core mode** (the default) for most use cases. Switch to JetStream mode when you need the guarantee that commands survive a brief server restart without the client seeing an error.
-:::
 
 ## Error Handling
 

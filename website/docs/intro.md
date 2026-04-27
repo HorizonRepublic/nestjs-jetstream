@@ -14,36 +14,11 @@ schema:
 
 # Introduction
 
-**`@horizon-republic/nestjs-jetstream`** is a NestJS NATS transport for production microservices. It wraps [NATS JetStream](https://docs.nats.io/nats-concepts/jetstream) under the same `@EventPattern` / `@MessagePattern` decorators you already use, so messages survive pod restarts, retries are bounded, dead letters have a home, and everything plugs into the standard NestJS lifecycle.
+NestJS' [built-in NATS transport](https://docs.nestjs.com/microservices/nats) loses messages on pod restart, doesn't retry on failure, and gives you nothing to debug with. [JetStream](https://docs.nats.io/nats-concepts/jetstream) fixes all three — but wiring it into NestJS by hand is a project on its own.
 
-The [built-in NestJS NATS transport](https://docs.nestjs.com/microservices/nats) is fire-and-forget: if a pod dies mid-handler the message is gone. Retries, replay, and dead letter handling are left to you. This library gives you all of that out of the box by putting JetStream underneath.
+**`nestjs-jetstream` is the swap.** Same `@EventPattern`, same `@MessagePattern`, same `client.emit()`. Durability, retries, dead letters, and W3C tracing — underneath, automatic.
 
 For a side-by-side with the built-in transport and the scenarios that force the switch, read [**Why JetStream?**](/docs/getting-started/why-jetstream).
-
-## Architecture at a glance
-
-```text
- Your NestJS Application
- +--------------------------+
- |  HTTP Controllers        |    client.emit() / client.send()
- |  (AppController)         | ──────────────────┐
- +--------------------------+                    │
-                                                 ▼
- +--------------------------+    ┌──────────────────────────────┐
- |  JetstreamModule         |    │   NATS Server + JetStream    │
- |  ├─ forRoot()            │◄──►│   ┌─ streams                │
- |  ├─ forFeature()         │    │   ├─ consumers              │
- |  └─ JetstreamStrategy    │    │   └─ subjects               │
- +--------------------------+    └──────────────────────────────┘
-                                                 │
- +--------------------------+                    │
- |  Microservice Controllers|◄───────────────────┘
- |  @EventPattern()         |    Messages pulled & routed
- |  @MessagePattern()       |    to handlers automatically
- +--------------------------+
-```
-
-The library sits between your NestJS application code and the NATS server. It provisions streams and consumers on startup, routes messages to decorated handlers, manages the connection lifecycle, and drains cleanly on shutdown. You interact with the standard NestJS abstractions (`ClientProxy`, `@Payload()`, `@Ctx()`) and the library translates them into JetStream operations.
 
 ## Where to start
 

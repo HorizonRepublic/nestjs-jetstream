@@ -13,6 +13,9 @@ schema:
 
 # Broadcast Events
 
+> **Use when:** every running service must react to the same message (cache invalidation, feature-flag flips, config reload).
+> **You get:** per-service durable consumers on a shared stream — late-joining replicas catch up automatically.
+
 Broadcast events implement **fan-out** delivery: every subscribing service receives a copy of each message. This is the opposite of [workqueue events](/docs/patterns/events) (one instance processes each message) and distinct from [ordered events](/docs/patterns/ordered-events) (every instance receives a full sequential replay).
 
 ## When to use
