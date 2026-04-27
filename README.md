@@ -11,11 +11,11 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@horizon-republic/nestjs-jetstream"><img src="https://img.shields.io/npm/v/@horizon-republic/nestjs-jetstream?style=flat&color=5DE39C&labelColor=1a1a1b&logo=npm&logoColor=white" alt="npm"/></a>&nbsp;
-  <a href="https://codecov.io/github/HorizonRepublic/nestjs-jetstream"><img src="https://img.shields.io/codecov/c/github/HorizonRepublic/nestjs-jetstream?style=flat&color=5DE39C&labelColor=1a1a1b&token=40IPSWFMT4&logo=codecov&logoColor=white" alt="coverage"/></a>&nbsp;
-  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%E2%89%A5%2020-7DD3FC?style=flat&labelColor=1a1a1b&logo=nodedotjs&logoColor=white" alt="node"/></a>&nbsp;
-  <a href="https://nestjs.com/"><img src="https://img.shields.io/badge/nestjs-10%2B-E0234E?style=flat&labelColor=1a1a1b&logo=nestjs&logoColor=white" alt="nestjs"/></a>&nbsp;
-  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-c0c0c0?style=flat&labelColor=1a1a1b&logo=opensourceinitiative&logoColor=white" alt="license"/></a>
+  <a href="https://www.npmjs.com/package/@horizon-republic/nestjs-jetstream"><img src="https://img.shields.io/npm/v/@horizon-republic/nestjs-jetstream?style=flat&color=f5f5f5&labelColor=CB3837&logo=npm&logoColor=white" alt="npm"/></a>&nbsp;
+  <a href="https://codecov.io/github/HorizonRepublic/nestjs-jetstream"><img src="https://img.shields.io/codecov/c/github/HorizonRepublic/nestjs-jetstream?style=flat&color=f5f5f5&labelColor=F01F7A&token=40IPSWFMT4&logo=codecov&logoColor=white" alt="coverage"/></a>&nbsp;
+  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%E2%89%A5%2020-f5f5f5?style=flat&labelColor=339933&logo=nodedotjs&logoColor=white" alt="node"/></a>&nbsp;
+  <a href="https://nestjs.com/"><img src="https://img.shields.io/badge/nestjs-10%2B-f5f5f5?style=flat&labelColor=E0234E&logo=nestjs&logoColor=white" alt="nestjs"/></a>&nbsp;
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-f5f5f5?style=flat&labelColor=3DA639&logo=opensourceinitiative&logoColor=white" alt="license"/></a>
 </p>
 
 <p align="center">
