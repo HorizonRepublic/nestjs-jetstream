@@ -8,7 +8,7 @@ schema:
   headline: "Workqueue Events — NestJS JetStream At-Least-Once Delivery"
   description: "NestJS NATS JetStream workqueue events with at-least-once delivery, automatic retry, publish-side deduplication, and dead letter handling."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-11"
+  dateModified: "2026-04-27"
 ---
 
 # Events (Workqueue)
@@ -96,6 +96,54 @@ export class NotificationsController {
 ```
 
 If `handleOrderCreated` throws, the message is automatically `nak`'d and redelivered. No try/catch needed — the transport handles retries.
+
+## Consumer naming and `@EventPattern` extras
+
+At-least-once delivery is **on by default** — every event handler registered with `@EventPattern` is automatically backed by a **durable** JetStream pull consumer with explicit ack. You don't enable it; you configure it.
+
+### Where the durable consumer name comes from
+
+The library does not take a per-handler durable name. Instead, **one durable consumer per service per stream kind** serves every matching `@EventPattern` in the module. The name is derived from the `name` you pass to `JetstreamModule.forRoot()`:
+
+```typescript
+JetstreamModule.forRoot({
+  name: 'orders', // ← this is the service name
+  servers: ['nats://localhost:4222'],
+});
+```
+
+| Stream kind | Generated durable consumer name |
+|---|---|
+| Workqueue events | `orders__microservice_ev-consumer` |
+| [Broadcast](/docs/patterns/broadcast) | `orders__microservice_broadcast-consumer` |
+| [Ordered](/docs/patterns/ordered-events) | `orders__microservice_ordered-consumer` |
+
+All `@EventPattern` handlers in the same `orders` service share the workqueue consumer above. JetStream load-balances across replicas of the same service via that single durable consumer, which is exactly what at-least-once delivery requires — multiple replicas, one cursor, ack semantics enforced server-side.
+
+If you need a different consumer for a specific subject, that's done by **giving it its own service**, not by overriding the decorator.
+
+### Decorator-level options (`@EventPattern` extras)
+
+The second argument to `@EventPattern` is the only thing you set per-handler:
+
+```typescript
+@EventPattern('user.created', { broadcast: true })
+async onUserCreated(@Payload() user: User) { /* ... */ }
+
+@EventPattern('order.status', { ordered: true })
+async onOrderStatus(@Payload() data: OrderStatus) { /* ... */ }
+
+@EventPattern('settings.changed', { meta: { tier: 'critical' } })
+async onSettingsChanged(@Payload() s: Settings) { /* ... */ }
+```
+
+| Extra | Type | Effect |
+|---|---|---|
+| `broadcast` | `boolean` | Routes the handler to the shared broadcast stream — every replica processes every message. See [Broadcast](/docs/patterns/broadcast). |
+| `ordered` | `boolean` | Backs the handler with an [ordered consumer](/docs/patterns/ordered-events) for strict per-key delivery. |
+| `meta` | `Record<string, unknown>` | Free-form metadata published to the [handler metadata registry](/docs/patterns/handler-metadata). |
+
+There is no `durable`, `ackWait`, or `maxDeliver` on the decorator — those are stream-and-consumer-level concerns, configured once on the module under [Custom configuration](#custom-configuration) below.
 
 ## Delivery semantics
 
