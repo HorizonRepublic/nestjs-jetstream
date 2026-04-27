@@ -1,0 +1,67 @@
+/* ============================================================================
+   nestjs-jetstream — design tokens
+   The single source of truth for color, type, spacing, radii.
+   Imported by custom.css. Don't reference these directly in app code —
+   reference the Infima vars in custom.css that map to these.
+   ============================================================================ */
+
+:root {
+  /* ---- type ---------------------------------------------------------- */
+  --jt-font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --jt-font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  /* ---- accent (shared light + dark) ---------------------------------- */
+  --jt-accent: oklch(0.86 0.19 145);          /* electric green */
+  --jt-accent-hover: oklch(0.82 0.21 145);
+  --jt-accent-soft: oklch(0.86 0.19 145 / 0.14);
+  --jt-accent-fg: oklch(0.20 0.05 145);       /* on accent */
+
+  /* ---- callouts ------------------------------------------------------ */
+  --jt-info: oklch(0.78 0.10 240);
+  --jt-warn: oklch(0.82 0.14 80);
+  --jt-danger: oklch(0.70 0.20 25);
+
+  /* ---- radii --------------------------------------------------------- */
+  --jt-radius-sm: 4px;
+  --jt-radius-md: 6px;
+  --jt-radius-lg: 10px;
+  --jt-radius-xl: 14px;
+}
+
+/* ---- DARK (default) -------------------------------------------------- */
+[data-theme="dark"] {
+  --jt-bg-0: oklch(0.155 0.007 60);   /* page background */
+  --jt-bg-1: oklch(0.185 0.007 60);   /* cards, navbar */
+  --jt-bg-2: oklch(0.215 0.007 60);   /* code blocks, inputs */
+  --jt-bg-3: oklch(0.245 0.007 60);   /* hover, raised */
+
+  --jt-line-1: oklch(0.28 0.006 60);  /* hairlines */
+  --jt-line-2: oklch(0.34 0.006 60);  /* stronger borders */
+
+  --jt-fg-0: oklch(0.96 0.005 90);    /* primary text */
+  --jt-fg-1: oklch(0.78 0.005 90);    /* body */
+  --jt-fg-2: oklch(0.60 0.005 90);    /* secondary */
+  --jt-fg-3: oklch(0.46 0.005 90);    /* muted, captions */
+}
+
+/* ---- LIGHT ----------------------------------------------------------- */
+[data-theme="light"] {
+  --jt-bg-0: oklch(0.985 0.003 90);
+  --jt-bg-1: oklch(1.000 0 0);
+  --jt-bg-2: oklch(0.965 0.003 90);
+  --jt-bg-3: oklch(0.940 0.004 90);
+
+  --jt-line-1: oklch(0.91 0.004 90);
+  --jt-line-2: oklch(0.84 0.005 90);
+
+  --jt-fg-0: oklch(0.18 0.006 60);
+  --jt-fg-1: oklch(0.30 0.006 60);
+  --jt-fg-2: oklch(0.46 0.005 90);
+  --jt-fg-3: oklch(0.58 0.005 90);
+
+  /* darker accent for AA on light */
+  --jt-accent: oklch(0.62 0.18 145);
+  --jt-accent-hover: oklch(0.56 0.20 145);
+  --jt-accent-soft: oklch(0.62 0.18 145 / 0.10);
+  --jt-accent-fg: oklch(0.99 0 0);
+}

@@ -8,76 +8,57 @@ schema:
   headline: "Header Contract — NATS Message Headers Used by the Transport"
   description: "Stable contract for NATS message headers the transport reads and writes."
   datePublished: "2026-04-24"
-  dateModified: "2026-04-24"
+  dateModified: "2026-04-27"
 ---
 
 # Header Contract
 
-The transport reads and writes a defined set of NATS message headers. This page is the canonical reference for external publishers (Go, Python, Rust, or any other language) that interoperate with services using the library.
+Every NATS message header the transport touches — in one place. The contract is **stable across minor versions**; header names change only on major bumps. External publishers (Go, Python, Rust, …) only need to honour this page to interoperate with NestJS services using the library.
 
-The contract is **stable across minor versions**. Header names will not change without a major version bump.
+## At a glance
 
-## Headers the transport reads
-
-| Header             | Direction            | Source             | Purpose                                                |
-|--------------------|----------------------|--------------------|--------------------------------------------------------|
-| `traceparent`      | Inbound              | W3C Trace Context  | Parent span id used to link the consume span to the upstream producer. Read on every incoming message. |
-| `tracestate`       | Inbound              | W3C Trace Context  | Vendor-specific trace state. Forwarded as-is.          |
-| `baggage`          | Inbound              | W3C Baggage        | Application-level context propagation. Forwarded.      |
-| `Nats-Msg-Id`      | Inbound              | NATS standard      | Message-id deduplication. Surfaces on consume spans as the standard `messaging.message.id` attribute, not via the `messaging.header.*` capture path. |
-| `x-correlation-id` | Inbound (RPC)        | Library-internal   | Required on RPC requests; identifies the response.     |
-| `x-reply-to`       | Inbound (RPC)        | Library-internal   | Required on RPC requests; specifies the reply subject. |
-| `x-error`          | Inbound (RPC reply)  | Library-internal   | When `true`, marks the reply payload as an error envelope. |
-
-## Headers the transport writes
-
-| Header             | Direction             | Destination        | Purpose                                              |
-|--------------------|-----------------------|--------------------|------------------------------------------------------|
-| `traceparent`      | Outbound              | W3C Trace Context  | Injected into every published message so downstream consumers continue the trace. |
-| `tracestate`       | Outbound              | W3C Trace Context  | Forwarded when present in active context.            |
-| `baggage`          | Outbound              | W3C Baggage        | Forwarded when present in active context.            |
-| `Nats-Msg-Id`      | Outbound              | NATS standard      | Set when the user supplies a message id via `JetstreamRecordBuilder.setMessageId()`. |
-| `x-correlation-id` | Outbound (RPC)        | Library-internal   | Generated per RPC request.                           |
-| `x-reply-to`       | Outbound (RPC)        | Library-internal   | Inbox subject for the response.                      |
-| `x-error`          | Outbound (RPC reply)  | Library-internal   | Set to `true` when the handler threw or the reply represents an error. |
-| `x-subject`        | Outbound              | Library-internal   | Original subject the message was published to.       |
-| `x-caller-name`    | Outbound              | Library-internal   | Internal name of the service that sent the message.  |
+| Header | Read | Write | Source | What it does |
+|---|:---:|:---:|---|---|
+| `traceparent` | ✓ | ✓ | W3C Trace Context | Links the consume span to the upstream producer span. |
+| `tracestate` | ✓ | ✓ | W3C Trace Context | Vendor-specific trace state. Forwarded as-is. |
+| `baggage` | ✓ | ✓ | W3C Baggage | App-level context propagation. Forwarded. |
+| `Nats-Msg-Id` | ✓ | ✓ | NATS standard | Dedup key. Surfaces on consume spans as `messaging.message.id`. |
+| `x-correlation-id` | RPC | RPC | Library | Identifies the matching RPC reply. |
+| `x-reply-to` | RPC | RPC | Library | Inbox subject for the RPC reply. |
+| `x-error` | RPC reply | RPC reply | Library | Marks the reply payload as an error envelope. |
+| `x-subject` | — | ✓ | Library | Original subject the message was published to. |
+| `x-caller-name` | — | ✓ | Library | Internal name of the sending service. |
+| `x-dead-letter-reason` | — | DLQ | Library | DLQ tracking — exhausted-retry reason. |
+| `x-original-subject` | — | DLQ | Library | DLQ tracking — original target subject. |
+| `x-original-stream` | — | DLQ | Library | DLQ tracking — original stream name. |
+| `x-failed-at` | — | DLQ | Library | DLQ tracking — ISO 8601 failure timestamp. |
+| `x-delivery-count` | — | DLQ | Library | DLQ tracking — delivery attempt counter. |
 
 Header names are matched **case-insensitively** per the W3C Trace Context specification.
 
-## Reserved header names
+## Reserved (you can't set these)
 
-The transport reserves specific header names for internal use. Names are matched case-insensitively.
+Calling `JetstreamRecordBuilder.setHeader()` with any of these throws a reserved-header error — they are populated by the library at publish time:
 
-**Rejected at `JetstreamRecordBuilder.setHeader()` (`RESERVED_HEADERS`):**
+- `x-correlation-id` · `x-reply-to` · `x-error`
 
-Setting any of these via the builder throws a reserved-header error (`Header "<key>" is reserved by the JetStream transport and cannot be set manually.`). They are populated by the library at publish time.
+The builder accepts values for these next two, but they're **silently overwritten** at publish time:
 
-- `x-correlation-id` — RPC request identifier
-- `x-reply-to` — RPC response inbox subject
-- `x-error` — RPC error reply marker
+- `x-subject` · `x-caller-name`
 
-**Silently overwritten by the transport at publish time:**
+User-defined headers should use a distinct prefix or name (`x-tenant-id`, `x-request-id`, `application-foo`) and avoid the reserved names above.
 
-Builder accepts values for these, but the value is replaced by the transport's own during `publish` / `send`, so supplying them has no effect.
+## NATS server-interpreted (`Nats-*` prefix)
 
-- `x-subject` — original subject (transport pre-routing metadata)
-- `x-caller-name` — internal service name of the publisher
+These are interpreted by the NATS server itself, not by this library:
 
-**Dead-letter metadata (written when a message is republished to the DLQ stream):**
-
-- `x-dead-letter-reason`, `x-original-subject`, `x-original-stream`, `x-failed-at`, `x-delivery-count`
-
-**NATS server-interpreted (`Nats-*` prefix):**
-
-- `Nats-Msg-Id` — publisher-supplied deduplication key. Set it via `JetstreamRecordBuilder.setMessageId()` from this library, or directly on the headers map from external publishers (Go, Python, …). Do not set it both ways on the same publish — pick one.
-- `Nats-TTL`, `Nats-Schedule`, `Nats-Expected-*`, `Nats-Rollup`, … — interpreted by the NATS server, not by the library. Set them per the NATS docs when you need their semantics; otherwise leave them alone.
-
-User-defined headers should use a distinct prefix or name (e.g. `x-tenant-id`, `x-request-id`, `application-foo`) and avoid the reserved names above.
+- **`Nats-Msg-Id`** — publisher-supplied deduplication key. Set via `JetstreamRecordBuilder.setMessageId()` (from this library) or directly on the headers map (external publishers). Do not set it both ways on the same publish.
+- **`Nats-TTL`, `Nats-Schedule`, `Nats-Expected-*`, `Nats-Rollup`, …** — set them per the [NATS docs](https://docs.nats.io/) when you need their semantics; otherwise leave them alone.
 
 ## Cross-language examples
 
-### Publishing from Go (with OpenTelemetry)
+<details>
+<summary>Publishing from Go (with OpenTelemetry)</summary>
 
 ```go
 import (
@@ -99,9 +80,12 @@ js.PublishMsg(&nats.Msg{
 })
 ```
 
-The NestJS consumer will pick up `traceparent` from the headers and create a CONSUMER span as a child of the Go producer span. The trace appears as a single end-to-end flow in your APM.
+The NestJS consumer picks up `traceparent` from the headers and creates a CONSUMER span as a child of the Go producer span. The trace appears as a single end-to-end flow in your APM.
 
-### Publishing from Python (with OpenTelemetry)
+</details>
+
+<details>
+<summary>Publishing from Python (with OpenTelemetry)</summary>
 
 ```python
 from opentelemetry import propagate
@@ -117,9 +101,12 @@ await js.publish(
 )
 ```
 
-### Reading the trace context manually
+</details>
 
-If you cannot use OpenTelemetry on the consumer side, you can still inspect the W3C trace headers yourself. The `traceparent` header has the form:
+<details>
+<summary>Reading <code>traceparent</code> manually (no OTel)</summary>
+
+The header has the form:
 
 ```text
 00-<32-hex-trace-id>-<16-hex-parent-span-id>-<2-hex-flags>
@@ -128,6 +115,8 @@ If you cannot use OpenTelemetry on the consumer side, you can still inspect the 
 Example: `00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01`.
 
 Per the [W3C Trace Context specification](https://www.w3.org/TR/trace-context/), the version field is fixed at `00` (current) and the flags field's lowest bit indicates whether the trace is sampled. See the spec for the full grammar.
+
+</details>
 
 ## Compatibility
 

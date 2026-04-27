@@ -1,103 +1,98 @@
-<div align="center">
+<p align="center">
+  <img src="website/static/img/logo.svg" width="80" alt="nestjs-jetstream"/>
+</p>
 
-# @horizon-republic/nestjs-jetstream
+<h1 align="center">nestjs-jetstream</h1>
 
-**Ship reliable microservices with NATS JetStream and NestJS.**
-Events, broadcast, ordered delivery, and RPC — with two lines of config.
+<p align="center">
+  The NATS JetStream transport NestJS microservices need —
+  durable, retried, traced — under the same <code>@EventPattern</code>
+  and <code>@MessagePattern</code> decorators you already use.
+</p>
 
-[![npm version](https://img.shields.io/npm/v/@horizon-republic/nestjs-jetstream.svg)](https://www.npmjs.com/package/@horizon-republic/nestjs-jetstream)
-[![codecov](https://codecov.io/github/HorizonRepublic/nestjs-jetstream/graph/badge.svg?token=40IPSWFMT4)](https://codecov.io/github/HorizonRepublic/nestjs-jetstream)
-[![CI](https://github.com/HorizonRepublic/nestjs-jetstream/actions/workflows/coverage.yml/badge.svg)](https://github.com/HorizonRepublic/nestjs-jetstream/actions)
-[![Documentation](https://img.shields.io/badge/docs-online-brightgreen.svg)](https://horizonrepublic.github.io/nestjs-jetstream/)
+<p align="center">
+  <a href="https://www.npmjs.com/package/@horizon-republic/nestjs-jetstream">
+    <img src="https://img.shields.io/npm/v/@horizon-republic/nestjs-jetstream?style=flat-square&color=5DE39C&labelColor=1a1a1b" alt="npm"/>
+  </a>
+  <a href="https://codecov.io/github/HorizonRepublic/nestjs-jetstream">
+    <img src="https://img.shields.io/codecov/c/github/HorizonRepublic/nestjs-jetstream?style=flat-square&color=5DE39C&labelColor=1a1a1b&token=40IPSWFMT4" alt="coverage"/>
+  </a>
+  <a href="https://nodejs.org/">
+    <img src="https://img.shields.io/badge/node-%E2%89%A5%2020-7DD3FC?style=flat-square&labelColor=1a1a1b" alt="node"/>
+  </a>
+  <a href="https://nestjs.com/">
+    <img src="https://img.shields.io/badge/nestjs-10%2B-FFB347?style=flat-square&labelColor=1a1a1b" alt="nestjs"/>
+  </a>
+  <a href="https://opensource.org/licenses/MIT">
+    <img src="https://img.shields.io/badge/license-MIT-c0c0c0?style=flat-square&labelColor=1a1a1b" alt="license"/>
+  </a>
+</p>
 
-[![Node.js](https://img.shields.io/node/v/@horizon-republic/nestjs-jetstream.svg)](https://nodejs.org)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.7%2B-blue.svg)](https://www.typescriptlang.org)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
-</div>
+<p align="center">
+  <a href="https://horizonrepublic.github.io/nestjs-jetstream/"><b>Documentation</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://horizonrepublic.github.io/nestjs-jetstream/docs/getting-started/quick-start">Quick Start</a>
+  &nbsp;·&nbsp;
+  <a href="https://horizonrepublic.github.io/nestjs-jetstream/docs/reference/api">API Reference</a>
+</p>
 
 ---
 
-## Why this library?
+## Why this exists
 
-NestJS ships with a NATS transport, but it's fire-and-forget. Messages vanish if no one's listening. This library adds JetStream — so your messages **survive restarts**, **retry on failure**, and **replay for new consumers**.
+NestJS' [built-in NATS transport](https://docs.nestjs.com/microservices/nats) loses messages on pod restart, doesn't retry on failure, and gives you nothing to debug with. JetStream fixes all three — but wiring it into NestJS by hand is a project on its own.
 
-You keep writing `@EventPattern()` and `@MessagePattern()`. The library handles streams, consumers, and subjects automatically.
+**This library is the swap.** Same `@EventPattern`, same `@MessagePattern`, same `client.emit()`. Durability, retries, and tracing underneath.
 
-## What's inside
+## What you get
 
-**Delivery modes** — workqueue (one consumer), broadcast (all consumers), ordered (sequential), and dual-mode RPC (Core or JetStream-backed).
+- **At-least-once delivery** — every event acked after the handler resolves; bounded retries with exponential backoff.
+- **Broadcast** — one message reaches every running pod via per-service durable consumers.
+- **Ordered delivery** — sequential per partition key without giving up horizontal scale.
+- **RPC** — Core for speed, JetStream for durability — same @MessagePattern either way.
+- **DLQ** — typed sink with original headers preserved after retries are exhausted.
+- **Scheduled messages, per-message TTL, health checks, graceful shutdown** — all the production levers.
+- **OpenTelemetry-compatible** — W3C `traceparent` propagated through every hop.
 
-**Operations** — dead letter queue stream, health indicator for Kubernetes probes, graceful shutdown with drain, lifecycle hooks for observability.
+## Install
 
-**Flexible** — pluggable codecs (JSON/MsgPack/Protobuf), per-stream configuration, publisher-only mode for API gateways.
+```bash
+npm i @horizon-republic/nestjs-jetstream
+```
 
 ## Quick Start
 
-```bash
-npm install @horizon-republic/nestjs-jetstream
-```
-
-```typescript
+```ts
 // app.module.ts
 @Module({
   imports: [
-    JetstreamModule.forRoot({ name: 'orders', servers: ['nats://localhost:4222'] }),
-    JetstreamModule.forFeature({ name: 'orders' }),
+    JetstreamModule.forRoot({ servers: ['nats://localhost:4222'] }),
   ],
 })
 export class AppModule {}
+```
 
+```ts
 // orders.controller.ts
 @Controller()
 export class OrdersController {
-  constructor(@Inject('orders') private client: ClientProxy) {}
-
-  @EventPattern('order.created')
-  handle(@Payload() data: { orderId: number }) {
-    console.log('Order created:', data.orderId);
-  }
-
-  @Get('emit')
-  emit() {
-    return this.client.emit('order.created', { orderId: 42 });
+  @EventPattern('orders.created')
+  async onCreated(@Payload() order: Order) {
+    await this.billing.charge(order);
   }
 }
-
-// main.ts — wire the JetStream microservice transport into the HTTP app
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  app.connectMicroservice(
-    { strategy: app.get(JetstreamStrategy) },
-    { inheritAppConfig: true },
-  );
-  app.enableShutdownHooks();
-  await app.startAllMicroservices();
-  await app.listen(3000);
-}
-void bootstrap();
 ```
 
-## Documentation
+That's it. At-least-once. Retries on throw. Traced end-to-end.
 
-**[Read the full documentation →](https://horizonrepublic.github.io/nestjs-jetstream/)**
+The full configuration surface, every pattern, and the production checklist live in the [documentation](https://horizonrepublic.github.io/nestjs-jetstream/).
 
-| Section | What you'll learn |
-|---------|-------------------|
-| [Getting Started](https://horizonrepublic.github.io/nestjs-jetstream/docs/getting-started/installation) | Installation, module setup, first handler |
-| [Messaging Patterns](https://horizonrepublic.github.io/nestjs-jetstream/docs/patterns/rpc) | RPC, Events, Broadcast, Ordered Events |
-| [Guides](https://horizonrepublic.github.io/nestjs-jetstream/docs/guides/record-builder) | Handler context, DLQ, health checks, performance tuning |
-| [Migration](https://horizonrepublic.github.io/nestjs-jetstream/docs/guides/migration) | From built-in NATS transport or between versions |
-| [API Reference](https://horizonrepublic.github.io/nestjs-jetstream/docs/reference/api/) | Full TypeDoc-generated API |
+## Quality
 
-## Links
+The transport is covered by an extensive test suite (unit and integration) — see the [codecove report](https://codecov.io/github/HorizonRepublic/nestjs-jetstream) above. 
 
-- [npm](https://www.npmjs.com/package/@horizon-republic/nestjs-jetstream)
-- [GitHub](https://github.com/HorizonRepublic/nestjs-jetstream)
-- [Documentation](https://horizonrepublic.github.io/nestjs-jetstream/)
-- [Issues](https://github.com/HorizonRepublic/nestjs-jetstream/issues)
-- [Discussions](https://github.com/HorizonRepublic/nestjs-jetstream/discussions)
+Runnable demos for most supported patterns live under [`examples/`](./examples).
 
-## License
+---
 
-MIT
+MIT · © 2026 Horizon Republic · [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)

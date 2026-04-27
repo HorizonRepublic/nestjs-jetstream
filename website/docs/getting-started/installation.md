@@ -76,8 +76,8 @@ To verify it's running:
 docker logs nats | head -5
 ```
 
-:::tip Docker Compose
-For development, you can add NATS to your `docker-compose.yml`:
+<details>
+<summary>NATS via Docker Compose for local development</summary>
 
 ```yaml title="docker-compose.yml"
 services:
@@ -90,7 +90,8 @@ services:
 ```
 
 The monitoring port (`8222`) gives you access to the [NATS monitoring endpoint](https://docs.nats.io/running-a-nats-service/configuration/monitoring) for debugging.
-:::
+
+</details>
 
 ## What's next?
 
