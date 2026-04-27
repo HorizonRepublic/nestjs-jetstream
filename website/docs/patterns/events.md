@@ -13,6 +13,9 @@ schema:
 
 # Events (Workqueue)
 
+> **Use when:** exactly one consumer instance should handle each message (background jobs, billing, anything that shouldn't run twice).
+> **You get:** at-least-once delivery, retries on throw, and a dead-letter queue when retries run out.
+
 Workqueue events are fire-and-forget messages where **exactly one** handler instance processes each message. This is the default event delivery model. Contrast with [broadcast](/docs/patterns/broadcast) (all instances receive every message) and [ordered events](/docs/patterns/ordered-events) (strict sequential replay).
 
 ## When to use
@@ -34,9 +37,7 @@ The workqueue flow, step by step:
 
 Because the stream uses **workqueue retention**, a message is automatically deleted once acknowledged — keeping the stream compact.
 
-:::info Parallel handler execution
-Workqueue event handlers run concurrently using RxJS `mergeMap`. Multiple messages can be processed in parallel, limited by the consumer's `max_ack_pending` setting (default: 100).
-:::
+Handlers run concurrently via RxJS `mergeMap`, bounded by the consumer's `max_ack_pending` (default: 100). Multiple messages can be in-flight at once.
 
 ## Code examples
 
@@ -94,9 +95,7 @@ export class NotificationsController {
 }
 ```
 
-:::tip Handler errors trigger retry
-If `handleOrderCreated` throws an exception, the message is automatically `nak`'d and redelivered. You don't need try/catch for retry logic — the transport handles it.
-:::
+If `handleOrderCreated` throws, the message is automatically `nak`'d and redelivered. No try/catch needed — the transport handles retries.
 
 ## Delivery semantics
 
@@ -216,9 +215,7 @@ This prevents duplicate publishes in scenarios like:
 - The publisher retries after a network timeout (but the first publish actually succeeded).
 - A controller endpoint is called twice with the same data.
 
-:::info Dedup window defaults
-The event stream's default `duplicate_window` is **2 minutes**. Messages with the same ID published within this window are deduplicated. To extend it, override `events.stream.duplicate_window` in `forRoot()` — for example `duplicate_window: toNanos(5, 'minutes')`. See [Custom configuration](#custom-configuration) for the full override pattern.
-:::
+The default `duplicate_window` is **2 minutes** — messages with the same ID published within that window are deduplicated. To extend it, override `events.stream.duplicate_window` in `forRoot()` (e.g. `duplicate_window: toNanos(5, 'minutes')`). See [Custom configuration](#custom-configuration) for the full override pattern.
 
 When no message ID is set explicitly, the transport generates a random UUID for each publish — meaning no deduplication occurs by default. Always set a deterministic message ID when duplicate publishes are a concern.
 

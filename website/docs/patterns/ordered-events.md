@@ -17,6 +17,9 @@ import Since from '@site/src/components/Since';
 
 # Ordered Events
 
+> **Use when:** every replica needs to rebuild its own state from a strict, replayable event sequence (CQRS read models, in-memory caches, projections).
+> **You get:** ephemeral ordered consumers — each replica reads the full stream in order, independently.
+
 ## The problem: rebuilding state from event history
 
 Imagine you're building an e-commerce platform. Every time an order changes status — created, paid, shipped, delivered — you publish an event. Downstream, a projections service rebuilds a read model (an Elasticsearch index, a Redis cache, a reporting database) from these events.
@@ -228,9 +231,19 @@ export class ProjectionsController {
 
 The deliver policy controls **where the ordered consumer starts reading** when it is created (or recreated after a restart). This is the most important configuration decision for ordered events.
 
-Each policy serves a different architectural pattern. Choose based on how your service needs to handle startup and restarts.
+| Policy | Replays on restart? | Misses messages during downtime? | External state needed? | Best for |
+|---|---|---|---|---|
+| **All** (default) | Yes (full stream) | No | No | Read model rebuild, event sourcing |
+| **New** | No | Yes | No | Real-time dashboards, live feeds |
+| **Last** | Yes (1 message) | Partially | No | Config initialization |
+| **LastPerSubject** | Yes (1 per subject) | Partially | No | Per-entity state maps |
+| **StartSequence** | From offset | No (if tracked) | Yes (offset DB) | Resumable projections |
+| **StartTime** | From timestamp | Depends | Optional | Debugging, time-based recovery |
 
-### All (default)
+Each policy is detailed below — open the one that matches your scenario.
+
+<details>
+<summary><b>All</b> — full replay on every start <i>(default)</i></summary>
 
 **Scenario:** You're building a CQRS read model that must reflect the complete event history. An Elasticsearch index, a materialized view in PostgreSQL, or a Redis cache that's fully derived from events.
 
@@ -251,15 +264,16 @@ JetstreamModule.forRoot({
 
 **Restart behavior:** Full replay from the beginning of the stream. Your handlers must be **idempotent** — processing the same event twice must produce the same result.
 
-:::tip When to use
-Use `All` when your service builds state entirely from events and can afford to replay on startup. This is the simplest model — no external offset tracking needed.
-:::
+**When to use:** services that build state entirely from events and can afford to replay on startup. The simplest model — no external offset tracking needed.
 
 :::caution Replay volume
 With `All` policy, a service that restarts after running for 7 days will replay 7 days of events before it's caught up. Consider the time and resource cost of this replay. If it's too expensive, look at `StartSequence` with external offset tracking, or reduce `max_age`.
 :::
 
-### New
+</details>
+
+<details>
+<summary><b>New</b> — start from "now", skip backlog</summary>
 
 **Scenario:** A real-time dashboard that shows live order activity. Historical data is loaded from a database on startup — you only need events published *after* the service starts.
 
@@ -283,7 +297,10 @@ JetstreamModule.forRoot({
 If your service restarts and messages were published during downtime, those messages are lost from this consumer's perspective. Use `New` only when missing messages during downtime is acceptable (dashboards, metrics, monitoring).
 :::
 
-### Last
+</details>
+
+<details>
+<summary><b>Last</b> — only the most recent message, then live</summary>
 
 **Scenario:** A configuration cache service that needs the latest config value on startup, then listens for updates. The stream contains configuration snapshots — you only need the most recent one to initialize, then you track changes going forward.
 
@@ -303,11 +320,12 @@ JetstreamModule.forRoot({
 
 **Restart behavior:** On restart, delivers the last message again (which may be the same one from the previous run, or a newer one published since). Then continues with live messages.
 
-:::tip Single-subject streams
 `Last` works best when your stream has a single logical "latest value" concept. If your stream has multiple subjects (e.g., `config.database`, `config.cache`, `config.auth`), consider `LastPerSubject` instead.
-:::
 
-### LastPerSubject
+</details>
+
+<details>
+<summary><b>LastPerSubject</b> — latest per entity, then live</summary>
 
 **Scenario:** An in-memory status map that tracks the latest state of every entity. The stream contains per-entity subjects like `order.status.123`, `order.status.456`. On startup, you need the latest status for *each* order, then you track updates in real time.
 
@@ -327,11 +345,12 @@ JetstreamModule.forRoot({
 
 **Restart behavior:** Same as initial startup — delivers the latest per subject, then live messages.
 
-:::info Subject granularity matters
 The "per subject" grouping is based on the full NATS subject. If you publish to `ordered:order.status` (a single subject), `LastPerSubject` behaves like `Last`. To get per-entity delivery, publish to `ordered:order.status.{orderId}` and register your handler with a wildcard or specific patterns.
-:::
 
-### StartSequence
+</details>
+
+<details>
+<summary><b>StartSequence</b> — resume from a tracked offset</summary>
 
 **Scenario:** A resumable projection that stores its last-processed sequence number in an external database. On restart, it reads the stored offset and resumes from exactly that point — no re-processing, no gaps.
 
@@ -378,11 +397,12 @@ async handleOrderStatus(
 }
 ```
 
-:::tip Exactly-once with external state
-`StartSequence` is the only deliver policy that enables exactly-once processing semantics (when combined with idempotent handlers and transactional offset tracking). It's the most complex pattern but the most powerful.
-:::
+`StartSequence` is the only deliver policy that enables exactly-once processing semantics (when combined with idempotent handlers and transactional offset tracking). The most complex pattern, but the most powerful.
 
-### StartTime
+</details>
+
+<details>
+<summary><b>StartTime</b> — replay from a wall-clock timestamp</summary>
 
 **Scenario:** Debugging a production issue. You know the bug was introduced around 14:00 UTC and you want to replay the last 2 hours of events against a fixed handler to verify the fix.
 
@@ -418,16 +438,7 @@ useFactory: () => ({
 ```
 :::
 
-### Deliver policy decision matrix
-
-| Policy | Replays on restart? | Misses messages during downtime? | External state needed? | Best for |
-|---|---|---|---|---|
-| **All** | Yes (full stream) | No | No | Read model rebuild, event sourcing |
-| **New** | No | Yes | No | Real-time dashboards, live feeds |
-| **Last** | Yes (1 message) | Partially | No | Config initialization |
-| **LastPerSubject** | Yes (1 per subject) | Partially | No | Per-entity state maps |
-| **StartSequence** | From offset | No (if tracked) | Yes (offset DB) | Resumable projections |
-| **StartTime** | From timestamp | Depends | Optional | Debugging, time-based recovery |
+</details>
 
 ## Configuration reference
 
@@ -496,7 +507,10 @@ This is by design — ordered consumers are meant for per-instance state buildin
 
 ### Single-instance for exclusive processing
 
-If you need **exactly one handler** processing ordered events across your entire cluster (e.g., writing to a single external database), deploy the service as a single replica:
+If you need **exactly one handler** processing ordered events across your entire cluster (e.g., writing to a single external database), deploy the service as a single replica.
+
+<details>
+<summary>Kubernetes deployment example</summary>
 
 ```yaml title="kubernetes deployment"
 apiVersion: apps/v1
@@ -504,6 +518,8 @@ kind: Deployment
 spec:
   replicas: 1  # Single instance for exclusive ordered event processing
 ```
+
+</details>
 
 There is no built-in mechanism for leader election or exclusive ordered consumption. If you need distributed exclusive processing with ordering guarantees, consider using workqueue events with a single-partition approach or an external coordination mechanism.
 
@@ -583,7 +599,7 @@ This workaround is invisible to your application code. It's documented here for 
 
 ### No partial replay
 
-Ordered consumers do not support "resume from where I left off" natively. If the consumer disconnects and reconnects, the client recreates it — but the starting position depends on the configured deliver policy, not on the last message processed. For resumable processing, use `DeliverPolicy.StartSequence` with external offset tracking (see the [StartSequence section](#startsequence) above).
+Ordered consumers do not support "resume from where I left off" natively. If the consumer disconnects and reconnects, the client recreates it — but the starting position depends on the configured deliver policy, not on the last message processed. For resumable processing, use `DeliverPolicy.StartSequence` with external offset tracking (see the **StartSequence** entry in [Deliver policy deep dive](#deliver-policy-deep-dive)).
 
 ### Stream name is derived automatically
 
