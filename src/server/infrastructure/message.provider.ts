@@ -17,7 +17,6 @@ import {
   repeat,
   Subject,
   takeUntil,
-  tap,
   timer,
 } from 'rxjs';
 
@@ -187,7 +186,10 @@ export class MessageProvider {
   private createFlow(kind: StreamKind, info: ConsumerInfo): Observable<void> {
     const target$ = this.getTargetSubject(kind);
 
-    return this.createSelfHealingFlow(() => this.consumeOnce(kind, info, target$), info.name);
+    return this.createSelfHealingFlow(
+      (onConnected) => this.consumeOnce(kind, info, target$, onConnected),
+      info.name,
+    );
   }
 
   /** Single iteration: get consumer -> pull messages -> emit to subject. */
@@ -195,6 +197,7 @@ export class MessageProvider {
     kind: StreamKind,
     info: ConsumerInfo,
     target$: Subject<JsMsg>,
+    onConnected: () => void,
   ): Promise<void> {
     const js = this.connection.getJetStreamClient();
 
@@ -235,6 +238,10 @@ export class MessageProvider {
 
     this.activeIterators.add(messages);
     this.monitorConsumerHealth(messages, consumerName);
+    // Signal recovery now — consume() succeeded, the consumer is live.
+    // Doing it after `await messages.closed()` would log "recovered" only
+    // when the stream ends, which is the wrong moment.
+    onConnected();
 
     try {
       await messages.closed();
@@ -307,7 +314,7 @@ export class MessageProvider {
     consumerOpts: Partial<OrderedConsumerOptions>,
   ): Observable<void> {
     return this.createSelfHealingFlow(
-      () => this.consumeOrderedOnce(streamName, consumerOpts),
+      (onConnected) => this.consumeOrderedOnce(streamName, consumerOpts, onConnected),
       StreamKind.Ordered,
       (err) => {
         // Fail fast on first error so listen() propagates the failure.
@@ -323,16 +330,28 @@ export class MessageProvider {
 
   /** Shared self-healing flow: defer -> retry with exponential backoff on error/completion. */
   private createSelfHealingFlow(
-    source: () => Promise<void>,
+    source: (onConnected: () => void) => Promise<void>,
     label: string,
     onFirstError?: (err: unknown) => void,
   ): Observable<void> {
     let consecutiveFailures = 0;
 
-    return defer(source).pipe(
-      tap(() => {
-        consecutiveFailures = 0;
-      }),
+    // Called from inside `source()` once the consumer is actually live
+    // (right after `consumer.consume()` resolves, before `messages.closed()`).
+    // The log + event are skipped on the very first successful start
+    // (no preceding failures) to avoid noise.
+    const onConnected = (): void => {
+      if (consecutiveFailures > 0) {
+        const attempts = consecutiveFailures;
+
+        this.logger.log(`Consumer ${label} recovered after ${attempts} failed attempt(s)`);
+        this.eventBus.emit(TransportEvent.ConsumerRecovered, label, attempts);
+      }
+
+      consecutiveFailures = 0;
+    };
+
+    return defer(() => source(onConnected)).pipe(
       catchError((err) => {
         consecutiveFailures++;
         this.logger.error(`Consumer ${label} error, will restart:`, err);
@@ -360,6 +379,7 @@ export class MessageProvider {
   private async consumeOrderedOnce(
     streamName: string,
     consumerOpts: Partial<OrderedConsumerOptions>,
+    onConnected: () => void,
   ): Promise<void> {
     const js = this.connection.getJetStreamClient();
     const consumer = await js.consumers.get(streamName, consumerOpts);
@@ -378,6 +398,9 @@ export class MessageProvider {
     }
 
     this.activeIterators.add(messages);
+    // Signal recovery now — consume() succeeded, the consumer is live.
+    // See consumeOnce for the same rationale.
+    onConnected();
 
     try {
       await messages.closed();
