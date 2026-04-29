@@ -89,6 +89,11 @@ const config: Config = {
     ],
   ],
   headTags: [
+    { tagName: 'link', attributes: { rel: 'icon', type: 'image/png', sizes: '48x48', href: '/nestjs-jetstream/img/favicon-48.png' } },
+    { tagName: 'link', attributes: { rel: 'icon', type: 'image/png', sizes: '96x96', href: '/nestjs-jetstream/img/favicon-96.png' } },
+    { tagName: 'link', attributes: { rel: 'icon', type: 'image/png', sizes: '192x192', href: '/nestjs-jetstream/img/favicon-192.png' } },
+    { tagName: 'link', attributes: { rel: 'icon', type: 'image/png', sizes: '512x512', href: '/nestjs-jetstream/img/favicon-512.png' } },
+    { tagName: 'link', attributes: { rel: 'apple-touch-icon', sizes: '180x180', href: '/nestjs-jetstream/img/apple-touch-icon.png' } },
     {
       tagName: 'meta',
       attributes: {
