@@ -16,6 +16,7 @@ export enum TransportEvent {
   ShutdownStart = 'shutdownStart',
   ShutdownComplete = 'shutdownComplete',
   DeadLetter = 'deadLetter',
+  ConsumerRecovered = 'consumerRecovered',
 }
 
 /**
@@ -62,6 +63,17 @@ export interface TransportHooks {
 
   /** Fired when a message exhausts all delivery attempts (dead letter). */
   [TransportEvent.DeadLetter](info: DeadLetterInfo): void;
+
+  /**
+   * Fired when a consumer's self-healing flow successfully recovers after
+   * one or more failed restart attempts. Useful for "service is back" alerts
+   * and to balance the noise from preceding error/restart logs.
+   *
+   * @param label   Stream kind label (`event`, `broadcast`, `ordered`, etc.)
+   *                or consumer name passed to `createSelfHealingFlow`.
+   * @param attempts How many consecutive failed attempts preceded the recovery.
+   */
+  [TransportEvent.ConsumerRecovered](label: string, attempts: number): void;
 }
 
 /**

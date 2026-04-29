@@ -331,6 +331,15 @@ export class MessageProvider {
 
     return defer(source).pipe(
       tap(() => {
+        // Recovery path: reset the backoff counter and announce that the
+        // consumer is healthy again. The log + event are skipped on the very
+        // first successful start (no preceding failures) to avoid noise.
+        if (consecutiveFailures > 0) {
+          const attempts = consecutiveFailures;
+
+          this.logger.log(`Consumer ${label} recovered after ${attempts} failed attempt(s)`);
+          this.eventBus.emit(TransportEvent.ConsumerRecovered, label, attempts);
+        }
         consecutiveFailures = 0;
       }),
       catchError((err) => {
