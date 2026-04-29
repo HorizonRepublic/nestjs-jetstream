@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.11.0](https://github.com/HorizonRepublic/nestjs-jetstream/compare/v2.10.0...v2.11.0) (2026-04-29)
+
+
+### Features
+
+* **docs:** redesign documentation site ([#149](https://github.com/HorizonRepublic/nestjs-jetstream/issues/149)) ([c4a3c87](https://github.com/HorizonRepublic/nestjs-jetstream/commit/c4a3c87071c5b3e65dd2acf877529581ab287617))
+
+
+### Bug Fixes
+
+* **docs:** collapse README badge anchors and add brand logos ([61668e1](https://github.com/HorizonRepublic/nestjs-jetstream/commit/61668e101ab56a473e781e17c4fb377556a9b315))
+* **docs:** hardcode NestJS peer major on landing ([529ed08](https://github.com/HorizonRepublic/nestjs-jetstream/commit/529ed088286eb2af810195eba2bcde979e858ae6))
+
 ## [2.10.0](https://github.com/HorizonRepublic/nestjs-jetstream/compare/v2.9.1...v2.10.0) (2026-04-25)
 
 
