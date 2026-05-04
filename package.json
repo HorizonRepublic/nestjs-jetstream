@@ -113,6 +113,7 @@
     "hdr-histogram-js": "^3.0.1",
     "msgpackr": "^1.11.10",
     "prettier": "^3.8.3",
+    "prom-client": "^15.1.3",
     "testcontainers": "^11.14.0",
     "tinybench": "^6.0.1",
     "tsup": "^8.5.1",
