@@ -29,7 +29,7 @@ export const DEFAULT_HISTOGRAM_BUCKETS: Required<HistogramBuckets> = {
  * string that resolves cleanly through {@link mapErrorContext} — extend this
  * map if you introduce a context the mapper does not recognize.
  */
-export const ERROR_CONTEXT_PREFIXES: ReadonlyArray<readonly [string, ErrorContext]> = [
+export const ERROR_CONTEXT_PREFIXES: readonly (readonly [string, ErrorContext])[] = [
   ['connection', 'connection'],
   ['codec', 'codec'],
   ['client-rpc', 'publish'],

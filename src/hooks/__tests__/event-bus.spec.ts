@@ -160,6 +160,7 @@ describe(EventBus, () => {
       // Given: two subscribers on Connect
       const subA = vi.fn();
       const subB = vi.fn();
+
       sut.subscribe(TransportEvent.Connect, subA);
       sut.subscribe(TransportEvent.Connect, subB);
       const server = faker.internet.url();
@@ -176,6 +177,7 @@ describe(EventBus, () => {
       // Given: user hook + internal subscriber
       const userHook = vi.fn();
       const sub = vi.fn();
+
       sut = new EventBus(logger, { [TransportEvent.Disconnect]: userHook });
       sut.subscribe(TransportEvent.Disconnect, sub);
 
@@ -193,6 +195,7 @@ describe(EventBus, () => {
         throw new Error('boom');
       });
       const survivor = vi.fn();
+
       sut.subscribe(TransportEvent.Connect, throwing);
       sut.subscribe(TransportEvent.Connect, survivor);
 
