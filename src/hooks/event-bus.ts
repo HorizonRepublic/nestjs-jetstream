@@ -1,10 +1,6 @@
 import { Logger } from '@nestjs/common';
 
-import type {
-  MessageKind,
-  TransportEventSubscriber,
-  TransportHooks,
-} from '../interfaces';
+import type { MessageKind, TransportEventSubscriber, TransportHooks } from '../interfaces';
 import { TransportEvent } from '../interfaces';
 
 /** Type-erased callable used internally to store hooks and subscribers homogeneously. */
