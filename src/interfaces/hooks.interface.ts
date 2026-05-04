@@ -101,6 +101,23 @@ export interface TransportHooks {
 }
 
 /**
+ * Internal subscriber for a transport event. Multiple subscribers may be
+ * registered per event via `EventBus.subscribe()` — used by built-in
+ * observers (e.g. metrics) without overriding the user-provided hook.
+ */
+export type TransportEventSubscriber<K extends keyof TransportHooks> = (
+  ...args: Parameters<TransportHooks[K]>
+) => unknown;
+
+/**
+ * Type-erased callable used by `EventBus` internals to store user hooks and
+ * subscribers in homogeneous structures (Map values, single dispatch helper).
+ * The public APIs preserve full per-event typing via `TransportHooks` and
+ * {@link TransportEventSubscriber}.
+ */
+export type AnyTransportListener = (...args: unknown[]) => unknown;
+
+/**
  * Context passed to the onDeadLetter callback when a message exhausts all delivery attempts.
  */
 export interface DeadLetterInfo {
