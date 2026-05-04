@@ -1,20 +1,26 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Registry } from 'prom-client';
+import * as promClient from 'prom-client';
 
-import { createMetrics } from '../metrics.factory';
+import { createMetrics, type PromClientRuntime } from '../metrics.factory';
 import { DEFAULT_METRICS_PREFIX } from '../metrics.constants';
 
+const runtime: PromClientRuntime = {
+  Counter: promClient.Counter,
+  Histogram: promClient.Histogram,
+  Gauge: promClient.Gauge,
+};
+
 describe(createMetrics, () => {
-  let register: Registry;
+  let register: promClient.Registry;
 
   beforeEach(() => {
-    register = new Registry();
+    register = new promClient.Registry();
   });
 
   describe('happy path', () => {
     it('should create all expected metrics on the given register with default prefix', async () => {
       // Given/When
-      const metrics = createMetrics({ register });
+      const metrics = createMetrics({ register, promClient: runtime });
 
       // Then: factory returns the metric handles
       expect(metrics.messagesReceivedTotal).toBeDefined();
@@ -47,7 +53,7 @@ describe(createMetrics, () => {
 
     it('should honor a custom prefix', async () => {
       // Given
-      createMetrics({ register, prefix: 'myapp_jet_' });
+      createMetrics({ register, promClient: runtime, prefix: 'myapp_jet_' });
 
       // Then
       const text = await register.metrics();
@@ -58,7 +64,11 @@ describe(createMetrics, () => {
 
     it('should apply default labels to every metric', async () => {
       // Given
-      const metrics = createMetrics({ register, defaultLabels: { service: 'orders' } });
+      const metrics = createMetrics({
+        register,
+        promClient: runtime,
+        defaultLabels: { service: 'orders' },
+      });
 
       // When: a counter is incremented (default labels are auto-applied)
       metrics.messagesReceivedTotal.inc({ stream: 'S', subject: 's', kind: 'event' });
@@ -73,6 +83,7 @@ describe(createMetrics, () => {
       // Given/When
       const metrics = createMetrics({
         register,
+        promClient: runtime,
         buckets: { handlerDuration: [0.5, 1, 5] },
       });
 
@@ -95,10 +106,10 @@ describe(createMetrics, () => {
   describe('edge cases', () => {
     it('should not collide when called twice with different registers', () => {
       // Given/When
-      const reg2 = new Registry();
+      const reg2 = new promClient.Registry();
 
-      expect(() => createMetrics({ register })).not.toThrow();
-      expect(() => createMetrics({ register: reg2 })).not.toThrow();
+      expect(() => createMetrics({ register, promClient: runtime })).not.toThrow();
+      expect(() => createMetrics({ register: reg2, promClient: runtime })).not.toThrow();
     });
   });
 });
