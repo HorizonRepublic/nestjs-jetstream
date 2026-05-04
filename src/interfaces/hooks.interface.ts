@@ -1,10 +1,15 @@
 import type { MsgHdrs } from '@nats-io/transport-node';
 
+import { StreamKind } from './stream.interface';
+
 /** Discriminates the kind of message routed through the transport. */
 export enum MessageKind {
   Event = 'event',
   Rpc = 'rpc',
 }
+
+/** Outcome of a handler invocation, used as a label on processing metrics. */
+export type HandlerStatus = 'success' | 'error' | 'retried' | 'terminated';
 
 export enum TransportEvent {
   Connect = 'connect',
@@ -17,6 +22,7 @@ export enum TransportEvent {
   ShutdownComplete = 'shutdownComplete',
   DeadLetter = 'deadLetter',
   ConsumerRecovered = 'consumerRecovered',
+  HandlerCompleted = 'handlerCompleted',
 }
 
 /**
@@ -74,6 +80,24 @@ export interface TransportHooks {
    * @param attempts How many consecutive failed attempts preceded the recovery.
    */
   [TransportEvent.ConsumerRecovered](label: string, attempts: number): void;
+
+  /**
+   * Fired immediately after a handler returns or throws.
+   *
+   * Used by built-in metrics; users can register their own handler for
+   * latency tracking, slow-handler alerting, or custom observability.
+   *
+   * @param subject  The declared NATS pattern (from `@EventPattern` / `@MessagePattern`).
+   * @param kind     Stream kind: `Event`, `Command`, `Broadcast`, `Ordered`.
+   * @param durationMs Wall-clock time in milliseconds from handler entry to settlement.
+   * @param status   Outcome: `success`, `error`, `retried`, or `terminated`.
+   */
+  [TransportEvent.HandlerCompleted](
+    subject: string,
+    kind: StreamKind,
+    durationMs: number,
+    status: HandlerStatus,
+  ): void;
 }
 
 /**
