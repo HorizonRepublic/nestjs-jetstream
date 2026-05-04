@@ -81,6 +81,7 @@
     "@nestjs/microservices": "^10.2.0 || ^11.0.0",
     "@opentelemetry/api": "^1.9.0",
     "msgpackr": "^1.11.0",
+    "prom-client": "^15.0.0",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.0"
   },
@@ -89,6 +90,9 @@
       "optional": true
     },
     "msgpackr": {
+      "optional": true
+    },
+    "prom-client": {
       "optional": true
     }
   },
