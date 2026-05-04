@@ -1,7 +1,23 @@
-import { Counter, Histogram, Gauge, Registry } from 'prom-client';
+import type { Counter, Histogram, Gauge, Registry } from 'prom-client';
 
 import { DEFAULT_HISTOGRAM_BUCKETS, DEFAULT_METRICS_PREFIX } from './metrics.constants';
 import type { HistogramBuckets } from './metrics.config';
+
+/**
+ * Subset of the `prom-client` runtime surface used by the factory.
+ *
+ * Passing the module in (rather than importing it statically) keeps
+ * `prom-client` strictly optional: nothing in this file triggers a load until
+ * `JetstreamMetricsModule` has explicitly resolved the peer dependency via
+ * dynamic import.
+ */
+/* eslint-disable @typescript-eslint/naming-convention */
+export interface PromClientRuntime {
+  Counter: typeof Counter;
+  Histogram: typeof Histogram;
+  Gauge: typeof Gauge;
+}
+/* eslint-enable @typescript-eslint/naming-convention */
 
 /**
  * Resolved set of `prom-client` metric handles used across the transport.
@@ -33,11 +49,13 @@ export interface JetstreamMetrics {
 }
 
 /**
- * Inputs for {@link createMetrics}. Only `register` is required; everything
- * else falls back to project defaults from `metrics.constants.ts`.
+ * Inputs for {@link createMetrics}. Only `register` and `promClient` are
+ * required; everything else falls back to project defaults from
+ * `metrics.constants.ts`.
  */
 export interface CreateMetricsOptions {
   register: Registry;
+  promClient: PromClientRuntime;
   prefix?: string;
   defaultLabels?: Record<string, string>;
   buckets?: HistogramBuckets;
@@ -47,11 +65,12 @@ export interface CreateMetricsOptions {
  * Instantiate the full set of jetstream-transport Prometheus metrics on the
  * given `prom-client` registry.
  *
- * Default labels (if any) are applied to every metric via the registry; metric
- * name prefix and histogram buckets are configurable.
+ * The runtime classes (`Counter`, `Histogram`, `Gauge`) must be supplied via
+ * `promClient` — this avoids any static `import 'prom-client'` here so the
+ * peer stays truly optional.
  */
 export const createMetrics = (opts: CreateMetricsOptions): JetstreamMetrics => {
-  const { register } = opts;
+  const { register, promClient } = opts;
   const prefix = opts.prefix ?? DEFAULT_METRICS_PREFIX;
   const buckets = {
     handlerDuration: opts.buckets?.handlerDuration ?? DEFAULT_HISTOGRAM_BUCKETS.handlerDuration,
@@ -64,7 +83,7 @@ export const createMetrics = (opts: CreateMetricsOptions): JetstreamMetrics => {
   }
 
   const counter = (name: string, help: string, labelNames: string[]): Counter<string> =>
-    new Counter({ name: `${prefix}${name}`, help, labelNames, registers: [register] });
+    new promClient.Counter({ name: `${prefix}${name}`, help, labelNames, registers: [register] });
 
   const histogram = (
     name: string,
@@ -72,7 +91,7 @@ export const createMetrics = (opts: CreateMetricsOptions): JetstreamMetrics => {
     labelNames: string[],
     bucketArr: number[],
   ): Histogram<string> =>
-    new Histogram({
+    new promClient.Histogram({
       name: `${prefix}${name}`,
       help,
       labelNames,
@@ -81,7 +100,7 @@ export const createMetrics = (opts: CreateMetricsOptions): JetstreamMetrics => {
     });
 
   const gauge = (name: string, help: string, labelNames: string[]): Gauge<string> =>
-    new Gauge({ name: `${prefix}${name}`, help, labelNames, registers: [register] });
+    new promClient.Gauge({ name: `${prefix}${name}`, help, labelNames, registers: [register] });
 
   return {
     messagesReceivedTotal: counter(
