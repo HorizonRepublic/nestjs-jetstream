@@ -2,7 +2,7 @@ export type { Codec } from './codec.interface';
 
 export { MessageKind, TransportEvent } from './hooks.interface';
 
-export type { DeadLetterInfo, TransportHooks } from './hooks.interface';
+export type { DeadLetterInfo, HandlerStatus, TransportHooks } from './hooks.interface';
 
 export type { JetstreamHealthStatus } from './health.interface';
 
