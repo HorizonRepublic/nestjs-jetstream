@@ -1,5 +1,36 @@
 # Changelog
 
+## [2.11.0](https://github.com/HorizonRepublic/nestjs-jetstream/compare/v2.10.0...v2.11.0) (2026-05-27)
+
+
+### Features
+
+* **docs:** redesign documentation site ([#149](https://github.com/HorizonRepublic/nestjs-jetstream/issues/149)) ([c4a3c87](https://github.com/HorizonRepublic/nestjs-jetstream/commit/c4a3c87071c5b3e65dd2acf877529581ab287617))
+* **observability:** add HandlerCompleted transport event and HandlerStatus type ([56b95d2](https://github.com/HorizonRepublic/nestjs-jetstream/commit/56b95d2edd99d12b1f51b9270f976fcc5433da77))
+* **observability:** add JetstreamMetricsModule and metrics module option ([d249510](https://github.com/HorizonRepublic/nestjs-jetstream/commit/d24951013ce135f5f2f0ea853b0c00732c30dbf5))
+* **observability:** add JetstreamMetricsService with EventBus subscriptions ([6ca1967](https://github.com/HorizonRepublic/nestjs-jetstream/commit/6ca19673ce7c00b43dc7ad5ea02e534094c05d4f))
+* **observability:** add metrics constants and error-context prefix map ([b4e4243](https://github.com/HorizonRepublic/nestjs-jetstream/commit/b4e42431cf6078265035bfde01fb2bc768a52b3b))
+* **observability:** add polling loop for consumer + stream gauges ([4688e6e](https://github.com/HorizonRepublic/nestjs-jetstream/commit/4688e6e8884940ed11a2d68ef7eacb99ee079d6c))
+* **observability:** declare prom-client as optional peer dependency ([bc7798c](https://github.com/HorizonRepublic/nestjs-jetstream/commit/bc7798cd26ff2b191db539681daf3e2d2a617219))
+* **observability:** emit HandlerCompleted from all routers and wire metrics handlers ([eb97401](https://github.com/HorizonRepublic/nestjs-jetstream/commit/eb97401daf5aa59132741e0aa92dd9c59934e7d2))
+* **observability:** emit Published and RpcCompleted from JetstreamClient ([a812cf6](https://github.com/HorizonRepublic/nestjs-jetstream/commit/a812cf6ed585909443be2601e6fd942cbaa8bb3d))
+* **observability:** instantiate prom-client metrics on configurable register ([07f187c](https://github.com/HorizonRepublic/nestjs-jetstream/commit/07f187c6cab5eff879ac7d0397a9902a100b15b7))
+* **observability:** introduce metrics config types and prom-client dev dep ([3f868d8](https://github.com/HorizonRepublic/nestjs-jetstream/commit/3f868d82ec11316bbb68f93969ac3cc8e725bfee))
+* **observability:** map free-form error contexts to bounded enum ([cd97685](https://github.com/HorizonRepublic/nestjs-jetstream/commit/cd976850b29a3ef3f1a53e11f4b555bebb8f369a))
+* **observability:** Prometheus metrics ([#164](https://github.com/HorizonRepublic/nestjs-jetstream/issues/164)) ([ad32c35](https://github.com/HorizonRepublic/nestjs-jetstream/commit/ad32c353a9b01a6a225cb7d8acc580858234f50d))
+* **observability:** support multiple subscribers per transport event ([e1db7a5](https://github.com/HorizonRepublic/nestjs-jetstream/commit/e1db7a5083a78da6bf85890843117d9f17a33e1e))
+* **observability:** wire metrics module into forRoot and forRootAsync ([1b89512](https://github.com/HorizonRepublic/nestjs-jetstream/commit/1b89512c76ac2958da689263b16c6f66f1466b3c))
+
+
+### Bug Fixes
+
+* **docs:** collapse README badge anchors and add brand logos ([61668e1](https://github.com/HorizonRepublic/nestjs-jetstream/commit/61668e101ab56a473e781e17c4fb377556a9b315))
+* **docs:** hardcode NestJS peer major on landing ([529ed08](https://github.com/HorizonRepublic/nestjs-jetstream/commit/529ed088286eb2af810195eba2bcde979e858ae6))
+* **observability:** address CodeRabbit review feedback ([da64e14](https://github.com/HorizonRepublic/nestjs-jetstream/commit/da64e146838f62160660fc5d21d7223802de60ad))
+* **observability:** emit ConsumerRecovered after self-healing ([#154](https://github.com/HorizonRepublic/nestjs-jetstream/issues/154)) ([2609f87](https://github.com/HorizonRepublic/nestjs-jetstream/commit/2609f87c9a78f7ce7c6c79eb6857cff3df5930d6))
+* **observability:** keep prom-client truly optional via type-only imports ([a7c3917](https://github.com/HorizonRepublic/nestjs-jetstream/commit/a7c3917eeffdf1fb88961c41dcba1d9e7abea14e))
+* **routing:** fail-fast on duplicate handler patterns ([#166](https://github.com/HorizonRepublic/nestjs-jetstream/issues/166)) ([fce2b69](https://github.com/HorizonRepublic/nestjs-jetstream/commit/fce2b69a6adbb1413e02a951dcc752cc37fa562b))
+
 ## [2.10.0](https://github.com/HorizonRepublic/nestjs-jetstream/compare/v2.9.1...v2.10.0) (2026-04-25)
 
 
