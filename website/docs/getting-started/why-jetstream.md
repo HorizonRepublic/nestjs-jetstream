@@ -128,4 +128,4 @@ Being honest about trade-offs matters. Don't use this library if:
 - Install the package and connect to a local NATS broker — [Installation](./installation)
 - Run the full four-step example in under five minutes — [Quick Start](./quick-start)
 - Explore the patterns you'll use daily — [Events](../patterns/events), [RPC](../patterns/rpc)
-- Skim the production checklist — [Module Configuration](./module-configuration), [DLQ](../guides/dead-letter-queue), [Health Checks](../guides/health-checks), [Graceful Shutdown](../guides/graceful-shutdown)
+- Skim the production checklist — [Module Configuration](/docs/reference/module-configuration), [DLQ](/docs/guides/dead-letter-queue), [Health Checks](/docs/guides/health-checks), [Graceful Shutdown](/docs/guides/graceful-shutdown)

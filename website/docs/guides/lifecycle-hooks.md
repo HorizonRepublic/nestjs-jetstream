@@ -1,17 +1,17 @@
 ---
 sidebar_position: 4
 sidebar_label: "Lifecycle Hooks"
-title: "Lifecycle Hooks — NestJS JetStream Transport Events"
-description: "Observe NestJS NATS JetStream transport events: connection, disconnect, reconnect, errors, RPC timeouts, message routing, dead letters, and shutdown."
+title: "How to register lifecycle hooks — NestJS JetStream"
+description: "Subscribe to NATS JetStream transport events — connection, disconnect, reconnect, errors, RPC timeouts, message routing, dead letters, and shutdown — for monitoring and alerting."
 schema:
   type: Article
-  headline: "Lifecycle Hooks — NestJS JetStream Transport Events"
-  description: "Observe NestJS NATS JetStream transport events: connection, disconnect, reconnect, errors, RPC timeouts, message routing, dead letters, and shutdown."
+  headline: "How to register lifecycle hooks for NestJS JetStream"
+  description: "Subscribe to transport events for monitoring, alerting, and logging integration."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-11"
+  dateModified: "2026-05-27"
 ---
 
-# Lifecycle Hooks
+# How to register lifecycle hooks
 
 The transport emits lifecycle events at key moments — connection changes, errors, message routing, shutdown, and dead letters. Register hook callbacks to integrate with your monitoring, alerting, or logging infrastructure.
 
@@ -225,4 +225,4 @@ The hook fires first, then the callback. If the callback fails and the message i
 - [**Dead Letter Queue**](/docs/guides/dead-letter-queue) — full guide on dead letter handling and the `onDeadLetter` callback
 - [**Health Checks**](/docs/guides/health-checks) — monitor connection health with RTT latency
 - [**Graceful Shutdown**](/docs/guides/graceful-shutdown) — `ShutdownStart` and `ShutdownComplete` events in context
-- [**Module Configuration**](/docs/getting-started/module-configuration) — `hooks` option in the full options reference
+- [**Module Configuration**](/docs/reference/module-configuration) — `hooks` option in the full options reference

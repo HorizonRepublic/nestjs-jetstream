@@ -444,7 +444,7 @@ useFactory: () => ({
 
 ### OrderedEventOverrides
 
-See [OrderedEventOverrides](/docs/getting-started/module-configuration#orderedeventoverrides) in Module Configuration for the canonical field reference. This page focuses on how those fields shape the delivery policy decisions above.
+See [OrderedEventOverrides](/docs/reference/module-configuration#orderedeventoverrides) in Module Configuration for the canonical field reference. This page focuses on how those fields shape the delivery policy decisions above.
 
 ### Stream overrides
 
@@ -608,7 +608,7 @@ The ordered stream name follows the library's [naming conventions](/docs/referen
 ## What's next?
 
 - [Events (Workqueue)](/docs/patterns/events) — at-least-once delivery with load balancing
-- [Module Configuration](/docs/getting-started/module-configuration) — full options reference including `ordered`
+- [Module Configuration](/docs/reference/module-configuration) — full options reference including `ordered`
 - [Default Configs](/docs/reference/default-configs) — stream and consumer defaults for all stream types
 - [Lifecycle Hooks](/docs/guides/lifecycle-hooks) — monitor errors, reconnections, and transport events
 - [Troubleshooting](/docs/guides/troubleshooting) — common issues and debugging

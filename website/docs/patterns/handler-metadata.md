@@ -199,5 +199,5 @@ If entries are missing or the bucket fails to create, see [Troubleshooting — H
 ## See also
 
 - [Naming Conventions — `metadataKey()`](/docs/reference/naming-conventions#metadatakeyservicename-kind-pattern) — programmatic key construction
-- [Module Configuration](/docs/getting-started/module-configuration) — the `metadata` option in the full options reference
+- [Module Configuration](/docs/reference/module-configuration) — the `metadata` option in the full options reference
 - [Events (Workqueue)](/docs/patterns/events), [RPC](/docs/patterns/rpc), [Broadcast](/docs/patterns/broadcast), [Ordered Events](/docs/patterns/ordered-events) — any handler type can attach `meta`

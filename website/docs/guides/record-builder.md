@@ -202,4 +202,4 @@ if (RESERVED_HEADERS.has(key)) {
 - [Scheduling (Delayed Jobs)](/docs/guides/scheduling) — delay message delivery to a future time
 - [Handler Context](/docs/guides/handler-context) — access headers and message metadata in your handlers
 - [Custom Codec](/docs/guides/custom-codec) — control how payloads are serialized
-- [Module Configuration](/docs/getting-started/module-configuration) — configure dedup windows via stream overrides
+- [Module Configuration](/docs/reference/module-configuration) — configure dedup windows via stream overrides

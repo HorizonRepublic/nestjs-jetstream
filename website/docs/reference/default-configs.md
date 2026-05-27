@@ -13,7 +13,7 @@ schema:
 
 # Default Configs
 
-The transport ships with production-ready defaults for every stream and consumer type. This page lists the exact values from the source code. All defaults can be overridden via [module configuration](/docs/getting-started/module-configuration).
+The transport ships with production-ready defaults for every stream and consumer type. This page lists the exact values from the source code. All defaults can be overridden via [module configuration](/docs/reference/module-configuration).
 
 ## Stream Defaults
 
@@ -305,7 +305,7 @@ JetstreamModule.forRoot({
 });
 ```
 
-See [Module Configuration](/docs/getting-started/module-configuration) for the full options reference.
+See [Module Configuration](/docs/reference/module-configuration) for the full options reference.
 
 ## Exported constants
 

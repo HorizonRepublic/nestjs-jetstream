@@ -1,21 +1,21 @@
 ---
 sidebar_position: 1
 sidebar_label: "Module Configuration"
-title: Module Configuration
-description: "forRoot(), forRootAsync(), and forFeature() registration methods with stream, consumer, and connection options."
+title: "Module Configuration — NestJS JetStream Transport"
+description: "Reference for forRoot(), forRootAsync(), and forFeature() registration methods, plus stream, consumer, RPC, and connection options."
 schema:
   type: Article
-  headline: "Module Configuration"
-  description: "forRoot(), forRootAsync(), and forFeature() registration methods with stream, consumer, and connection options."
+  headline: "Module Configuration Reference"
+  description: "Reference for forRoot(), forRootAsync(), and forFeature() registration methods with stream, consumer, and connection options."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-11"
+  dateModified: "2026-05-27"
 ---
 
 import Since from '@site/src/components/Since';
 
 # Module Configuration
 
-This is the main surface you'll touch day-to-day. The library follows NestJS conventions with three registration methods: `forRoot()` for global setup, `forRootAsync()` for async/dynamic configuration, and `forFeature()` for per-module client registration. If you only read one configuration page, read this one.
+Reference for the three registration methods exposed by `JetstreamModule`: `forRoot()` for global setup, `forRootAsync()` for async/dynamic configuration, and `forFeature()` for per-module client registration. Every option is listed below with its type and default. For a guided introduction see the [Quick Start](/docs/getting-started/quick-start).
 
 ## forRoot()
 
