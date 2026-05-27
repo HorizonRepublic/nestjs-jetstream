@@ -1,4 +1,5 @@
 import { CustomTransportStrategy, Server } from '@nestjs/microservices';
+import type { MessageHandler, MsPattern } from '@nestjs/microservices';
 import type { ConsumerInfo } from '@nats-io/jetstream';
 
 import { ConnectionProvider } from '../connection';
@@ -133,6 +134,36 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     this.coreRpcServer.stop();
     this.messageProvider.destroy();
     this.started = false;
+  }
+
+  /**
+   * Override NestJS `Server.addHandler` to fail-fast on duplicate pattern registration.
+   *
+   * The base class silently overwrites duplicate RPC handlers (last wins) and appends
+   * duplicate event handlers to a linked list. Both behaviors are hazardous in a
+   * JetStream context: silent overwrite drops a handler the user wrote, and double
+   * event dispatch double-acks/double-processes the same JetStream message.
+   *
+   * We treat any pattern collision as a fatal misconfiguration so it surfaces at
+   * bootstrap instead of in production traffic.
+   */
+  public override addHandler(
+    pattern: unknown,
+    callback: MessageHandler,
+    isEventHandler = false,
+    extras: Record<string, unknown> = {},
+  ): void {
+    const normalizedPattern = this.normalizePattern(pattern as MsPattern);
+
+    if (this.messageHandlers.has(normalizedPattern)) {
+      throw new Error(
+        `Duplicate handler registered for pattern "${normalizedPattern}". ` +
+          `Each @EventPattern() / @MessagePattern() value must be unique within a microservice — ` +
+          `find and remove the second declaration.`,
+      );
+    }
+
+    super.addHandler(pattern, callback, isEventHandler, extras);
   }
 
   /**
