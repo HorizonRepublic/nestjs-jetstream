@@ -47,6 +47,25 @@ describe('resolveOtelOptions', () => {
     });
   });
 
+  describe('boolean shorthand', () => {
+    it('should treat `true` as the all-defaults form', () => {
+      // When
+      const sut = resolveOtelOptions(true);
+
+      // Then
+      expect(sut.enabled).toBe(true);
+      expect([...sut.traces]).toEqual([...DEFAULT_TRACES]);
+    });
+
+    it('should treat `false` as a global kill switch', () => {
+      // When
+      const sut = resolveOtelOptions(false);
+
+      // Then
+      expect(sut.enabled).toBe(false);
+    });
+  });
+
   describe('traces option', () => {
     it('should expand the "default" preset to DEFAULT_TRACES', () => {
       // When

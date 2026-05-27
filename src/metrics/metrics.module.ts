@@ -49,21 +49,19 @@ const normalizeMetricsConfig = (
 };
 
 /**
- * Internal module activated by `JetstreamModule` when `metrics` is enabled.
- * Provides `JetstreamMetricsService` plus the resolved config, registry, and
- * dynamically loaded `prom-client` runtime via DI tokens. Returns an empty
- * shell when `metrics` is `false`/omitted so the peer is never loaded.
+ * Internal module wired unconditionally by `JetstreamModule`. Providers gate
+ * themselves on `JETSTREAM_OPTIONS.metrics` at resolution time — when metrics
+ * are disabled they resolve to `null` and `prom-client` is never loaded, so
+ * the peer dependency stays truly optional.
  */
 @Module({})
 export class JetstreamMetricsModule {
-  public static forFeature(metricsOption: MetricsOption | undefined): DynamicModule {
-    if (!metricsOption) {
-      return { module: JetstreamMetricsModule, providers: [], exports: [] };
-    }
-
+  public static forFeature(): DynamicModule {
     const promClientProvider: Provider = {
       provide: JETSTREAM_METRICS_PROM_CLIENT,
-      useFactory: async (): Promise<PromClientRuntime> => {
+      inject: [JETSTREAM_OPTIONS],
+      useFactory: async (opts: JetstreamModuleOptions): Promise<PromClientRuntime | null> => {
+        if (!opts.metrics) return null;
         const mod = await resolvePromClient();
 
         /* eslint-disable @typescript-eslint/naming-convention */
@@ -74,17 +72,19 @@ export class JetstreamMetricsModule {
 
     const configProvider: Provider = {
       provide: JETSTREAM_METRICS_CONFIG,
-      useFactory: async (): Promise<MetricsConfig> => {
+      inject: [JETSTREAM_OPTIONS],
+      useFactory: async (opts: JetstreamModuleOptions): Promise<MetricsConfig | null> => {
+        if (!opts.metrics) return null;
         const mod = await resolvePromClient();
 
-        return normalizeMetricsConfig(metricsOption, mod);
+        return normalizeMetricsConfig(opts.metrics, mod);
       },
     };
 
     const registryProvider: Provider = {
       provide: JETSTREAM_METRICS_REGISTRY,
       inject: [JETSTREAM_METRICS_CONFIG],
-      useFactory: (cfg: MetricsConfig) => cfg.register,
+      useFactory: (cfg: MetricsConfig | null) => cfg?.register ?? null,
     };
 
     const serviceProvider: Provider = {
@@ -99,8 +99,8 @@ export class JetstreamMetricsModule {
       ],
       useFactory: (
         eventBus: EventBus,
-        cfg: MetricsConfig,
-        runtime: PromClientRuntime,
+        cfg: MetricsConfig | null,
+        runtime: PromClientRuntime | null,
         opts: JetstreamModuleOptions,
         patternRegistry: PatternRegistry | null,
         connection: ConnectionProvider | null,

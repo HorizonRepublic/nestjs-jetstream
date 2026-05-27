@@ -65,8 +65,8 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
 
   public constructor(
     private readonly eventBus: EventBus,
-    @Inject(JETSTREAM_METRICS_CONFIG) private readonly config: MetricsConfig,
-    @Inject(JETSTREAM_METRICS_PROM_CLIENT) private readonly promClient: PromClientRuntime,
+    @Inject(JETSTREAM_METRICS_CONFIG) private readonly config: MetricsConfig | null,
+    @Inject(JETSTREAM_METRICS_PROM_CLIENT) private readonly promClient: PromClientRuntime | null,
     @Inject(JETSTREAM_OPTIONS) private readonly options: JetstreamModuleOptions,
     @Optional() private readonly patternRegistry: PatternRegistry | null,
     @Optional()
@@ -76,6 +76,11 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
 
   public async onApplicationBootstrap(): Promise<void> {
     if (this.metrics !== null) return;
+
+    // Disabled — `metrics` was omitted/false. prom-client is never resolved
+    // in this branch, so the service is a no-op for publisher-only or
+    // metrics-off deployments.
+    if (!this.options.metrics || !this.config || !this.promClient) return;
 
     if (!this.config.register) {
       throw new Error(
@@ -106,7 +111,7 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
 
   /** @internal Visible for tests. `0` disables polling. */
   public getEffectivePollInterval(): number {
-    return this.config.pollInterval ?? DEFAULT_POLL_INTERVAL_MS;
+    return this.config?.pollInterval ?? DEFAULT_POLL_INTERVAL_MS;
   }
 
   /**
