@@ -130,15 +130,15 @@ export class RpcRouter {
       eventBus.emit(TransportEvent.RpcTimeout, subject, correlationId);
     };
 
-    const emitCompleted = eventBus.hasHook(TransportEvent.HandlerCompleted);
-
     /**
      * Emit `HandlerCompleted` with the declared pattern + {@link StreamKind} so
      * the metric label space stays bounded — see EventRouter for the same
-     * cardinality rationale.
+     * cardinality rationale. `hasHook` is checked per-emit so late subscribers
+     * (e.g. {@link JetstreamMetricsService} during `OnApplicationBootstrap`)
+     * still receive events.
      */
     const reportHandlerCompleted = (msg: JsMsg, startedAt: number, status: HandlerStatus): void => {
-      if (!emitCompleted) return;
+      if (!eventBus.hasHook(TransportEvent.HandlerCompleted)) return;
       const declared = patternRegistry.resolveDeclared(msg.subject);
       const pattern = declared?.pattern ?? msg.subject;
       const declaredKind = declared?.kind ?? StreamKind.Command;

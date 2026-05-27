@@ -143,17 +143,21 @@ export class EventRouter {
     // Snapshot the config object, not the Map — updateMaxDeliverMap() can
     // replace maxDeliverByStream wholesale after consumers are ensured.
     const hasDlqCheck = deadLetterConfig !== undefined;
-    const emitRouted = eventBus.hasHook(TransportEvent.MessageRouted);
-    const emitCompleted = eventBus.hasHook(TransportEvent.HandlerCompleted);
 
     /**
      * Emit `HandlerCompleted` with the declared pattern + {@link StreamKind} so
      * cardinality stays bounded — the actual NATS subject matches the declared
      * pattern under the current exact-match routing, but pinning to the
      * declared form future-proofs against wildcard support.
+     *
+     * `hasHook` is checked per-emit (not snapshotted) so subscribers that
+     * register after `start()` — e.g. {@link JetstreamMetricsService} during
+     * `OnApplicationBootstrap` — still receive events. The check itself is
+     * a single Map.get and stays off the hot path entirely when nobody
+     * listens.
      */
     const reportHandlerCompleted = (msg: JsMsg, startedAt: number, status: HandlerStatus): void => {
-      if (!emitCompleted) return;
+      if (!eventBus.hasHook(TransportEvent.HandlerCompleted)) return;
       const declared = patternRegistry.resolveDeclared(msg.subject);
       const pattern = declared?.pattern ?? msg.subject;
       const declaredKind = declared?.kind ?? kind;
@@ -228,7 +232,7 @@ export class EventRouter {
           return null;
         }
 
-        if (emitRouted) eventBus.emitMessageRouted(subject, MessageKind.Event);
+        eventBus.emitMessageRouted(subject, MessageKind.Event);
 
         return { handler, data };
       } catch (err) {
@@ -368,7 +372,7 @@ export class EventRouter {
           return undefined;
         }
 
-        if (emitRouted) eventBus.emitMessageRouted(subject, MessageKind.Event);
+        eventBus.emitMessageRouted(subject, MessageKind.Event);
       } catch (err) {
         logger.error(`Ordered handler error (${subject}):`, err);
 

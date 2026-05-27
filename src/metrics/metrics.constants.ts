@@ -48,6 +48,10 @@ export const ERROR_CONTEXT_PREFIXES: readonly (readonly [string, ErrorContext])[
   ['consume', 'consume'],
   ['core-rpc-handler', 'handler'],
   ['rpc-handler', 'handler'],
+  // EventRouter formats handler-error contexts as `${StreamKind.*}-handler:...`
+  // — the StreamKind enum uses NATS subject conventions (`ev`, `ordered`,
+  // `broadcast`), so both the short and long forms appear in the wild.
+  ['ev-handler', 'handler'],
   ['event-handler', 'handler'],
   ['broadcast-handler', 'handler'],
   ['ordered-handler', 'handler'],
