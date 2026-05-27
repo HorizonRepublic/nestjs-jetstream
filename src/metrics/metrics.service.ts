@@ -39,15 +39,15 @@ import {
   STREAM_KIND_LABEL,
   UNMATCHED_SUBJECT_LABEL,
 } from './metrics.constants';
-import { createMetrics, type JetstreamMetrics, type PromClientRuntime } from './metrics.factory';
-import { PollRunner, type ConsumerPollTarget } from './poll-runner';
-
-type RecoveredKindLabel = StreamKind | string;
-
-interface ResolvedSubjectLabels {
-  pattern: string;
-  kind: StreamKind;
-}
+import { createMetrics } from './metrics.factory';
+import { PollRunner } from './poll-runner';
+import type {
+  ConsumerPollTarget,
+  JetstreamMetrics,
+  PromClientRuntime,
+  RecoveredKindLabel,
+  ResolvedSubjectLabels,
+} from './metrics.types';
 
 /**
  * Built-in Prometheus metrics service. On bootstrap, instantiates the metric

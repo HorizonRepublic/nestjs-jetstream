@@ -5,8 +5,9 @@ import type { ConsumerInfo, JetStreamManager, StreamInfo } from '@nats-io/jetstr
 
 import { StreamKind } from '../../interfaces';
 
-import { createMetrics, type JetstreamMetrics } from '../metrics.factory';
-import { PollRunner, type ConsumerPollTarget } from '../poll-runner';
+import { createMetrics } from '../metrics.factory';
+import { PollRunner } from '../poll-runner';
+import type { ConsumerPollTarget, JetstreamMetrics } from '../metrics.types';
 
 const consumerInfo = (overrides: Partial<ConsumerInfo> = {}): ConsumerInfo =>
   ({

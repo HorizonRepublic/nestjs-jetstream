@@ -16,8 +16,8 @@ import {
   DEFAULT_POLL_INTERVAL_MS,
 } from '../metrics.constants';
 import { JetstreamMetricsModule } from '../metrics.module';
-import type { PromClientRuntime } from '../metrics.factory';
 import { JetstreamMetricsService } from '../metrics.service';
+import type { PromClientRuntime } from '../metrics.types';
 
 const baseOptions: JetstreamModuleOptions = {
   name: 'orders',

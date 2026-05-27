@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as promClient from 'prom-client';
 
-import { createMetrics, type PromClientRuntime } from '../metrics.factory';
+import { createMetrics } from '../metrics.factory';
 import { DEFAULT_METRICS_PREFIX } from '../metrics.constants';
+import type { PromClientRuntime } from '../metrics.types';
 
 const runtime: PromClientRuntime = {
   Counter: promClient.Counter,

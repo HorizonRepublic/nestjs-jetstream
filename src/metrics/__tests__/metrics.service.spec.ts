@@ -15,8 +15,8 @@ import { streamName } from '../../jetstream.constants';
 import { PatternRegistry } from '../../server/routing/pattern-registry';
 
 import { DEFAULT_POLL_INTERVAL_MS, UNMATCHED_SUBJECT_LABEL } from '../metrics.constants';
-import type { PromClientRuntime } from '../metrics.factory';
 import { JetstreamMetricsService } from '../metrics.service';
+import type { PromClientRuntime } from '../metrics.types';
 
 type Subscribers = Map<string, ((...args: unknown[]) => void)[]>;
 
