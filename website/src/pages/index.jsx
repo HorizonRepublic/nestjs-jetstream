@@ -349,13 +349,28 @@ export default function Home() {
               <strong>{versionLabel}</strong>
               <span className="lp-eyebrow-sep">·</span>
               <span>MIT</span>
+              <span className="lp-eyebrow-sep">·</span>
+              <a
+                className="lp-eyebrow-badge"
+                href="https://codecov.io/github/HorizonRepublic/nestjs-jetstream"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Code coverage on Codecov"
+              >
+                <img
+                  src="https://img.shields.io/codecov/c/github/HorizonRepublic/nestjs-jetstream?style=flat&label=coverage&color=2c5d3a&labelColor=1a1a1a"
+                  alt="coverage"
+                  height="18"
+                />
+              </a>
             </div>
             <h1 className="lp-hero-title lp-fade-up lp-delay-1">
               nestjs-<span className="lp-accent-mark">jetstream</span>
             </h1>
             <p className="lp-hero-sub lp-fade-up lp-delay-2">
-              The NATS JetStream transport NestJS microservices need — durable, retried, traced —
-              under the same <code>@EventPattern</code> decorators you already use.
+              A NATS JetStream transport for NestJS. Durable streams, bounded retries,
+              and W3C trace context — behind the same <code>@EventPattern</code> decorators
+              you already use.
             </p>
             <div className="lp-hero-ctas lp-fade-up lp-delay-3">
               <Link className="lp-btn lp-btn-primary" to="/docs/getting-started/quick-start">
@@ -398,9 +413,9 @@ export default function Home() {
         <section className="lp-section">
           <div className="lp-container">
             <Reveal>
-              <span className="lp-eyelet">Why this library</span>
-              <h2 className="lp-section-title">Five primitives, one transport.</h2>
-              <p className="lp-section-sub">Each one drops in behind the decorators you already use. Same behavior in dev, staging, and prod.</p>
+              <span className="lp-eyelet">What's inside</span>
+              <h2 className="lp-section-title">Five primitives.</h2>
+              <p className="lp-section-sub">Each one sits behind the NestJS decorators you already use. The library handles the JetStream details.</p>
             </Reveal>
             <Reveal className="lp-pillars">
               <article className="lp-pillar span-3">
@@ -504,9 +519,9 @@ export default function Home() {
         <section className="lp-section">
           <div className="lp-container">
             <Reveal>
-              <span className="lp-eyelet">Live code</span>
-              <h2 className="lp-section-title">Configure once. Decorate handlers. Ship.</h2>
-              <p className="lp-section-sub">Same NestJS surface area you use today. The library does the JetStream work underneath.</p>
+              <span className="lp-eyelet">In code</span>
+              <h2 className="lp-section-title">Register the module, decorate handlers.</h2>
+              <p className="lp-section-sub">The surface area you already use in <code>@nestjs/microservices</code>. JetStream lives underneath.</p>
             </Reveal>
 
             <Reveal className="lp-demo-grid">
@@ -552,8 +567,8 @@ export default function Home() {
           <div className="lp-container">
             <Reveal>
               <span className="lp-eyelet">All capabilities</span>
-              <h2 className="lp-section-title">Everything a professional team expects from production messaging.</h2>
-              <p className="lp-section-sub">Twelve features in one transport. No surprises across environments.</p>
+              <h2 className="lp-section-title">Twelve building blocks.</h2>
+              <p className="lp-section-sub">The primitives we needed when wiring NestJS to JetStream, packaged into a single transport.</p>
             </Reveal>
             <Reveal className="lp-features">
               <div className="lp-feature-group">Delivery</div>
@@ -583,8 +598,8 @@ export default function Home() {
         <section className="lp-section" style={{ padding: '80px 0' }}>
           <div className="lp-container" style={{ textAlign: 'center' }}>
             <Reveal>
-              <h2 className="lp-section-title" style={{ margin: '0 auto 16px' }}>Read the docs. Ship the code.</h2>
-              <p className="lp-section-sub" style={{ margin: '0 auto 32px' }}>Five-minute quick start. Then drop into your existing NestJS module graph.</p>
+              <h2 className="lp-section-title" style={{ margin: '0 auto 16px' }}>Quick start.</h2>
+              <p className="lp-section-sub" style={{ margin: '0 auto 32px' }}>Five minutes to wire up. Drops into your existing NestJS module graph.</p>
               <div className="lp-hero-ctas" style={{ justifyContent: 'center' }}>
                 <Link className="lp-btn lp-btn-primary" to="/docs/getting-started/quick-start">
                   Quick start
@@ -604,7 +619,7 @@ export default function Home() {
                   <BrandMark />
                   <span>nestjs-jetstream</span>
                 </div>
-                <p>A production NATS JetStream transport for NestJS — by Horizon Republic.</p>
+                <p>NATS JetStream as a NestJS transport. Maintained by Horizon Republic.</p>
               </div>
               <div className="lp-footer-col">
                 <h4>Docs</h4>
@@ -631,7 +646,6 @@ export default function Home() {
             <div className="lp-footer-bar">
               <span>MIT · © {new Date().getFullYear()} Horizon Republic</span>
               <span className="lp-footer-meta">
-                <span className="lp-footer-status"><span className="lp-footer-status-dot" /> All systems operational</span>
                 <span><strong>{versionLabel}</strong></span>
               </span>
             </div>
