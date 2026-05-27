@@ -18,7 +18,7 @@ import {
   JETSTREAM_METRICS_PROM_CLIENT,
   JETSTREAM_METRICS_REGISTRY,
 } from './metrics.constants';
-import type { PromClientRuntime } from './metrics.factory';
+import type { PromClientRuntime } from './metrics.types';
 import { JetstreamMetricsService } from './metrics.service';
 
 const PROM_CLIENT_INSTALL_MESSAGE =

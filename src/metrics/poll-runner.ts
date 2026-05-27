@@ -1,29 +1,8 @@
 import { Logger } from '@nestjs/common';
 import type { JetStreamManager } from '@nats-io/jetstream';
 
-import type { StreamKind } from '../interfaces';
-
-import type { JetstreamMetrics } from './metrics.factory';
 import { STREAM_KIND_LABEL } from './metrics.constants';
-
-export interface ConsumerPollTarget {
-  kind: StreamKind;
-  stream: string;
-  consumer: string;
-}
-
-/**
- * Inputs for {@link PollRunner}. `targets` lists every consumer this service
- * owns; stream gauges are derived from `targets[].stream`, deduplicated.
- */
-export interface PollRunnerOptions {
-  intervalMs: number;
-  jsmFactory(): Promise<JetStreamManager>;
-  metrics: JetstreamMetrics;
-  targets: ConsumerPollTarget[];
-}
-
-type PollErrorTarget = 'consumer.info' | 'stream.info' | 'jsm.connect';
+import type { PollErrorTarget, PollRunnerOptions } from './metrics.types';
 
 /**
  * Periodically pulls consumer + stream info from `JetStreamManager` and
