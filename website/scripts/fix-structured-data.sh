@@ -23,16 +23,13 @@ if [[ ! -f "$ROOT_JS" ]]; then
   exit 1
 fi
 
-# 1. Fix path lookup — inject baseUrl stripping before schema resolution
-perl -i -pe 's|const contentData = schemas\[location\.pathname\];|// Normalize path: strip baseUrl prefix and match with/without trailing slash
-  const siteBaseUrl = \x27/nestjs-jetstream\x27;
-  const strippedPath = location.pathname.startsWith(siteBaseUrl)
-    ? location.pathname.slice(siteBaseUrl.length) \|\| \x27/\x27
-    : location.pathname;
+# 1. Fix path lookup — handle trailing slash mismatch (baseUrl is now root, so no prefix to strip)
+perl -i -pe 's|const contentData = schemas\[location\.pathname\];|// Normalize path: match with/without trailing slash
+  const strippedPath = location.pathname \|\| \x27/\x27;
   const contentData = schemas[strippedPath] \|\| schemas[strippedPath + \x27/\x27] \|\| schemas[strippedPath.replace(/\\/\$/, \x27\x27)];|' "$ROOT_JS"
 
-# 2. Remove image: undefined lines
-sedi '/"image": "https:\/\/horizonrepublic\.github\.io\/undefined"/d' "$ROOT_JS"
+# 2. Remove image: undefined lines (matches any host since we may switch domains)
+sedi '/"image": "https:\/\/[^"]*\/undefined"/d' "$ROOT_JS"
 
 # 3. Fix intro page broken path
 sedi "s|'/docs///': {|'/docs/': {|" "$ROOT_JS"
@@ -53,7 +50,7 @@ perl -i -0777 -pe '
 
 # 6. Validate patches applied correctly
 errors=0
-grep -q "const siteBaseUrl = '/nestjs-jetstream'" "$ROOT_JS" || { echo "Error: baseUrl path patch did not apply."; errors=$((errors + 1)); }
+grep -q "const strippedPath = location.pathname" "$ROOT_JS" || { echo "Error: path-normalization patch did not apply."; errors=$((errors + 1)); }
 grep -q "schemas\[homePath\] = { \"@type\": \"WebSite\"" "$ROOT_JS" || { echo "Error: homepage schema patch did not apply."; errors=$((errors + 1)); }
 grep -q "'/docs/': {" "$ROOT_JS" || { echo "Error: intro path patch did not apply."; errors=$((errors + 1)); }
 

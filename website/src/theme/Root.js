@@ -9,7 +9,7 @@ import { useLocation } from '@docusaurus/router';
 export default function Root({ children }) {
   const location = useLocation();
 
-  const baseUrl = "https://horizonrepublic.github.io";
+  const baseUrl = "https://nestjs-jetstream.horizon-republic.dev";
   const currentPath = location.pathname;
   const fullUrl = baseUrl + currentPath;
   const locales = ["en"];
@@ -21,7 +21,7 @@ export default function Root({ children }) {
       "organization": {
         "@type": "Organization",
         "name": "Horizon Republic",
-        "url": "https://horizonrepublic.github.io"
+        "url": "https://nestjs-jetstream.horizon-republic.dev"
       }
     }
   }
@@ -302,11 +302,8 @@ export default function Root({ children }) {
   }
   
   // Get the schema for the current page
-  // Normalize path: strip baseUrl prefix and match with/without trailing slash
-  const siteBaseUrl = '/nestjs-jetstream';
-  const strippedPath = location.pathname.startsWith(siteBaseUrl)
-    ? location.pathname.slice(siteBaseUrl.length) || '/'
-    : location.pathname;
+  // Normalize path: match with/without trailing slash
+  const strippedPath = location.pathname || '/';
   const contentData = schemas[strippedPath] || schemas[strippedPath + '/'] || schemas[strippedPath.replace(/\/$/, '')];
   if (contentData) {
     let isSupportedType = true;
