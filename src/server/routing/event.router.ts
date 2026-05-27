@@ -14,6 +14,7 @@ import type {
   DeadLetterConfig,
   DeadLetterInfo,
   EventProcessingConfig,
+  HandlerStatus,
   JetstreamModuleOptions,
 } from '../../interfaces';
 import {
@@ -142,7 +143,20 @@ export class EventRouter {
     // Snapshot the config object, not the Map — updateMaxDeliverMap() can
     // replace maxDeliverByStream wholesale after consumers are ensured.
     const hasDlqCheck = deadLetterConfig !== undefined;
-    const emitRouted = eventBus.hasHook(TransportEvent.MessageRouted);
+
+    // Use the declared pattern (not the wire subject) so cardinality stays
+    // bounded. hasHook is checked per-emit, not snapshotted, so late
+    // subscribers (e.g. JetstreamMetricsService bootstrapping after this
+    // router starts) still receive events.
+    const reportHandlerCompleted = (msg: JsMsg, startedAt: number, status: HandlerStatus): void => {
+      if (!eventBus.hasHook(TransportEvent.HandlerCompleted)) return;
+      const declared = patternRegistry.resolveDeclared(msg.subject);
+      const pattern = declared?.pattern ?? msg.subject;
+      const declaredKind = declared?.kind ?? kind;
+      const durationMs = performance.now() - startedAt;
+
+      eventBus.emit(TransportEvent.HandlerCompleted, pattern, declaredKind, durationMs, status);
+    };
 
     const isDeadLetter = (msg: JsMsg): boolean => {
       if (!hasDlqCheck) return false;
@@ -210,7 +224,7 @@ export class EventRouter {
           return null;
         }
 
-        if (emitRouted) eventBus.emitMessageRouted(subject, MessageKind.Event);
+        eventBus.emitMessageRouted(subject, MessageKind.Event);
 
         return { handler, data };
       } catch (err) {
@@ -226,6 +240,14 @@ export class EventRouter {
 
         return null;
       }
+    };
+
+    // Order mirrors settleSuccess: explicit terminate() wins over retry().
+    const statusForContext = (ctx: RpcContext): HandlerStatus => {
+      if (ctx.shouldTerminate) return 'terminated';
+      if (ctx.shouldRetry) return 'retried';
+
+      return 'success';
     };
 
     /**
@@ -247,6 +269,7 @@ export class EventRouter {
       const stopAckExtension = hasAckExtension
         ? startAckExtensionTimer(msg, ackExtensionInterval)
         : null;
+      const startedAt = performance.now();
 
       let pending: unknown;
 
@@ -272,6 +295,8 @@ export class EventRouter {
           `${kind}-handler:${msg.subject}`,
         );
 
+        reportHandlerCompleted(msg, startedAt, 'error');
+
         // Keep ack extension alive across settleFailure() — it may route
         // through handleDeadLetter → publishToDlq whose JetStream publish
         // can take longer than the consumer's `ack_wait`. Stopping the
@@ -285,6 +310,7 @@ export class EventRouter {
 
       if (!isPromiseLike(pending)) {
         settleSuccess(msg, ctx);
+        reportHandlerCompleted(msg, startedAt, statusForContext(ctx));
         if (stopAckExtension !== null) stopAckExtension();
 
         return undefined;
@@ -293,6 +319,7 @@ export class EventRouter {
       return (pending as Promise<unknown>).then(
         () => {
           settleSuccess(msg, ctx);
+          reportHandlerCompleted(msg, startedAt, statusForContext(ctx));
           if (stopAckExtension !== null) stopAckExtension();
         },
         async (err: unknown) => {
@@ -301,6 +328,7 @@ export class EventRouter {
             err instanceof Error ? err : new Error(String(err)),
             `${kind}-handler:${msg.subject}`,
           );
+          reportHandlerCompleted(msg, startedAt, 'error');
           try {
             await settleFailure(msg, data, err);
           } finally {
@@ -332,7 +360,7 @@ export class EventRouter {
           return undefined;
         }
 
-        if (emitRouted) eventBus.emitMessageRouted(subject, MessageKind.Event);
+        eventBus.emitMessageRouted(subject, MessageKind.Event);
       } catch (err) {
         logger.error(`Ordered handler error (${subject}):`, err);
 
@@ -349,6 +377,7 @@ export class EventRouter {
         }
       };
 
+      const startedAt = performance.now();
       let pending: unknown;
 
       try {
@@ -368,19 +397,28 @@ export class EventRouter {
         );
       } catch (err) {
         logger.error(`Ordered handler error (${subject}):`, err);
+        reportHandlerCompleted(msg, startedAt, 'error');
 
         return undefined;
       }
 
       if (!isPromiseLike(pending)) {
         warnIfSettlementAttempted();
+        reportHandlerCompleted(msg, startedAt, 'success');
 
         return undefined;
       }
 
-      return (pending as Promise<unknown>).then(warnIfSettlementAttempted, (err: unknown) => {
-        logger.error(`Ordered handler error (${subject}):`, err);
-      });
+      return (pending as Promise<unknown>).then(
+        () => {
+          warnIfSettlementAttempted();
+          reportHandlerCompleted(msg, startedAt, 'success');
+        },
+        (err: unknown) => {
+          logger.error(`Ordered handler error (${subject}):`, err);
+          reportHandlerCompleted(msg, startedAt, 'error');
+        },
+      );
     };
 
     const route = isOrdered ? handleOrderedSafe : handleSafe;

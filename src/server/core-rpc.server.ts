@@ -4,8 +4,8 @@ import { headers as natsHeaders, type Msg, type Subscription } from '@nats-io/tr
 import { ConnectionProvider } from '../connection';
 import { RpcContext } from '../context';
 import { EventBus } from '../hooks';
-import { MessageKind, TransportEvent } from '../interfaces';
-import type { Codec, JetstreamModuleOptions } from '../interfaces';
+import { MessageKind, StreamKind, TransportEvent } from '../interfaces';
+import type { Codec, HandlerStatus, JetstreamModuleOptions } from '../interfaces';
 import { JetstreamHeader } from '../jetstream.constants';
 import {
   ConsumeKind,
@@ -107,6 +107,7 @@ export class CoreRpcServer {
     }
 
     const ctx = new RpcContext([msg]);
+    const startedAt = performance.now();
 
     try {
       const raw = await withConsumeSpan(
@@ -128,6 +129,7 @@ export class CoreRpcServer {
       );
 
       msg.respond(this.codec.encode(raw));
+      this.reportHandlerCompleted(msg, startedAt, 'success');
     } catch (err) {
       this.eventBus.emit(
         TransportEvent.Error,
@@ -135,7 +137,26 @@ export class CoreRpcServer {
         `core-rpc-handler:${msg.subject}`,
       );
       this.respondWithError(msg, err);
+      this.reportHandlerCompleted(msg, startedAt, 'error');
     }
+  }
+
+  // See EventRouter.reportHandlerCompleted for the rationale on declared
+  // pattern + per-emit hasHook check.
+  private reportHandlerCompleted(msg: Msg, startedAt: number, status: HandlerStatus): void {
+    if (!this.eventBus.hasHook(TransportEvent.HandlerCompleted)) return;
+
+    const declared = this.patternRegistry.resolveDeclared(msg.subject);
+    const pattern = declared?.pattern ?? msg.subject;
+    const kind = declared?.kind ?? StreamKind.Command;
+
+    this.eventBus.emit(
+      TransportEvent.HandlerCompleted,
+      pattern,
+      kind,
+      performance.now() - startedAt,
+      status,
+    );
   }
 
   /** Send an error response back to the caller with x-error header. */

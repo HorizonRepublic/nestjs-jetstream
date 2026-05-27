@@ -104,6 +104,21 @@ export class PatternRegistry {
     return this.registry.get(subject)?.handler ?? null;
   }
 
+  /**
+   * Resolve the declared pattern and {@link StreamKind} for a full NATS subject.
+   *
+   * Returns `null` when the subject is not registered. The declared pattern is
+   * the value the user passed to `@EventPattern`/`@MessagePattern` — stable and
+   * bounded, suitable for use as a Prometheus label without cardinality risk.
+   */
+  public resolveDeclared(subject: string): { pattern: string; kind: StreamKind } | null {
+    const entry = this.registry.get(subject);
+
+    if (!entry) return null;
+
+    return { pattern: entry.pattern, kind: this.resolveStreamKind(entry) };
+  }
+
   /** Get all registered broadcast patterns (for consumer filter_subject setup). */
   public getBroadcastPatterns(): string[] {
     return this.getPatternsByKind().broadcasts.map((p) => buildBroadcastSubject(p));

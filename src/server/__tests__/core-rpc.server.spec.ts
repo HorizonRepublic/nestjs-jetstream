@@ -6,6 +6,7 @@ import type { Msg, NatsConnection, Subscription } from '@nats-io/transport-node'
 import { ConnectionProvider } from '../../connection';
 import { EventBus } from '../../hooks';
 import type { Codec, JetstreamModuleOptions } from '../../interfaces';
+import { StreamKind, TransportEvent } from '../../interfaces';
 
 import { CoreRpcServer } from '../core-rpc.server';
 import { PatternRegistry } from '../routing/pattern-registry';
@@ -278,6 +279,88 @@ describe(CoreRpcServer, () => {
 
           // Then: no crash, msg.respond NOT called (encode failed in respondWithError)
           expect(msg.respond).not.toHaveBeenCalled();
+        });
+      });
+
+      describe('HandlerCompleted emission', () => {
+        beforeEach(() => {
+          eventBus.hasHook.mockImplementation((event) => event === TransportEvent.HandlerCompleted);
+          patternRegistry.resolveDeclared.mockReturnValue({
+            pattern: 'orders.create',
+            kind: StreamKind.Command,
+          });
+        });
+
+        const completedCalls = (): unknown[][] =>
+          eventBus.emit.mock.calls.filter((c) => c[0] === TransportEvent.HandlerCompleted);
+
+        it('should emit success when handler resolves', async () => {
+          // Given
+          const handler = vi.fn().mockResolvedValue({ id: 1 });
+
+          patternRegistry.getHandler.mockReturnValue(handler);
+
+          const msg = createMock<Msg>({
+            subject: `${serviceName}__microservice.cmd.orders.create`,
+            reply: 'reply.subject',
+            data: codec.encode({}),
+          });
+
+          // When
+          subscriptionCallback(null, msg);
+          await new Promise(process.nextTick);
+
+          // Then
+          const calls = completedCalls();
+
+          expect(calls).toHaveLength(1);
+          expect(calls[0]?.[1]).toBe('orders.create');
+          expect(calls[0]?.[2]).toBe(StreamKind.Command);
+          expect(calls[0]?.[4]).toBe('success');
+        });
+
+        it('should emit error when handler rejects', async () => {
+          // Given
+          const handler = vi.fn().mockRejectedValue(new Error('boom'));
+
+          patternRegistry.getHandler.mockReturnValue(handler);
+
+          const msg = createMock<Msg>({
+            subject: `${serviceName}__microservice.cmd.orders.create`,
+            reply: 'reply.subject',
+            data: codec.encode({}),
+          });
+
+          // When
+          subscriptionCallback(null, msg);
+          await new Promise(process.nextTick);
+
+          // Then
+          const calls = completedCalls();
+
+          expect(calls).toHaveLength(1);
+          expect(calls[0]?.[4]).toBe('error');
+        });
+
+        it('should skip emission when no listener is registered', async () => {
+          // Given
+          eventBus.hasHook.mockReturnValue(false);
+          const handler = vi.fn().mockResolvedValue({ id: 1 });
+
+          patternRegistry.getHandler.mockReturnValue(handler);
+
+          const msg = createMock<Msg>({
+            subject: `${serviceName}__microservice.cmd.orders.create`,
+            reply: 'reply.subject',
+            data: codec.encode({}),
+          });
+
+          // When
+          subscriptionCallback(null, msg);
+          await new Promise(process.nextTick);
+
+          // Then
+          expect(completedCalls()).toHaveLength(0);
         });
       });
 

@@ -154,4 +154,65 @@ describe(EventBus, () => {
       });
     });
   });
+
+  describe('internal subscribers', () => {
+    it('should call all subscribers for a given event', () => {
+      // Given: two subscribers on Connect
+      const subA = vi.fn();
+      const subB = vi.fn();
+
+      sut.subscribe(TransportEvent.Connect, subA);
+      sut.subscribe(TransportEvent.Connect, subB);
+      const server = faker.internet.url();
+
+      // When: event emitted
+      sut.emit(TransportEvent.Connect, server);
+
+      // Then: both subscribers receive args
+      expect(subA).toHaveBeenCalledWith(server);
+      expect(subB).toHaveBeenCalledWith(server);
+    });
+
+    it('should call user hook AND internal subscribers', () => {
+      // Given: user hook + internal subscriber
+      const userHook = vi.fn();
+      const sub = vi.fn();
+
+      sut = new EventBus(logger, { [TransportEvent.Disconnect]: userHook });
+      sut.subscribe(TransportEvent.Disconnect, sub);
+
+      // When: event emitted
+      sut.emit(TransportEvent.Disconnect);
+
+      // Then: both fire
+      expect(userHook).toHaveBeenCalledOnce();
+      expect(sub).toHaveBeenCalledOnce();
+    });
+
+    it('should isolate subscriber failures — one throwing does not block others', () => {
+      // Given: two subscribers, first throws
+      const throwing = vi.fn(() => {
+        throw new Error('boom');
+      });
+      const survivor = vi.fn();
+
+      sut.subscribe(TransportEvent.Connect, throwing);
+      sut.subscribe(TransportEvent.Connect, survivor);
+
+      // When: event emitted
+      sut.emit(TransportEvent.Connect, faker.internet.url());
+
+      // Then: survivor still called, throw was logged
+      expect(survivor).toHaveBeenCalledOnce();
+      expect(logger.error).toHaveBeenCalled();
+    });
+
+    it('should report a registered hook via hasHook even if only internal subscribers exist', () => {
+      // Given: only an internal subscriber, no user hook
+      sut.subscribe(TransportEvent.MessageRouted, vi.fn());
+
+      // Then: hasHook returns true (so hot path runs emit)
+      expect(sut.hasHook(TransportEvent.MessageRouted)).toBe(true);
+    });
+  });
 });

@@ -572,7 +572,8 @@ export default function Home() {
               <FeatureCard to="/docs/guides/per-message-ttl" icon={<><path d="M3 13L13 3" /><circle cx="4" cy="12" r="1" /><circle cx="12" cy="4" r="1" /></>} name="Per-message TTL" desc="Expire stale messages before they reach a consumer." />
 
               <div className="lp-feature-group">Observability</div>
-              <FeatureCard to="/docs/guides/distributed-tracing" icon={<><path d="M2 8h12" /><circle cx="5" cy="8" r="1.5" /><circle cx="11" cy="8" r="1.5" /></>} name="Distributed tracing" desc="W3C trace context on every hop. OpenTelemetry-compatible." />
+              <FeatureCard to="/docs/observability/tracing" icon={<><path d="M2 8h12" /><circle cx="5" cy="8" r="1.5" /><circle cx="11" cy="8" r="1.5" /></>} name="Distributed tracing" desc="W3C trace context on every hop. OpenTelemetry-compatible." />
+              <FeatureCard to="/docs/observability/metrics" icon={<><path d="M2 13L5 9L8 11L13 4" /><circle cx="13" cy="4" r="1" /></>} name="Prometheus metrics" desc="Throughput, latency, lag — zero-config with prom-client." />
               <FeatureCard to="/docs/reference/header-contract" icon={<path d="M3 12V4M3 4h6l4 4-4 4H3" />} name="Header contract" desc="Stable, documented header schema for tracing & correlation." />
               <FeatureCard to="/docs/guides/lifecycle-hooks" icon={<><rect x="2" y="3" width="12" height="10" rx="1.5" /><path d="M2 6h12M5 9h6" /></>} name="Lifecycle hooks" desc={<>Subscribe to <code>TransportEvent</code> for ack, nak, redelivery.</>} />
             </Reveal>
