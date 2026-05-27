@@ -175,6 +175,39 @@ describe(PatternRegistry, () => {
     });
   });
 
+  describe('resolveDeclared()', () => {
+    describe('happy path', () => {
+      it.each([
+        ['RPC', { isEvent: false }, StreamKind.Command, `${'__svc__'}.cmd.`],
+        ['event', { isEvent: true }, StreamKind.Event, `${'__svc__'}.ev.`],
+        ['ordered', { ordered: true }, StreamKind.Ordered, `${'__svc__'}.ordered.`],
+        ['broadcast', { isEvent: true, broadcast: true }, StreamKind.Broadcast, 'broadcast.'],
+      ])(
+        'should return declared pattern and %s StreamKind',
+        (_kind, opts, expectedKind, prefix) => {
+          // Given
+          const pattern = `${faker.lorem.word()}.${faker.lorem.word()}`;
+          const handler = createHandler(opts);
+
+          sut.registerHandlers(new Map([[pattern, handler]]));
+
+          // When
+          const resolvedPrefix = prefix.replace('__svc__', `${serviceName}__microservice`);
+          const result = sut.resolveDeclared(`${resolvedPrefix}${pattern}`);
+
+          // Then
+          expect(result).toEqual({ pattern, kind: expectedKind });
+        },
+      );
+    });
+
+    describe('edge cases', () => {
+      it('should return null when subject is not registered', () => {
+        expect(sut.resolveDeclared('unknown.subject')).toBeNull();
+      });
+    });
+  });
+
   describe('pattern queries', () => {
     beforeEach(() => {
       const handlers = new Map<string, MessageHandler>([

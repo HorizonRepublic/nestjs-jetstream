@@ -1,7 +1,9 @@
 import { DynamicModule, Module, Provider } from '@nestjs/common';
 
 import { EventBus } from '../hooks';
-import { JETSTREAM_EVENT_BUS } from '../jetstream.constants';
+import type { JetstreamModuleOptions } from '../interfaces';
+import { JETSTREAM_EVENT_BUS, JETSTREAM_OPTIONS } from '../jetstream.constants';
+import { PatternRegistry } from '../server/routing/pattern-registry';
 
 import type { MetricsConfig, MetricsOption } from './metrics.config';
 import {
@@ -105,9 +107,20 @@ export class JetstreamMetricsModule {
 
     const serviceProvider: Provider = {
       provide: JetstreamMetricsService,
-      inject: [JETSTREAM_EVENT_BUS, JETSTREAM_METRICS_CONFIG, JETSTREAM_METRICS_PROM_CLIENT],
-      useFactory: (eventBus: EventBus, cfg: MetricsConfig, runtime: PromClientRuntime) =>
-        new JetstreamMetricsService(eventBus, cfg, runtime),
+      inject: [
+        JETSTREAM_EVENT_BUS,
+        JETSTREAM_METRICS_CONFIG,
+        JETSTREAM_METRICS_PROM_CLIENT,
+        JETSTREAM_OPTIONS,
+        { token: PatternRegistry, optional: true },
+      ],
+      useFactory: (
+        eventBus: EventBus,
+        cfg: MetricsConfig,
+        runtime: PromClientRuntime,
+        opts: JetstreamModuleOptions,
+        patternRegistry: PatternRegistry | null,
+      ) => new JetstreamMetricsService(eventBus, cfg, runtime, opts, patternRegistry),
     };
 
     return {

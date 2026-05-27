@@ -268,6 +268,126 @@ describe(RpcRouter, () => {
     });
   });
 
+  describe('HandlerCompleted emission', () => {
+    beforeEach(async () => {
+      sut.destroy();
+      eventBus.hasHook.mockImplementation((event) => event === TransportEvent.HandlerCompleted);
+      sut = new RpcRouter(messageProvider, patternRegistry, connection, codec, eventBus);
+      await sut.start();
+      patternRegistry.resolveDeclared.mockReturnValue({
+        pattern: 'orders.create',
+        kind: StreamKind.Command,
+      });
+    });
+
+    const handlerCompletedCalls = (): unknown[][] =>
+      eventBus.emit.mock.calls.filter((c) => c[0] === TransportEvent.HandlerCompleted);
+
+    it('should emit HandlerCompleted with success status when handler resolves', async () => {
+      // Given
+      const handler = vi.fn().mockResolvedValue({ id: 1 });
+
+      patternRegistry.getHandler.mockReturnValue(handler);
+      const msg = createRpcMsg(
+        'svc__microservice.cmd.orders.create',
+        {},
+        faker.string.uuid(),
+        faker.string.uuid(),
+      );
+
+      // When
+      commands$.next(msg);
+      await new Promise(process.nextTick);
+
+      // Then
+      const calls = handlerCompletedCalls();
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.[1]).toBe('orders.create');
+      expect(calls[0]?.[2]).toBe(StreamKind.Command);
+      expect(typeof calls[0]?.[3]).toBe('number');
+      expect(calls[0]?.[4]).toBe('success');
+    });
+
+    it('should emit HandlerCompleted with error status when handler rejects', async () => {
+      // Given
+      const handler = vi.fn().mockRejectedValue(new Error('boom'));
+
+      patternRegistry.getHandler.mockReturnValue(handler);
+      const msg = createRpcMsg(
+        'svc__microservice.cmd.orders.create',
+        {},
+        faker.string.uuid(),
+        faker.string.uuid(),
+      );
+
+      // When
+      commands$.next(msg);
+      await new Promise(process.nextTick);
+
+      // Then
+      const calls = handlerCompletedCalls();
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.[4]).toBe('error');
+    });
+
+    it('should emit HandlerCompleted with terminated status when handler exceeds timeout', async () => {
+      vi.useFakeTimers();
+      sut.destroy();
+      sut = new RpcRouter(messageProvider, patternRegistry, connection, codec, eventBus, {
+        timeout: 100,
+      });
+      await sut.start();
+      const handler = vi.fn().mockReturnValue(new Promise(() => {}));
+
+      patternRegistry.getHandler.mockReturnValue(handler);
+      const msg = createRpcMsg(
+        'svc__microservice.cmd.orders.create',
+        {},
+        faker.string.uuid(),
+        faker.string.uuid(),
+      );
+
+      // When: timeout fires
+      commands$.next(msg);
+      await vi.advanceTimersByTimeAsync(100);
+
+      // Then
+      const calls = handlerCompletedCalls();
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.[4]).toBe('terminated');
+
+      vi.useRealTimers();
+    });
+
+    it('should skip emission when HandlerCompleted has no listeners', async () => {
+      sut.destroy();
+      eventBus.hasHook.mockReturnValue(false);
+      sut = new RpcRouter(messageProvider, patternRegistry, connection, codec, eventBus);
+      await sut.start();
+
+      const handler = vi.fn().mockResolvedValue({ id: 1 });
+
+      patternRegistry.getHandler.mockReturnValue(handler);
+      const msg = createRpcMsg(
+        'svc__microservice.cmd.orders.create',
+        {},
+        faker.string.uuid(),
+        faker.string.uuid(),
+      );
+
+      // When
+      commands$.next(msg);
+      await new Promise(process.nextTick);
+
+      // Then
+      expect(handlerCompletedCalls()).toHaveLength(0);
+      expect(patternRegistry.resolveDeclared).not.toHaveBeenCalled();
+    });
+  });
+
   describe('timeout', () => {
     describe('when handler exceeds timeout', () => {
       it('should term the message and emit RpcTimeout', async () => {

@@ -14,6 +14,7 @@ import type {
   DeadLetterConfig,
   DeadLetterInfo,
   EventProcessingConfig,
+  HandlerStatus,
   JetstreamModuleOptions,
 } from '../../interfaces';
 import {
@@ -143,6 +144,23 @@ export class EventRouter {
     // replace maxDeliverByStream wholesale after consumers are ensured.
     const hasDlqCheck = deadLetterConfig !== undefined;
     const emitRouted = eventBus.hasHook(TransportEvent.MessageRouted);
+    const emitCompleted = eventBus.hasHook(TransportEvent.HandlerCompleted);
+
+    /**
+     * Emit `HandlerCompleted` with the declared pattern + {@link StreamKind} so
+     * cardinality stays bounded — the actual NATS subject matches the declared
+     * pattern under the current exact-match routing, but pinning to the
+     * declared form future-proofs against wildcard support.
+     */
+    const reportHandlerCompleted = (msg: JsMsg, startedAt: number, status: HandlerStatus): void => {
+      if (!emitCompleted) return;
+      const declared = patternRegistry.resolveDeclared(msg.subject);
+      const pattern = declared?.pattern ?? msg.subject;
+      const declaredKind = declared?.kind ?? kind;
+      const durationMs = performance.now() - startedAt;
+
+      eventBus.emit(TransportEvent.HandlerCompleted, pattern, declaredKind, durationMs, status);
+    };
 
     const isDeadLetter = (msg: JsMsg): boolean => {
       if (!hasDlqCheck) return false;
@@ -237,6 +255,18 @@ export class EventRouter {
      * sync path. The sync branch inlines settlement to avoid per-message
      * closures that would cost more heap than the Promise they replace.
      */
+    /**
+     * Map the post-handler context state to a {@link HandlerStatus}. The order
+     * mirrors `settleSuccess`: explicit `terminate()` wins over `retry()` so
+     * the status matches the actual settlement.
+     */
+    const statusForContext = (ctx: RpcContext): HandlerStatus => {
+      if (ctx.shouldTerminate) return 'terminated';
+      if (ctx.shouldRetry) return 'retried';
+
+      return 'success';
+    };
+
     const handleSafe = (msg: JsMsg): Promise<void> | undefined => {
       const resolved = resolveEvent(msg);
 
@@ -247,6 +277,7 @@ export class EventRouter {
       const stopAckExtension = hasAckExtension
         ? startAckExtensionTimer(msg, ackExtensionInterval)
         : null;
+      const startedAt = performance.now();
 
       let pending: unknown;
 
@@ -272,6 +303,8 @@ export class EventRouter {
           `${kind}-handler:${msg.subject}`,
         );
 
+        reportHandlerCompleted(msg, startedAt, 'error');
+
         // Keep ack extension alive across settleFailure() — it may route
         // through handleDeadLetter → publishToDlq whose JetStream publish
         // can take longer than the consumer's `ack_wait`. Stopping the
@@ -285,6 +318,7 @@ export class EventRouter {
 
       if (!isPromiseLike(pending)) {
         settleSuccess(msg, ctx);
+        reportHandlerCompleted(msg, startedAt, statusForContext(ctx));
         if (stopAckExtension !== null) stopAckExtension();
 
         return undefined;
@@ -293,6 +327,7 @@ export class EventRouter {
       return (pending as Promise<unknown>).then(
         () => {
           settleSuccess(msg, ctx);
+          reportHandlerCompleted(msg, startedAt, statusForContext(ctx));
           if (stopAckExtension !== null) stopAckExtension();
         },
         async (err: unknown) => {
@@ -301,6 +336,7 @@ export class EventRouter {
             err instanceof Error ? err : new Error(String(err)),
             `${kind}-handler:${msg.subject}`,
           );
+          reportHandlerCompleted(msg, startedAt, 'error');
           try {
             await settleFailure(msg, data, err);
           } finally {
@@ -349,6 +385,7 @@ export class EventRouter {
         }
       };
 
+      const startedAt = performance.now();
       let pending: unknown;
 
       try {
@@ -368,19 +405,28 @@ export class EventRouter {
         );
       } catch (err) {
         logger.error(`Ordered handler error (${subject}):`, err);
+        reportHandlerCompleted(msg, startedAt, 'error');
 
         return undefined;
       }
 
       if (!isPromiseLike(pending)) {
         warnIfSettlementAttempted();
+        reportHandlerCompleted(msg, startedAt, 'success');
 
         return undefined;
       }
 
-      return (pending as Promise<unknown>).then(warnIfSettlementAttempted, (err: unknown) => {
-        logger.error(`Ordered handler error (${subject}):`, err);
-      });
+      return (pending as Promise<unknown>).then(
+        () => {
+          warnIfSettlementAttempted();
+          reportHandlerCompleted(msg, startedAt, 'success');
+        },
+        (err: unknown) => {
+          logger.error(`Ordered handler error (${subject}):`, err);
+          reportHandlerCompleted(msg, startedAt, 'error');
+        },
+      );
     };
 
     const route = isOrdered ? handleOrderedSafe : handleSafe;

@@ -1,3 +1,5 @@
+import { StreamKind } from '../interfaces';
+
 import type { ErrorContext, HistogramBuckets } from './metrics.config';
 
 /** DI token for the resolved `MetricsConfig` (with defaults applied). */
@@ -55,3 +57,18 @@ export const ERROR_CONTEXT_PREFIXES: readonly (readonly [string, ErrorContext])[
 
 /** Sentinel subject label for `jetstream_messages_unhandled_total`. */
 export const UNMATCHED_SUBJECT_LABEL = '<unmatched>';
+
+/**
+ * Human-readable label values for the `kind` metric label.
+ *
+ * The {@link StreamKind} enum uses short forms (`ev`, `cmd`) chosen for NATS
+ * subject brevity. Prometheus dashboards/alerts read better with full words —
+ * this map expands them while keeping the underlying enum untouched. The
+ * resulting cardinality is fixed at four.
+ */
+export const STREAM_KIND_LABEL: Record<StreamKind, string> = {
+  [StreamKind.Event]: 'event',
+  [StreamKind.Command]: 'command',
+  [StreamKind.Broadcast]: 'broadcast',
+  [StreamKind.Ordered]: 'ordered',
+};
