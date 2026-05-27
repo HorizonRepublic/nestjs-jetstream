@@ -21,11 +21,11 @@
 </p>
 
 <p align="center">
-  <a href="https://horizonrepublic.github.io/nestjs-jetstream/"><b>Documentation</b></a>
+  <a href="https://nestjs-jetstream.horizon-republic.dev/"><b>Documentation</b></a>
   &nbsp;·&nbsp;
-  <a href="https://horizonrepublic.github.io/nestjs-jetstream/docs/getting-started/quick-start">Quick Start</a>
+  <a href="https://nestjs-jetstream.horizon-republic.dev/docs/getting-started/quick-start">Quick Start</a>
   &nbsp;·&nbsp;
-  <a href="https://horizonrepublic.github.io/nestjs-jetstream/docs/reference/api">API Reference</a>
+  <a href="https://nestjs-jetstream.horizon-republic.dev/docs/reference/api">API Reference</a>
 </p>
 
 ---
@@ -77,7 +77,7 @@ export class OrdersController {
 
 That's it. At-least-once. Retries on throw. Traced end-to-end.
 
-The full configuration surface, every pattern, and the production checklist live in the [documentation](https://horizonrepublic.github.io/nestjs-jetstream/).
+The full configuration surface, every pattern, and the production checklist live in the [documentation](https://nestjs-jetstream.horizon-republic.dev/).
 
 ## Quality
 
