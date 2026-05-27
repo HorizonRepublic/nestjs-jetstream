@@ -341,9 +341,12 @@ export interface JetstreamModuleOptions {
    * consuming application, all tracer calls are no-ops — there is no
    * runtime cost.
    *
+   * Accepts a full {@link OtelOptions} object, or the boolean shorthand
+   * `true` (== defaults) / `false` (== `{ enabled: false }`).
+   *
    * @see OtelOptions
    */
-  otel?: OtelOptions;
+  otel?: OtelOptions | boolean;
 }
 
 /** Options for `JetstreamModule.forFeature()`. */
@@ -369,16 +372,6 @@ export type JetstreamModuleAsyncOptions = {
 
   /** Additional module imports (e.g., ConfigModule). */
   imports?: ModuleMetadata['imports'];
-
-  /**
-   * Built-in Prometheus metrics. Specified at the async-options level (parallel
-   * to {@link name}) because module composition is decided synchronously before
-   * the async factory runs. Use `true` for defaults, a {@link MetricsConfig}
-   * object for full control, or omit/`false` to disable entirely.
-   *
-   * @see JetstreamModuleOptions.metrics
-   */
-  metrics?: MetricsOption;
 } & (
   | {
       useFactory(

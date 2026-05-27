@@ -39,7 +39,7 @@ const compile = async (
   class TestRootModule {}
 
   return Test.createTestingModule({
-    imports: [TestRootModule, JetstreamMetricsModule.forFeature(options.metrics)],
+    imports: [TestRootModule, JetstreamMetricsModule.forFeature()],
   }).compile();
 };
 
@@ -125,21 +125,23 @@ describe(JetstreamMetricsModule, () => {
   });
 
   describe('edge cases', () => {
-    it('should compile as an empty shell when metrics option is disabled', async () => {
+    it('should resolve config to null when metrics option is disabled', async () => {
       // Given/When
       const moduleRef = await compile({ ...baseOptions, metrics: false }, eventBus);
 
-      // Then: no metrics service or config providers exist
-      expect(() => moduleRef.get(JetstreamMetricsService)).toThrow();
-      expect(() => moduleRef.get(JETSTREAM_METRICS_CONFIG)).toThrow();
+      // Then: providers exist (module is always imported) but resolve to null,
+      // so prom-client is never loaded and the service self-disables on bootstrap.
+      expect(moduleRef.get(JETSTREAM_METRICS_CONFIG)).toBeNull();
+      expect(moduleRef.get(JetstreamMetricsService)).toBeInstanceOf(JetstreamMetricsService);
     });
 
-    it('should compile as an empty shell when metrics option is omitted', async () => {
+    it('should resolve config to null when metrics option is omitted', async () => {
       // Given/When
       const moduleRef = await compile(baseOptions, eventBus);
 
       // Then
-      expect(() => moduleRef.get(JetstreamMetricsService)).toThrow();
+      expect(moduleRef.get(JETSTREAM_METRICS_CONFIG)).toBeNull();
+      expect(moduleRef.get(JetstreamMetricsService)).toBeInstanceOf(JetstreamMetricsService);
     });
   });
 });

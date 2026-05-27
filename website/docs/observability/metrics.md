@@ -38,7 +38,7 @@ pnpm add prom-client
 
 The transport declares `prom-client` as an **optional peer**. If you do not enable metrics, the package is never imported. Tested against `prom-client@^15`.
 
-Enable metrics in `forRoot` (or `forRootAsync`):
+Enable metrics in `forRoot`:
 
 ```ts
 import { JetstreamModule } from '@horizon-republic/nestjs-jetstream';
@@ -53,6 +53,20 @@ import { JetstreamModule } from '@horizon-republic/nestjs-jetstream';
   ],
 })
 export class AppModule {}
+```
+
+…or with `forRootAsync`:
+
+```ts
+JetstreamModule.forRootAsync({
+  name: 'orders',
+  imports: [ConfigModule],
+  inject: [ConfigService],
+  useFactory: (config: ConfigService) => ({
+    servers: config.get<string[]>('NATS_SERVERS')!,
+    metrics: true,
+  }),
+})
 ```
 
 That's the whole integration. Metrics write to `prom-client`'s global `register`. To expose them at `/metrics`, pair the transport with `@willsoto/nestjs-prometheus`:
@@ -100,8 +114,7 @@ JetstreamModule.forRoot({
 
 When the `metrics` option is omitted or set to `false`:
 
-- `JetstreamMetricsModule` is not registered.
-- `prom-client` is never imported (the dynamic `import()` does not run).
+- `prom-client` is never imported (the dynamic `import()` only runs when `metrics` is truthy).
 - The transport's hot paths add ~30 nanoseconds per message (a single `Map.get` to check if a listener exists) — effectively free.
 
 Production deployments that don't need metrics pay nothing for the feature.

@@ -353,7 +353,10 @@ const resolveCaptureBody = (
  * this layer's job — the NestJS / NATS infra above us owns config
  * integrity.
  */
-export const resolveOtelOptions = (options: OtelOptions = {}): ResolvedOtelOptions => {
+export const resolveOtelOptions = (options: OtelOptions | boolean = {}): ResolvedOtelOptions => {
+  if (options === true) options = {};
+  if (options === false) options = { enabled: false };
+
   return {
     enabled: options.enabled ?? true,
     traces: expandTracesOption(options.traces),

@@ -135,7 +135,7 @@ export interface DerivedOtelAttrs {
  * keys rather than inventing a value.
  */
 export const deriveOtelAttrs = (options: {
-  readonly otel?: OtelOptions;
+  readonly otel?: OtelOptions | boolean;
   readonly name: string;
   readonly servers: readonly string[];
 }): DerivedOtelAttrs => ({
