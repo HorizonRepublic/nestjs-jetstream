@@ -66,7 +66,9 @@ class RpcContext {
 }
 ```
 
-### JetStream message info <small>since 2.7.0</small>
+### JetStream message info
+
+<Since version="2.7.0" />
 
 These return `undefined` for Core NATS messages — no type guard needed.
 
@@ -89,7 +91,9 @@ class RpcContext {
 }
 ```
 
-### Settlement actions <small>since 2.7.0</small>
+### Settlement actions
+
+<Since version="2.7.0" />
 
 Control how the transport acknowledges the message — without throwing errors.
 
