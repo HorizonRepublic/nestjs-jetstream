@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.11.1](https://github.com/HorizonRepublic/nestjs-jetstream/compare/v2.11.0...v2.11.1) (2026-05-27)
+
+
+### Bug Fixes
+
+* **observability:** unify metrics and otel under the factory result ([#171](https://github.com/HorizonRepublic/nestjs-jetstream/issues/171)) ([70dce19](https://github.com/HorizonRepublic/nestjs-jetstream/commit/70dce19aa2a999b70a01b93530a9c410ae521784))
+
 ## [2.11.0](https://github.com/HorizonRepublic/nestjs-jetstream/compare/v2.10.0...v2.11.0) (2026-05-27)
 
 
