@@ -216,6 +216,60 @@ describe('Metrics — integration', () => {
       expect(upSample!.labels.server).toMatch(/localhost/);
     });
 
+    it('should increment publish_total and observe publish_duration_seconds for a successful event emit', async () => {
+      // Given/When
+      await firstValueFrom(client.emit('orders.created', { id: 'd1' }));
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Then
+      const published = await samples(register, 'jetstream_publish_total');
+
+      expect(
+        findSample(published, {
+          subject: 'orders.created',
+          kind: 'event',
+          status: 'success',
+        })?.value,
+      ).toBe(1);
+
+      const text = await register.metrics();
+
+      expect(text).toMatch(
+        /^jetstream_publish_duration_seconds_count\{[^}]*subject="orders\.created"[^}]*\}\s+\d+/m,
+      );
+    });
+
+    it('should record rpc_duration_seconds with status=success on a successful Core RPC reply', async () => {
+      // Given/When
+      await firstValueFrom(client.send('orders.get', { id: 99 }));
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Then
+      const text = await register.metrics();
+
+      expect(text).toMatch(
+        /^jetstream_rpc_duration_seconds_count\{[^}]*subject="orders\.get"[^}]*status="success"[^}]*\}\s+\d+/m,
+      );
+      const published = await samples(register, 'jetstream_publish_total');
+
+      expect(
+        findSample(published, { subject: 'orders.get', kind: 'command', status: 'success' })?.value,
+      ).toBe(1);
+    });
+
+    it('should record rpc_duration_seconds with status=error when the RPC handler throws', async () => {
+      // Given/When
+      await firstValueFrom(client.send('orders.fail', {})).catch(() => undefined);
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Then
+      const text = await register.metrics();
+
+      expect(text).toMatch(
+        /^jetstream_rpc_duration_seconds_count\{[^}]*subject="orders\.fail"[^}]*status="error"[^}]*\}\s+\d+/m,
+      );
+    });
+
     it('should bucket unknown subjects into messages_unhandled_total when nothing routes', async () => {
       // Given/When: emit a MessageRouted with a subject we have no handler for.
       // We trigger this via the Core NATS publish path that mimics a stray

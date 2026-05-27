@@ -4,7 +4,12 @@ import { Counter, Gauge, Histogram, Registry } from 'prom-client';
 import { faker } from '@faker-js/faker';
 
 import { EventBus } from '../../hooks';
-import type { DeadLetterInfo, JetstreamModuleOptions } from '../../interfaces';
+import type {
+  DeadLetterInfo,
+  JetstreamModuleOptions,
+  PublishStatus,
+  RpcOutcomeStatus,
+} from '../../interfaces';
 import { MessageKind, StreamKind, TransportEvent } from '../../interfaces';
 import { streamName } from '../../jetstream.constants';
 import { PatternRegistry } from '../../server/routing/pattern-registry';
@@ -464,6 +469,126 @@ describe(JetstreamMetricsService, () => {
         await sampleValue(register, 'jetstream_messages_processed_total', {
           ...baseLabels,
           status: 'terminated',
+        }),
+      ).toBe(1);
+    });
+  });
+
+  describe('Published → publish_total + publish_duration_seconds', () => {
+    it('should increment publish_total and observe duration for a successful event publish', async () => {
+      // Given
+      const { subs } = await setup({ options, register, promClient, eventBus });
+
+      // When
+      dispatch(
+        subs,
+        TransportEvent.Published,
+        'orders.created',
+        StreamKind.Event,
+        25,
+        'success' satisfies PublishStatus,
+      );
+
+      // Then
+      const labels = { subject: 'orders.created', kind: 'event', status: 'success' };
+
+      expect(await sampleValue(register, 'jetstream_publish_total', labels)).toBe(1);
+      expect(await histogramCount(register, 'jetstream_publish_duration_seconds', labels)).toBe(1);
+    });
+
+    it('should record kind=broadcast/ordered/command for the matching StreamKind', async () => {
+      // Given
+      const { subs } = await setup({ options, register, promClient, eventBus });
+
+      // When
+      dispatch(subs, TransportEvent.Published, 'a', StreamKind.Broadcast, 1, 'success');
+      dispatch(subs, TransportEvent.Published, 'b', StreamKind.Ordered, 1, 'success');
+      dispatch(subs, TransportEvent.Published, 'c', StreamKind.Command, 1, 'success');
+
+      // Then
+      expect(
+        await sampleValue(register, 'jetstream_publish_total', {
+          subject: 'a',
+          kind: 'broadcast',
+          status: 'success',
+        }),
+      ).toBe(1);
+      expect(
+        await sampleValue(register, 'jetstream_publish_total', {
+          subject: 'b',
+          kind: 'ordered',
+          status: 'success',
+        }),
+      ).toBe(1);
+      expect(
+        await sampleValue(register, 'jetstream_publish_total', {
+          subject: 'c',
+          kind: 'command',
+          status: 'success',
+        }),
+      ).toBe(1);
+    });
+
+    it('should record status=error when the publish fails', async () => {
+      // Given
+      const { subs } = await setup({ options, register, promClient, eventBus });
+
+      // When
+      dispatch(subs, TransportEvent.Published, 'orders.created', StreamKind.Event, 10, 'error');
+
+      // Then
+      expect(
+        await sampleValue(register, 'jetstream_publish_total', {
+          subject: 'orders.created',
+          kind: 'event',
+          status: 'error',
+        }),
+      ).toBe(1);
+    });
+  });
+
+  describe('RpcCompleted → rpc_duration_seconds', () => {
+    it('should observe duration with status=success on a successful RPC round-trip', async () => {
+      // Given
+      const { subs } = await setup({ options, register, promClient, eventBus });
+
+      // When
+      dispatch(
+        subs,
+        TransportEvent.RpcCompleted,
+        'orders.get',
+        50,
+        'success' satisfies RpcOutcomeStatus,
+      );
+
+      // Then
+      expect(
+        await histogramCount(register, 'jetstream_rpc_duration_seconds', {
+          subject: 'orders.get',
+          status: 'success',
+        }),
+      ).toBe(1);
+    });
+
+    it('should distinguish error vs timeout outcomes via the status label', async () => {
+      // Given
+      const { subs } = await setup({ options, register, promClient, eventBus });
+
+      // When
+      dispatch(subs, TransportEvent.RpcCompleted, 'orders.get', 5, 'error');
+      dispatch(subs, TransportEvent.RpcCompleted, 'orders.get', 5_000, 'timeout');
+
+      // Then
+      expect(
+        await histogramCount(register, 'jetstream_rpc_duration_seconds', {
+          subject: 'orders.get',
+          status: 'error',
+        }),
+      ).toBe(1);
+      expect(
+        await histogramCount(register, 'jetstream_rpc_duration_seconds', {
+          subject: 'orders.get',
+          status: 'timeout',
         }),
       ).toBe(1);
     });

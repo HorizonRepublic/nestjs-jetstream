@@ -14,6 +14,8 @@ import type {
   HandlerStatus,
   JetstreamModuleOptions,
   MessageKind,
+  PublishStatus,
+  RpcOutcomeStatus,
 } from '../interfaces';
 import { StreamKind, TransportEvent } from '../interfaces';
 import { JETSTREAM_CONNECTION, JETSTREAM_OPTIONS, streamName } from '../jetstream.constants';
@@ -139,6 +141,8 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
     this.eventBus.subscribe(TransportEvent.DeadLetter, this.onDeadLetter);
     this.eventBus.subscribe(TransportEvent.ConsumerRecovered, this.onConsumerRecovered);
     this.eventBus.subscribe(TransportEvent.HandlerCompleted, this.onHandlerCompleted);
+    this.eventBus.subscribe(TransportEvent.Published, this.onPublished);
+    this.eventBus.subscribe(TransportEvent.RpcCompleted, this.onRpcCompleted);
   }
 
   private readonly onConnect = (server: string): void => {
@@ -222,6 +226,30 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
 
     this.metrics.messagesProcessedTotal.labels(labels).inc();
     this.metrics.handlerDurationSeconds.labels(labels).observe(durationMs / 1000);
+  };
+
+  private readonly onPublished = (
+    pattern: string,
+    kind: StreamKind,
+    durationMs: number,
+    status: PublishStatus,
+  ): void => {
+    if (!this.metrics) return;
+
+    const labels = { subject: pattern, kind: STREAM_KIND_LABEL[kind], status };
+
+    this.metrics.publishTotal.labels(labels).inc();
+    this.metrics.publishDurationSeconds.labels(labels).observe(durationMs / 1000);
+  };
+
+  private readonly onRpcCompleted = (
+    pattern: string,
+    durationMs: number,
+    status: RpcOutcomeStatus,
+  ): void => {
+    this.metrics?.rpcDurationSeconds
+      .labels({ subject: pattern, status })
+      .observe(durationMs / 1000);
   };
 
   /**

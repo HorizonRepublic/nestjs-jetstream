@@ -1009,4 +1009,131 @@ describe(JetstreamClient, () => {
       await coreClient.close();
     });
   });
+
+  describe('Published / RpcCompleted emission', () => {
+    const findEmit = (event: TransportEvent): unknown[] | undefined =>
+      eventBus.emit.mock.calls.find((c) => c[0] === event);
+
+    beforeEach(() => {
+      eventBus.hasHook.mockReturnValue(true);
+    });
+
+    describe('event publishes', () => {
+      it('should emit Published with kind=Event and status=success for a workqueue publish', async () => {
+        // Given/When
+        await firstValueFrom(sut.emit('user.created', { id: 1 }));
+
+        // Then
+        const call = findEmit(TransportEvent.Published);
+
+        expect(call).toBeDefined();
+        expect(call![1]).toBe('user.created');
+        expect(call![2]).toBe('ev');
+        expect(typeof call![3]).toBe('number');
+        expect(call![4]).toBe('success');
+      });
+
+      it.each([
+        ['broadcast:config.updated', 'config.updated', 'broadcast'],
+        ['ordered:order.status', 'order.status', 'ordered'],
+      ])('should strip the prefix from %s → %s (kind=%s)', async (pattern, declared, kind) => {
+        // Given/When
+        await firstValueFrom(sut.emit(pattern, {}));
+
+        // Then
+        const call = findEmit(TransportEvent.Published);
+
+        expect(call![1]).toBe(declared);
+        expect(call![2]).toBe(kind);
+      });
+
+      it('should emit Published with status=error when the JetStream publish fails', async () => {
+        // Given
+        mockJs.publish.mockRejectedValueOnce(new Error('stream not found'));
+
+        // When
+        await expect(firstValueFrom(sut.emit('user.created', {}))).rejects.toThrow();
+
+        // Then
+        const call = findEmit(TransportEvent.Published);
+
+        expect(call![4]).toBe('error');
+      });
+
+      it('should skip emission entirely when no listener is registered (hot-path guard)', async () => {
+        // Given
+        eventBus.hasHook.mockReturnValue(false);
+
+        // When
+        await firstValueFrom(sut.emit('user.created', {}));
+
+        // Then
+        expect(findEmit(TransportEvent.Published)).toBeUndefined();
+      });
+    });
+
+    describe('Core RPC', () => {
+      it('should emit Published(kind=Command, success) and RpcCompleted(success) on a successful reply', async () => {
+        // Given
+        const reply = createMock<Msg>({
+          data: codec.encode({ ok: true }),
+          headers: natsHeaders(),
+        });
+
+        mockNc.request.mockResolvedValue(reply);
+
+        // When
+        await firstValueFrom(sut.send('orders.get', { id: 1 }));
+
+        // Then
+        const published = findEmit(TransportEvent.Published);
+        const completed = findEmit(TransportEvent.RpcCompleted);
+
+        expect(published).toBeDefined();
+        expect(published![1]).toBe('orders.get');
+        expect(published![2]).toBe('cmd');
+        expect(published![4]).toBe('success');
+
+        expect(completed).toBeDefined();
+        expect(completed![1]).toBe('orders.get');
+        expect(completed![3]).toBe('success');
+      });
+
+      it('should emit RpcCompleted(error) when the reply carries the error header', async () => {
+        // Given
+        const errorHdrs = natsHeaders();
+
+        errorHdrs.set(JetstreamHeader.Error, 'true');
+        const reply = createMock<Msg>({
+          data: codec.encode({ message: 'bad' }),
+          headers: errorHdrs,
+        });
+
+        mockNc.request.mockResolvedValue(reply);
+
+        // When
+        await firstValueFrom(sut.send('orders.get', {})).catch(() => undefined);
+
+        // Then
+        const completed = findEmit(TransportEvent.RpcCompleted);
+
+        expect(completed![3]).toBe('error');
+      });
+
+      it('should emit RpcCompleted(timeout) when nc.request rejects with TimeoutError', async () => {
+        // Given
+        const { TimeoutError } = await import('@nats-io/transport-node');
+
+        mockNc.request.mockRejectedValue(new TimeoutError());
+
+        // When
+        await firstValueFrom(sut.send('orders.get', {})).catch(() => undefined);
+
+        // Then
+        const completed = findEmit(TransportEvent.RpcCompleted);
+
+        expect(completed![3]).toBe('timeout');
+      });
+    });
+  });
 });
