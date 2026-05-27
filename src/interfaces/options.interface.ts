@@ -6,6 +6,7 @@ import type { ConsumerConfig, ConsumeOptions, StreamConfig } from '@nats-io/jets
 import { Codec } from './codec.interface';
 import type { DeadLetterInfo } from './hooks.interface';
 import { TransportHooks } from './hooks.interface';
+import type { MetricsOption } from '../metrics/metrics.config';
 import type { OtelOptions } from '../otel';
 
 /**
@@ -309,6 +310,31 @@ export interface JetstreamModuleOptions {
   connectionOptions?: Partial<ConnectionOptions>;
 
   /**
+   * Built-in Prometheus metrics.
+   *
+   * Pass `true` to enable with defaults, or a {@link MetricsConfig} object for
+   * full control (custom registry, prefix, labels, polling, buckets).
+   * When omitted or `false`, the metrics module is not registered and
+   * `prom-client` is not imported — zero overhead.
+   *
+   * Requires `prom-client` peer dependency to be installed when enabled.
+   * The service writes to `prom-client`'s global `register` by default,
+   * making integration with `@willsoto/nestjs-prometheus` (or any
+   * `prom-client`-based `/metrics` exporter) work without coordination.
+   *
+   * @see MetricsConfig
+   * @example
+   * ```typescript
+   * JetstreamModule.forRoot({
+   *   name: 'orders',
+   *   servers: ['nats://localhost:4222'],
+   *   metrics: true,
+   * })
+   * ```
+   */
+  metrics?: MetricsOption;
+
+  /**
    * OpenTelemetry integration. When omitted, sensible defaults are applied:
    * tracing is enabled, default trace kinds are emitted, only standard
    * correlation headers are captured. If no OTel SDK is registered in the
@@ -343,6 +369,16 @@ export type JetstreamModuleAsyncOptions = {
 
   /** Additional module imports (e.g., ConfigModule). */
   imports?: ModuleMetadata['imports'];
+
+  /**
+   * Built-in Prometheus metrics. Specified at the async-options level (parallel
+   * to {@link name}) because module composition is decided synchronously before
+   * the async factory runs. Use `true` for defaults, a {@link MetricsConfig}
+   * object for full control, or omit/`false` to disable entirely.
+   *
+   * @see JetstreamModuleOptions.metrics
+   */
+  metrics?: MetricsOption;
 } & (
   | {
       useFactory(

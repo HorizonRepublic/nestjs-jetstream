@@ -8,7 +8,12 @@ import { ConnectionProvider } from '../../connection';
 import { RpcContext } from '../../context';
 import { EventBus } from '../../hooks';
 import { MessageKind, StreamKind, TransportEvent } from '../../interfaces';
-import type { Codec, JetstreamModuleOptions, RpcRouterOptions } from '../../interfaces';
+import type {
+  Codec,
+  HandlerStatus,
+  JetstreamModuleOptions,
+  RpcRouterOptions,
+} from '../../interfaces';
 import { DEFAULT_JETSTREAM_RPC_TIMEOUT, JetstreamHeader } from '../../jetstream.constants';
 import {
   ConsumeKind,
@@ -125,6 +130,23 @@ export class RpcRouter {
       eventBus.emit(TransportEvent.RpcTimeout, subject, correlationId);
     };
 
+    // See EventRouter.reportHandlerCompleted for the rationale on declared
+    // pattern + per-emit hasHook check.
+    const reportHandlerCompleted = (msg: JsMsg, startedAt: number, status: HandlerStatus): void => {
+      if (!eventBus.hasHook(TransportEvent.HandlerCompleted)) return;
+      const declared = patternRegistry.resolveDeclared(msg.subject);
+      const pattern = declared?.pattern ?? msg.subject;
+      const declaredKind = declared?.kind ?? StreamKind.Command;
+
+      eventBus.emit(
+        TransportEvent.HandlerCompleted,
+        pattern,
+        declaredKind,
+        performance.now() - startedAt,
+        status,
+      );
+    };
+
     const publishReply = (replyTo: string, correlationId: string, payload: unknown): void => {
       try {
         const hdrs = headers();
@@ -228,6 +250,7 @@ export class RpcRouter {
       const stopAckExtension = hasAckExtension
         ? startAckExtensionTimer(msg, ackExtensionInterval)
         : null;
+      const startedAt = performance.now();
 
       const reportHandlerError = (err: unknown): void => {
         eventBus.emit(
@@ -264,6 +287,7 @@ export class RpcRouter {
       } catch (err) {
         if (stopAckExtension !== null) stopAckExtension();
         reportHandlerError(err);
+        reportHandlerCompleted(msg, startedAt, 'error');
 
         return undefined;
       }
@@ -272,6 +296,7 @@ export class RpcRouter {
         if (stopAckExtension !== null) stopAckExtension();
         msg.ack();
         publishReply(replyTo, correlationId, pending);
+        reportHandlerCompleted(msg, startedAt, 'success');
 
         return undefined;
       }
@@ -287,6 +312,9 @@ export class RpcRouter {
         // RpcTimeout hook is the canonical signal here — no separate log.
         emitRpcTimeout(subject, correlationId);
         msg.term('Handler timeout');
+        // Transport outcome is terminated — the handler's eventual resolution
+        // is irrelevant once we've replied with timeout.
+        reportHandlerCompleted(msg, startedAt, 'terminated');
       }, timeout);
 
       return (pending as Promise<unknown>).then(
@@ -297,6 +325,7 @@ export class RpcRouter {
           if (stopAckExtension !== null) stopAckExtension();
           msg.ack();
           publishReply(replyTo, correlationId, result);
+          reportHandlerCompleted(msg, startedAt, 'success');
         },
         (err: unknown) => {
           if (settled) return;
@@ -307,6 +336,7 @@ export class RpcRouter {
           // on unexpected errors, OK + attributes on classified-expected errors)
           // and via the transport-error reply. No separate log.
           reportHandlerError(err);
+          reportHandlerCompleted(msg, startedAt, 'error');
         },
       );
     };

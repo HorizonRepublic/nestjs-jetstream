@@ -20,6 +20,8 @@ import type {
   Codec,
   ExtractedRecordData,
   JetstreamModuleOptions,
+  PublishStatus,
+  RpcOutcomeStatus,
   TransportHeaderOptions,
 } from '../interfaces';
 import { StreamKind } from '../interfaces';
@@ -57,6 +59,23 @@ const detectEventKind = (pattern: string): EventPublishKind => {
   if (pattern.startsWith(PatternPrefix.Ordered)) return PublishKind.Ordered;
 
   return PublishKind.Event;
+};
+
+/** Strip the broadcast/ordered prefix so metric labels match the handler-side declaration. */
+const declaredEventPattern = (pattern: string): string => {
+  if (pattern.startsWith(PatternPrefix.Broadcast))
+    return pattern.slice(PatternPrefix.Broadcast.length);
+  if (pattern.startsWith(PatternPrefix.Ordered)) return pattern.slice(PatternPrefix.Ordered.length);
+
+  return pattern;
+};
+
+/** Map an event-side {@link PublishKind} to its corresponding {@link StreamKind}. */
+const eventStreamKind = (kind: EventPublishKind): StreamKind => {
+  if (kind === PublishKind.Broadcast) return StreamKind.Broadcast;
+  if (kind === PublishKind.Ordered) return StreamKind.Ordered;
+
+  return StreamKind.Event;
 };
 
 /**
@@ -222,58 +241,71 @@ export class JetstreamClient extends ClientProxy {
     const record =
       packet.data instanceof JetstreamRecord ? packet.data : new JetstreamRecord(data, new Map());
 
-    await withPublishSpan(
-      {
-        subject: publishSubject,
-        pattern: packet.pattern,
-        record,
-        kind: detectEventKind(packet.pattern),
-        payloadBytes: encoded.length,
-        payload: encoded,
-        messageId: effectiveMsgId,
-        headers: msgHeaders,
-        serviceName: this.callerName,
-        endpoint: this.serverEndpoint,
-        scheduleTarget: schedule ? eventSubject : undefined,
-      },
-      this.otel,
-      async () => {
-        const warnIfDuplicate = (
-          kindLabel: string,
-          ack: { readonly duplicate: boolean; readonly seq: number },
-        ): void => {
-          if (ack.duplicate) {
-            this.logger.warn(
-              `Duplicate ${kindLabel} publish detected: ${publishSubject} (seq: ${ack.seq})`,
-            );
-          }
-        };
+    const publishKind = detectEventKind(packet.pattern);
+    const declaredPattern = declaredEventPattern(packet.pattern);
+    const streamKind = eventStreamKind(publishKind);
+    const startedAt = performance.now();
 
-        if (schedule) {
+    try {
+      await withPublishSpan(
+        {
+          subject: publishSubject,
+          pattern: packet.pattern,
+          record,
+          kind: publishKind,
+          payloadBytes: encoded.length,
+          payload: encoded,
+          messageId: effectiveMsgId,
+          headers: msgHeaders,
+          serviceName: this.callerName,
+          endpoint: this.serverEndpoint,
+          scheduleTarget: schedule ? eventSubject : undefined,
+        },
+        this.otel,
+        async () => {
+          const warnIfDuplicate = (
+            kindLabel: string,
+            ack: { readonly duplicate: boolean; readonly seq: number },
+          ): void => {
+            if (ack.duplicate) {
+              this.logger.warn(
+                `Duplicate ${kindLabel} publish detected: ${publishSubject} (seq: ${ack.seq})`,
+              );
+            }
+          };
+
+          if (schedule) {
+            const ack = await this.connection
+              .getJetStreamClient()
+              .publish(publishSubject, encoded, {
+                headers: msgHeaders,
+                msgID: effectiveMsgId,
+                ttl,
+                schedule: {
+                  specification: schedule.at,
+                  target: eventSubject,
+                },
+              });
+
+            warnIfDuplicate('scheduled', ack);
+
+            return;
+          }
+
           const ack = await this.connection.getJetStreamClient().publish(publishSubject, encoded, {
             headers: msgHeaders,
             msgID: effectiveMsgId,
             ttl,
-            schedule: {
-              specification: schedule.at,
-              target: eventSubject,
-            },
           });
 
-          warnIfDuplicate('scheduled', ack);
-
-          return;
-        }
-
-        const ack = await this.connection.getJetStreamClient().publish(publishSubject, encoded, {
-          headers: msgHeaders,
-          msgID: effectiveMsgId,
-          ttl,
-        });
-
-        warnIfDuplicate('event', ack);
-      },
-    );
+          warnIfDuplicate('event', ack);
+        },
+      );
+      this.reportPublished(declaredPattern, streamKind, startedAt, 'success');
+    } catch (err) {
+      this.reportPublished(declaredPattern, streamKind, startedAt, 'error');
+      throw err;
+    }
 
     return undefined as T;
   }
@@ -309,7 +341,9 @@ export class JetstreamClient extends ClientProxy {
     let jetStreamCorrelationId: string | null = null;
 
     if (this.isCoreMode) {
-      this.publishCoreRpc(subject, data, hdrs, timeout, callback).catch(onUnhandled);
+      this.publishCoreRpc(subject, data, hdrs, timeout, callback, packet.pattern).catch(
+        onUnhandled,
+      );
     } else {
       jetStreamCorrelationId = nuid.next();
       this.publishJetStreamRpc(subject, data, callback, {
@@ -317,6 +351,7 @@ export class JetstreamClient extends ClientProxy {
         timeout,
         correlationId: jetStreamCorrelationId,
         messageId,
+        declaredPattern: packet.pattern,
       }).catch(onUnhandled);
     }
 
@@ -343,6 +378,7 @@ export class JetstreamClient extends ClientProxy {
     customHeaders: Map<string, string> | null,
     timeout: number | undefined,
     callback: (p: WritePacket) => void,
+    declaredPattern: string,
   ): Promise<void> {
     const effectiveTimeout = timeout ?? this.defaultRpcTimeout;
     const hdrs = this.buildHeaders(customHeaders, { subject });
@@ -358,6 +394,7 @@ export class JetstreamClient extends ClientProxy {
       },
       this.otel,
     );
+    const startedAt = performance.now();
 
     try {
       const nc = this.readyForPublish
@@ -376,11 +413,19 @@ export class JetstreamClient extends ClientProxy {
 
       const decoded = this.codec.decode(response.data);
 
+      // In Core RPC the publish leg is implicit inside nc.request() — any
+      // response (or pre-response transport error) means the publish ran, so
+      // Published always carries success here. RpcCompleted captures the
+      // round-trip outcome separately.
       if (response.headers?.get(JetstreamHeader.Error)) {
         spanHandle.finish({ kind: RpcOutcomeKind.ReplyError, replyPayload: decoded });
+        this.reportPublished(declaredPattern, StreamKind.Command, startedAt, 'success');
+        this.reportRpcCompleted(declaredPattern, startedAt, 'error');
         callback({ err: decoded, response: null, isDisposed: true });
       } else {
         spanHandle.finish({ kind: RpcOutcomeKind.Ok, reply: decoded });
+        this.reportPublished(declaredPattern, StreamKind.Command, startedAt, 'success');
+        this.reportRpcCompleted(declaredPattern, startedAt, 'success');
         callback({ err: null, response: decoded, isDisposed: true });
       }
     } catch (err) {
@@ -389,10 +434,14 @@ export class JetstreamClient extends ClientProxy {
       if (error instanceof TimeoutError) {
         spanHandle.finish({ kind: RpcOutcomeKind.Timeout });
         this.eventBus.emit(TransportEvent.RpcTimeout, subject, '');
+        this.reportPublished(declaredPattern, StreamKind.Command, startedAt, 'success');
+        this.reportRpcCompleted(declaredPattern, startedAt, 'timeout');
       } else {
         spanHandle.finish({ kind: RpcOutcomeKind.Error, error });
         // Error hook + OTel CLIENT span are the canonical signals — no separate log.
         this.eventBus.emit(TransportEvent.Error, error, 'client-rpc');
+        this.reportPublished(declaredPattern, StreamKind.Command, startedAt, 'error');
+        this.reportRpcCompleted(declaredPattern, startedAt, 'error');
       }
 
       callback({ err: error, response: null, isDisposed: true });
@@ -409,9 +458,10 @@ export class JetstreamClient extends ClientProxy {
       timeout: number | undefined;
       correlationId: string;
       messageId?: string;
+      declaredPattern: string;
     },
   ): Promise<void> {
-    const { headers: customHeaders, correlationId, messageId } = options;
+    const { headers: customHeaders, correlationId, messageId, declaredPattern } = options;
     const effectiveTimeout = options.timeout ?? this.defaultRpcTimeout;
     const hdrs = this.buildHeaders(customHeaders, {
       subject,
@@ -432,6 +482,7 @@ export class JetstreamClient extends ClientProxy {
       },
       this.otel,
     );
+    const startedAt = performance.now();
 
     this.pendingMessages.set(correlationId, (packet: WritePacket) => {
       // Translate the inbox-callback WritePacket into an RPC outcome. A native
@@ -445,8 +496,11 @@ export class JetstreamClient extends ClientProxy {
         } else {
           spanHandle.finish({ kind: RpcOutcomeKind.ReplyError, replyPayload: packet.err });
         }
+
+        this.reportRpcCompleted(declaredPattern, startedAt, 'error');
       } else {
         spanHandle.finish({ kind: RpcOutcomeKind.Ok, reply: packet.response });
+        this.reportRpcCompleted(declaredPattern, startedAt, 'success');
       }
 
       callback(packet);
@@ -465,6 +519,7 @@ export class JetstreamClient extends ClientProxy {
       spanHandle.finish({ kind: RpcOutcomeKind.Timeout });
       // RpcTimeout hook + OTel CLIENT span are the canonical signals — no separate log.
       this.eventBus.emit(TransportEvent.RpcTimeout, subject, correlationId);
+      this.reportRpcCompleted(declaredPattern, startedAt, 'timeout');
       callback({ err: new Error(RPC_TIMEOUT_MESSAGE), response: null, isDisposed: true });
     }, effectiveTimeout);
 
@@ -483,6 +538,8 @@ export class JetstreamClient extends ClientProxy {
         const inboxError = new Error('Inbox not initialized');
 
         spanHandle.finish({ kind: RpcOutcomeKind.Error, error: inboxError });
+        this.reportPublished(declaredPattern, StreamKind.Command, startedAt, 'error');
+        this.reportRpcCompleted(declaredPattern, startedAt, 'error');
         callback({
           err: new Error('Inbox not initialized — JetStream RPC mode requires a connected inbox'),
           response: null,
@@ -500,6 +557,9 @@ export class JetstreamClient extends ClientProxy {
           msgID: messageId ?? nuid.next(),
         }),
       );
+      // Publish leg succeeded; RpcCompleted fires from the inbox reply or
+      // the timeout branch once the round-trip settles.
+      this.reportPublished(declaredPattern, StreamKind.Command, startedAt, 'success');
     } catch (err) {
       const existingTimeout = this.pendingTimeouts.get(correlationId);
 
@@ -515,8 +575,42 @@ export class JetstreamClient extends ClientProxy {
 
       spanHandle.finish({ kind: RpcOutcomeKind.Error, error });
       this.eventBus.emit(TransportEvent.Error, error, `jetstream-rpc-publish:${subject}`);
+      this.reportPublished(declaredPattern, StreamKind.Command, startedAt, 'error');
+      this.reportRpcCompleted(declaredPattern, startedAt, 'error');
       callback({ err: error, response: null, isDisposed: true });
     }
+  }
+
+  // hasHook is per-emit so late subscribers (JetstreamMetricsService during
+  // OnApplicationBootstrap) still receive events.
+  private reportPublished(
+    declaredPattern: string,
+    kind: StreamKind,
+    startedAt: number,
+    status: PublishStatus,
+  ): void {
+    if (!this.eventBus.hasHook(TransportEvent.Published)) return;
+    this.eventBus.emit(
+      TransportEvent.Published,
+      declaredPattern,
+      kind,
+      performance.now() - startedAt,
+      status,
+    );
+  }
+
+  private reportRpcCompleted(
+    declaredPattern: string,
+    startedAt: number,
+    status: RpcOutcomeStatus,
+  ): void {
+    if (!this.eventBus.hasHook(TransportEvent.RpcCompleted)) return;
+    this.eventBus.emit(
+      TransportEvent.RpcCompleted,
+      declaredPattern,
+      performance.now() - startedAt,
+      status,
+    );
   }
 
   /** Fail-fast all pending JetStream RPC callbacks on connection loss. */
