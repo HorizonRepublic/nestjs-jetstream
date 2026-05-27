@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.11.0](https://github.com/HorizonRepublic/nestjs-jetstream/compare/v2.10.0...v2.11.0) (2026-05-27)
+
+
+### Features
+
+* **observability:** built-in Prometheus metrics ([#164](https://github.com/HorizonRepublic/nestjs-jetstream/issues/164)) ([ad32c35](https://github.com/HorizonRepublic/nestjs-jetstream/commit/ad32c353a9b01a6a225cb7d8acc580858234f50d)) — counters, histograms, and gauges covering throughput, handler / publish / RPC latency, consumer lag, dead letters, and connection health. Enabled via `forRoot({ metrics: true })`. Writes to a `prom-client` registry — pairs zero-config with `@willsoto/nestjs-prometheus` or any other `prom-client`-based exporter. `prom-client` is an optional peer; nothing is loaded when `metrics` is omitted.
+* **observability:** new `TransportEvent` surface ([#164](https://github.com/HorizonRepublic/nestjs-jetstream/issues/164)) — `HandlerCompleted`, `Published`, and `RpcCompleted` join `ConsumerRecovered` as public hook signals, with `EventBus.subscribe()` supporting multiple subscribers per event so user hooks and built-in observers can coexist.
+* **docs:** Diátaxis-aligned documentation refactor ([#165](https://github.com/HorizonRepublic/nestjs-jetstream/issues/165)) ([3e8e157](https://github.com/HorizonRepublic/nestjs-jetstream/commit/3e8e157193dd5ace5cf9c66a30bf3e7c2a07e96b)) — new top-level **Observability** section (overview + tracing + metrics), `Module Configuration` and `Release Notes` moved to `/reference`, how-to guides renamed to the `How to X` form, table-heavy pages restructured into prose / definition lists / TypeScript declarations.
+* **docs:** custom domain at [nestjs-jetstream.horizon-republic.dev](https://nestjs-jetstream.horizon-republic.dev) — site now served from a dedicated subdomain on Cloudflare DNS. The old GitHub Pages URL 301-redirects automatically; bookmarks and external links keep working.
+* **docs:** redesign documentation site ([#149](https://github.com/HorizonRepublic/nestjs-jetstream/issues/149)) ([c4a3c87](https://github.com/HorizonRepublic/nestjs-jetstream/commit/c4a3c87071c5b3e65dd2acf877529581ab287617))
+
+
+### Bug Fixes
+
+* **routing:** fail-fast on duplicate handler patterns ([#166](https://github.com/HorizonRepublic/nestjs-jetstream/issues/166)) ([fce2b69](https://github.com/HorizonRepublic/nestjs-jetstream/commit/fce2b69a6adbb1413e02a951dcc752cc37fa562b)) — `@EventPattern()` / `@MessagePattern()` declared twice with the same pattern string now throws at bootstrap. Previously NestJS silently overwrote duplicate RPC handlers (last wins) and appended duplicate event handlers to a linked list (double-ack / double-process every message) — both manifested only in production traffic.
+* **observability:** emit `ConsumerRecovered` after self-healing succeeds, not on stream end ([#154](https://github.com/HorizonRepublic/nestjs-jetstream/issues/154)) ([2609f87](https://github.com/HorizonRepublic/nestjs-jetstream/commit/2609f87c9a78f7ce7c6c79eb6857cff3df5930d6))
+* **docs:** README polish — collapsed badge anchors, hardcoded NestJS peer major on landing ([61668e1](https://github.com/HorizonRepublic/nestjs-jetstream/commit/61668e101ab56a473e781e17c4fb377556a9b315), [529ed08](https://github.com/HorizonRepublic/nestjs-jetstream/commit/529ed088286eb2af810195eba2bcde979e858ae6))
+
 ## [2.10.0](https://github.com/HorizonRepublic/nestjs-jetstream/compare/v2.9.1...v2.10.0) (2026-04-25)
 
 
