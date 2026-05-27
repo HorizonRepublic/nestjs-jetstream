@@ -137,11 +137,11 @@ async onOrderStatus(@Payload() data: OrderStatus) { /* ... */ }
 async onSettingsChanged(@Payload() s: Settings) { /* ... */ }
 ```
 
-| Extra | Type | Effect |
-|---|---|---|
-| `broadcast` | `boolean` | Routes the handler to the shared broadcast stream — every replica processes every message. See [Broadcast](/docs/patterns/broadcast). |
-| `ordered` | `boolean` | Backs the handler with an [ordered consumer](/docs/patterns/ordered-events) for strict per-key delivery. |
-| `meta` | `Record<string, unknown>` | Free-form metadata published to the [handler metadata registry](/docs/patterns/handler-metadata). |
+**`broadcast: boolean`** &mdash; routes the handler to the shared broadcast stream so every replica processes every message. See [Broadcast](/docs/patterns/broadcast).
+
+**`ordered: boolean`** &mdash; backs the handler with an [ordered consumer](/docs/patterns/ordered-events) for strict per-key delivery.
+
+**`meta: Record<string, unknown>`** &mdash; free-form metadata published to the [handler metadata registry](/docs/patterns/handler-metadata).
 
 There is no `durable`, `ackWait`, or `maxDeliver` on the decorator — those are stream-and-consumer-level concerns, configured once on the module under [Custom configuration](#custom-configuration) below.
 
@@ -149,13 +149,11 @@ There is no `durable`, `ackWait`, or `maxDeliver` on the decorator — those are
 
 The transport uses explicit acknowledgement. The outcome depends on what happens during message processing:
 
-| Scenario | Action | Effect |
-|---|---|---|
-| Handler succeeds | `ack` | Message removed from stream |
-| Handler throws an error | `nak` | Message redelivered after backoff |
-| Payload cannot be decoded | `term` | Message terminated (no retry) |
-| No handler registered for subject | `term` | Message terminated (no retry) |
-| Max deliveries exhausted | `term` | Dead letter callback invoked, then terminated |
+- **Handler succeeds** &mdash; `ack`. Message is removed from the stream.
+- **Handler throws an error** &mdash; `nak`. Message is redelivered after backoff.
+- **Payload cannot be decoded** &mdash; `term`. Message is terminated immediately; no retry.
+- **No handler registered for subject** &mdash; `term`. Message is terminated; no retry.
+- **Max deliveries exhausted** &mdash; `term`. Dead letter callback is invoked, then the message is terminated.
 
 :::warning Decode errors are terminal
 If the codec cannot deserialize a message (e.g., corrupted data, schema mismatch), the message is immediately terminated with `term()`. Retrying would produce the same error, so the transport avoids wasting delivery attempts.
@@ -315,13 +313,11 @@ The default of 3 delivery attempts works well for transient errors (network blip
 
 ### Default values — the ones you'll actually tune
 
-| Setting | Default | Why it matters |
-|---|---|---|
-| `max_deliver` | 3 | How many retry attempts before the message is marked dead |
-| `ack_wait` | 10 seconds | Time a handler has to ack before NATS redelivers |
-| `max_ack_pending` | 100 | In-flight cap — primary backpressure control |
-| `max_age` | 7 days | How long events live in the stream before being purged |
-| `duplicate_window` | 2 minutes | Dedup window for [`setMessageId()`](/docs/guides/record-builder) |
+- **`max_deliver`** &mdash; `3`. How many retry attempts before the message is marked dead.
+- **`ack_wait`** &mdash; 10 seconds. How long a handler has to ack before NATS redelivers.
+- **`max_ack_pending`** &mdash; `100`. In-flight cap; the primary backpressure control.
+- **`max_age`** &mdash; 7 days. How long events live in the stream before being purged.
+- **`duplicate_window`** &mdash; 2 minutes. Dedup window for [`setMessageId()`](/docs/guides/record-builder).
 
 See [Default Configs — Event Stream](/docs/reference/default-configs#event-stream) and [Event Consumer](/docs/reference/default-configs#event-consumer) for the complete list of stream and consumer defaults.
 
@@ -375,11 +371,11 @@ export class OrdersController {
 
 Every message ends in one of three states:
 
-| Outcome | When | Effect |
-|---------|------|--------|
-| **auto-ack** *(no action)* | Handler succeeds | Message removed from stream. The transport calls `ack()` on the underlying message when the handler returns successfully. |
-| **`ctx.retry()`** | Recoverable error | Message redelivered (optionally with `{ delayMs }` delay). The transport applies the same retry semantics automatically when a handler throws, so you only need to call `ctx.retry()` manually when you want to return early without raising an exception. |
-| **`ctx.terminate(reason)`** | Non-recoverable error | Message permanently discarded. Must be called manually in the handler. |
+**Auto-ack** (no action needed). The handler returns successfully. The transport calls `ack()` on the underlying message automatically — the message is removed from the stream.
+
+**`ctx.retry()`** — for recoverable errors. The message is redelivered, optionally with a `{ delayMs }` delay. The transport applies the same retry semantics automatically when a handler throws, so you only need to call `ctx.retry()` manually when you want to return early without raising an exception.
+
+**`ctx.terminate(reason)`** — for non-recoverable errors. The message is permanently discarded. Must be called manually in the handler.
 
 ### Relationship with dead letter handling
 

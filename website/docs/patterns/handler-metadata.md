@@ -107,11 +107,9 @@ JetstreamModule.forRoot({
 })
 ```
 
-| Option | Default | Description |
-|---|---|---|
-| `bucket` | `'handler_registry'` | KV bucket name |
-| `replicas` | `1` | Bucket replicas (1, 3, or 5) |
-| `ttl` | `30_000` | Entry TTL in milliseconds — entries expire unless refreshed by heartbeat (minimum: `5_000` ms). Note: this field is in ms, not nanoseconds. |
+- **`bucket`** &mdash; `'handler_registry'`. KV bucket name.
+- **`replicas`** &mdash; `1`. Bucket replicas (1, 3, or 5).
+- **`ttl`** &mdash; `30_000`. Entry TTL in milliseconds — entries expire unless refreshed by heartbeat (minimum: `5_000` ms). Note: this field is in ms, not nanoseconds.
 
 :::note Bucket configuration
 The KV bucket is created on first startup. Changing `ttl` or `replicas` after creation requires deleting the existing bucket — NATS KV does not update bucket config in place. Use the NATS CLI: `nats kv rm handler_registry`.
@@ -163,14 +161,12 @@ The `meta` object is stored in a shared NATS KV bucket readable by any connected
 
 Entries are managed via TTL + heartbeat — no explicit delete needed.
 
-| Event | Behavior |
-|---|---|
-| **Startup** | Transport writes all handler meta entries to KV, starts heartbeat |
-| **Heartbeat** | Every `ttl / 2`, all entries are re-written to reset their TTL |
-| **Graceful shutdown** | Heartbeat stops → entries expire after TTL |
-| **Crash** | Heartbeat stops → entries expire after TTL (automatic cleanup) |
-| **Rolling update** | New pod writes entries immediately; old entries from removed handlers expire via TTL |
-| **Multi-pod** | All pods heartbeat the same keys — entries stay alive while any pod is running |
+- **Startup.** The transport writes all handler meta entries to KV and starts the heartbeat.
+- **Heartbeat.** Every `ttl / 2`, all entries are re-written to reset their TTL.
+- **Graceful shutdown.** Heartbeat stops; entries expire after TTL.
+- **Crash.** Heartbeat stops; entries expire after TTL (automatic cleanup).
+- **Rolling update.** The new pod writes entries immediately; old entries from removed handlers expire via TTL.
+- **Multi-pod.** All pods heartbeat the same keys — entries stay alive while any pod is running.
 
 ## Use cases
 

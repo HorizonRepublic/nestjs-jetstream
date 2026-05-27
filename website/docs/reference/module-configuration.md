@@ -211,41 +211,87 @@ See [Custom Codec](/docs/guides/custom-codec) for how to implement the `Codec` i
 
 ## Full options reference
 
-Below is every field in `JetstreamModuleOptions` with its type, default value, and guidance on when to change it.
+Every field in `JetstreamModuleOptions` with its type, default, and guidance on when to change it.
 
 ### Required options
 
-| Field | Type | Description |
-|---|---|---|
-| `name` | `string` | Service name. Used for stream, consumer, and subject naming. Must be unique per service in your system. |
-| `servers` | `string[]` | NATS server URLs (e.g., `['nats://localhost:4222']`). |
+#### `name` &mdash; `string`
+
+Service name. Used for stream, consumer, and subject naming. Must be unique per service in your system.
+
+#### `servers` &mdash; `string[]`
+
+NATS server URLs (e.g., `['nats://localhost:4222']`).
 
 ### Optional options
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `codec` | `Codec` | `JsonCodec` | Global message serializer/deserializer. Swap for MessagePack, Protobuf, etc. |
-| `rpc` | `RpcConfig` | `{ mode: 'core' }` | RPC transport mode and configuration. See [RPC Config](#rpcconfig). |
-| `consumer` | `boolean` | `true` | Enable consumer infrastructure. Set to `false` for publisher-only services (e.g., API gateways). |
-| `events` | `StreamConsumerOverrides` | _(production defaults)_ | Overrides for workqueue event stream and consumer config. To enable [message scheduling](/docs/guides/scheduling), set `events.stream.allow_msg_schedules: true` (requires NATS >= 2.12). <Since version="2.8.0" /> |
-| `broadcast` | `StreamConsumerOverrides` | _(production defaults)_ | Overrides for broadcast event stream and consumer config. |
-| `ordered` | `OrderedEventOverrides` | _(production defaults)_ | Configuration for ordered event consumers. <Since version="2.4.0" /> |
-| `hooks` | `Partial<TransportHooks>` | _(none)_ | Transport lifecycle hook handlers. Unset hooks are silently ignored. |
-| `onDeadLetter` | `(info: DeadLetterInfo) => Promise<void>` | _(none)_ | Async callback for dead letter handling. Called and awaited when a message exhausts all delivery attempts. <Since version="2.2.0" /> |
-| `dlq` | `{ stream?: StreamConfigOverrides }` | _(none)_ | Built-in Dead Letter Queue stream. When set, exhausted messages are automatically republished to a dedicated DLQ stream with tracking headers. See [Dead Letter Queue](/docs/guides/dead-letter-queue#built-in-dlq-stream). <Since version="2.9.0" /> |
-| `metadata` | `MetadataRegistryOptions` | _(auto-enabled if any handler has `meta`)_ | Handler metadata registry — publishes `@EventPattern` / `@MessagePattern` handler metadata to a NATS KV bucket for cross-service discovery. No-op when `consumer: false` (publisher-only services register nothing). See [Handler Metadata](/docs/patterns/handler-metadata). <Since version="2.9.0" /> |
-| `allowDestructiveMigration` | `boolean` | `false` | Allow automatic blue-green stream recreation for immutable property changes (e.g., `storage`). Without this flag, the transport logs a warning and keeps the existing stream config. See [Stream Migration](/docs/guides/stream-migration). <Since version="2.9.0" /> |
-| `shutdownTimeout` | `number` | `10_000` (10s) | Graceful shutdown timeout in milliseconds. Handlers exceeding this are abandoned. |
-| `connectionOptions` | `Partial<ConnectionOptions>` | _(none)_ | Raw NATS `ConnectionOptions` pass-through for TLS, auth, reconnection, etc. |
+#### `codec` &mdash; `Codec`
+
+Default: `JsonCodec`. Global message serializer/deserializer. Swap for MessagePack, Protobuf, or any custom binary format. See [Custom Codec](/docs/guides/custom-codec).
+
+#### `rpc` &mdash; `RpcConfig`
+
+Default: `{ mode: 'core' }`. RPC transport mode and configuration. See [RpcConfig](#rpcconfig) below.
+
+#### `consumer` &mdash; `boolean`
+
+Default: `true`. Enable consumer infrastructure. Set to `false` for publisher-only services (e.g., API gateways).
+
+#### `events` &mdash; `StreamConsumerOverrides`
+
+Default: production defaults (see [Default Configs](/docs/reference/default-configs#stream-defaults)). Overrides for workqueue event stream and consumer config. To enable [message scheduling](/docs/guides/scheduling), set `events.stream.allow_msg_schedules: true` (requires NATS >= 2.12). <Since version="2.8.0" />
+
+#### `broadcast` &mdash; `StreamConsumerOverrides`
+
+Default: production defaults. Overrides for broadcast event stream and consumer config.
+
+#### `ordered` &mdash; `OrderedEventOverrides`
+
+Default: production defaults. Configuration for ordered event consumers. See [OrderedEventOverrides](#orderedeventoverrides) below. <Since version="2.4.0" />
+
+#### `hooks` &mdash; `Partial<TransportHooks>`
+
+Default: none. Transport lifecycle hook handlers. Unset hooks are silently ignored. See [Lifecycle Hooks](/docs/guides/lifecycle-hooks).
+
+#### `onDeadLetter` &mdash; `(info: DeadLetterInfo) => Promise<void>`
+
+Default: none. Async callback for dead letter handling. Called and awaited when a message exhausts all delivery attempts. See [Dead Letter Queue](/docs/guides/dead-letter-queue). <Since version="2.2.0" />
+
+#### `dlq` &mdash; `{ stream?: StreamConfigOverrides }`
+
+Default: none. Built-in Dead Letter Queue stream. When set, exhausted messages are automatically republished to a dedicated DLQ stream with tracking headers. See [Built-in DLQ stream](/docs/guides/dead-letter-queue#built-in-dlq-stream). <Since version="2.9.0" />
+
+#### `metadata` &mdash; `MetadataRegistryOptions`
+
+Default: auto-enabled if any handler has `meta`. Handler metadata registry — publishes `@EventPattern` / `@MessagePattern` handler metadata to a NATS KV bucket for cross-service discovery. No-op when `consumer: false`. See [Handler Metadata](/docs/patterns/handler-metadata). <Since version="2.9.0" />
+
+#### `metrics` &mdash; `MetricsOption`
+
+Default: none. Built-in Prometheus metrics. Pass `true` for defaults or a `MetricsConfig` object for full control (custom registry, prefix, labels, polling interval, histogram buckets). Requires the optional `prom-client` peer dependency when enabled. See [Prometheus Metrics](/docs/observability/metrics). <Since version="2.11.0" />
+
+#### `allowDestructiveMigration` &mdash; `boolean`
+
+Default: `false`. Allow automatic blue-green stream recreation for immutable property changes (e.g., `storage`). Without this flag, the transport logs a warning and keeps the existing stream config. See [Stream Migration](/docs/guides/stream-migration). <Since version="2.9.0" />
+
+#### `shutdownTimeout` &mdash; `number`
+
+Default: `10_000` (10 s). Graceful shutdown timeout in milliseconds. Handlers exceeding this are abandoned.
+
+#### `connectionOptions` &mdash; `Partial<ConnectionOptions>`
+
+Default: none. Raw NATS `ConnectionOptions` pass-through for TLS, auth, reconnection, etc. See [connectionOptions](#connectionoptions) below.
+
+#### `otel` &mdash; `OtelOptions`
+
+Default: enabled with sensible defaults. OpenTelemetry tracing configuration. See [Distributed Tracing](/docs/observability/tracing).
 
 ### RpcConfig
 
-RPC configuration is a discriminated union on `mode`:
+RPC configuration is a discriminated union on `mode`. Pick the mode based on whether commands must survive handler downtime:
 
-| Mode | Timeout default | Persistence | Best for |
-|---|---|---|---|
-| `'core'` | `30_000` ms (30 s) | None (in-memory) | Low-latency RPC, simple request/reply |
-| `'jetstream'` | `180_000` ms (3 min) | JetStream stream | Commands that must survive handler downtime |
+**`mode: 'core'`** &mdash; default. NATS native request/reply, no persistence. Lowest latency. Default timeout `30_000` ms (30 s). Best for low-latency queries and lookups where in-flight requests can simply error on failure.
+
+**`mode: 'jetstream'`** &mdash; commands persisted in a JetStream stream before delivery. Default timeout `180_000` ms (3 min). Best for commands that must survive a handler restart (payments, state changes).
 
 :::note Timeout unit
 The `timeout` field is specified in **milliseconds**, not seconds. Writing `timeout: 30` means 30 ms — almost certainly a bug. Use `timeout: 30_000` for 30 seconds.
@@ -320,13 +366,25 @@ JetstreamModule.forRoot({
 })
 ```
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `stream` | `Partial<StreamConfig>` | _(production defaults)_ | Stream overrides (e.g., `max_age`, `max_bytes`). |
-| `deliverPolicy` | `DeliverPolicy` | `DeliverPolicy.All` | Where to start reading when the consumer is created. |
-| `optStartSeq` | `number` | _(none)_ | Start sequence (only with `DeliverPolicy.StartSequence`). |
-| `optStartTime` | `string` | _(none)_ | Start time ISO string (only with `DeliverPolicy.StartTime`). |
-| `replayPolicy` | `ReplayPolicy` | `ReplayPolicy.Instant` | Replay policy for historical messages. |
+#### `stream` &mdash; `Partial<StreamConfig>`
+
+Default: production defaults. Stream overrides (e.g., `max_age`, `max_bytes`).
+
+#### `deliverPolicy` &mdash; `DeliverPolicy`
+
+Default: `DeliverPolicy.All`. Where to start reading when the consumer is created.
+
+#### `optStartSeq` &mdash; `number`
+
+Default: none. Start sequence number. Only used with `DeliverPolicy.StartSequence`.
+
+#### `optStartTime` &mdash; `string`
+
+Default: none. Start time as an ISO string. Only used with `DeliverPolicy.StartTime`.
+
+#### `replayPolicy` &mdash; `ReplayPolicy`
+
+Default: `ReplayPolicy.Instant`. Replay policy for historical messages.
 
 See [Ordered Events](/docs/patterns/ordered-events) for detailed usage.
 
