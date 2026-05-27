@@ -115,7 +115,7 @@ describe(JetstreamMetricsService, () => {
     eventBus = createMock<EventBus>();
     register = new Registry();
     promClient = { Counter, Histogram, Gauge };
-    options = { name: 'orders', servers: ['nats://localhost:4222'] };
+    options = { name: 'orders', servers: ['nats://localhost:4222'], metrics: true };
   });
 
   afterEach(() => {

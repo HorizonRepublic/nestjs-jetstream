@@ -98,10 +98,12 @@ JetstreamModule.forRoot({
 
 Use `traces: 'all'` to enable every kind, `traces: 'none'` to suppress span emission entirely while keeping context propagation alive.
 
+For an env-driven toggle, the option also accepts a plain boolean — `otel: true` for defaults, `otel: false` for `{ enabled: false }`.
+
 ## Configuration reference
 
 ```ts
-otel?: {
+otel?: boolean | {
   /** Master kill switch. @default true */
   enabled?: boolean;
 

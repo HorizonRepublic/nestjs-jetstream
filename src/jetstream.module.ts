@@ -110,7 +110,7 @@ export class JetstreamModule implements OnApplicationShutdown {
     return {
       module: JetstreamModule,
       global: true,
-      imports: options.metrics ? [JetstreamMetricsModule.forFeature(options.metrics)] : [],
+      imports: [JetstreamMetricsModule.forFeature()],
       providers,
       exports: [
         JETSTREAM_CONNECTION,
@@ -137,14 +137,11 @@ export class JetstreamModule implements OnApplicationShutdown {
   public static forRootAsync(asyncOptions: JetstreamModuleAsyncOptions): DynamicModule {
     const asyncProviders = this.createAsyncOptionsProvider(asyncOptions);
     const coreProviders = this.createCoreDependentProviders();
-    const metricsImports = asyncOptions.metrics
-      ? [JetstreamMetricsModule.forFeature(asyncOptions.metrics)]
-      : [];
 
     return {
       module: JetstreamModule,
       global: true,
-      imports: [...(asyncOptions.imports ?? []), ...metricsImports],
+      imports: [...(asyncOptions.imports ?? []), JetstreamMetricsModule.forFeature()],
       providers: [...asyncProviders, ...coreProviders],
       exports: [
         JETSTREAM_CONNECTION,
