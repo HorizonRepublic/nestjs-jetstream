@@ -221,8 +221,9 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
 
   private readonly onRpcTimeout = (subject: string, _correlationId: string): void => {
     const declared = this.resolveDeclared(subject);
+    const subjectLabel = declared?.pattern ?? UNMATCHED_SUBJECT_LABEL;
 
-    this.metrics?.rpcTimeoutTotal.labels({ subject: declared?.pattern ?? subject }).inc();
+    this.metrics?.rpcTimeoutTotal.labels({ subject: subjectLabel }).inc();
   };
 
   // `_kind` collapses broadcast/ordered into MessageKind.Event — we use
@@ -248,9 +249,10 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
 
   private readonly onDeadLetter = (info: DeadLetterInfo): void => {
     const declared = this.resolveDeclared(info.subject);
+    const subjectLabel = declared?.pattern ?? UNMATCHED_SUBJECT_LABEL;
 
     this.metrics?.messagesDeadLetterTotal
-      .labels({ stream: info.stream, subject: declared?.pattern ?? info.subject })
+      .labels({ stream: info.stream, subject: subjectLabel })
       .inc();
   };
 

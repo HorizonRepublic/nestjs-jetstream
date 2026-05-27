@@ -72,8 +72,10 @@ export class EventBus {
   private dispatch(event: keyof TransportHooks, args: unknown[]): void {
     const subs = this.subscribers.get(event);
 
-    if (subs) {
-      for (const sub of subs) {
+    if (subs?.length) {
+      // Snapshot the array so a subscriber that re-subscribes to the same
+      // event during dispatch cannot extend the live iteration.
+      for (const sub of [...subs]) {
         this.callHook(event, sub, ...args);
       }
     }

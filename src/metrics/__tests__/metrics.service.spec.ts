@@ -60,6 +60,8 @@ const sampleValue = async (
   return sample?.value;
 };
 
+const escapeRegex = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 const histogramCount = async (
   register: Registry,
   metricName: string,
@@ -67,12 +69,15 @@ const histogramCount = async (
 ): Promise<number | undefined> => {
   const text = await register.metrics();
   const labelExpr = Object.entries(matchLabels)
-    .map(([k, v]) => `${k}="${v}"`)
+    .map(([k, v]) => `${escapeRegex(k)}="${escapeRegex(v)}"`)
     .join(',');
   // The `_count` suffix is appended by prom-client when rendering histograms;
   // we parse it from the text exposition to avoid the typed-API churn around
   // histogram bucket samples (rich metric object reshapes across versions).
-  const re = new RegExp(`^${metricName}_count\\{[^}]*${labelExpr}[^}]*\\}\\s+(\\d+)`, 'm');
+  const re = new RegExp(
+    `^${escapeRegex(metricName)}_count\\{[^}]*${labelExpr}[^}]*\\}\\s+(\\d+)`,
+    'm',
+  );
   const match = re.exec(text);
 
   return match ? Number(match[1]) : undefined;
@@ -135,6 +140,8 @@ describe(JetstreamMetricsService, () => {
           TransportEvent.DeadLetter,
           TransportEvent.ConsumerRecovered,
           TransportEvent.HandlerCompleted,
+          TransportEvent.Published,
+          TransportEvent.RpcCompleted,
         ]),
       );
     });
@@ -293,16 +300,18 @@ describe(JetstreamMetricsService, () => {
       ).toBe(1);
     });
 
-    it('should fall back to the wire subject when the pattern registry has no entry', async () => {
+    it('should bucket into the UNMATCHED sentinel when the pattern registry has no entry', async () => {
       // Given
       const { subs } = await setup({ options, register, promClient, eventBus });
 
       // When
       dispatch(subs, TransportEvent.RpcTimeout, 'unknown.subject', faker.string.uuid());
 
-      // Then
+      // Then: cardinality stays bounded — no raw wire subject leaks into the label
       expect(
-        await sampleValue(register, 'jetstream_rpc_timeout_total', { subject: 'unknown.subject' }),
+        await sampleValue(register, 'jetstream_rpc_timeout_total', {
+          subject: UNMATCHED_SUBJECT_LABEL,
+        }),
       ).toBe(1);
     });
   });
