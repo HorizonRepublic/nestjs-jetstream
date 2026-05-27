@@ -568,7 +568,6 @@ export default function Home() {
             <Reveal>
               <span className="lp-eyelet">Core features</span>
               <h2 className="lp-section-title">What's in the transport.</h2>
-              <p className="lp-section-sub">Three areas, three primitives each. Each card links to docs and a runnable example.</p>
             </Reveal>
             <Reveal className="lp-features">
               <div className="lp-feature-group">Messaging</div>
@@ -601,7 +600,7 @@ export default function Home() {
           <div className="lp-container" style={{ textAlign: 'center' }}>
             <Reveal>
               <h2 className="lp-section-title" style={{ margin: '0 auto 16px' }}>Quick start.</h2>
-              <p className="lp-section-sub" style={{ margin: '0 auto 32px' }}>Five minutes to wire up. Drops into your existing NestJS module graph.</p>
+              <p className="lp-section-sub" style={{ margin: '0 auto 32px' }}>Drops into your existing NestJS module graph.</p>
               <div className="lp-hero-ctas" style={{ justifyContent: 'center' }}>
                 <Link className="lp-btn lp-btn-primary" to="/docs/getting-started/quick-start">
                   Quick start
@@ -621,7 +620,7 @@ export default function Home() {
                   <BrandMark />
                   <span>nestjs-jetstream</span>
                 </div>
-                <p>NATS JetStream as a NestJS transport. Maintained by Horizon Republic.</p>
+                <p>NATS JetStream as a NestJS transport. Maintained by <a href="https://horizon-republic.dev" target="_blank" rel="noopener noreferrer">Horizon Republic</a>.</p>
               </div>
               <div className="lp-footer-col">
                 <h4>Docs</h4>
