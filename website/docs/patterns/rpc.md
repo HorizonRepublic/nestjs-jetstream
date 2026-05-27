@@ -250,7 +250,7 @@ const order = await firstValueFrom(
 The per-request timeout overrides the client-side wait time. In JetStream mode, the server-side handler timeout is still governed by the global `rpc.timeout` configuration.
 :::
 
-See [Module Configuration](/docs/getting-started/module-configuration) for all `RpcConfig` options.
+See [Module Configuration](/docs/reference/module-configuration) for all `RpcConfig` options.
 
 ## Edge Cases
 
@@ -302,6 +302,6 @@ In Core mode, NATS handles disconnect behavior natively. Pending `nc.request()` 
 ## See Also
 
 - [Record Builder](/docs/guides/record-builder) — custom headers, message IDs, per-request timeouts
-- [Module Configuration](/docs/getting-started/module-configuration) — RPC mode selection and timeout config
+- [Module Configuration](/docs/reference/module-configuration) — RPC mode selection and timeout config
 - [Performance Tuning](/docs/guides/performance) — concurrency and ack extension for JetStream RPC
 - [Troubleshooting](/docs/guides/troubleshooting#rpc-issues) — diagnosing timeout and routing errors

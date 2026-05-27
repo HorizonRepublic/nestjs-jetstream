@@ -212,7 +212,7 @@ curl http://localhost:3000/orders/42
 
 ## What's next?
 
-- [**Module Configuration**](/docs/getting-started/module-configuration) — learn about all configuration options, async setup, and advanced connection settings
+- [**Module Configuration**](/docs/reference/module-configuration) — learn about all configuration options, async setup, and advanced connection settings
 - [**RPC Patterns**](/docs/patterns/rpc) — deep dive into Core vs JetStream RPC modes
 - [**Events & Broadcast**](/docs/patterns/events) — workqueue events, broadcast fan-out, and ordered events
 - [**Record Builder & Deduplication**](/docs/guides/record-builder) — custom headers, deterministic message IDs, per-request RPC timeouts, and deduplication

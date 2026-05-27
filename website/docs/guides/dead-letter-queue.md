@@ -1,19 +1,19 @@
 ---
 sidebar_position: 2
 sidebar_label: "Dead Letter Queue"
-title: "Dead Letter Queue — NestJS NATS JetStream DLQ Stream & Callback"
-description: "Handle NestJS NATS JetStream messages that exhaust all delivery attempts via a dedicated DLQ stream with tracking headers or onDeadLetter callback."
+title: "How to configure a Dead Letter Queue — NestJS JetStream"
+description: "Capture NestJS NATS JetStream messages that exhaust all delivery attempts — via a built-in DLQ stream with tracking headers or an onDeadLetter callback."
 schema:
   type: Article
-  headline: "Dead Letter Queue — NestJS NATS JetStream DLQ Stream & Callback"
-  description: "Handle NestJS NATS JetStream messages that exhaust all delivery attempts via a dedicated DLQ stream with tracking headers or onDeadLetter callback."
+  headline: "How to configure a Dead Letter Queue"
+  description: "Capture NestJS NATS JetStream messages that exhaust all delivery attempts via a DLQ stream or onDeadLetter callback."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-11"
+  dateModified: "2026-05-27"
 ---
 
 import Since from '@site/src/components/Since';
 
-# Dead Letter Queue
+# How to configure a Dead Letter Queue
 
 <Since version="2.2.0" />
 
@@ -291,4 +291,4 @@ Dead letter detection applies to [**workqueue events**](/docs/patterns/events) a
 - [**Events (Workqueue)**](/docs/patterns/events) — retry flow and delivery semantics
 - [**Broadcast Events**](/docs/patterns/broadcast) — fan-out delivery with per-instance DLQ
 - [**Lifecycle Hooks**](/docs/guides/lifecycle-hooks) — observe transport events including dead letters
-- [**Module Configuration**](/docs/getting-started/module-configuration) — `forRoot()` and `forRootAsync()` options reference
+- [**Module Configuration**](/docs/reference/module-configuration) — `forRoot()` and `forRootAsync()` options reference

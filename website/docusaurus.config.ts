@@ -212,7 +212,7 @@ const config: Config = {
           items: [
             { label: 'Getting Started', to: '/docs/getting-started/installation' },
             { label: 'Core Concepts', to: '/docs/patterns/events' },
-            { label: 'Going to Production', to: '/docs/getting-started/module-configuration' },
+            { label: 'Going to Production', to: '/docs/reference/module-configuration' },
           ],
         },
         {

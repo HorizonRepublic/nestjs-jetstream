@@ -46,7 +46,6 @@ const sidebars: SidebarsConfig = {
       label: 'Production Basics',
       collapsed: false,
       items: [
-        'getting-started/module-configuration',
         'guides/dead-letter-queue',
         'guides/health-checks',
         'guides/graceful-shutdown',
@@ -71,10 +70,12 @@ const sidebars: SidebarsConfig = {
       label: 'Reference',
       collapsed: true,
       items: [
+        'reference/module-configuration',
         'reference/naming-conventions',
         'reference/default-configs',
         'reference/edge-cases',
         'reference/header-contract',
+        'reference/release-notes',
       ],
     },
     {

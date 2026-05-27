@@ -1,19 +1,19 @@
 ---
 sidebar_position: 3
 sidebar_label: "Scheduling (Delayed Jobs)"
-title: "NATS JetStream Scheduling — Delayed Jobs (NATS 2.12)"
-description: "One-shot delayed NestJS NATS JetStream message delivery via the Nats-Schedule header (NATS 2.12, ADR-51) — replace Bull or Agenda for simple delayed jobs."
+title: "How to schedule delayed messages — NestJS JetStream (NATS 2.12)"
+description: "One-shot delayed NestJS NATS JetStream message delivery via the Nats-Schedule header (NATS 2.12, ADR-51). Replace Bull or Agenda for simple delayed jobs."
 schema:
   type: Article
-  headline: "NATS JetStream Scheduling — Delayed Jobs (NATS 2.12)"
-  description: "One-shot delayed NestJS NATS JetStream message delivery via the Nats-Schedule header (NATS 2.12, ADR-51) — replace Bull or Agenda for simple delayed jobs."
+  headline: "How to schedule delayed messages with NestJS JetStream"
+  description: "One-shot delayed message delivery via the Nats-Schedule header (NATS 2.12, ADR-51)."
   datePublished: "2026-04-01"
-  dateModified: "2026-04-11"
+  dateModified: "2026-05-27"
 ---
 
 import Since from '@site/src/components/Since';
 
-# Scheduling (Delayed Jobs)
+# How to schedule delayed messages
 
 <Since version="2.8.0" />
 
