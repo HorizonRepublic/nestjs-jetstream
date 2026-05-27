@@ -84,12 +84,10 @@ Per-message TTL works **independently** from stream `max_age`:
 
 ## Limitations
 
-| Limitation | Details |
-|-----------|---------|
-| **Events only** | `ttl()` is ignored for RPC ([`client.send()`](/docs/patterns/rpc)); a warning is logged |
-| **NATS >= 2.11** | `allow_msg_ttl` is not supported by older server versions |
-| **Per-stream opt-in** | Each stream must have `allow_msg_ttl: true` explicitly |
-| **No consumer-side awareness** | Consumers don't know if a message has TTL — they process it normally before expiry |
+- **Events only.** `ttl()` is ignored for RPC ([`client.send()`](/docs/patterns/rpc)); a warning is logged instead.
+- **NATS >= 2.11.** `allow_msg_ttl` is not supported by older server versions.
+- **Per-stream opt-in.** Each stream must have `allow_msg_ttl: true` explicitly.
+- **No consumer-side awareness.** Consumers don't know if a message has TTL — they process it normally before expiry.
 
 ## See also
 

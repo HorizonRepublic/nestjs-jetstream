@@ -71,7 +71,7 @@ handleReminder(@Payload() data: OrderReminder) {
 
 1. `scheduleAt(date)` stores the delivery time in the record
 2. On publish, the library routes to a `_sch` subject within the event stream (a library convention to separate scheduled messages from regular events)
-3. The publish includes `Nats-Schedule` and `Nats-Schedule-Target` headers (ADR-51) — the server uses these headers, not the subject, to manage scheduling
+3. The publish includes `Nats-Schedule` and `Nats-Schedule-Target` headers ([ADR-51](https://github.com/nats-io/nats-architecture-and-design/blob/main/adr/ADR-51.md)) — the server uses these headers, not the subject, to manage scheduling
 4. NATS holds the message until the scheduled time, then publishes a **new message** to the target event subject
 5. The event consumer processes it normally
 
@@ -110,14 +110,12 @@ Setting `max_age: 0` disables automatic cleanup for **all** messages in the even
 
 ## Limitations
 
-| Limitation | Details |
-|-----------|---------|
-| **One-shot only** | No cron or interval scheduling. NATS supports these (ADR-51), but the library currently only exposes `scheduleAt()` for one-shot delivery. |
-| **Events only** | `scheduleAt()` is ignored for RPC ([`client.send()`](/docs/patterns/rpc)); a warning is logged |
-| **Future dates only** | `scheduleAt()` throws if the date is not in the future |
-| **NATS >= 2.12** | `allow_msg_schedules` is not supported by older server versions |
-| **`max_age` constraint** | Schedule delay must not exceed the stream's `max_age` |
-| **Per-stream opt-in** | Broadcast scheduling requires `allow_msg_schedules: true` on the [broadcast stream](/docs/patterns/broadcast) config separately |
+- **One-shot only.** No cron or interval scheduling. NATS supports these ([ADR-51](https://github.com/nats-io/nats-architecture-and-design/blob/main/adr/ADR-51.md)), but the library currently exposes only `scheduleAt()` for one-shot delivery.
+- **Events only.** `scheduleAt()` is ignored for RPC ([`client.send()`](/docs/patterns/rpc)); a warning is logged.
+- **Future dates only.** `scheduleAt()` throws if the date is not in the future.
+- **NATS >= 2.12.** `allow_msg_schedules` is not supported by older server versions.
+- **`max_age` constraint.** Schedule delay must not exceed the stream's `max_age`.
+- **Per-stream opt-in.** Broadcast scheduling requires `allow_msg_schedules: true` on the [broadcast stream](/docs/patterns/broadcast) config separately.
 
 ## See also
 

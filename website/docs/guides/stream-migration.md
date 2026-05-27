@@ -109,13 +109,11 @@ Expect migration time to scale roughly linearly with message count. For small st
 
 ## Error handling
 
-| Failure | Behavior |
-|---------|----------|
-| Backup creation fails | Original stream untouched, error thrown |
-| Phase 2/3 fails (delete or create) | Backup cleaned up, error thrown |
-| Sourcing timeout during Phase 4 (30s default) | Stream exists with new config but incomplete messages. Backup cleaned up, error thrown. Manual intervention may be needed — check stream message count. |
-| Process killed mid-migration | Orphaned backup detected on next application startup, cleaned up, migration retried from scratch |
-| NATS connection lost | Transport reconnects, migration resumes from the beginning |
+- **Backup creation fails.** The original stream is untouched; an error is thrown.
+- **Phase 2/3 fails (delete or create).** The backup is cleaned up; an error is thrown.
+- **Sourcing timeout during Phase 4 (30s default).** The stream exists with the new config but holds incomplete messages. The backup is cleaned up and an error is thrown — manual intervention may be needed, check the stream message count.
+- **Process killed mid-migration.** The orphaned backup is detected on the next application startup, cleaned up, and the migration is retried from scratch.
+- **NATS connection lost.** The transport reconnects and the migration resumes from the beginning.
 
 ## Limitations
 
