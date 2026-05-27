@@ -5,6 +5,8 @@ export { MessageKind, TransportEvent } from './hooks.interface';
 export type {
   DeadLetterInfo,
   HandlerStatus,
+  PublishStatus,
+  RpcOutcomeStatus,
   TransportEventSubscriber,
   TransportHooks,
 } from './hooks.interface';

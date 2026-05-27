@@ -11,6 +11,20 @@ export enum MessageKind {
 /** Outcome of a handler invocation, used as a label on processing metrics. */
 export type HandlerStatus = 'success' | 'error' | 'retried' | 'terminated';
 
+/**
+ * Outcome of a client publish (event emit or RPC publish leg). Outbound
+ * operations either acknowledge cleanly or surface a transport error — there
+ * is no retried/terminated dimension at the publish boundary.
+ */
+export type PublishStatus = 'success' | 'error';
+
+/**
+ * Outcome of a full RPC round-trip from the caller's perspective. Adds the
+ * `timeout` dimension on top of {@link PublishStatus} so percentile analysis
+ * can distinguish slow successes from deadline-exceeded calls.
+ */
+export type RpcOutcomeStatus = 'success' | 'error' | 'timeout';
+
 export enum TransportEvent {
   Connect = 'connect',
   Disconnect = 'disconnect',
@@ -23,6 +37,8 @@ export enum TransportEvent {
   DeadLetter = 'deadLetter',
   ConsumerRecovered = 'consumerRecovered',
   HandlerCompleted = 'handlerCompleted',
+  Published = 'published',
+  RpcCompleted = 'rpcCompleted',
 }
 
 /**
@@ -97,6 +113,41 @@ export interface TransportHooks {
     kind: StreamKind,
     durationMs: number,
     status: HandlerStatus,
+  ): void;
+
+  /**
+   * Fired after every client-side publish (event emit or RPC publish leg)
+   * completes, regardless of outcome.
+   *
+   * @param subject  Declared user pattern (e.g. `orders.created`) — bounded
+   *                 by handler registration, safe for high-cardinality labels.
+   * @param kind     Stream kind the publish targets: `Event`, `Broadcast`,
+   *                 `Ordered`, or `Command` (RPC publish leg).
+   * @param durationMs Wall-clock time from publish initiation to ack/error.
+   * @param status   `success` when the publish acked, `error` otherwise.
+   */
+  [TransportEvent.Published](
+    subject: string,
+    kind: StreamKind,
+    durationMs: number,
+    status: PublishStatus,
+  ): void;
+
+  /**
+   * Fired after an RPC round-trip completes from the caller's perspective —
+   * either a reply is received, the call errors out, or the deadline expires.
+   *
+   * Distinct from {@link Published} which only covers the publish leg.
+   *
+   * @param subject  Declared command pattern (e.g. `orders.get`).
+   * @param durationMs Wall-clock time from request initiation to settlement.
+   * @param status   `success` for a successful reply, `error` for transport/
+   *                 handler errors, `timeout` when the deadline expired.
+   */
+  [TransportEvent.RpcCompleted](
+    subject: string,
+    durationMs: number,
+    status: RpcOutcomeStatus,
   ): void;
 }
 
