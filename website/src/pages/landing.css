@@ -245,6 +245,13 @@ body[data-page="landing"] .main-wrapper { padding-top: 0 !important; }
 }
 .lp-eyebrow strong { color: var(--lp-fg-0); font-weight: 500; }
 .lp-eyebrow-sep { color: var(--lp-fg-3); }
+.lp-eyebrow-badge {
+  display: inline-flex; align-items: center;
+  line-height: 1;
+  transition: opacity 0.15s ease;
+}
+.lp-eyebrow-badge:hover { opacity: 0.8; }
+.lp-eyebrow-badge img { display: block; border-radius: 3px; }
 
 .lp-hero-title {
   font-family: var(--lp-f-display);
@@ -658,13 +665,6 @@ body[data-page="landing"] .main-wrapper { padding-top: 0 !important; }
 }
 .lp-footer-meta { display: flex; gap: 18px; align-items: center; }
 .lp-footer-meta strong { color: var(--lp-fg-1); font-weight: 500; }
-.lp-footer-status { display: inline-flex; align-items: center; gap: 8px; color: var(--lp-fg-2); }
-.lp-footer-status-dot {
-  width: 6px; height: 6px;
-  border-radius: 999px;
-  background: var(--lp-accent);
-  box-shadow: 0 0 0 3px var(--lp-accent-soft);
-}
 
 
 .lp-cmdk-overlay {
