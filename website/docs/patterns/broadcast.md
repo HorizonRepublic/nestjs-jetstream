@@ -135,13 +135,11 @@ The `broadcast:` prefix is used **only on the sending side** (`client.emit('broa
 
 Each consumer processes broadcast messages with the same delivery guarantees as workqueue events:
 
-| Scenario | Action | Effect |
-|---|---|---|
-| Handler succeeds | `ack` | Consumer marked as having processed the message |
-| Handler throws an error | `nak` | Message redelivered to **that consumer only** |
-| Payload cannot be decoded | `term` | Message terminated for that consumer |
-| No handler for subject | `term` | Message terminated for that consumer |
-| Max deliveries exhausted | `term` | Dead letter callback invoked for that consumer |
+- **Handler succeeds** &mdash; `ack`. The consumer is marked as having processed the message.
+- **Handler throws an error** &mdash; `nak`. The message is redelivered to **that consumer only**.
+- **Payload cannot be decoded** &mdash; `term`. The message is terminated for that consumer.
+- **No handler for subject** &mdash; `term`. The message is terminated for that consumer.
+- **Max deliveries exhausted** &mdash; `term`. The dead letter callback is invoked for that consumer.
 
 The key difference from workqueue events: broadcast delivery is **at-least-once per consumer**. Every subscribing service receives every message at least once.
 
@@ -241,11 +239,9 @@ To schedule delayed broadcasts, enable `broadcast.stream.allow_msg_schedules: tr
 
 ### Default values — the ones you'll actually tune
 
-| Setting | Default | Why it matters |
-|---|---|---|
-| `max_age` (stream, shared) | 1 hour | New instances catch up on broadcasts within this window |
-| `max_deliver` (per-service) | 3 | Each service retries independently before dead letter |
-| `ack_wait` (per-service) | 10 seconds | Scoped to each service's broadcast consumer |
+- **`max_age`** (stream, shared) &mdash; 1 hour. New instances catch up on broadcasts within this window.
+- **`max_deliver`** (per-service) &mdash; `3`. Each service retries independently before dead letter.
+- **`ack_wait`** (per-service) &mdash; 10 seconds. Scoped to each service's broadcast consumer.
 
 See [Default Configs — Broadcast Stream](/docs/reference/default-configs#broadcast-stream) and [Broadcast Consumer](/docs/reference/default-configs#broadcast-consumer) for the complete list.
 

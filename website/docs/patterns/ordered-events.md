@@ -74,12 +74,12 @@ Ordered consumers provide **at-most-once** delivery. This is the fundamental tra
 
 ### What happens when things go wrong
 
-| Scenario | What happens | Message retried? |
-|---|---|---|
-| Handler succeeds | Auto-ack by the client | No |
-| Handler throws an error | Error logged, consumer moves to next message | **No** |
-| Decode error (malformed payload) | Error logged, message skipped | **No** |
-| No handler registered for subject | Error logged, message skipped | **No** |
+For ordered consumers, **no scenario triggers a retry** — the consumer always advances to the next message. This is the fundamental trade-off for strict ordering.
+
+- **Handler succeeds** &mdash; auto-acked by the client.
+- **Handler throws an error** &mdash; error is logged; the consumer moves to the next message.
+- **Decode error (malformed payload)** &mdash; error is logged; the message is skipped.
+- **No handler registered for subject** &mdash; error is logged; the message is skipped.
 
 ### Why no retries?
 
@@ -231,16 +231,14 @@ export class ProjectionsController {
 
 The deliver policy controls **where the ordered consumer starts reading** when it is created (or recreated after a restart). This is the most important configuration decision for ordered events.
 
-| Policy | Replays on restart? | Misses messages during downtime? | External state needed? | Best for |
-|---|---|---|---|---|
-| **All** (default) | Yes (full stream) | No | No | Read model rebuild, event sourcing |
-| **New** | No | Yes | No | Real-time dashboards, live feeds |
-| **Last** | Yes (1 message) | Partially | No | Config initialization |
-| **LastPerSubject** | Yes (1 per subject) | Partially | No | Per-entity state maps |
-| **StartSequence** | From offset | No (if tracked) | Yes (offset DB) | Resumable projections |
-| **StartTime** | From timestamp | Depends | Optional | Debugging, time-based recovery |
+A one-liner per policy — open the matching `<details>` block below for the full discussion:
 
-Each policy is detailed below — open the one that matches your scenario.
+- **`All`** (default) — replays the full stream on every restart. No external state needed. Best for read-model rebuilds and event sourcing.
+- **`New`** — starts from messages published after the consumer is created. Skips history; misses messages emitted while the consumer is down. Best for real-time dashboards and live feeds.
+- **`Last`** — delivers only the most recent message in the stream. Best for config initialization.
+- **`LastPerSubject`** — delivers the most recent message per subject. Best for per-entity state maps.
+- **`StartSequence`** — resumes from a tracked offset stored in your application (e.g., in a database). Best for resumable projections.
+- **`StartTime`** — resumes from an ISO timestamp. Best for debugging and time-based recovery.
 
 <details>
 <summary><b>All</b> — full replay on every start <i>(default)</i></summary>
