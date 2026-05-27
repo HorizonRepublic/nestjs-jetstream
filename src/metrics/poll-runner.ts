@@ -6,7 +6,6 @@ import type { StreamKind } from '../interfaces';
 import type { JetstreamMetrics } from './metrics.factory';
 import { STREAM_KIND_LABEL } from './metrics.constants';
 
-/** A consumer this service owns: stream + durable + StreamKind for labelling. */
 export interface ConsumerPollTarget {
   kind: StreamKind;
   stream: string;
@@ -14,9 +13,8 @@ export interface ConsumerPollTarget {
 }
 
 /**
- * Resolved inputs for {@link PollRunner}. `targets` lists every consumer this
- * service owns (one per active StreamKind). Stream gauges are derived from
- * `targets[].stream`, deduplicated internally.
+ * Inputs for {@link PollRunner}. `targets` lists every consumer this service
+ * owns; stream gauges are derived from `targets[].stream`, deduplicated.
  */
 export interface PollRunnerOptions {
   intervalMs: number;
@@ -25,20 +23,14 @@ export interface PollRunnerOptions {
   targets: ConsumerPollTarget[];
 }
 
-/** Bounded label values for `metrics_poll_errors_total{target}`. */
 type PollErrorTarget = 'consumer.info' | 'stream.info' | 'jsm.connect';
 
 /**
- * Periodically pulls consumer + stream info from `JetStreamManager` and writes
- * the latest values to the gauge metrics. Each tick is guarded so:
- *
- *  - Overlapping ticks are skipped (no queueing) when a previous cycle has not
- *    completed within the interval.
- *  - Per-target failures are isolated — a single broken consumer cannot stop
- *    the cycle, and the failure surfaces via `metrics_poll_errors_total`.
- *
- * Stops cleanly via {@link stop}: clears the timer and awaits the in-flight
- * tick so unit/integration tests are not left with detached promises.
+ * Periodically pulls consumer + stream info from `JetStreamManager` and
+ * writes the values to gauge metrics. Overlapping ticks are skipped (no
+ * queueing); per-target failures are isolated and surface via
+ * `metrics_poll_errors_total`. {@link stop} clears the timer and awaits the
+ * in-flight tick.
  */
 export class PollRunner {
   private readonly logger = new Logger('Jetstream:Metrics:Poll');
@@ -73,9 +65,7 @@ export class PollRunner {
     if (this.inFlight !== null) await this.inFlight;
   }
 
-  /**
-   * @internal Visible for tests. Runs one poll cycle synchronously.
-   */
+  /** @internal Visible for tests. Runs one poll cycle. */
   public async tick(): Promise<void> {
     let jsm: JetStreamManager;
 
@@ -104,8 +94,6 @@ export class PollRunner {
         this.opts.metrics.consumerNumRedelivered.labels(labels).set(info.num_redelivered);
         this.opts.metrics.consumerNumWaiting.labels(labels).set(info.num_waiting);
       } catch {
-        // Single-consumer failures stay isolated: a missing/recreating consumer
-        // shouldn't prevent the rest of the cycle from collecting data.
         this.recordPollError('consumer.info');
       }
     }

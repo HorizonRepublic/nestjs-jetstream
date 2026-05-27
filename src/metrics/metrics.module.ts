@@ -24,11 +24,7 @@ import { JetstreamMetricsService } from './metrics.service';
 const PROM_CLIENT_INSTALL_MESSAGE =
   'prom-client is required when JetstreamModule.forRoot({ metrics: ... }) is enabled. Install it with: pnpm add prom-client';
 
-/**
- * Dynamically load `prom-client` so the dependency stays optional when the
- * `metrics` option is not set. A clear actionable error is thrown if the peer
- * package is missing at runtime.
- */
+/** Dynamic import so `prom-client` stays a truly optional peer dependency. */
 const resolvePromClient = async (): Promise<typeof import('prom-client')> => {
   try {
     return await import('prom-client');
@@ -37,12 +33,6 @@ const resolvePromClient = async (): Promise<typeof import('prom-client')> => {
   }
 };
 
-/**
- * Normalize the user-provided `metrics` option into a {@link MetricsConfig}
- * with all defaults applied. The registry falls back to `prom-client`'s
- * global `register`, which is also what `@willsoto/nestjs-prometheus`
- * exposes — so default integration works without configuration.
- */
 const normalizeMetricsConfig = (
   option: MetricsOption | undefined,
   promClient: typeof import('prom-client'),
@@ -59,26 +49,13 @@ const normalizeMetricsConfig = (
 };
 
 /**
- * Internal module activated by `JetstreamModule.forRoot` when metrics are
- * enabled. Provides:
- *
- *  - {@link JetstreamMetricsService} — singleton subscribing to the EventBus.
- *  - {@link JETSTREAM_METRICS_CONFIG} — normalized {@link MetricsConfig}.
- *  - {@link JETSTREAM_METRICS_REGISTRY} — resolved `prom-client` registry.
- *  - {@link JETSTREAM_METRICS_PROM_CLIENT} — dynamically loaded runtime
- *    classes (`Counter`, `Histogram`, `Gauge`) so the factory does not need
- *    a static `import 'prom-client'`.
- *
- * When the `metrics` option is `false`/omitted, `forFeature` returns an empty
- * shell — no providers, no `prom-client` load.
+ * Internal module activated by `JetstreamModule` when `metrics` is enabled.
+ * Provides `JetstreamMetricsService` plus the resolved config, registry, and
+ * dynamically loaded `prom-client` runtime via DI tokens. Returns an empty
+ * shell when `metrics` is `false`/omitted so the peer is never loaded.
  */
 @Module({})
 export class JetstreamMetricsModule {
-  /**
-   * Build the metrics module for the given `metrics` option. When the option is
-   * falsy/undefined the method returns an empty shell — no providers, no
-   * `prom-client` load.
-   */
   public static forFeature(metricsOption: MetricsOption | undefined): DynamicModule {
     if (!metricsOption) {
       return { module: JetstreamMetricsModule, providers: [], exports: [] };

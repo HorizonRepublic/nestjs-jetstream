@@ -141,11 +141,8 @@ export class CoreRpcServer {
     }
   }
 
-  /**
-   * Emit `HandlerCompleted` with the declared pattern + {@link StreamKind} so
-   * the metric label space stays bounded — see EventRouter for the same
-   * cardinality rationale.
-   */
+  // See EventRouter.reportHandlerCompleted for the rationale on declared
+  // pattern + per-emit hasHook check.
   private reportHandlerCompleted(msg: Msg, startedAt: number, status: HandlerStatus): void {
     if (!this.eventBus.hasHook(TransportEvent.HandlerCompleted)) return;
 
