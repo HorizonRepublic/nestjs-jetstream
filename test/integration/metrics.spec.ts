@@ -287,6 +287,77 @@ describe('Metrics — integration', () => {
     });
   });
 
+  describe('polling gauges (consumer + stream info)', () => {
+    let app: INestApplication;
+    let module: TestingModule;
+    let client: ClientProxy;
+    let serviceName: string;
+    let register: Registry;
+
+    beforeEach(async () => {
+      serviceName = uniqueServiceName();
+      register = new Registry();
+      ({ app, module } = await createTestApp(
+        {
+          name: serviceName,
+          port,
+          // Short interval so the test doesn't wait forever for the first tick.
+          metrics: { register, pollInterval: 100 },
+        },
+        [MetricsController],
+        [serviceName],
+      ));
+      client = module.get<ClientProxy>(getClientToken(serviceName));
+    });
+
+    afterEach(async () => {
+      await app.close();
+      await cleanupStreams(nc, serviceName);
+    });
+
+    it('should publish gauges for each active consumer kind after one tick', async () => {
+      // Given/When: emit one message so the stream has state worth observing
+      await firstValueFrom(client.emit('orders.created', { id: 'p1' }));
+
+      // Wait for a poll cycle (intervalMs=100 + slack)
+      await waitForCondition(async () => {
+        const text = await register.metrics();
+
+        return /^jetstream_consumer_num_ack_pending\{/m.test(text);
+      }, 5_000);
+
+      // Then
+      const text = await register.metrics();
+
+      expect(text).toMatch(
+        new RegExp(`^jetstream_consumer_num_pending\\{[^}]*kind="event"[^}]*\\}`, 'm'),
+      );
+      expect(text).toMatch(
+        new RegExp(
+          `^jetstream_stream_messages\\{stream="${streamName(serviceName, StreamKind.Event)}"\\}`,
+          'm',
+        ),
+      );
+      expect(text).toMatch(
+        new RegExp(
+          `^jetstream_stream_bytes\\{stream="${streamName(serviceName, StreamKind.Event)}"\\}`,
+          'm',
+        ),
+      );
+    });
+
+    it('should not register metrics_poll_errors_total samples during healthy polling', async () => {
+      // Given/When: emit and poll a few ticks
+      await firstValueFrom(client.emit('orders.created', { id: 'p2' }));
+      await new Promise((r) => setTimeout(r, 300));
+
+      // Then: the family exists but has no error samples
+      const text = await register.metrics();
+
+      expect(text).not.toMatch(/^jetstream_metrics_poll_errors_total\{[^}]+\}\s+[1-9]/m);
+    });
+  });
+
   describe('when metrics are disabled', () => {
     let app: INestApplication;
     let serviceName: string;

@@ -7,6 +7,8 @@ import {
   type OnModuleDestroy,
 } from '@nestjs/common';
 
+import type { JetStreamManager } from '@nats-io/jetstream';
+
 import { ConnectionProvider } from '../connection';
 import { EventBus } from '../hooks';
 import type {
@@ -18,7 +20,13 @@ import type {
   RpcOutcomeStatus,
 } from '../interfaces';
 import { StreamKind, TransportEvent } from '../interfaces';
-import { JETSTREAM_CONNECTION, JETSTREAM_OPTIONS, streamName } from '../jetstream.constants';
+import {
+  consumerName,
+  isJetStreamRpcMode,
+  JETSTREAM_CONNECTION,
+  JETSTREAM_OPTIONS,
+  streamName,
+} from '../jetstream.constants';
 import { PatternRegistry } from '../server/routing/pattern-registry';
 
 import { mapErrorContext } from './error-context-mapper';
@@ -32,6 +40,7 @@ import {
   UNMATCHED_SUBJECT_LABEL,
 } from './metrics.constants';
 import { createMetrics, type JetstreamMetrics, type PromClientRuntime } from './metrics.factory';
+import { PollRunner, type ConsumerPollTarget } from './poll-runner';
 
 /** Stream-kind label used by ConsumerRecovered subscribers. */
 type RecoveredKindLabel = StreamKind | string;
@@ -61,6 +70,7 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
   private readonly logger = new Logger('Jetstream:Metrics');
 
   private metrics: JetstreamMetrics | null = null;
+  private pollRunner: PollRunner | null = null;
   private readonly activeServers = new Set<string>();
 
   public constructor(
@@ -93,13 +103,15 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
 
     this.subscribeToEvents();
     this.syncInitialConnectionState();
+    this.startPolling();
     this.logger.log(
       `Metrics enabled (prefix=${this.config.prefix ?? DEFAULT_METRICS_PREFIX}, poll=${this.getEffectivePollInterval()}ms)`,
     );
   }
 
   public async onModuleDestroy(): Promise<void> {
-    // Polling lifecycle wired in Phase E.
+    await this.pollRunner?.stop();
+    this.pollRunner = null;
   }
 
   /**
@@ -129,6 +141,77 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
 
     this.activeServers.add(server);
     this.metrics?.connectionUp.labels({ server }).set(1);
+  }
+
+  /**
+   * Wire up the polling loop for gauge metrics. The loop is only started when:
+   *
+   *  - `pollInterval > 0` (the user opted in to polling).
+   *  - {@link PatternRegistry} is available (consumer mode is enabled).
+   *  - {@link ConnectionProvider} is available (we have a NATS connection to
+   *    pull info from).
+   *
+   * The resolved target list mirrors the consumers this service actually owns
+   * — derived from {@link PatternRegistry} so publisher-only deployments and
+   * inactive stream kinds are silently skipped.
+   */
+  private startPolling(): void {
+    const interval = this.getEffectivePollInterval();
+    const connection = this.connection;
+
+    if (interval <= 0 || !this.patternRegistry || !connection || !this.metrics) return;
+
+    const targets = this.buildPollTargets();
+
+    if (targets.length === 0) return;
+
+    this.pollRunner = new PollRunner({
+      intervalMs: interval,
+      jsmFactory: async (): Promise<JetStreamManager> => connection.getJetStreamManager(),
+      metrics: this.metrics,
+      targets,
+    });
+    this.pollRunner.start();
+  }
+
+  private buildPollTargets(): ConsumerPollTarget[] {
+    const registry = this.patternRegistry;
+
+    if (!registry) return [];
+
+    const targets: ConsumerPollTarget[] = [];
+
+    if (registry.hasEventHandlers()) {
+      targets.push({
+        kind: StreamKind.Event,
+        stream: streamName(this.options.name, StreamKind.Event),
+        consumer: consumerName(this.options.name, StreamKind.Event),
+      });
+    }
+
+    // Core RPC mode uses NATS request/reply — no JetStream stream/consumer is
+    // created, so there's nothing to poll. Only JetStream RPC mode owns the
+    // cmd stream + consumer.
+    if (registry.hasRpcHandlers() && isJetStreamRpcMode(this.options.rpc)) {
+      targets.push({
+        kind: StreamKind.Command,
+        stream: streamName(this.options.name, StreamKind.Command),
+        consumer: consumerName(this.options.name, StreamKind.Command),
+      });
+    }
+
+    if (registry.hasBroadcastHandlers()) {
+      targets.push({
+        kind: StreamKind.Broadcast,
+        stream: streamName(this.options.name, StreamKind.Broadcast),
+        consumer: consumerName(this.options.name, StreamKind.Broadcast),
+      });
+    }
+
+    // Ordered consumers are ephemeral (auto-managed by nats.js) — there is no
+    // stable durable name to poll, so we don't include them.
+
+    return targets;
   }
 
   private subscribeToEvents(): void {
