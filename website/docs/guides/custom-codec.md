@@ -1,15 +1,17 @@
 ---
 sidebar_position: 4
-title: "Custom Codec"
+sidebar_label: "Custom Codec"
+title: "How to use a custom codec — NestJS JetStream"
+description: "Replace the default JSON codec with the built-in MessagePack codec, Protobuf, or any custom binary format for NATS message serialization."
 schema:
   type: Article
-  headline: "Custom Codec"
-  description: "Replace the default JSON codec with the built-in MessagePack codec, Protobuf, or any custom binary format."
+  headline: "How to use a custom codec with NestJS JetStream"
+  description: "Replace JSON with MessagePack, Protobuf, or a custom binary codec for NATS message serialization."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-16"
+  dateModified: "2026-05-27"
 ---
 
-# Custom Codec
+# How to use a custom codec
 
 The transport uses a `Codec` to serialize and deserialize message payloads. By default, `JsonCodec` handles everything using the native `TextEncoder`/`TextDecoder` with `JSON.stringify`/`JSON.parse`. You can replace it globally or per-client with any binary format.
 
@@ -237,4 +239,4 @@ To switch codecs without downtime, deploy consumers that can handle both formats
 
 - [Record Builder & Deduplication](./record-builder.md) — attach headers and dedup IDs to outbound messages
 - [Handler Context](./handler-context.md) — access decoded payloads and metadata in handlers
-- [Module Configuration](/docs/getting-started/module-configuration) — full reference for `forRoot()` and `forFeature()` options
+- [Module Configuration](/docs/reference/module-configuration) — full reference for `forRoot()` and `forFeature()` options

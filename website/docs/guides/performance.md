@@ -159,5 +159,5 @@ In the meantime, here is what you can rely on without numbers:
 ## See also
 
 - [Default Configs](/docs/reference/default-configs) — all stream, consumer, and connection defaults
-- [Module Configuration](/docs/getting-started/module-configuration) — where to set these options
+- [Module Configuration](/docs/reference/module-configuration) — where to set these options
 - [Troubleshooting](/docs/guides/troubleshooting#consumer-issues) — diagnosing consumer lag

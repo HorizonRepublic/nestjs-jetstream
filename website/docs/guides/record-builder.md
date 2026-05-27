@@ -174,17 +174,40 @@ These headers are read-only from the handler's perspective — you can access th
 
 ## API summary
 
-| Method | Description |
-|---|---|
-| `new JetstreamRecordBuilder(data?)` | Create a builder, optionally with initial payload |
-| `.setData(data)` | Set or replace the payload |
-| `.setHeader(key, value)` | Add a single custom header |
-| `.setHeaders(record)` | Add multiple headers from a key-value object |
-| `.setMessageId(id)` | Set a deterministic message ID for deduplication |
-| `.setTimeout(ms)` | Override the global RPC timeout for this request |
-| `.scheduleAt(date)` | Schedule one-shot delayed delivery (NATS >= 2.12). <Since version="2.8.0" /> |
-| `.ttl(ns)` | Set per-message TTL via the `Nats-TTL` header (NATS >= 2.11, requires `allow_msg_ttl: true`). See [Per-Message TTL](/docs/guides/per-message-ttl). <Since version="2.9.0" /> |
-| `.build()` | Return an immutable `JetstreamRecord` |
+```typescript
+class JetstreamRecordBuilder<T = unknown> {
+  /** Create a builder, optionally with an initial payload. */
+  constructor(data?: T);
+
+  /** Set or replace the payload. */
+  setData(data: T): this;
+
+  /** Add a single custom header. Reserved headers throw. */
+  setHeader(key: string, value: string): this;
+
+  /** Add multiple headers from a key-value object. */
+  setHeaders(record: Record<string, string>): this;
+
+  /** Set a deterministic message ID for JetStream-level deduplication. */
+  setMessageId(id: string): this;
+
+  /** Override the global RPC timeout for this single request. */
+  setTimeout(ms: number): this;
+
+  /** Schedule one-shot delayed delivery (NATS >= 2.12). @since 2.8.0 */
+  scheduleAt(date: Date): this;
+
+  /**
+   * Set per-message TTL via the `Nats-TTL` header.
+   * Requires NATS >= 2.11 and `allow_msg_ttl: true` on the target stream.
+   * @since 2.9.0
+   */
+  ttl(durationNs: number): this;
+
+  /** Return an immutable JetstreamRecord. */
+  build(): JetstreamRecord<T>;
+}
+```
 
 The `RESERVED_HEADERS` set is also exported from the package — use it in custom tooling (e.g., a header-sanitization helper) to check whether a key is blocked before calling `.setHeader()`:
 
@@ -202,4 +225,4 @@ if (RESERVED_HEADERS.has(key)) {
 - [Scheduling (Delayed Jobs)](/docs/guides/scheduling) — delay message delivery to a future time
 - [Handler Context](/docs/guides/handler-context) — access headers and message metadata in your handlers
 - [Custom Codec](/docs/guides/custom-codec) — control how payloads are serialized
-- [Module Configuration](/docs/getting-started/module-configuration) — configure dedup windows via stream overrides
+- [Module Configuration](/docs/reference/module-configuration) — configure dedup windows via stream overrides

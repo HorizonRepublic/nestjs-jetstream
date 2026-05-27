@@ -72,12 +72,10 @@ When no OpenTelemetry SDK is registered in the host application, every internal 
 
 The default trace set covers the message-flow operations that map onto a distributed trace waterfall:
 
-| Trace kind          | Span kind  | When it fires                                       |
-|---------------------|------------|-----------------------------------------------------|
-| `publish`           | `PRODUCER` | Every `client.emit()` and the publish portion of an RPC `client.send()` |
-| `consume`           | `CONSUMER` | Every handler invocation. Retries produce additional spans with `messaging.nats.message.delivery_count > 1` |
-| `rpc.client.send`   | `CLIENT`   | Full RPC round-trip on the caller side, from publish through reply or timeout |
-| `dead_letter`       | `INTERNAL` | When a message exhausts `maxDeliver` and the DLQ flow fires |
+- **`publish`** &mdash; `PRODUCER` span. Fires for every `client.emit()` and for the publish portion of an RPC `client.send()`.
+- **`consume`** &mdash; `CONSUMER` span. Fires for every handler invocation. Retries produce additional spans with `messaging.nats.message.delivery_count > 1`.
+- **`rpc.client.send`** &mdash; `CLIENT` span. Covers the full RPC round-trip on the caller side, from publish through reply or timeout.
+- **`dead_letter`** &mdash; `INTERNAL` span. Fires when a message exhausts `maxDeliver` and the DLQ flow runs.
 
 Infrastructure trace kinds (connection lifecycle, self-healing, provisioning, migration, shutdown) exist in the `JetstreamTrace` enum but are off by default. Enable them explicitly when you need that level of detail.
 
@@ -143,10 +141,8 @@ otel?: {
 
 Handler errors are classified by exception type. The classifier drives **only** OpenTelemetry span status — it does not affect logs, hooks, or the reply envelope returned to the caller.
 
-| Thrown type                            | Span status                              |
-|----------------------------------------|------------------------------------------|
-| `RpcException` / `HttpException`       | `OK` + `jetstream.rpc.reply.has_error`, `jetstream.rpc.reply.error.code` attributes |
-| Bare `Error` / unknown                 | `ERROR` + `span.recordException(err)`    |
+- **`RpcException` / `HttpException`** &mdash; span status `OK`, with `jetstream.rpc.reply.has_error` and `jetstream.rpc.reply.error.code` attributes attached.
+- **Bare `Error` / unknown thrown value** &mdash; span status `ERROR`, with `span.recordException(err)` attached.
 
 This keeps APM error rates clean for business outcomes that are part of the contract (auth denials, validation failures) while loud-failing on real bugs and infrastructure problems. Override the default with a custom classifier when your team uses other primitives:
 

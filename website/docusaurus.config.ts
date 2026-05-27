@@ -6,8 +6,8 @@ const config: Config = {
   title: '@horizon-republic/nestjs-jetstream',
   tagline: 'The NestJS NATS transport backed by JetStream — durable events, broadcast, ordered delivery, and RPC',
   favicon: 'img/favicon.svg',
-  url: 'https://horizonrepublic.github.io',
-  baseUrl: '/nestjs-jetstream/',
+  url: 'https://nestjs-jetstream.horizon-republic.dev',
+  baseUrl: '/',
   organizationName: 'HorizonRepublic',
   projectName: 'nestjs-jetstream',
   trailingSlash: false,
@@ -89,11 +89,11 @@ const config: Config = {
     ],
   ],
   headTags: [
-    { tagName: 'link', attributes: { rel: 'icon', type: 'image/png', sizes: '48x48', href: '/nestjs-jetstream/img/favicon-48.png' } },
-    { tagName: 'link', attributes: { rel: 'icon', type: 'image/png', sizes: '96x96', href: '/nestjs-jetstream/img/favicon-96.png' } },
-    { tagName: 'link', attributes: { rel: 'icon', type: 'image/png', sizes: '192x192', href: '/nestjs-jetstream/img/favicon-192.png' } },
-    { tagName: 'link', attributes: { rel: 'icon', type: 'image/png', sizes: '512x512', href: '/nestjs-jetstream/img/favicon-512.png' } },
-    { tagName: 'link', attributes: { rel: 'apple-touch-icon', sizes: '180x180', href: '/nestjs-jetstream/img/apple-touch-icon.png' } },
+    { tagName: 'link', attributes: { rel: 'icon', type: 'image/png', sizes: '48x48', href: '/img/favicon-48.png' } },
+    { tagName: 'link', attributes: { rel: 'icon', type: 'image/png', sizes: '96x96', href: '/img/favicon-96.png' } },
+    { tagName: 'link', attributes: { rel: 'icon', type: 'image/png', sizes: '192x192', href: '/img/favicon-192.png' } },
+    { tagName: 'link', attributes: { rel: 'icon', type: 'image/png', sizes: '512x512', href: '/img/favicon-512.png' } },
+    { tagName: 'link', attributes: { rel: 'apple-touch-icon', sizes: '180x180', href: '/img/apple-touch-icon.png' } },
     {
       tagName: 'meta',
       attributes: {
@@ -212,7 +212,7 @@ const config: Config = {
           items: [
             { label: 'Getting Started', to: '/docs/getting-started/installation' },
             { label: 'Core Concepts', to: '/docs/patterns/events' },
-            { label: 'Going to Production', to: '/docs/getting-started/module-configuration' },
+            { label: 'Going to Production', to: '/docs/reference/module-configuration' },
           ],
         },
         {

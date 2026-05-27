@@ -1,19 +1,19 @@
 ---
 sidebar_position: 4
 sidebar_label: "Per-Message TTL"
-title: "Per-Message TTL — NATS JetStream Message Expiration"
-description: "Individual NestJS NATS JetStream message expiration via the Nats-TTL header (NATS 2.11, ADR-43), independent of the stream's max_age."
+title: "How to set per-message TTL — NestJS JetStream"
+description: "Set individual NATS JetStream message expiration via the Nats-TTL header (NATS 2.11, ADR-43), independent of the stream's max_age."
 schema:
   type: Article
-  headline: "Per-Message TTL — NATS JetStream Message Expiration"
-  description: "Individual NestJS NATS JetStream message expiration via the Nats-TTL header (NATS 2.11, ADR-43), independent of the stream's max_age."
+  headline: "How to set per-message TTL on NATS JetStream messages"
+  description: "Set individual message expiration via the Nats-TTL header (NATS 2.11, ADR-43)."
   datePublished: "2026-04-02"
-  dateModified: "2026-04-11"
+  dateModified: "2026-05-27"
 ---
 
 import Since from '@site/src/components/Since';
 
-# Per-Message TTL
+# How to set per-message TTL
 
 <Since version="2.9.0" />
 
@@ -84,16 +84,14 @@ Per-message TTL works **independently** from stream `max_age`:
 
 ## Limitations
 
-| Limitation | Details |
-|-----------|---------|
-| **Events only** | `ttl()` is ignored for RPC ([`client.send()`](/docs/patterns/rpc)); a warning is logged |
-| **NATS >= 2.11** | `allow_msg_ttl` is not supported by older server versions |
-| **Per-stream opt-in** | Each stream must have `allow_msg_ttl: true` explicitly |
-| **No consumer-side awareness** | Consumers don't know if a message has TTL — they process it normally before expiry |
+- **Events only.** `ttl()` is ignored for RPC ([`client.send()`](/docs/patterns/rpc)); a warning is logged instead.
+- **NATS >= 2.11.** `allow_msg_ttl` is not supported by older server versions.
+- **Per-stream opt-in.** Each stream must have `allow_msg_ttl: true` explicitly.
+- **No consumer-side awareness.** Consumers don't know if a message has TTL — they process it normally before expiry.
 
 ## See also
 
 - [Record Builder & Deduplication](/docs/guides/record-builder) — full `JetstreamRecordBuilder` API including `.ttl()`, `.setMessageId()`, `.scheduleAt()`
 - [Scheduling (Delayed Jobs)](/docs/guides/scheduling) — the sibling feature for one-shot delayed delivery
 - [Default Configs](/docs/reference/default-configs#enable-only-can-be-turned-on-but-never-off) — `allow_msg_ttl` in the enable-only stream properties table
-- [Module Configuration](/docs/getting-started/module-configuration) — where to set `events.stream.allow_msg_ttl`
+- [Module Configuration](/docs/reference/module-configuration) — where to set `events.stream.allow_msg_ttl`

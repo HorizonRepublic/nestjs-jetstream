@@ -152,15 +152,13 @@ Setting `pollInterval: 0` (or `false`) disables the polling loop entirely. Count
 
 ### Label values
 
-| Label    | Values |
-| -------- | ------ |
-| `kind`   | `event`, `command`, `broadcast`, `ordered` |
-| `status` (handler) | `success`, `error`, `retried`, `terminated` |
-| `status` (publish) | `success`, `error` |
-| `status` (rpc round-trip) | `success`, `error`, `timeout` |
-| `context` (errors) | `connection`, `codec`, `publish`, `consume`, `handler`, `shutdown`, `other` |
+Every label value is bounded — no free-form data ever reaches a label. The `subject` label is sourced from the **declared pattern** in `@EventPattern` / `@MessagePattern`, not from the wire NATS subject, so cardinality is bounded by your handler count.
 
-All label values are bounded — no free-form data ever reaches a label. The `subject` label is sourced from the **declared pattern** in `@EventPattern` / `@MessagePattern`, not from the wire NATS subject, so cardinality is bounded by your handler count.
+- **`kind`** &mdash; `event`, `command`, `broadcast`, `ordered`.
+- **`status`** on handler metrics &mdash; `success`, `error`, `retried`, `terminated`.
+- **`status`** on publish metrics &mdash; `success`, `error`.
+- **`status`** on RPC round-trip metrics &mdash; `success`, `error`, `timeout`.
+- **`context`** on `jetstream_errors_total` &mdash; `connection`, `codec`, `publish`, `consume`, `handler`, `shutdown`, `other`.
 
 ## PromQL examples
 

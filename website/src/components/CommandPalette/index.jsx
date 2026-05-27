@@ -16,7 +16,7 @@ const DEFAULT_ITEMS = [
   { section: "Patterns", kind: "doc", label: "RPC", to: "/docs/patterns/rpc" },
   { section: "Patterns", kind: "doc", label: "Broadcast", to: "/docs/patterns/broadcast" },
   { section: "Patterns", kind: "doc", label: "Ordered delivery", to: "/docs/patterns/ordered-events" },
-  { section: "Production", kind: "doc", label: "Module config", to: "/docs/getting-started/module-configuration" },
+  { section: "Production", kind: "doc", label: "Module config", to: "/docs/reference/module-configuration" },
   { section: "Production", kind: "doc", label: "Dead-letter queue", to: "/docs/guides/dead-letter-queue" },
   { section: "Production", kind: "doc", label: "Health checks", to: "/docs/guides/health-checks" },
   { section: "External", kind: "link", label: "GitHub repository", to: "https://github.com/HorizonRepublic/nestjs-jetstream" },

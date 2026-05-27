@@ -83,14 +83,17 @@ Handlers can return a plain value, a `Promise`, or an `Observable`. For an Obser
 
 ### Error behavior
 
-| Scenario | What happens |
-|---|---|
-| Handler throws `RpcException` | Error serialized via `getError()`, sent back with `x-error` header |
-| Handler throws generic `Error` | `{ message }` extracted, sent back with `x-error` header |
-| Handler throws plain object | Passed through as-is with `x-error` header |
-| No handler registered | Error response returned immediately to caller |
-| Decode failure | Error response returned to caller |
-| Timeout exceeded | NATS returns a timeout error to the client |
+**Handler throws `RpcException`.** The error is serialized via `getError()` and sent back to the caller with the `x-error` header.
+
+**Handler throws a generic `Error`.** The `{ message }` is extracted and sent back with the `x-error` header.
+
+**Handler throws a plain object.** The object is passed through as-is with the `x-error` header.
+
+**No handler registered for the subject.** An error response is returned to the caller immediately.
+
+**Decode failure.** An error response is returned to the caller; the handler is not invoked.
+
+**Timeout exceeded.** NATS returns a timeout error to the client — no response was produced in time.
 
 ## JetStream Mode
 
@@ -137,16 +140,21 @@ const order = await firstValueFrom(
 
 ### Error behavior
 
-| Scenario | What happens |
-|---|---|
-| Handler throws `RpcException` | Error published to inbox with `x-error` header, message `term()`'d (no redelivery) |
-| Handler throws generic `Error` | `{ message }` published to inbox, message `term()`'d |
-| Handler throws plain object | Passed through to inbox, message `term()`'d |
-| No handler registered | Message `term()`'d immediately, client times out |
-| Missing headers (`x-reply-to` / `x-correlation-id`) | Message `term()`'d, client times out |
-| Decode failure | Message `term()`'d, client times out |
-| Handler timeout exceeded | Message `term()`'d, no response published |
-| Response publish failure | Message still `ack()`'d (handler succeeded), client times out |
+**Handler throws `RpcException`.** The error is published to the caller's inbox with the `x-error` header. The message is `term()`'d — no redelivery.
+
+**Handler throws a generic `Error`.** `{ message }` is published to the inbox; the message is `term()`'d.
+
+**Handler throws a plain object.** The object is forwarded to the inbox as-is; the message is `term()`'d.
+
+**No handler registered.** The message is `term()`'d immediately; the client eventually times out.
+
+**Missing headers (`x-reply-to` / `x-correlation-id`).** The message is `term()`'d; the client times out.
+
+**Decode failure.** The message is `term()`'d; the client times out.
+
+**Handler timeout exceeded.** The message is `term()`'d; no response is published.
+
+**Response publish failure.** The message is still `ack()`'d (the handler succeeded), but the client times out because the reply never arrived on the inbox.
 
 :::info Why `term()` instead of `nak()`?
 RPC commands are **never** redelivered via `nak()`. Retrying a command could cause duplicate side effects (double charges, duplicate records). If the handler fails, the message is terminated and the error is returned to the caller, who can decide whether to retry.
@@ -214,10 +222,7 @@ A single `timeout` value in `RpcConfig` controls **both sides** of the RPC call:
 - **Client side** — how long the client waits for a response before rejecting with `"RPC timeout"`.
 - **Server side (JetStream mode only)** — how long the handler has to complete before the message is `term()`'d.
 
-| Mode | Default timeout | Config path |
-|---|---|---|
-| Core | 30,000 ms (30 s) | `rpc.timeout` |
-| JetStream | 180,000 ms (3 min) | `rpc.timeout` |
+Defaults: **Core** &mdash; 30,000 ms (30 s). **JetStream** &mdash; 180,000 ms (3 min). Both modes accept the value under `rpc.timeout`.
 
 ```typescript
 JetstreamModule.forRoot({
@@ -250,16 +255,15 @@ const order = await firstValueFrom(
 The per-request timeout overrides the client-side wait time. In JetStream mode, the server-side handler timeout is still governed by the global `rpc.timeout` configuration.
 :::
 
-See [Module Configuration](/docs/getting-started/module-configuration) for all `RpcConfig` options.
+See [Module Configuration](/docs/reference/module-configuration) for all `RpcConfig` options.
 
 ## Edge Cases
 
 ### Server not running
 
-| Mode | Behavior |
-|---|---|
-| **Core** | Client receives a timeout error — no subscriber exists to handle the request. |
-| **JetStream** | The command is persisted in the stream. When the server comes online, the consumer delivers it. If the client's timeout expires before the response arrives, the client gets a timeout error but the handler may still execute later. |
+**Core mode.** The client receives a timeout error — no subscriber exists to handle the request, so NATS gives up after the deadline.
+
+**JetStream mode.** The command is persisted in the stream. When the server comes online, the consumer delivers it. If the client's timeout expires before the response arrives, the client receives a timeout error but the handler may still execute later.
 
 :::danger Stale responses in JetStream mode
 If the client times out but the server processes the message later, the response is published to an inbox that no one is listening on. The response is silently discarded. Design handlers to be idempotent if this scenario is possible.
@@ -302,6 +306,6 @@ In Core mode, NATS handles disconnect behavior natively. Pending `nc.request()` 
 ## See Also
 
 - [Record Builder](/docs/guides/record-builder) — custom headers, message IDs, per-request timeouts
-- [Module Configuration](/docs/getting-started/module-configuration) — RPC mode selection and timeout config
+- [Module Configuration](/docs/reference/module-configuration) — RPC mode selection and timeout config
 - [Performance Tuning](/docs/guides/performance) — concurrency and ack extension for JetStream RPC
 - [Troubleshooting](/docs/guides/troubleshooting#rpc-issues) — diagnosing timeout and routing errors
