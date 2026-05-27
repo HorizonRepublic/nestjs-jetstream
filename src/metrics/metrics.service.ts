@@ -42,28 +42,18 @@ import {
 import { createMetrics, type JetstreamMetrics, type PromClientRuntime } from './metrics.factory';
 import { PollRunner, type ConsumerPollTarget } from './poll-runner';
 
-/** Stream-kind label used by ConsumerRecovered subscribers. */
 type RecoveredKindLabel = StreamKind | string;
 
-/**
- * Resolution result for translating a wire NATS subject to declared metric
- * labels. When the {@link PatternRegistry} is not available (publisher-only
- * mode) or the subject is unknown, callers fall back to the wire subject.
- */
 interface ResolvedSubjectLabels {
   pattern: string;
   kind: StreamKind;
 }
 
 /**
- * Built-in Prometheus metrics service.
- *
- * Activated only when `JetstreamModuleOptions.metrics` is truthy. On
- * `OnApplicationBootstrap` the service instantiates the full metric set on
- * the configured `prom-client` registry, subscribes to relevant
- * {@link TransportEvent}s, and (in a later phase) starts the polling loop
- * for gauges. Critical-path transport code never imports this module —
- * metrics writes happen entirely off the hot path.
+ * Built-in Prometheus metrics service. On bootstrap, instantiates the metric
+ * set, subscribes to the EventBus, and starts the gauge polling loop.
+ * Critical-path transport code never imports this module — metrics writes
+ * happen entirely off the hot path.
  */
 @Injectable()
 export class JetstreamMetricsService implements OnApplicationBootstrap, OnModuleDestroy {
@@ -114,23 +104,16 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
     this.pollRunner = null;
   }
 
-  /**
-   * Resolved polling interval in milliseconds. `0` means polling is disabled —
-   * only event-driven counters/histograms update.
-   *
-   * @internal Visible for tests.
-   */
+  /** @internal Visible for tests. `0` disables polling. */
   public getEffectivePollInterval(): number {
     return this.config.pollInterval ?? DEFAULT_POLL_INTERVAL_MS;
   }
 
   /**
-   * NATS connects during early bootstrap (when consumer infrastructure
-   * resolves streams), which is before this service subscribes to the
-   * EventBus. As a result the initial `Connect` emission misses us. Mirror
-   * the current state here so `connection_up` reflects reality the moment
-   * metrics come online — subsequent reconnects/disconnects then update it
-   * normally via the EventBus subscribers.
+   * NATS connects during early bootstrap, before this service subscribes to
+   * the EventBus — the initial `Connect` emission misses us. Mirror the
+   * current state here so `connection_up` reflects reality the moment metrics
+   * come online; later disconnects/reconnects update it normally.
    */
   private syncInitialConnectionState(): void {
     const nc = this.connection?.unwrap;
@@ -143,18 +126,7 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
     this.metrics?.connectionUp.labels({ server }).set(1);
   }
 
-  /**
-   * Wire up the polling loop for gauge metrics. The loop is only started when:
-   *
-   *  - `pollInterval > 0` (the user opted in to polling).
-   *  - {@link PatternRegistry} is available (consumer mode is enabled).
-   *  - {@link ConnectionProvider} is available (we have a NATS connection to
-   *    pull info from).
-   *
-   * The resolved target list mirrors the consumers this service actually owns
-   * — derived from {@link PatternRegistry} so publisher-only deployments and
-   * inactive stream kinds are silently skipped.
-   */
+  /** Skips polling for publisher-only deployments and when no kinds are active. */
   private startPolling(): void {
     const interval = this.getEffectivePollInterval();
     const connection = this.connection;
@@ -189,9 +161,7 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
       });
     }
 
-    // Core RPC mode uses NATS request/reply — no JetStream stream/consumer is
-    // created, so there's nothing to poll. Only JetStream RPC mode owns the
-    // cmd stream + consumer.
+    // Core RPC mode owns no JetStream stream — only JetStream RPC mode does.
     if (registry.hasRpcHandlers() && isJetStreamRpcMode(this.options.rpc)) {
       targets.push({
         kind: StreamKind.Command,
@@ -208,8 +178,7 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
       });
     }
 
-    // Ordered consumers are ephemeral (auto-managed by nats.js) — there is no
-    // stable durable name to poll, so we don't include them.
+    // Ordered consumers are ephemeral — no stable durable name to poll.
 
     return targets;
   }
@@ -239,8 +208,8 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
   };
 
   private readonly onDisconnect = (): void => {
-    // We don't know which server dropped — flip every observed server to 0.
-    // The next Connect/Reconnect re-flips it back to 1.
+    // Disconnect carries no server name — flip every observed server to 0;
+    // the next Connect/Reconnect re-flips the live one back to 1.
     for (const server of this.activeServers) {
       this.metrics?.connectionUp.labels({ server }).set(0);
     }
@@ -256,9 +225,8 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
     this.metrics?.rpcTimeoutTotal.labels({ subject: declared?.pattern ?? subject }).inc();
   };
 
-  // The `_kind` parameter from MessageRouted collapses broadcast and ordered
-  // into MessageKind.Event, so we rely on declared.kind from PatternRegistry
-  // for the most specific label.
+  // `_kind` collapses broadcast/ordered into MessageKind.Event — we use
+  // declared.kind from PatternRegistry for the precise label instead.
   private readonly onMessageRouted = (subject: string, _kind: MessageKind): void => {
     if (!this.metrics) return;
 
@@ -287,9 +255,7 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
   };
 
   private readonly onConsumerRecovered = (label: RecoveredKindLabel, _attempts: number): void => {
-    // `label` is typically a StreamKind value (the self-healing flow tags by
-    // stream kind), but the public hook accepts any string for custom flows.
-    // Expand known kinds to readable labels; pass through anything else.
+    // Self-healing usually tags by StreamKind, but the hook accepts any string.
     const kindLabel = (STREAM_KIND_LABEL as Record<string, string>)[label] ?? String(label);
 
     this.metrics?.consumerRecoveredTotal.labels({ kind: kindLabel }).inc();
@@ -335,11 +301,6 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
       .observe(durationMs / 1000);
   };
 
-  /**
-   * Translate a wire NATS subject to {@link ResolvedSubjectLabels}. Returns
-   * `null` when no {@link PatternRegistry} entry matches (unknown subject or
-   * publisher-only mode).
-   */
   private resolveDeclared(subject: string): ResolvedSubjectLabels | null {
     return this.patternRegistry?.resolveDeclared(subject) ?? null;
   }

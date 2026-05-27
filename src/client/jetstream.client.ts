@@ -61,11 +61,7 @@ const detectEventKind = (pattern: string): EventPublishKind => {
   return PublishKind.Event;
 };
 
-/**
- * Resolve a user event pattern to its declared (prefix-stripped) form used as
- * a Prometheus label. Cardinality stays bounded by the number of
- * `@EventPattern` declarations across the service mesh.
- */
+/** Strip the broadcast/ordered prefix so metric labels match the handler-side declaration. */
 const declaredEventPattern = (pattern: string): string => {
   if (pattern.startsWith(PatternPrefix.Broadcast))
     return pattern.slice(PatternPrefix.Broadcast.length);
@@ -417,13 +413,12 @@ export class JetstreamClient extends ClientProxy {
 
       const decoded = this.codec.decode(response.data);
 
+      // In Core RPC the publish leg is implicit inside nc.request() — any
+      // response (or pre-response transport error) means the publish ran, so
+      // Published always carries success here. RpcCompleted captures the
+      // round-trip outcome separately.
       if (response.headers?.get(JetstreamHeader.Error)) {
         spanHandle.finish({ kind: RpcOutcomeKind.ReplyError, replyPayload: decoded });
-        // In Core RPC the publish leg is implicit inside nc.request() — there
-        // is no separate "ack" before the reply. A non-error reply means the
-        // publish leg also succeeded; a transport error before reply settles
-        // both legs at the same outcome. Emit Published with the same status
-        // so publish_total / publish_duration_seconds reflect activity.
         this.reportPublished(declaredPattern, StreamKind.Command, startedAt, 'success');
         this.reportRpcCompleted(declaredPattern, startedAt, 'error');
         callback({ err: decoded, response: null, isDisposed: true });
@@ -439,9 +434,6 @@ export class JetstreamClient extends ClientProxy {
       if (error instanceof TimeoutError) {
         spanHandle.finish({ kind: RpcOutcomeKind.Timeout });
         this.eventBus.emit(TransportEvent.RpcTimeout, subject, '');
-        // Publish itself may have completed before the deadline — but the
-        // overall outcome from the caller's POV is timeout. We surface
-        // Published=success (the publish leg ran) and Rpc=timeout (round-trip).
         this.reportPublished(declaredPattern, StreamKind.Command, startedAt, 'success');
         this.reportRpcCompleted(declaredPattern, startedAt, 'timeout');
       } else {
@@ -565,8 +557,8 @@ export class JetstreamClient extends ClientProxy {
           msgID: messageId ?? nuid.next(),
         }),
       );
-      // Publish leg succeeded; the round-trip is still pending until the inbox
-      // reply or timeout fires — RpcCompleted is emitted from those branches.
+      // Publish leg succeeded; RpcCompleted fires from the inbox reply or
+      // the timeout branch once the round-trip settles.
       this.reportPublished(declaredPattern, StreamKind.Command, startedAt, 'success');
     } catch (err) {
       const existingTimeout = this.pendingTimeouts.get(correlationId);
@@ -589,12 +581,8 @@ export class JetstreamClient extends ClientProxy {
     }
   }
 
-  /**
-   * Emit `Published` for the publish leg of an event or RPC. `hasHook` is
-   * checked per-emit so subscribers that register after the client connects
-   * — most importantly {@link JetstreamMetricsService} during
-   * `OnApplicationBootstrap` — still receive events.
-   */
+  // hasHook is per-emit so late subscribers (JetstreamMetricsService during
+  // OnApplicationBootstrap) still receive events.
   private reportPublished(
     declaredPattern: string,
     kind: StreamKind,
@@ -611,10 +599,6 @@ export class JetstreamClient extends ClientProxy {
     );
   }
 
-  /**
-   * Emit `RpcCompleted` for a full RPC round-trip from the caller's
-   * perspective — fires from the reply, error, and timeout branches.
-   */
   private reportRpcCompleted(
     declaredPattern: string,
     startedAt: number,

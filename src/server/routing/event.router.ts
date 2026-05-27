@@ -144,18 +144,10 @@ export class EventRouter {
     // replace maxDeliverByStream wholesale after consumers are ensured.
     const hasDlqCheck = deadLetterConfig !== undefined;
 
-    /**
-     * Emit `HandlerCompleted` with the declared pattern + {@link StreamKind} so
-     * cardinality stays bounded — the actual NATS subject matches the declared
-     * pattern under the current exact-match routing, but pinning to the
-     * declared form future-proofs against wildcard support.
-     *
-     * `hasHook` is checked per-emit (not snapshotted) so subscribers that
-     * register after `start()` — e.g. {@link JetstreamMetricsService} during
-     * `OnApplicationBootstrap` — still receive events. The check itself is
-     * a single Map.get and stays off the hot path entirely when nobody
-     * listens.
-     */
+    // Use the declared pattern (not the wire subject) so cardinality stays
+    // bounded. hasHook is checked per-emit, not snapshotted, so late
+    // subscribers (e.g. JetstreamMetricsService bootstrapping after this
+    // router starts) still receive events.
     const reportHandlerCompleted = (msg: JsMsg, startedAt: number, status: HandlerStatus): void => {
       if (!eventBus.hasHook(TransportEvent.HandlerCompleted)) return;
       const declared = patternRegistry.resolveDeclared(msg.subject);
@@ -250,6 +242,14 @@ export class EventRouter {
       }
     };
 
+    // Order mirrors settleSuccess: explicit terminate() wins over retry().
+    const statusForContext = (ctx: RpcContext): HandlerStatus => {
+      if (ctx.shouldTerminate) return 'terminated';
+      if (ctx.shouldRetry) return 'retried';
+
+      return 'success';
+    };
+
     /**
      * Run the full event-routing pipeline for one message.
      *
@@ -259,18 +259,6 @@ export class EventRouter {
      * sync path. The sync branch inlines settlement to avoid per-message
      * closures that would cost more heap than the Promise they replace.
      */
-    /**
-     * Map the post-handler context state to a {@link HandlerStatus}. The order
-     * mirrors `settleSuccess`: explicit `terminate()` wins over `retry()` so
-     * the status matches the actual settlement.
-     */
-    const statusForContext = (ctx: RpcContext): HandlerStatus => {
-      if (ctx.shouldTerminate) return 'terminated';
-      if (ctx.shouldRetry) return 'retried';
-
-      return 'success';
-    };
-
     const handleSafe = (msg: JsMsg): Promise<void> | undefined => {
       const resolved = resolveEvent(msg);
 

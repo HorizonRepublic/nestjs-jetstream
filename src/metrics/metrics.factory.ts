@@ -4,12 +4,9 @@ import { DEFAULT_HISTOGRAM_BUCKETS, DEFAULT_METRICS_PREFIX } from './metrics.con
 import type { HistogramBuckets } from './metrics.config';
 
 /**
- * Subset of the `prom-client` runtime surface used by the factory.
- *
- * Passing the module in (rather than importing it statically) keeps
- * `prom-client` strictly optional: nothing in this file triggers a load until
- * `JetstreamMetricsModule` has explicitly resolved the peer dependency via
- * dynamic import.
+ * Subset of the `prom-client` runtime surface used by the factory. Injected
+ * (rather than statically imported) so nothing here triggers a load until
+ * `JetstreamMetricsModule` resolves the peer dependency via dynamic import.
  */
 /* eslint-disable @typescript-eslint/naming-convention */
 export interface PromClientRuntime {
@@ -19,13 +16,7 @@ export interface PromClientRuntime {
 }
 /* eslint-enable @typescript-eslint/naming-convention */
 
-/**
- * Resolved set of `prom-client` metric handles used across the transport.
- *
- * Every field maps to a single time-series family registered on a shared
- * registry. Property names are stable: downstream emitters and tests address
- * metrics by camelCase property (e.g. `metrics.messagesReceivedTotal.inc(...)`).
- */
+/** Resolved metric handles. Names are stable; emitters use them by property. */
 export interface JetstreamMetrics {
   messagesReceivedTotal: Counter<string>;
   messagesProcessedTotal: Counter<string>;
@@ -48,11 +39,6 @@ export interface JetstreamMetrics {
   metricsPollErrorsTotal: Counter<string>;
 }
 
-/**
- * Inputs for {@link createMetrics}. Only `register` and `promClient` are
- * required; everything else falls back to project defaults from
- * `metrics.constants.ts`.
- */
 export interface CreateMetricsOptions {
   register: Registry;
   promClient: PromClientRuntime;
@@ -61,14 +47,7 @@ export interface CreateMetricsOptions {
   buckets?: HistogramBuckets;
 }
 
-/**
- * Instantiate the full set of jetstream-transport Prometheus metrics on the
- * given `prom-client` registry.
- *
- * The runtime classes (`Counter`, `Histogram`, `Gauge`) must be supplied via
- * `promClient` — this avoids any static `import 'prom-client'` here so the
- * peer stays truly optional.
- */
+/** Instantiate every Jetstream metric on the given registry. */
 export const createMetrics = (opts: CreateMetricsOptions): JetstreamMetrics => {
   const { register, promClient } = opts;
   const prefix = opts.prefix ?? DEFAULT_METRICS_PREFIX;
