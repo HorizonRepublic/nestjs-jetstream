@@ -54,14 +54,16 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: 'Observability',
+      collapsed: false,
+      link: { type: 'doc', id: 'observability/index' },
+      items: ['observability/tracing', 'observability/metrics'],
+    },
+    {
+      type: 'category',
       label: 'Operations',
       collapsed: false,
-      items: [
-        'guides/lifecycle-hooks',
-        'guides/distributed-tracing',
-        'guides/stream-migration',
-        'guides/performance',
-      ],
+      items: ['guides/lifecycle-hooks', 'guides/stream-migration', 'guides/performance'],
     },
     'guides/troubleshooting',
     {

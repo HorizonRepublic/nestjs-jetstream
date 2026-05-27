@@ -120,10 +120,23 @@ After migration, you get for free:
 
 ## Upgrading between versions
 
+### v2.10 → v2.11
+
+**New features:**
+- [**Prometheus metrics**](/docs/observability/metrics) — built-in `prom-client`-based metrics covering throughput (`jetstream_messages_received_total`, `jetstream_publish_total`, `jetstream_messages_dead_letter_total`), latency histograms (`jetstream_handler_duration_seconds`, `jetstream_publish_duration_seconds`, `jetstream_rpc_duration_seconds`), and consumer lag gauges (`jetstream_consumer_num_pending`, `jetstream_stream_messages`, etc.). Enable via `forRoot({ metrics: true })`. Writes to `prom-client`'s global `register` by default, so pairing with `@willsoto/nestjs-prometheus` is zero-config. Adds `TransportEvent.HandlerCompleted`, `TransportEvent.Published`, and `TransportEvent.RpcCompleted` to the public `TransportHooks` surface for users who want to subscribe directly.
+
+**Peer dependency (optional):**
+- **`prom-client`** is now declared as an **optional peer dependency** (`^15.0.0`). Required only when `metrics` is enabled. The transport never imports it when `metrics` is omitted or `false`, so applications that do not use the metrics feature pay nothing — no bundle weight, no runtime cost.
+
+**Documentation reorganization:**
+- The `Distributed Tracing` guide moved from `/docs/guides/distributed-tracing` to **`/docs/observability/tracing`**. The new top-level **Observability** section in the sidebar groups both tracing and metrics under a single heading with a shared overview page. Bookmarks and external links to the old path should be updated.
+
+No breaking API changes. Existing applications upgrade by bumping the dependency.
+
 ### v2.9 → v2.10
 
 **New features:**
-- [**Distributed tracing with OpenTelemetry**](/docs/guides/distributed-tracing) — every publish, consume, and RPC round-trip now produces an OpenTelemetry span. W3C Trace Context propagates through NATS message headers, so a single trace flows end-to-end across services. Activates automatically the moment your application registers an OpenTelemetry SDK (Sentry, Datadog, NodeSDK, etc.); zero runtime cost when no SDK is registered. Configurable through `forRoot({ otel: ... })`.
+- [**Distributed tracing with OpenTelemetry**](/docs/observability/tracing) — every publish, consume, and RPC round-trip now produces an OpenTelemetry span. W3C Trace Context propagates through NATS message headers, so a single trace flows end-to-end across services. Activates automatically the moment your application registers an OpenTelemetry SDK (Sentry, Datadog, NodeSDK, etc.); zero runtime cost when no SDK is registered. Configurable through `forRoot({ otel: ... })`.
 - [**Header contract**](/docs/reference/header-contract) — formal documentation of the NATS message headers the transport reads and writes. Use this as the integration spec when publishing to (or consuming from) the transport from other languages (Go, Python, etc.).
 
 **Peer dependency (optional):**
