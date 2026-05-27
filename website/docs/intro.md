@@ -27,7 +27,7 @@ Pick an entry point based on where you are in your journey:
 - **New to the library?** — [Installation](/docs/getting-started/installation) → [Quick Start](/docs/getting-started/quick-start)
 - **Comparing transports?** — [Why JetStream?](/docs/getting-started/why-jetstream) covers when Core NATS is enough and when you outgrow it
 - **Migrating from `@nestjs/microservices` NATS?** — [Migration Guide](/docs/guides/migration)
-- **Planning a production rollout?** — [Module Configuration](/docs/getting-started/module-configuration), [Dead Letter Queue](/docs/guides/dead-letter-queue), [Graceful Shutdown](/docs/guides/graceful-shutdown), [Health Checks](/docs/guides/health-checks), [Performance Tuning](/docs/guides/performance)
+- **Planning a production rollout?** — [Module Configuration](/docs/reference/module-configuration), [Dead Letter Queue](/docs/guides/dead-letter-queue), [Graceful Shutdown](/docs/guides/graceful-shutdown), [Health Checks](/docs/guides/health-checks), [Performance Tuning](/docs/guides/performance)
 - **Looking for a specific delivery pattern?** — [Workqueue Events](/docs/patterns/events), [RPC (Request/Reply)](/docs/patterns/rpc), [Broadcast](/docs/patterns/broadcast), [Ordered Events](/docs/patterns/ordered-events)
 
 The full feature catalog lives in the sidebar on the left — every page is one click away.

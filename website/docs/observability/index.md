@@ -15,10 +15,9 @@ schema:
 
 The transport ships with two complementary observability surfaces. Both work out of the box, both are designed for production, and both stay invisible when you don't need them.
 
-| Surface | What it answers | Backed by | Page |
-| ------- | --------------- | --------- | ---- |
-| **Distributed tracing** | "Where did this one request go, and where did it slow down?" | OpenTelemetry spans, W3C Trace Context | [Tracing](/docs/observability/tracing) |
-| **Prometheus metrics** | "Is the system healthy in aggregate? What should I alert on?" | `prom-client` counters, histograms, gauges | [Metrics](/docs/observability/metrics) |
+[**Distributed tracing →**](/docs/observability/tracing) — answers "where did this one request go, and where did it slow down?" Backed by OpenTelemetry spans with W3C Trace Context propagation across services.
+
+[**Prometheus metrics →**](/docs/observability/metrics) — answers "is the system healthy in aggregate? What should I alert on?" Backed by `prom-client` counters, histograms, and gauges written to a registry your exporter already serves.
 
 ## Picking what you need
 

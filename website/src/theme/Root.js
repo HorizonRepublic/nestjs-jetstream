@@ -9,7 +9,7 @@ import { useLocation } from '@docusaurus/router';
 export default function Root({ children }) {
   const location = useLocation();
 
-  const baseUrl = "https://horizonrepublic.github.io";
+  const baseUrl = "https://nestjs-jetstream.horizon-republic.dev";
   const currentPath = location.pathname;
   const fullUrl = baseUrl + currentPath;
   const locales = ["en"];
@@ -21,7 +21,7 @@ export default function Root({ children }) {
       "organization": {
         "@type": "Organization",
         "name": "Horizon Republic",
-        "url": "https://horizonrepublic.github.io"
+        "url": "https://nestjs-jetstream.horizon-republic.dev"
       }
     }
   }
@@ -55,14 +55,6 @@ export default function Root({ children }) {
   "dateModified": "2026-04-11"
 },
       
-    '/docs/getting-started/module-configuration/': {
-  "@type": "Article",
-  "headline": "Module Configuration",
-  "description": "forRoot(), forRootAsync(), and forFeature() registration methods with stream, consumer, and connection options.",
-  "datePublished": "2026-03-21",
-  "dateModified": "2026-04-11"
-},
-      
     '/docs/getting-started/quick-start/': {
   "@type": "Article",
   "headline": "Quick Start",
@@ -81,18 +73,18 @@ export default function Root({ children }) {
       
     '/docs/guides/custom-codec/': {
   "@type": "Article",
-  "headline": "Custom Codec",
-  "description": "Replace the default JSON codec with the built-in MessagePack codec, Protobuf, or any custom binary format.",
+  "headline": "How to use a custom codec with NestJS JetStream",
+  "description": "Replace JSON with MessagePack, Protobuf, or a custom binary codec for NATS message serialization.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-04-16"
+  "dateModified": "2026-05-27"
 },
       
     '/docs/guides/dead-letter-queue/': {
   "@type": "Article",
-  "headline": "Dead Letter Queue — NestJS NATS JetStream DLQ Stream & Callback",
-  "description": "Handle NestJS NATS JetStream messages that exhaust all delivery attempts via a dedicated DLQ stream with tracking headers or onDeadLetter callback.",
+  "headline": "How to configure a Dead Letter Queue",
+  "description": "Capture NestJS NATS JetStream messages that exhaust all delivery attempts via a DLQ stream or onDeadLetter callback.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-04-11"
+  "dateModified": "2026-05-27"
 },
       
     '/docs/guides/graceful-shutdown/': {
@@ -113,34 +105,34 @@ export default function Root({ children }) {
       
     '/docs/guides/health-checks/': {
   "@type": "Article",
-  "headline": "Health Checks — NestJS Terminus Indicator for NATS JetStream",
-  "description": "JetstreamHealthIndicator reports NATS connection status and RTT latency for NestJS Kubernetes readiness/liveness probes, with or without @nestjs/terminus.",
+  "headline": "How to expose health checks for NATS JetStream",
+  "description": "Expose NATS connection status and RTT latency as a Kubernetes readiness/liveness probe using JetstreamHealthIndicator.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-04-11"
+  "dateModified": "2026-05-27"
 },
       
     '/docs/guides/lifecycle-hooks/': {
   "@type": "Article",
-  "headline": "Lifecycle Hooks — NestJS JetStream Transport Events",
-  "description": "Observe NestJS NATS JetStream transport events: connection, disconnect, reconnect, errors, RPC timeouts, message routing, dead letters, and shutdown.",
+  "headline": "How to register lifecycle hooks for NestJS JetStream",
+  "description": "Subscribe to transport events for monitoring, alerting, and logging integration.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-04-11"
+  "dateModified": "2026-05-27"
 },
       
     '/docs/guides/migration/': {
   "@type": "Article",
-  "headline": "Migration Guide",
-  "description": "Migrate from the built-in NestJS NATS transport to JetStream with durable delivery.",
+  "headline": "How to migrate from @nestjs/microservices NATS to JetStream",
+  "description": "Step-by-step migration from the built-in NestJS NATS transport to durable JetStream-backed delivery.",
   "datePublished": "2026-03-26",
-  "dateModified": "2026-04-24"
+  "dateModified": "2026-05-27"
 },
       
     '/docs/guides/per-message-ttl/': {
   "@type": "Article",
-  "headline": "Per-Message TTL — NATS JetStream Message Expiration",
-  "description": "Individual NestJS NATS JetStream message expiration via the Nats-TTL header (NATS 2.11, ADR-43), independent of the stream's max_age.",
+  "headline": "How to set per-message TTL on NATS JetStream messages",
+  "description": "Set individual message expiration via the Nats-TTL header (NATS 2.11, ADR-43).",
   "datePublished": "2026-04-02",
-  "dateModified": "2026-04-11"
+  "dateModified": "2026-05-27"
 },
       
     '/docs/guides/performance/': {
@@ -161,18 +153,18 @@ export default function Root({ children }) {
       
     '/docs/guides/scheduling/': {
   "@type": "Article",
-  "headline": "NATS JetStream Scheduling — Delayed Jobs (NATS 2.12)",
-  "description": "One-shot delayed NestJS NATS JetStream message delivery via the Nats-Schedule header (NATS 2.12, ADR-51) — replace Bull or Agenda for simple delayed jobs.",
+  "headline": "How to schedule delayed messages with NestJS JetStream",
+  "description": "One-shot delayed message delivery via the Nats-Schedule header (NATS 2.12, ADR-51).",
   "datePublished": "2026-04-01",
-  "dateModified": "2026-04-11"
+  "dateModified": "2026-05-27"
 },
       
     '/docs/guides/stream-migration/': {
   "@type": "Article",
-  "headline": "Stream Migration",
-  "description": "Safe stream recreation for immutable property changes with automatic message preservation via blue-green sourcing.",
+  "headline": "How to migrate immutable stream properties",
+  "description": "Safely change immutable stream properties without losing messages via blue-green sourcing.",
   "datePublished": "2026-04-02",
-  "dateModified": "2026-04-11"
+  "dateModified": "2026-05-27"
 },
       
     '/docs/guides/troubleshooting/': {
@@ -279,12 +271,28 @@ export default function Root({ children }) {
   "dateModified": "2026-04-27"
 },
       
+    '/docs/reference/module-configuration/': {
+  "@type": "Article",
+  "headline": "Module Configuration Reference",
+  "description": "Reference for forRoot(), forRootAsync(), and forFeature() registration methods with stream, consumer, and connection options.",
+  "datePublished": "2026-03-21",
+  "dateModified": "2026-05-27"
+},
+      
     '/docs/reference/naming-conventions/': {
   "@type": "Article",
   "headline": "Naming Conventions",
   "description": "Stream, consumer, and subject naming patterns derived from the service name.",
   "datePublished": "2026-03-21",
   "dateModified": "2026-04-11"
+},
+      
+    '/docs/reference/release-notes/': {
+  "@type": "Article",
+  "headline": "Release Notes — NestJS JetStream Transport",
+  "description": "Version-by-version changelog covering new features, behavior changes, and breaking changes.",
+  "datePublished": "2026-03-26",
+  "dateModified": "2026-05-27"
 },
       
 
@@ -294,11 +302,8 @@ export default function Root({ children }) {
   }
   
   // Get the schema for the current page
-  // Normalize path: strip baseUrl prefix and match with/without trailing slash
-  const siteBaseUrl = '/nestjs-jetstream';
-  const strippedPath = location.pathname.startsWith(siteBaseUrl)
-    ? location.pathname.slice(siteBaseUrl.length) || '/'
-    : location.pathname;
+  // Normalize path: match with/without trailing slash
+  const strippedPath = location.pathname || '/';
   const contentData = schemas[strippedPath] || schemas[strippedPath + '/'] || schemas[strippedPath.replace(/\/$/, '')];
   if (contentData) {
     let isSupportedType = true;

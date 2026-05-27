@@ -1,19 +1,19 @@
 ---
 sidebar_position: 2
 sidebar_label: "Dead Letter Queue"
-title: "Dead Letter Queue — NestJS NATS JetStream DLQ Stream & Callback"
-description: "Handle NestJS NATS JetStream messages that exhaust all delivery attempts via a dedicated DLQ stream with tracking headers or onDeadLetter callback."
+title: "How to configure a Dead Letter Queue — NestJS JetStream"
+description: "Capture NestJS NATS JetStream messages that exhaust all delivery attempts — via a built-in DLQ stream with tracking headers or an onDeadLetter callback."
 schema:
   type: Article
-  headline: "Dead Letter Queue — NestJS NATS JetStream DLQ Stream & Callback"
-  description: "Handle NestJS NATS JetStream messages that exhaust all delivery attempts via a dedicated DLQ stream with tracking headers or onDeadLetter callback."
+  headline: "How to configure a Dead Letter Queue"
+  description: "Capture NestJS NATS JetStream messages that exhaust all delivery attempts via a DLQ stream or onDeadLetter callback."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-11"
+  dateModified: "2026-05-27"
 ---
 
 import Since from '@site/src/components/Since';
 
-# Dead Letter Queue
+# How to configure a Dead Letter Queue
 
 <Since version="2.2.0" />
 
@@ -82,21 +82,19 @@ On startup, the library provisions a dedicated DLQ stream and, from that point o
 
 ### What gets created
 
-On application start, the library provisions (or updates) the DLQ JetStream stream with:
+On application start, the library provisions (or updates) the DLQ JetStream stream with these defaults:
 
-| Property | Default |
-|---|---|
-| Stream name | `{service}__microservice_dlq-stream` (e.g. `orders__microservice_dlq-stream`) |
-| Retention | `Workqueue` — messages are removed when a DLQ consumer acks them |
-| `max_age` | 30 days |
-| `max_bytes` | 5 GB |
-| `max_msgs` | 50,000,000 |
-| `max_msg_size` | 10 MB |
-| `max_consumers` | 100 |
-| `allow_rollup_hdrs` | `false` |
-| `duplicate_window` | 2 minutes |
+- **Stream name** &mdash; `{service}__microservice_dlq-stream` (e.g. `orders__microservice_dlq-stream`).
+- **Retention** &mdash; `Workqueue`. Messages are removed when a DLQ consumer acks them.
+- **`max_age`** &mdash; 30 days.
+- **`max_bytes`** &mdash; 5 GB.
+- **`max_msgs`** &mdash; 50,000,000.
+- **`max_msg_size`** &mdash; 10 MB.
+- **`max_consumers`** &mdash; 100.
+- **`allow_rollup_hdrs`** &mdash; `false`.
+- **`duplicate_window`** &mdash; 2 minutes.
 
-You can override any of these fields via `dlq.stream`, for example to shorten retention or raise the byte cap. The stream name is always derived from your service name — any `name` field you set on `dlq.stream` is ignored, which keeps DLQ streams predictable across services. Full defaults live in `DEFAULT_DLQ_STREAM_CONFIG`.
+You can override any of these via `dlq.stream`, for example to shorten retention or raise the byte cap. The stream name is always derived from your service name — any `name` field you set on `dlq.stream` is ignored, which keeps DLQ streams predictable across services. Full defaults live in `DEFAULT_DLQ_STREAM_CONFIG`.
 
 The `dlqStreamName(serviceName)` helper is exported from the package so you can subscribe to the DLQ stream from elsewhere without hardcoding the name.
 
@@ -104,13 +102,11 @@ The `dlqStreamName(serviceName)` helper is exported from the package so you can 
 
 Every message republished to the DLQ stream carries metadata headers so you can investigate, replay, or filter without decoding the payload first:
 
-| Header | Description |
-|---|---|
-| `x-dead-letter-reason` | The error message from the last handler failure (extracted from `Error.message` or coerced via `String(error)`) |
-| `x-original-subject` | The subject the message was originally published to |
-| `x-original-stream` | The source stream the message came from |
-| `x-failed-at` | ISO 8601 timestamp of the moment the message entered the DLQ |
-| `x-delivery-count` | How many times the message was delivered before it was marked dead |
+- **`x-dead-letter-reason`** &mdash; the error message from the last handler failure (extracted from `Error.message` or coerced via `String(error)`).
+- **`x-original-subject`** &mdash; the subject the message was originally published to.
+- **`x-original-stream`** &mdash; the source stream the message came from.
+- **`x-failed-at`** &mdash; ISO 8601 timestamp of the moment the message entered the DLQ.
+- **`x-delivery-count`** &mdash; how many times the message was delivered before it was marked dead.
 
 The `JetstreamDlqHeader` enum is exported from the package — use it for type-safe header access in your DLQ consumer.
 
@@ -162,16 +158,26 @@ export class AppModule {}
 
 The callback receives a `DeadLetterInfo` object with everything you need to investigate the failure:
 
-| Field | Type | Description |
-|---|---|---|
-| `subject` | `string` | The NATS subject the message was published to |
-| `data` | `unknown` | Decoded message payload (already deserialized by the codec) |
-| `headers` | `MsgHdrs \| undefined` | Raw NATS message headers |
-| `error` | `unknown` | The error that caused the last handler failure |
-| `deliveryCount` | `number` | How many times this message was delivered |
-| `stream` | `string` | The stream this message belongs to |
-| `streamSequence` | `number` | The stream sequence number (unique within the stream) |
-| `timestamp` | `string` | ISO 8601 timestamp of the message (derived from NATS metadata) |
+```typescript
+interface DeadLetterInfo {
+  /** The NATS subject the message was published to. */
+  subject: string;
+  /** Decoded message payload (already deserialized by the codec). */
+  data: unknown;
+  /** Raw NATS message headers. */
+  headers: MsgHdrs | undefined;
+  /** The error that caused the last handler failure. */
+  error: unknown;
+  /** How many times this message was delivered. */
+  deliveryCount: number;
+  /** The stream this message belongs to. */
+  stream: string;
+  /** The stream sequence number (unique within the stream). */
+  streamSequence: number;
+  /** ISO 8601 timestamp of the message (derived from NATS metadata). */
+  timestamp: string;
+}
+```
 
 ## Callback flow (standalone mode)
 
@@ -291,4 +297,4 @@ Dead letter detection applies to [**workqueue events**](/docs/patterns/events) a
 - [**Events (Workqueue)**](/docs/patterns/events) — retry flow and delivery semantics
 - [**Broadcast Events**](/docs/patterns/broadcast) — fan-out delivery with per-instance DLQ
 - [**Lifecycle Hooks**](/docs/guides/lifecycle-hooks) — observe transport events including dead letters
-- [**Module Configuration**](/docs/getting-started/module-configuration) — `forRoot()` and `forRootAsync()` options reference
+- [**Module Configuration**](/docs/reference/module-configuration) — `forRoot()` and `forRootAsync()` options reference

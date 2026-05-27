@@ -1,19 +1,21 @@
 ---
 sidebar_position: 4
 sidebar_label: "Lifecycle Hooks"
-title: "Lifecycle Hooks — NestJS JetStream Transport Events"
-description: "Observe NestJS NATS JetStream transport events: connection, disconnect, reconnect, errors, RPC timeouts, message routing, dead letters, and shutdown."
+title: "How to register lifecycle hooks — NestJS JetStream"
+description: "Subscribe to NATS JetStream transport events — connection, disconnect, reconnect, errors, RPC timeouts, message routing, dead letters, and shutdown — for monitoring and alerting."
 schema:
   type: Article
-  headline: "Lifecycle Hooks — NestJS JetStream Transport Events"
-  description: "Observe NestJS NATS JetStream transport events: connection, disconnect, reconnect, errors, RPC timeouts, message routing, dead letters, and shutdown."
+  headline: "How to register lifecycle hooks for NestJS JetStream"
+  description: "Subscribe to transport events for monitoring, alerting, and logging integration."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-11"
+  dateModified: "2026-05-27"
 ---
 
-# Lifecycle Hooks
+import Since from '@site/src/components/Since';
 
-The transport emits lifecycle events at key moments — connection changes, errors, message routing, shutdown, and dead letters. Register hook callbacks to integrate with your monitoring, alerting, or logging infrastructure.
+# How to register lifecycle hooks
+
+The transport emits lifecycle events at key moments — connection changes, errors, message routing, shutdown, dead letters, and observability checkpoints. Register hook callbacks to integrate with your monitoring, alerting, or logging infrastructure.
 
 ## Available events
 
@@ -27,6 +29,10 @@ The full event set is defined in the `TransportEvent` enum:
 | `Error` | `(error: Error, context?: string) => void` | Any transport-level error |
 | `RpcTimeout` | `(subject: string, correlationId: string) => void` | An RPC handler exceeds its timeout |
 | `MessageRouted` | `(subject: string, kind: MessageKind) => void` | A message is successfully routed to its handler |
+| `HandlerCompleted` | `(subject, kind: StreamKind, durationMs, status) => void` | A handler returns or throws (success/error/retried/terminated). <Since version="2.11.0" /> |
+| `Published` | `(subject, kind: StreamKind, durationMs, status) => void` | Every client-side publish leg completes (event emit or RPC publish). <Since version="2.11.0" /> |
+| `RpcCompleted` | `(subject, durationMs, status) => void` | RPC round-trip settles on the caller side (success / error / timeout). <Since version="2.11.0" /> |
+| `ConsumerRecovered` | `(label, attempts: number) => void` | Self-healing recovers a consumer after one or more failed restarts |
 | `ShutdownStart` | `() => void` | Graceful shutdown sequence begins |
 | `ShutdownComplete` | `() => void` | Graceful shutdown sequence finishes |
 | `DeadLetter` | `(info: DeadLetterInfo) => void` | A message exhausts all delivery attempts |
@@ -225,4 +231,4 @@ The hook fires first, then the callback. If the callback fails and the message i
 - [**Dead Letter Queue**](/docs/guides/dead-letter-queue) — full guide on dead letter handling and the `onDeadLetter` callback
 - [**Health Checks**](/docs/guides/health-checks) — monitor connection health with RTT latency
 - [**Graceful Shutdown**](/docs/guides/graceful-shutdown) — `ShutdownStart` and `ShutdownComplete` events in context
-- [**Module Configuration**](/docs/getting-started/module-configuration) — `hooks` option in the full options reference
+- [**Module Configuration**](/docs/reference/module-configuration) — `hooks` option in the full options reference
