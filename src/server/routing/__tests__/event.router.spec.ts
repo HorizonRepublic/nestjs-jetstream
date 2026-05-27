@@ -329,6 +329,155 @@ describe(EventRouter, () => {
     });
   });
 
+  describe('HandlerCompleted emission', () => {
+    beforeEach(() => {
+      // Snapshot hooks are read at subscribeToStream() time, so configure the
+      // mock and (re)start sut here — the outer beforeEach already started one
+      // pass without HandlerCompleted enabled.
+      sut.destroy();
+      eventBus.hasHook.mockImplementation(
+        (event) =>
+          event === TransportEvent.HandlerCompleted || event === TransportEvent.MessageRouted,
+      );
+      sut.start();
+    });
+
+    const setupAndDispatch = async (handler: ReturnType<typeof vi.fn>): Promise<JsMsg> => {
+      patternRegistry.getHandler.mockReturnValue(
+        handler as unknown as ReturnType<typeof patternRegistry.getHandler>,
+      );
+      patternRegistry.resolveDeclared.mockReturnValue({
+        pattern: 'orders.created',
+        kind: StreamKind.Event,
+      });
+
+      // `ack: vi.fn()` is required to make `'ack' in msg` true so RpcContext
+      // recognises the message as JetStream and ctx.retry()/terminate() work.
+      const msg = createMock<JsMsg>({
+        subject: `svc__microservice.ev.orders.created`,
+        data: new TextEncoder().encode(JSON.stringify({})),
+        ack: vi.fn(),
+      });
+
+      events$.next(msg);
+      await new Promise(process.nextTick);
+
+      return msg;
+    };
+
+    const handlerCompletedCalls = (): unknown[][] =>
+      eventBus.emit.mock.calls.filter((c) => c[0] === TransportEvent.HandlerCompleted);
+
+    it('should emit HandlerCompleted with success status when handler resolves', async () => {
+      // Given/When
+      const handler = vi.fn().mockResolvedValue(undefined);
+
+      await setupAndDispatch(handler);
+
+      // Then
+      const calls = handlerCompletedCalls();
+
+      expect(calls).toHaveLength(1);
+      const firstCall = calls[0]!;
+
+      expect(firstCall[1]).toBe('orders.created');
+      expect(firstCall[2]).toBe(StreamKind.Event);
+      expect(typeof firstCall[3]).toBe('number');
+      expect(firstCall[3] as number).toBeGreaterThanOrEqual(0);
+      expect(firstCall[4]).toBe('success');
+    });
+
+    it('should emit HandlerCompleted with error status when handler rejects', async () => {
+      // Given/When
+      const handler = vi.fn().mockRejectedValue(new Error('boom'));
+
+      await setupAndDispatch(handler);
+
+      // Then
+      const calls = handlerCompletedCalls();
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.[4]).toBe('error');
+    });
+
+    it('should emit HandlerCompleted with retried status when handler calls ctx.retry()', async () => {
+      // Given/When
+      const handler = vi.fn().mockImplementation((_d: unknown, ctx: RpcContext) => {
+        ctx.retry();
+      });
+
+      await setupAndDispatch(handler);
+
+      // Then
+      const calls = handlerCompletedCalls();
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.[4]).toBe('retried');
+    });
+
+    it('should emit HandlerCompleted with terminated status when handler calls ctx.terminate()', async () => {
+      // Given/When
+      const handler = vi.fn().mockImplementation((_d: unknown, ctx: RpcContext) => {
+        ctx.terminate();
+      });
+
+      await setupAndDispatch(handler);
+
+      // Then
+      const calls = handlerCompletedCalls();
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.[4]).toBe('terminated');
+    });
+
+    it('should fall back to msg.subject + EventRouter kind when pattern is not declared', async () => {
+      // Given: handler exists but pattern registry has no declared entry
+      const handler = vi.fn().mockResolvedValue(undefined);
+
+      patternRegistry.getHandler.mockReturnValue(handler);
+      patternRegistry.resolveDeclared.mockReturnValue(null);
+
+      const msg = createMock<JsMsg>({
+        subject: 'unmatched.subject',
+        data: new TextEncoder().encode(JSON.stringify({})),
+      });
+
+      // When
+      events$.next(msg);
+      await new Promise(process.nextTick);
+
+      // Then
+      const calls = handlerCompletedCalls();
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.[1]).toBe('unmatched.subject');
+      expect(calls[0]?.[2]).toBe(StreamKind.Event);
+    });
+
+    it('should skip emission entirely when no listener is registered (hot-path guard)', async () => {
+      // Given: rebuild sut with no hooks registered
+      sut.destroy();
+      eventBus.hasHook.mockReturnValue(false);
+      sut.start();
+      const handler = vi.fn().mockResolvedValue(undefined);
+
+      patternRegistry.getHandler.mockReturnValue(handler);
+
+      const msg = createMock<JsMsg>({
+        subject: 'svc__microservice.ev.orders.created',
+        data: new TextEncoder().encode(JSON.stringify({})),
+      });
+
+      // When
+      events$.next(msg);
+      await new Promise(process.nextTick);
+
+      // Then: no HandlerCompleted emission AND no resolveDeclared lookup
+      expect(handlerCompletedCalls()).toHaveLength(0);
+      expect(patternRegistry.resolveDeclared).not.toHaveBeenCalled();
+    });
+  });
+
   describe('ordered message handling', () => {
     let ordered$: Subject<JsMsg>;
 
