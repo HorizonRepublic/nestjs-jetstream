@@ -566,31 +566,33 @@ export default function Home() {
         <section className="lp-section">
           <div className="lp-container">
             <Reveal>
-              <span className="lp-eyelet">All capabilities</span>
-              <h2 className="lp-section-title">Twelve building blocks.</h2>
-              <p className="lp-section-sub">The primitives we needed when wiring NestJS to JetStream, packaged into a single transport.</p>
+              <span className="lp-eyelet">Core features</span>
+              <h2 className="lp-section-title">What's in the transport.</h2>
+              <p className="lp-section-sub">Three areas, three primitives each. Each card links to docs and a runnable example.</p>
             </Reveal>
             <Reveal className="lp-features">
-              <div className="lp-feature-group">Delivery</div>
-              <FeatureCard to="/docs/patterns/events" icon={<path d="M3 8l3 3 7-7" />} name="At-least-once events" desc="Workqueue retention with explicit ack after handler resolves." />
-              <FeatureCard to="/docs/patterns/ordered-events" icon={<><circle cx="8" cy="8" r="5.5" /><path d="M8 4v4l3 2" /></>} name="Ordered events" desc="Per-key ordering on the same partition with stable subjects." />
-              <FeatureCard to="/docs/patterns/broadcast" icon={<><circle cx="3" cy="8" r="1.5" /><circle cx="13" cy="3" r="1.5" /><circle cx="13" cy="13" r="1.5" /><path d="M4.5 7L12 4M4.5 9L12 12" /></>} name="Broadcast fan-out" desc="One emit reaches every replica; nothing is shared by accident." />
+              <div className="lp-feature-group">Messaging</div>
+              <FeatureCard to="/docs/patterns/events" icon={<path d="M3 8l3 3 7-7" />} name="At-least-once events" desc="Workqueue retention with explicit ack after the handler resolves." />
+              <FeatureCard to="/docs/patterns/broadcast" icon={<><circle cx="3" cy="8" r="1.5" /><circle cx="13" cy="3" r="1.5" /><circle cx="13" cy="13" r="1.5" /><path d="M4.5 7L12 4M4.5 9L12 12" /></>} name="Broadcast fan-out" desc="One emit reaches every replica without double-processing on the workqueue." />
+              <FeatureCard to="/docs/patterns/rpc" icon={<><path d="M2 5h8M10 5l-2-2M10 5l-2 2" /><path d="M14 11H6M6 11l2-2M6 11l2 2" /></>} name="RPC (Core & JetStream)" desc="Request/reply with deadlines, headers, and typed responses." />
 
               <div className="lp-feature-group">Reliability</div>
+              <FeatureCard to="/docs/patterns/ordered-events" icon={<><circle cx="8" cy="8" r="5.5" /><path d="M8 4v4l3 2" /></>} name="Ordered delivery" desc="Per-key ordering on the same partition with stable subject keys." />
               <FeatureCard to="/docs/guides/dead-letter-queue" icon={<><rect x="3" y="3" width="10" height="10" rx="1.5" /><path d="M6 8h4" /></>} name="Dead-letter queue" desc="Bounded retries, then a typed sink with original headers preserved." />
               <FeatureCard to="/docs/guides/graceful-shutdown" icon={<><path d="M2 12L8 4l6 8" /><path d="M5 12h6" /></>} name="Graceful shutdown" desc="Drains in-flight handlers, flushes acks, closes the connection." />
-              <FeatureCard to="/docs/guides/health-checks" icon={<><circle cx="8" cy="8" r="5.5" /><path d="M5 8l2 2 4-4" /></>} name="Health checks" desc={<>Drop-in <code>isHealthy()</code> indicator for k8s probes.</>} />
-
-              <div className="lp-feature-group">Patterns</div>
-              <FeatureCard to="/docs/patterns/rpc" icon={<><path d="M2 5h8M10 5l-2-2M10 5l-2 2" /><path d="M14 11H6M6 11l2-2M6 11l2 2" /></>} name="RPC (Core & JetStream)" desc="Request/reply with deadlines, headers, and typed responses." />
-              <FeatureCard to="/docs/guides/scheduling" icon={<><circle cx="8" cy="8" r="5.5" /><path d="M8 4v4l3 1" /></>} name="Scheduled messages" desc="Per-message delay or absolute deliver-at, native to the stream." />
-              <FeatureCard to="/docs/guides/per-message-ttl" icon={<><path d="M3 13L13 3" /><circle cx="4" cy="12" r="1" /><circle cx="12" cy="4" r="1" /></>} name="Per-message TTL" desc="Expire stale messages before they reach a consumer." />
 
               <div className="lp-feature-group">Observability</div>
+              <FeatureCard to="/docs/guides/health-checks" icon={<><circle cx="8" cy="8" r="5.5" /><path d="M5 8l2 2 4-4" /></>} name="Health checks" desc={<>Drop-in <code>isHealthy()</code> indicator for k8s probes.</>} />
               <FeatureCard to="/docs/observability/tracing" icon={<><path d="M2 8h12" /><circle cx="5" cy="8" r="1.5" /><circle cx="11" cy="8" r="1.5" /></>} name="Distributed tracing" desc="W3C trace context on every hop. OpenTelemetry-compatible." />
               <FeatureCard to="/docs/observability/metrics" icon={<><path d="M2 13L5 9L8 11L13 4" /><circle cx="13" cy="4" r="1" /></>} name="Prometheus metrics" desc="Throughput, latency, lag — zero-config with prom-client." />
-              <FeatureCard to="/docs/reference/header-contract" icon={<path d="M3 12V4M3 4h6l4 4-4 4H3" />} name="Header contract" desc="Stable, documented header schema for tracing & correlation." />
-              <FeatureCard to="/docs/guides/lifecycle-hooks" icon={<><rect x="2" y="3" width="12" height="10" rx="1.5" /><path d="M2 6h12M5 9h6" /></>} name="Lifecycle hooks" desc={<>Subscribe to <code>TransportEvent</code> for ack, nak, redelivery.</>} />
+            </Reveal>
+            <Reveal style={{ marginTop: 24, textAlign: 'center' }}>
+              <Link className="lp-features-more" to="/docs/">
+                Scheduling, TTL, lifecycle hooks, and more in the docs
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+                  <path d="M3 8h10M9 4l4 4-4 4" />
+                </svg>
+              </Link>
             </Reveal>
           </div>
         </section>
