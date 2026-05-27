@@ -6,7 +6,7 @@
     "type": "git",
     "url": "git+https://github.com/HorizonRepublic/nestjs-jetstream.git"
   },
-  "homepage": "https://horizonrepublic.github.io/nestjs-jetstream/",
+  "homepage": "https://nestjs-jetstream.horizon-republic.dev/",
   "bugs": {
     "url": "https://github.com/HorizonRepublic/nestjs-jetstream/issues"
   },
