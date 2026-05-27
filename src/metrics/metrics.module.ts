@@ -1,7 +1,6 @@
 import { DynamicModule, Module, Provider } from '@nestjs/common';
 
 import { EventBus } from '../hooks';
-import type { JetstreamModuleOptions } from '../interfaces';
 import { JETSTREAM_EVENT_BUS } from '../jetstream.constants';
 
 import type { MetricsConfig, MetricsOption } from './metrics.config';
@@ -68,8 +67,13 @@ const normalizeMetricsConfig = (
  */
 @Module({})
 export class JetstreamMetricsModule {
-  public static forFeature(options: JetstreamModuleOptions): DynamicModule {
-    if (!options.metrics) {
+  /**
+   * Build the metrics module for the given `metrics` option. When the option is
+   * falsy/undefined the method returns an empty shell — no providers, no
+   * `prom-client` load.
+   */
+  public static forFeature(metricsOption: MetricsOption | undefined): DynamicModule {
+    if (!metricsOption) {
       return { module: JetstreamMetricsModule, providers: [], exports: [] };
     }
 
@@ -89,7 +93,7 @@ export class JetstreamMetricsModule {
       useFactory: async (): Promise<MetricsConfig> => {
         const mod = await resolvePromClient();
 
-        return normalizeMetricsConfig(options.metrics, mod);
+        return normalizeMetricsConfig(metricsOption, mod);
       },
     };
 

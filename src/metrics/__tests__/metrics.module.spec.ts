@@ -39,7 +39,7 @@ const compile = async (
   class TestRootModule {}
 
   return Test.createTestingModule({
-    imports: [TestRootModule, JetstreamMetricsModule.forFeature(options)],
+    imports: [TestRootModule, JetstreamMetricsModule.forFeature(options.metrics)],
   }).compile();
 };
 

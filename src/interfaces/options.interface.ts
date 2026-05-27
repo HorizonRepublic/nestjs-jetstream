@@ -369,6 +369,16 @@ export type JetstreamModuleAsyncOptions = {
 
   /** Additional module imports (e.g., ConfigModule). */
   imports?: ModuleMetadata['imports'];
+
+  /**
+   * Built-in Prometheus metrics. Specified at the async-options level (parallel
+   * to {@link name}) because module composition is decided synchronously before
+   * the async factory runs. Use `true` for defaults, a {@link MetricsConfig}
+   * object for full control, or omit/`false` to disable entirely.
+   *
+   * @see JetstreamModuleOptions.metrics
+   */
+  metrics?: MetricsOption;
 } & (
   | {
       useFactory(
