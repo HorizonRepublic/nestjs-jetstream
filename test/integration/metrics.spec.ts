@@ -61,6 +61,22 @@ const samples = async (register: Registry, name: string): Promise<PromSample[]> 
 const findSample = (list: PromSample[], match: Record<string, string>): PromSample | undefined =>
   list.find((s) => Object.entries(match).every(([k, v]) => s.labels[k] === v));
 
+/** Poll a metric registry until a sample matching the labels exists, or fail. */
+const waitForSample = (
+  register: Registry,
+  metric: string,
+  match: Record<string, string>,
+  timeoutMs = 5_000,
+): Promise<void> =>
+  waitForCondition(
+    async () => findSample(await samples(register, metric), match) !== undefined,
+    timeoutMs,
+  );
+
+/** Poll the registry's text output until a regex matches, or fail. */
+const waitForTextMatch = (register: Registry, re: RegExp, timeoutMs = 5_000): Promise<void> =>
+  waitForCondition(async () => re.test(await register.metrics()), timeoutMs);
+
 describe('Metrics — integration', () => {
   let nc: NatsConnection;
   let container: StartedTestContainer;
@@ -84,7 +100,6 @@ describe('Metrics — integration', () => {
     let module: TestingModule;
     let client: ClientProxy;
     let serviceName: string;
-    let controller: MetricsController;
     let register: Registry;
 
     beforeEach(async () => {
@@ -108,7 +123,6 @@ describe('Metrics — integration', () => {
       ));
 
       client = module.get<ClientProxy>(getClientToken(serviceName));
-      controller = module.get(MetricsController);
     });
 
     afterEach(async () => {
@@ -119,10 +133,15 @@ describe('Metrics — integration', () => {
     it('should increment messages_received_total and messages_processed_total with success status for a successful event', async () => {
       // Given/When
       await firstValueFrom(client.emit('orders.created', { orderId: 'a1' }));
-      await waitForCondition(() => controller.events.length > 0, 5_000);
 
-      // Allow the post-handler emit() to dispatch on the microtask queue.
-      await new Promise((r) => setTimeout(r, 50));
+      const processedLabels = {
+        stream: streamName(serviceName, StreamKind.Event),
+        subject: 'orders.created',
+        kind: 'event',
+        status: 'success',
+      };
+
+      await waitForSample(register, 'jetstream_messages_processed_total', processedLabels);
 
       // Then
       const received = await samples(register, 'jetstream_messages_received_total');
@@ -135,29 +154,22 @@ describe('Metrics — integration', () => {
           kind: 'event',
         })?.value,
       ).toBe(1);
-      expect(
-        findSample(processed, {
-          stream: streamName(serviceName, StreamKind.Event),
-          subject: 'orders.created',
-          kind: 'event',
-          status: 'success',
-        })?.value,
-      ).toBe(1);
+      expect(findSample(processed, processedLabels)?.value).toBe(1);
     });
 
     it('should observe handler_duration_seconds for completed handlers', async () => {
       // Given/When
       await firstValueFrom(client.emit('orders.created', { orderId: 'b1' }));
-      await waitForCondition(() => controller.events.length > 0, 5_000);
-      await new Promise((r) => setTimeout(r, 50));
 
-      // Then: the histogram `_count` sample for the labels equals at least 1
-      const text = await register.metrics();
       const re = new RegExp(
         `^jetstream_handler_duration_seconds_count\\{[^}]*subject="orders\\.created"[^}]*\\}\\s+(\\d+)`,
         'm',
       );
-      const match = re.exec(text);
+
+      await waitForTextMatch(register, re);
+
+      // Then
+      const match = re.exec(await register.metrics());
 
       expect(match).not.toBeNull();
       expect(Number(match![1])).toBeGreaterThanOrEqual(1);
@@ -166,19 +178,12 @@ describe('Metrics — integration', () => {
     it('should increment messages_processed_total with status=error and errors_total{context=handler} when handler throws', async () => {
       // Given/When: handler always throws → nak'd, may redeliver up to max_deliver
       await firstValueFrom(client.emit('orders.cancelled', { orderId: 'c1' }));
-      await new Promise((r) => setTimeout(r, 500));
 
       // Wait for at least one error to surface — redeliveries are best-effort
-      await waitForCondition(async () => {
-        const processed = await samples(register, 'jetstream_messages_processed_total');
-
-        return (
-          findSample(processed, {
-            subject: 'orders.cancelled',
-            status: 'error',
-          }) !== undefined
-        );
-      }, 5_000);
+      await waitForSample(register, 'jetstream_messages_processed_total', {
+        subject: 'orders.cancelled',
+        status: 'error',
+      });
 
       // Then
       const errors = await samples(register, 'jetstream_errors_total');
@@ -192,18 +197,15 @@ describe('Metrics — integration', () => {
       const response = await firstValueFrom(client.send('orders.get', { id: 7 }));
 
       expect(response).toEqual({ id: 7, ok: true });
-      await new Promise((r) => setTimeout(r, 50));
+
+      const labels = { subject: 'orders.get', kind: 'command', status: 'success' };
+
+      await waitForSample(register, 'jetstream_messages_processed_total', labels);
 
       // Then
       const processed = await samples(register, 'jetstream_messages_processed_total');
 
-      expect(
-        findSample(processed, {
-          subject: 'orders.get',
-          kind: 'command',
-          status: 'success',
-        })?.value,
-      ).toBe(1);
+      expect(findSample(processed, labels)?.value).toBe(1);
     });
 
     it('should record connection_up=1 after bootstrap completes', async () => {
@@ -219,22 +221,16 @@ describe('Metrics — integration', () => {
     it('should increment publish_total and observe publish_duration_seconds for a successful event emit', async () => {
       // Given/When
       await firstValueFrom(client.emit('orders.created', { id: 'd1' }));
-      await new Promise((r) => setTimeout(r, 50));
+
+      const labels = { subject: 'orders.created', kind: 'event', status: 'success' };
+
+      await waitForSample(register, 'jetstream_publish_total', labels);
 
       // Then
       const published = await samples(register, 'jetstream_publish_total');
 
-      expect(
-        findSample(published, {
-          subject: 'orders.created',
-          kind: 'event',
-          status: 'success',
-        })?.value,
-      ).toBe(1);
-
-      const text = await register.metrics();
-
-      expect(text).toMatch(
+      expect(findSample(published, labels)?.value).toBe(1);
+      expect(await register.metrics()).toMatch(
         /^jetstream_publish_duration_seconds_count\{[^}]*subject="orders\.created"[^}]*\}\s+\d+/m,
       );
     });
@@ -242,14 +238,14 @@ describe('Metrics — integration', () => {
     it('should record rpc_duration_seconds with status=success on a successful Core RPC reply', async () => {
       // Given/When
       await firstValueFrom(client.send('orders.get', { id: 99 }));
-      await new Promise((r) => setTimeout(r, 50));
+
+      const rpcCountRe =
+        /^jetstream_rpc_duration_seconds_count\{[^}]*subject="orders\.get"[^}]*status="success"[^}]*\}\s+\d+/m;
+
+      await waitForTextMatch(register, rpcCountRe);
 
       // Then
-      const text = await register.metrics();
-
-      expect(text).toMatch(
-        /^jetstream_rpc_duration_seconds_count\{[^}]*subject="orders\.get"[^}]*status="success"[^}]*\}\s+\d+/m,
-      );
+      expect(await register.metrics()).toMatch(rpcCountRe);
       const published = await samples(register, 'jetstream_publish_total');
 
       expect(
@@ -260,14 +256,14 @@ describe('Metrics — integration', () => {
     it('should record rpc_duration_seconds with status=error when the RPC handler throws', async () => {
       // Given/When
       await firstValueFrom(client.send('orders.fail', {})).catch(() => undefined);
-      await new Promise((r) => setTimeout(r, 50));
+
+      const rpcErrorRe =
+        /^jetstream_rpc_duration_seconds_count\{[^}]*subject="orders\.fail"[^}]*status="error"[^}]*\}\s+\d+/m;
+
+      await waitForTextMatch(register, rpcErrorRe);
 
       // Then
-      const text = await register.metrics();
-
-      expect(text).toMatch(
-        /^jetstream_rpc_duration_seconds_count\{[^}]*subject="orders\.fail"[^}]*status="error"[^}]*\}\s+\d+/m,
-      );
+      expect(await register.metrics()).toMatch(rpcErrorRe);
     });
 
     it('should bucket unknown subjects into messages_unhandled_total when nothing routes', async () => {
@@ -347,11 +343,12 @@ describe('Metrics — integration', () => {
     });
 
     it('should not register metrics_poll_errors_total samples during healthy polling', async () => {
-      // Given/When: emit and poll a few ticks
+      // Given/When: emit one event and wait until at least one poll tick has
+      // actually written a stream gauge — that proves the poll loop ran healthily.
       await firstValueFrom(client.emit('orders.created', { id: 'p2' }));
-      await new Promise((r) => setTimeout(r, 300));
+      await waitForTextMatch(register, /^jetstream_consumer_num_ack_pending\{/m);
 
-      // Then: the family exists but has no error samples
+      // Then: the poll-error family carries no non-zero samples
       const text = await register.metrics();
 
       expect(text).not.toMatch(/^jetstream_metrics_poll_errors_total\{[^}]+\}\s+[1-9]/m);

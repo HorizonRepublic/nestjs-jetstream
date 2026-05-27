@@ -224,8 +224,16 @@ describe(PollRunner, () => {
   });
 
   describe('start() / stop() lifecycle', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
     it('should skip a tick when a previous one is still running (backpressure)', async () => {
-      // Given: tick takes 500ms; interval is 50ms
+      // Given: tick is held until we explicitly resolve it; interval is 50ms
       let resolveFirstTick: () => void = () => {};
 
       const firstTickPromise = new Promise<void>((r) => {
@@ -247,17 +255,17 @@ describe(PollRunner, () => {
         targets: [targets[0]!],
       });
 
-      // When
+      // When: advance fake time well past several intervals — the in-flight tick
+      // is still blocked on firstTickPromise, so subsequent ticks must be skipped.
       sut.start();
-      await new Promise((r) => setTimeout(r, 250));
+      await vi.advanceTimersByTimeAsync(250);
 
       // Then: backpressure prevented overlap — only the first tick is in flight
       expect(ticks).toBe(1);
 
-      // Cleanup: release the first tick, give the runner a chance to advance,
-      // then stop. Without this it leaks an interval into other tests.
+      // Cleanup: release the first tick, drain the runner, then stop.
       resolveFirstTick();
-      await new Promise((r) => setTimeout(r, 100));
+      await vi.advanceTimersByTimeAsync(100);
       await sut.stop();
     });
 
@@ -298,12 +306,12 @@ describe(PollRunner, () => {
 
       // When
       sut.start();
-      await new Promise((r) => setTimeout(r, 100));
+      await vi.advanceTimersByTimeAsync(100);
       await sut.stop();
 
       const callsBefore = (jsm.consumers.info as ReturnType<typeof vi.fn>).mock.calls.length;
 
-      await new Promise((r) => setTimeout(r, 100));
+      await vi.advanceTimersByTimeAsync(100);
       const callsAfter = (jsm.consumers.info as ReturnType<typeof vi.fn>).mock.calls.length;
 
       // Then: no further ticks after stop()
