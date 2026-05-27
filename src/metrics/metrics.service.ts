@@ -7,6 +7,7 @@ import {
   type OnModuleDestroy,
 } from '@nestjs/common';
 
+import { ConnectionProvider } from '../connection';
 import { EventBus } from '../hooks';
 import type {
   DeadLetterInfo,
@@ -15,7 +16,7 @@ import type {
   MessageKind,
 } from '../interfaces';
 import { StreamKind, TransportEvent } from '../interfaces';
-import { JETSTREAM_OPTIONS, streamName } from '../jetstream.constants';
+import { JETSTREAM_CONNECTION, JETSTREAM_OPTIONS, streamName } from '../jetstream.constants';
 import { PatternRegistry } from '../server/routing/pattern-registry';
 
 import { mapErrorContext } from './error-context-mapper';
@@ -66,6 +67,9 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
     @Inject(JETSTREAM_METRICS_PROM_CLIENT) private readonly promClient: PromClientRuntime,
     @Inject(JETSTREAM_OPTIONS) private readonly options: JetstreamModuleOptions,
     @Optional() private readonly patternRegistry: PatternRegistry | null,
+    @Optional()
+    @Inject(JETSTREAM_CONNECTION)
+    private readonly connection: ConnectionProvider | null = null,
   ) {}
 
   public async onApplicationBootstrap(): Promise<void> {
@@ -86,6 +90,7 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
     });
 
     this.subscribeToEvents();
+    this.syncInitialConnectionState();
     this.logger.log(
       `Metrics enabled (prefix=${this.config.prefix ?? DEFAULT_METRICS_PREFIX}, poll=${this.getEffectivePollInterval()}ms)`,
     );
@@ -103,6 +108,25 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
    */
   public getEffectivePollInterval(): number {
     return this.config.pollInterval ?? DEFAULT_POLL_INTERVAL_MS;
+  }
+
+  /**
+   * NATS connects during early bootstrap (when consumer infrastructure
+   * resolves streams), which is before this service subscribes to the
+   * EventBus. As a result the initial `Connect` emission misses us. Mirror
+   * the current state here so `connection_up` reflects reality the moment
+   * metrics come online — subsequent reconnects/disconnects then update it
+   * normally via the EventBus subscribers.
+   */
+  private syncInitialConnectionState(): void {
+    const nc = this.connection?.unwrap;
+
+    if (!nc) return;
+
+    const server = nc.getServer();
+
+    this.activeServers.add(server);
+    this.metrics?.connectionUp.labels({ server }).set(1);
   }
 
   private subscribeToEvents(): void {
