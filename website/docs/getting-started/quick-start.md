@@ -134,14 +134,7 @@ export class OrdersController {
 }
 ```
 
-**Handler types at a glance:**
-
-| Decorator | Pattern prefix | Delivery | Return value |
-|---|---|---|---|
-| `@EventPattern('...')` | _(none)_ | One instance (workqueue) | Ignored |
-| `@EventPattern('...', { broadcast: true })` | _(none)_ | All instances (fan-out) | Ignored |
-| `@EventPattern('...', { ordered: true })` | _(none)_ | Strict sequential delivery | Ignored |
-| `@MessagePattern('...')` | _(none)_ | One instance (load-balanced) | Sent as response |
+The decorators above cover the three handler shapes you'll meet first — workqueue events (one instance handles each message), broadcast events (all instances handle every message), and RPC commands (request/reply). Strict-order delivery uses `@EventPattern('...', { ordered: true })`. For the full picture of each, see [Events](/docs/patterns/events), [Broadcast](/docs/patterns/broadcast), [Ordered Events](/docs/patterns/ordered-events), and [RPC](/docs/patterns/rpc).
 
 ## 4. Send messages
 
@@ -181,12 +174,7 @@ export class GatewayController {
 }
 ```
 
-**Key differences between `emit` and `send`:**
-
-| Method | Purpose | Delivery guarantee | Response |
-|---|---|---|---|
-| `client.emit(pattern, data)` | Fire-and-forget events | At-least-once (JetStream) | `Observable<void>` |
-| `client.send(pattern, data)` | Request/reply RPC | Depends on RPC mode | `Observable<TResponse>` |
+Use `client.emit()` for fire-and-forget events — at-least-once delivery through JetStream, no response. Use `client.send()` for request/reply RPC — it returns an `Observable<TResponse>` with the handler's reply.
 
 :::info Broadcast prefix
 To send a broadcast event, prefix the pattern with `broadcast:` when calling `emit()`. On the handler side, use `{ broadcast: true }` in the decorator extras — no prefix needed.

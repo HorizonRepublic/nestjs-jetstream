@@ -44,39 +44,60 @@ export class OrdersController {
 
 ### Message accessors
 
-| Method | Return type | Description |
-|---|---|---|
-| `getSubject()` | `string` | The NATS subject this message was published to |
-| `getHeader(key)` | `string \| undefined` | Value of a single header, or `undefined` if missing |
-| `getHeaders()` | `MsgHdrs \| undefined` | All NATS message headers (the raw NATS `MsgHdrs` object from `@nats-io/transport-node`) |
-| `isJetStream()` | `boolean` | Type guard — returns `true` when the message is a JetStream message |
-| `getMessage()` | `JsMsg \| Msg` | The raw NATS message. Narrowed to `JsMsg` after a successful `isJetStream()` check, or `Msg` when the check returns `false`. |
+```typescript
+class RpcContext {
+  /** NATS subject this message was published to. */
+  getSubject(): string;
 
-### JetStream message info
+  /** Value of a single header, or undefined if missing. */
+  getHeader(key: string): string | undefined;
 
-<Since version="2.7.0" />
+  /** All NATS message headers (raw MsgHdrs from @nats-io/transport-node). */
+  getHeaders(): MsgHdrs | undefined;
+
+  /** Type guard — true when the message is a JetStream message. */
+  isJetStream(): boolean;
+
+  /**
+   * The raw NATS message. Narrowed to JsMsg after a successful isJetStream()
+   * check, or Msg when the check returns false.
+   */
+  getMessage(): JsMsg | Msg;
+}
+```
+
+### JetStream message info <small>since 2.7.0</small>
 
 These return `undefined` for Core NATS messages — no type guard needed.
 
-| Method | Return type | Description |
-|---|---|---|
-| `getDeliveryCount()` | `number \| undefined` | How many times this message has been delivered |
-| `getStream()` | `string \| undefined` | The JetStream stream name |
-| `getSequence()` | `number \| undefined` | Stream sequence number |
-| `getTimestamp()` | `Date \| undefined` | Message publish timestamp |
-| `getCallerName()` | `string \| undefined` | Name of the service that sent the message |
+```typescript
+class RpcContext {
+  /** How many times this message has been delivered. */
+  getDeliveryCount(): number | undefined;
 
-### Settlement actions
+  /** The JetStream stream name. */
+  getStream(): string | undefined;
 
-<Since version="2.7.0" />
+  /** Stream sequence number. */
+  getSequence(): number | undefined;
+
+  /** Message publish timestamp. */
+  getTimestamp(): Date | undefined;
+
+  /** Name of the service that sent the message. */
+  getCallerName(): string | undefined;
+}
+```
+
+### Settlement actions <small>since 2.7.0</small>
 
 Control how the transport acknowledges the message — without throwing errors.
 
-| Method | Effect | Use case |
-|---|---|---|
-| `ctx.retry({ delayMs? })` | `msg.nak(delayMs)` — redeliver | Business-level retry (external service unavailable, resource locked) |
-| `ctx.terminate(reason?)` | `msg.term(reason)` — permanent reject | Message no longer relevant (order cancelled, entity deleted) |
-| *(no action)* | `msg.ack()` — acknowledge | Successful processing (default) |
+**`ctx.retry({ delayMs? })`** → `msg.nak(delayMs)`, redelivering the message. Use for business-level retries (external service unavailable, resource locked).
+
+**`ctx.terminate(reason?)`** → `msg.term(reason)`, permanently rejecting. Use when the message is no longer relevant (order cancelled, entity deleted).
+
+**No action** → `msg.ack()`, the default. The transport acknowledges automatically when the handler returns successfully.
 
 ## Accessing JetStream metadata
 
