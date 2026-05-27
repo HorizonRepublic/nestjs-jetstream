@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 import { createMock } from '@golevelup/ts-vitest';
+import type { MessageHandler } from '@nestjs/microservices';
 import type { NatsConnection } from '@nats-io/transport-node';
 
 import { ConnectionProvider } from '../../connection';
@@ -14,6 +15,8 @@ import {
 } from '../infrastructure';
 import { EventRouter, PatternRegistry, RpcRouter } from '../routing';
 import { JetstreamStrategy } from '../strategy';
+
+const fakeHandler = (): MessageHandler => vi.fn() as unknown as MessageHandler;
 
 describe(JetstreamStrategy, () => {
   let sut: JetstreamStrategy;
@@ -109,6 +112,47 @@ describe(JetstreamStrategy, () => {
 
       // Then
       expect(metadataProvider.publish).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('addHandler()', () => {
+    it('should register a handler when the pattern is unique', () => {
+      // Given: a fresh strategy
+      // When
+      sut.addHandler('user.created', fakeHandler(), true);
+
+      // Then: handler is stored, no throw
+      expect(sut.getHandlers().size).toBe(1);
+    });
+
+    it('should throw when the same pattern is registered twice', () => {
+      // Given: a handler already registered for the pattern
+      sut.addHandler('user.created', fakeHandler(), true);
+
+      // When/Then: the second registration fails fast
+      expect(() => {
+        sut.addHandler('user.created', fakeHandler(), true);
+      }).toThrow(/Duplicate handler registered for pattern "user\.created"/);
+    });
+
+    it('should throw when an event handler collides with an RPC handler on the same pattern', () => {
+      // Given: an event handler registered
+      sut.addHandler('user.created', fakeHandler(), true);
+
+      // When/Then: an RPC handler (isEventHandler=false) for the same pattern is rejected
+      expect(() => {
+        sut.addHandler('user.created', fakeHandler(), false);
+      }).toThrow(/Duplicate handler registered/);
+    });
+
+    it('should mention the conflicting pattern in the error message', () => {
+      // Given
+      sut.addHandler('orders.placed', fakeHandler(), false);
+
+      // When/Then
+      expect(() => {
+        sut.addHandler('orders.placed', fakeHandler(), false);
+      }).toThrow(/orders\.placed/);
     });
   });
 
