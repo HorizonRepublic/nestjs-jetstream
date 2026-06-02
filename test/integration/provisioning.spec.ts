@@ -48,7 +48,7 @@ describe('Provisioning error clarity', () => {
 
     expect(provisioningErr.entity).toBe('stream');
     expect(provisioningErr.message).toContain('max_file_store');
-    // Pin the real insufficient-storage err_code for NatsErrorCode.InsufficientResources
+    // Pin the real insufficient-storage err_code for NatsErrorCode.StorageResourcesExceeded
     expect(provisioningErr.errCode).toBe(10047);
   });
 });

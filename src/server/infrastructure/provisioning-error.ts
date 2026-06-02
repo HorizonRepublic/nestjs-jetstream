@@ -29,7 +29,7 @@ export interface ProvisioningErrorFields {
 }
 
 const REMEDIATION: Partial<Record<NatsErrorCode, string>> = {
-  [NatsErrorCode.InsufficientResources]:
+  [NatsErrorCode.StorageResourcesExceeded]:
     'Aggregate stream reservation exceeds the server `max_file_store` (or account `max_storage`). ' +
     'Lower `max_bytes`/`num_replicas` for this service, or raise `max_file_store` on the NATS servers.',
   [NatsErrorCode.NoSuitablePeers]:

@@ -22,7 +22,7 @@ describe('mapProvisioningError', () => {
   it('should map insufficient-storage with a max_file_store remediation hint', () => {
     // Given
     const apiErr = new JetStreamApiError({
-      err_code: NatsErrorCode.InsufficientResources,
+      err_code: NatsErrorCode.StorageResourcesExceeded,
       code: 500,
       description: 'insufficient storage resources available',
     });
@@ -34,7 +34,7 @@ describe('mapProvisioningError', () => {
     expect(result).toBeInstanceOf(JetstreamProvisioningError);
     expect(result.entity).toBe('stream');
     expect(result.target).toBe('svc__microservice_ev-stream');
-    expect(result.errCode).toBe(NatsErrorCode.InsufficientResources);
+    expect(result.errCode).toBe(NatsErrorCode.StorageResourcesExceeded);
     expect(result.reservation).toBe(15 * GIB); // 5 × 3
     expect(result.message).toContain('max_file_store');
     expect(result.message).toContain('insufficient storage resources available');
@@ -82,7 +82,7 @@ describe('mapProvisioningError', () => {
       kind: 'ev',
     };
     const apiErr = new JetStreamApiError({
-      err_code: NatsErrorCode.InsufficientResources,
+      err_code: NatsErrorCode.StorageResourcesExceeded,
       code: 500,
       description: 'insufficient resources',
     });
