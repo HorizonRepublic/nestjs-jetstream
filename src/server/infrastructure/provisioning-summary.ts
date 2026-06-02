@@ -1,4 +1,4 @@
-import { type RetentionPolicy, type StorageType } from '@nats-io/jetstream';
+import { type RetentionPolicy, StorageType } from '@nats-io/jetstream';
 
 /** One stream's provisioning footprint, used to build the boot summary. */
 export interface StreamReservation {
@@ -39,10 +39,10 @@ export const formatProvisioningSummary = (
 ): string => {
   const lines: string[] = [`Provisioning ${reservations.length} stream(s) for "${serviceName}":`];
 
-  let totalMaxBytes = 0;
+  let totalFileMaxBytes = 0;
 
   for (const r of reservations) {
-    totalMaxBytes += r.maxBytes;
+    if (r.storage === StorageType.File) totalFileMaxBytes += r.maxBytes;
 
     const clusterReservation = r.maxBytes * r.numReplicas;
 
@@ -54,7 +54,7 @@ export const formatProvisioningSummary = (
   }
 
   lines.push(
-    `  Σ per-node footprint ≈ ${formatBytes(totalMaxBytes)} ` +
+    `  Σ per-node file-backed footprint ≈ ${formatBytes(totalFileMaxBytes)} ` +
       `(sum of max_bytes; worst case replicas = nodes). ` +
       `Ensure the NATS server max_file_store accommodates the sum across ALL services.`,
   );

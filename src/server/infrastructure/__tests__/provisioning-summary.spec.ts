@@ -44,8 +44,38 @@ describe('formatProvisioningSummary', () => {
     const result = formatProvisioningSummary('svc', reservations);
 
     // Then: 5 + 2 = 7 GiB per node, not 5×3 + 2×3
-    expect(result).toContain('per-node footprint ≈ 7.00 GiB');
+    expect(result).toContain('per-node file-backed footprint ≈ 7.00 GiB');
     expect(result).toContain('max_file_store');
+  });
+
+  it('should exclude memory-backed streams from the file-backed footprint total', () => {
+    // Given: one file stream (2 GiB) + one memory stream (3 GiB)
+    const mixed: StreamReservation[] = [
+      {
+        kind: 'ev',
+        name: 'svc__microservice_ev-stream',
+        storage: StorageType.File,
+        numReplicas: 1,
+        maxBytes: 2 * GIB,
+        maxAge: 0,
+        retention: RetentionPolicy.Limits,
+      },
+      {
+        kind: 'broadcast',
+        name: 'broadcast-stream',
+        storage: StorageType.Memory,
+        numReplicas: 1,
+        maxBytes: 3 * GIB,
+        maxAge: 0,
+        retention: RetentionPolicy.Limits,
+      },
+    ];
+
+    // When
+    const result = formatProvisioningSummary('svc', mixed);
+
+    // Then: only the file-backed 2 GiB counts toward the footer total
+    expect(result).toContain('per-node file-backed footprint ≈ 2.00 GiB');
   });
 
   it('should render zero max_bytes safely', () => {
