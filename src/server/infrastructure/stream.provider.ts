@@ -342,12 +342,14 @@ export class StreamProvider {
     kind: ReservationKind,
     config: Partial<StreamConfig> & { name: string; subjects: string[] },
   ): StreamReservation {
+    const mb = config.max_bytes;
+
     return {
       kind,
       name: config.name,
       storage: config.storage ?? StorageType.File,
       numReplicas: config.num_replicas ?? 1,
-      maxBytes: config.max_bytes ?? 0,
+      maxBytes: mb !== undefined && mb >= 0 ? mb : 0, // NATS uses -1 for unlimited
       maxAge: config.max_age ?? 0,
       retention: config.retention ?? RetentionPolicy.Limits,
     };
