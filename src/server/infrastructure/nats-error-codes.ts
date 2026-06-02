@@ -17,6 +17,9 @@ export enum NatsErrorCode {
   /** Insufficient storage resources — reservation exceeds server `max_file_store`. */
   InsufficientResources = 10047,
 
-  /** No suitable peers for placement (fewer healthy peers than `num_replicas`). */
+  /**
+   * No suitable peers for placement (fewer healthy peers than `num_replicas`,
+   * or no peer has storage headroom). Confirmed at runtime by the cluster integration test.
+   */
   NoSuitablePeers = 10005,
 }
