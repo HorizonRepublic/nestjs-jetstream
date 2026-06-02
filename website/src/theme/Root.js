@@ -164,7 +164,7 @@ export default function Root({ children }) {
   "headline": "Storage budgeting & provisioning",
   "description": "How JetStream stream reservations relate to the server max_file_store, and how to read the boot-time provisioning summary.",
   "datePublished": "2026-06-02",
-  "dateModified": "2026-06-02"
+  "dateModified": "2026-06-03"
 },
       
     '/docs/guides/stream-migration/': {
