@@ -167,6 +167,22 @@ export interface MetadataRegistryOptions {
 }
 
 /**
+ * Stream/consumer provisioning behavior. At boot the transport always logs a
+ * summary of each stream's storage reservation (always on, INFO level); the
+ * options here are opt-in refinements on top of that.
+ */
+export interface ProvisioningOptions {
+  /**
+   * Opt-in pre-flight storage budget check via `getAccountInfo()` before
+   * ensuring streams. Warn-only: logs a warning when this service's
+   * reservation would exceed the available budget, but never blocks or
+   * crashes boot. Off by default. The real provisioning failure (if any) is
+   * still surfaced as a {@link JetstreamProvisioningError}.
+   */
+  preflightStorageCheck?: boolean;
+}
+
+/**
  * Root module configuration for `JetstreamModule.forRoot()`.
  *
  * Minimal usage requires only `name` and `servers`.
@@ -347,6 +363,9 @@ export interface JetstreamModuleOptions {
    * @see OtelOptions
    */
   otel?: OtelOptions | boolean;
+
+  /** Provisioning behavior. */
+  provisioning?: ProvisioningOptions;
 }
 
 /** Options for `JetstreamModule.forFeature()`. */

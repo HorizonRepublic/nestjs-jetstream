@@ -13,6 +13,7 @@ export type {
   JetstreamModuleOptions,
   MetadataRegistryOptions,
   OrderedEventOverrides,
+  ProvisioningOptions,
   RpcConfig,
   ScheduleRecordOptions,
   StreamConfigOverrides,
