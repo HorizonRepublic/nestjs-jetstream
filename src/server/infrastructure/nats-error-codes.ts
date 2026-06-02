@@ -14,20 +14,9 @@ export enum NatsErrorCode {
   /** Stream does not exist. */
   StreamNotFound = 10059,
 
-  /**
-   * Insufficient storage resources available — the requested reservation exceeds
-   * the server `max_file_store` (or account `max_storage`) budget.
-   * Sourced from nats-server v2.14.1 server/errors.json; confirmed at runtime by
-   * the provisioning integration test.
-   */
+  /** Insufficient storage resources — reservation exceeds server `max_file_store`. */
   InsufficientResources = 10047,
 
-  /**
-   * No suitable peers for placement — fewer healthy peers than `num_replicas`,
-   * or no peer with enough reserved storage headroom (clustered deployments).
-   * Sourced from nats-server v2.14.1 server/errors.json. NOT confirmed at runtime by
-   * the integration test — triggering it requires a clustered NATS deployment (the test
-   * runs single-node).
-   */
+  /** No suitable peers for placement (fewer healthy peers than `num_replicas`). */
   NoSuitablePeers = 10005,
 }

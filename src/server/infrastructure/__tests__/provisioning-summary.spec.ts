@@ -50,7 +50,17 @@ describe('formatProvisioningSummary', () => {
 
   it('should render zero max_bytes safely', () => {
     // Given: a stream with no byte limit
-    const zero: StreamReservation[] = [{ ...reservations[0], maxBytes: 0, maxAge: 0 }];
+    const zero: StreamReservation[] = [
+      {
+        kind: 'ev',
+        name: 'svc__microservice_ev-stream',
+        storage: StorageType.File,
+        numReplicas: 3,
+        maxBytes: 0,
+        maxAge: 0,
+        retention: RetentionPolicy.Workqueue,
+      },
+    ];
 
     // When
     const result = formatProvisioningSummary('svc', zero);

@@ -32,14 +32,7 @@ const formatAge = (nanos: number): string => {
   return `${(nanos / NANOS_PER_SECOND).toFixed(0)}s`;
 };
 
-/**
- * Build an operator-facing, multi-line summary of what each stream reserves.
- * Pure: no I/O. The caller logs the returned string.
- *
- * Per-stream line shows `max_bytes × num_replicas` = cluster-wide reservation.
- * The total line shows `Σ max_bytes` = per-node footprint in the worst case
- * where replicas = nodes (R = N), which is what exhausts `max_file_store`.
- */
+/** Operator-facing summary of each stream's storage reservation. Pure — caller logs it. */
 export const formatProvisioningSummary = (
   serviceName: string,
   reservations: StreamReservation[],

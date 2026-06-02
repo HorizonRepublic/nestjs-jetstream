@@ -166,18 +166,11 @@ export interface MetadataRegistryOptions {
   ttl?: number;
 }
 
-/**
- * Stream/consumer provisioning behavior. At boot the transport always logs a
- * summary of each stream's storage reservation (always on, INFO level); the
- * options here are opt-in refinements on top of that.
- */
+/** Provisioning behavior. Stream reservations are always logged at boot (INFO). */
 export interface ProvisioningOptions {
   /**
-   * Opt-in pre-flight storage budget check via `getAccountInfo()` before
-   * ensuring streams. Warn-only: logs a warning when this service's
-   * reservation would exceed the available budget, but never blocks or
-   * crashes boot. Off by default. The real provisioning failure (if any) is
-   * still surfaced as a {@link JetstreamProvisioningError}.
+   * Opt-in storage budget check via `getAccountInfo()` before provisioning.
+   * Warn-only; never blocks boot. Off by default.
    */
   preflightStorageCheck?: boolean;
 }
