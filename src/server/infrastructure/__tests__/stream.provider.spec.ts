@@ -26,6 +26,7 @@ describe(StreamProvider, () => {
       add: ReturnType<typeof vi.fn>;
       update: ReturnType<typeof vi.fn>;
     };
+    getAccountInfo?: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(() => {
@@ -477,6 +478,60 @@ describe(StreamProvider, () => {
           );
         });
       });
+    });
+  });
+
+  describe('ensureStreams', () => {
+    it('should wrap an insufficient-storage failure from streams.add', async () => {
+      // Given: stream does not exist, then add fails with insufficient storage
+      const notFound = new JetStreamApiError({
+        err_code: 10059,
+        code: 404,
+        description: 'stream not found',
+      });
+      const storageErr = new JetStreamApiError({
+        err_code: 10047,
+        code: 500,
+        description: 'insufficient storage resources available',
+      });
+
+      mockJsm.streams.info.mockRejectedValue(notFound);
+      mockJsm.streams.add.mockRejectedValue(storageErr);
+
+      // When / Then
+      await expect(sut.ensureStreams([StreamKind.Event])).rejects.toMatchObject({
+        name: 'JetstreamProvisioningError',
+        errCode: 10047,
+        entity: 'stream',
+      });
+    });
+
+    it('should run the preflight check only when provisioning.preflightStorageCheck is set', async () => {
+      // Given: existing stream with no diff, preflight enabled
+      options.provisioning = { preflightStorageCheck: true };
+      sut = new StreamProvider(options, connection);
+
+      const getAccountInfo = vi.fn().mockResolvedValue({
+        storage: 0,
+        reserved_storage: 0,
+        memory: 0,
+        reserved_memory: 0,
+        streams: 0,
+        consumers: 0,
+        limits: { max_storage: -1, max_memory: 0 },
+        api: { total: 0, errors: 0 },
+      });
+
+      mockJsm.getAccountInfo = getAccountInfo;
+      mockJsm.streams.info.mockResolvedValue({
+        config: { ...DEFAULT_EVENT_STREAM_CONFIG, name: sut.getStreamName(StreamKind.Event) },
+      } as never);
+
+      // When
+      await sut.ensureStreams([StreamKind.Event]);
+
+      // Then
+      expect(getAccountInfo).toHaveBeenCalledOnce();
     });
   });
 

@@ -1,5 +1,11 @@
 import { Logger } from '@nestjs/common';
-import { JetStreamApiError, type StreamConfig, type StreamInfo } from '@nats-io/jetstream';
+import {
+  JetStreamApiError,
+  RetentionPolicy,
+  StorageType,
+  type StreamConfig,
+  type StreamInfo,
+} from '@nats-io/jetstream';
 
 import { ConnectionProvider } from '../../connection';
 import { StreamKind } from '../../interfaces';
@@ -22,8 +28,14 @@ import {
   type ServerEndpoint,
 } from '../../otel';
 import { NatsErrorCode } from './nats-error-codes';
+import { assertStorageBudget } from './provisioning-budget';
+import { mapProvisioningError, type ProvisioningErrorContext } from './provisioning-error';
+import { formatProvisioningSummary, type StreamReservation } from './provisioning-summary';
 import { compareStreamConfig, type StreamConfigDiffResult } from './stream-config-diff';
 import { StreamMigration } from './stream-migration';
+
+/** A `StreamKind` or the `'dlq'` label, used for reservation/error provenance. */
+type ReservationKind = StreamKind | 'dlq';
 
 /**
  * Manages JetStream stream lifecycle: creation, updates, and idempotent ensures.
@@ -63,6 +75,18 @@ export class StreamProvider {
    */
   public async ensureStreams(kinds: StreamKind[]): Promise<void> {
     const jsm = await this.connection.getJetStreamManager();
+
+    const reservations = kinds.map((kind) => this.buildReservation(kind, this.buildConfig(kind)));
+
+    if (this.options.dlq) {
+      reservations.push(this.buildReservation('dlq', this.buildDlqConfig()));
+    }
+
+    this.logger.log(`\n${formatProvisioningSummary(this.options.name, reservations)}`);
+
+    if (this.options.provisioning?.preflightStorageCheck) {
+      await assertStorageBudget(jsm, this.options.name, reservations, this.logger);
+    }
 
     await Promise.all(kinds.map((kind) => this.ensureStream(jsm, kind)));
     if (this.options.dlq) {
@@ -116,6 +140,7 @@ export class StreamProvider {
     kind: StreamKind,
   ): Promise<StreamInfo> {
     const config = this.buildConfig(kind);
+    const ctx = this.errorContext(kind, config);
 
     return withProvisioningSpan(
       this.otel,
@@ -125,6 +150,12 @@ export class StreamProvider {
         entity: 'stream',
         name: config.name,
         action: 'ensure',
+        maxBytes: ctx.maxBytes,
+        numReplicas: ctx.numReplicas,
+        reservation:
+          ctx.maxBytes !== undefined && ctx.numReplicas !== undefined
+            ? ctx.maxBytes * ctx.numReplicas
+            : undefined,
       },
       async () => {
         this.logger.log(`Ensuring stream: ${config.name}`);
@@ -132,14 +163,15 @@ export class StreamProvider {
         try {
           const currentInfo = await jsm.streams.info(config.name);
 
-          return await this.handleExistingStream(jsm, currentInfo, config);
+          return await this.handleExistingStream(jsm, currentInfo, config, ctx);
         } catch (err) {
           if (
             err instanceof JetStreamApiError &&
             err.apiError().err_code === NatsErrorCode.StreamNotFound
           ) {
             this.logger.log(`Creating stream: ${config.name}`);
-            return await jsm.streams.add(config as StreamConfig);
+
+            return await this.runStreamOp(ctx, () => jsm.streams.add(config as StreamConfig));
           }
 
           throw err;
@@ -153,6 +185,7 @@ export class StreamProvider {
     jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
   ): Promise<StreamInfo> {
     const config = this.buildDlqConfig();
+    const ctx = this.errorContext('dlq', config);
 
     return withProvisioningSpan(
       this.otel,
@@ -162,6 +195,12 @@ export class StreamProvider {
         entity: 'stream',
         name: config.name,
         action: 'ensure',
+        maxBytes: ctx.maxBytes,
+        numReplicas: ctx.numReplicas,
+        reservation:
+          ctx.maxBytes !== undefined && ctx.numReplicas !== undefined
+            ? ctx.maxBytes * ctx.numReplicas
+            : undefined,
       },
       async () => {
         this.logger.log(`Ensuring DLQ stream: ${config.name}`);
@@ -169,14 +208,15 @@ export class StreamProvider {
         try {
           const currentInfo = await jsm.streams.info(config.name);
 
-          return await this.handleExistingStream(jsm, currentInfo, config);
+          return await this.handleExistingStream(jsm, currentInfo, config, ctx);
         } catch (err) {
           if (
             err instanceof JetStreamApiError &&
             err.apiError().err_code === NatsErrorCode.StreamNotFound
           ) {
             this.logger.log(`Creating DLQ stream: ${config.name}`);
-            return await jsm.streams.add(config as StreamConfig);
+
+            return await this.runStreamOp(ctx, () => jsm.streams.add(config as StreamConfig));
           }
 
           throw err;
@@ -189,6 +229,7 @@ export class StreamProvider {
     jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
     currentInfo: StreamInfo,
     config: Partial<StreamConfig> & { name: string; subjects: string[] },
+    ctx: ProvisioningErrorContext,
   ): Promise<StreamInfo> {
     const diff = compareStreamConfig(currentInfo.config, config);
 
@@ -214,7 +255,8 @@ export class StreamProvider {
     if (!diff.hasImmutableChanges) {
       // Mutable-only or enable-only — normal update
       this.logger.debug(`Stream exists, updating: ${config.name}`);
-      return await jsm.streams.update(config.name, config);
+
+      return await this.runStreamOp(ctx, () => jsm.streams.update(config.name, config));
     }
 
     // Immutable changes detected
@@ -228,7 +270,7 @@ export class StreamProvider {
       if (diff.hasMutableChanges) {
         const mutableConfig = this.buildMutableOnlyConfig(config, currentInfo.config, diff);
 
-        return await jsm.streams.update(config.name, mutableConfig);
+        return await this.runStreamOp(ctx, () => jsm.streams.update(config.name, mutableConfig));
       }
 
       return currentInfo;
@@ -293,6 +335,46 @@ export class StreamProvider {
       } else {
         this.logger.log(`Stream ${streamName}: ${detail}`);
       }
+    }
+  }
+
+  private buildReservation(
+    kind: ReservationKind,
+    config: Partial<StreamConfig> & { name: string; subjects: string[] },
+  ): StreamReservation {
+    return {
+      kind,
+      name: config.name,
+      storage: config.storage ?? StorageType.File,
+      numReplicas: config.num_replicas ?? 1,
+      maxBytes: config.max_bytes ?? 0,
+      maxAge: config.max_age ?? 0,
+      retention: config.retention ?? RetentionPolicy.Limits,
+    };
+  }
+
+  private errorContext(
+    kind: ReservationKind,
+    config: Partial<StreamConfig> & { name: string },
+  ): ProvisioningErrorContext {
+    return {
+      entity: 'stream',
+      name: config.name,
+      kind,
+      maxBytes: config.max_bytes,
+      numReplicas: config.num_replicas ?? 1,
+    };
+  }
+
+  private async runStreamOp<T>(ctx: ProvisioningErrorContext, op: () => Promise<T>): Promise<T> {
+    try {
+      return await op();
+    } catch (err) {
+      if (err instanceof JetStreamApiError) {
+        throw mapProvisioningError(err, ctx);
+      }
+
+      throw err;
     }
   }
 
