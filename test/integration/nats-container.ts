@@ -2,7 +2,7 @@ import { GenericContainer, StartedTestContainer, Wait } from 'testcontainers';
 import { connect } from '@nats-io/transport-node';
 import { jetstreamManager } from '@nats-io/jetstream';
 
-export const NATS_IMAGE = 'nats:2.12.6';
+export const NATS_IMAGE = 'nats:2.14.1';
 
 export interface NatsContainerResult {
   container: StartedTestContainer;
