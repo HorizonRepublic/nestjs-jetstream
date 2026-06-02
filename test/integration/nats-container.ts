@@ -87,6 +87,35 @@ export const startNatsContainerWithFixedPort = async (
 };
 
 /**
+ * Start a NATS container whose JetStream file store is capped to `maxFileStoreBytes`.
+ * Used to provoke insufficient-storage provisioning failures deterministically.
+ */
+export const startNatsContainerWithFileStoreLimit = async (
+  maxFileStoreBytes: number,
+): Promise<NatsContainerResult> => {
+  const conf = [
+    'jetstream {',
+    '  store_dir: /data',
+    `  max_file_store: ${maxFileStoreBytes}`,
+    '}',
+    '',
+  ].join('\n');
+
+  const container = await new GenericContainer(NATS_IMAGE)
+    .withCopyContentToContainer([{ content: conf, target: '/etc/nats/nats.conf' }])
+    .withCommand(['-c', '/etc/nats/nats.conf'])
+    .withExposedPorts(4222)
+    .withWaitStrategy(Wait.forLogMessage(/Server is ready/))
+    .start();
+
+  const port = container.getMappedPort(4222);
+
+  await waitForNatsReady(port);
+
+  return { container, port };
+};
+
+/**
  * Restart a NATS container and wait for JetStream readiness.
  * Container filesystem (including JetStream store) persists across restarts.
  *
