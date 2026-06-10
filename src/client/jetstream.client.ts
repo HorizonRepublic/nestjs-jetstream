@@ -566,12 +566,24 @@ export class JetstreamClient extends ClientProxy {
       // Run the publish under the CLIENT span's context so any handler /
       // interceptor spans around the publish itself nest under the CLIENT
       // round-trip span rather than the ambient context.
-      await context.with(spanHandle.activeContext, () =>
+      const ack = await context.with(spanHandle.activeContext, () =>
         this.connection.getJetStreamClient().publish(subject, encoded, {
           headers: hdrs,
           msgID: messageId ?? nuid.next(),
         }),
       );
+
+      if (ack.duplicate) {
+        // The stream dropped this publish as a duplicate (messageId reused
+        // within the dedup window). The original command owns the reply — this
+        // correlation id will never receive one, so fail now instead of
+        // burning the full RPC timeout.
+        throw new Error(
+          `Duplicate RPC publish for ${subject}: the messageId was already used within the ` +
+            'stream dedup window, so the reply belongs to the original request',
+        );
+      }
+
       // Publish leg succeeded; RpcCompleted fires from the inbox reply or
       // the timeout branch once the round-trip settles.
       this.reportPublished(declaredPattern, StreamKind.Command, startedAt, 'success');

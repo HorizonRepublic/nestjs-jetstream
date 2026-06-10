@@ -956,6 +956,35 @@ describe(JetstreamClient, () => {
     });
   });
 
+  describe('duplicate publish detection (JetStream RPC mode)', () => {
+    beforeEach(async () => {
+      vi.useFakeTimers();
+
+      options.rpc = { mode: 'jetstream' };
+      sut = new JetstreamClient(options, targetName, connection, codec, eventBus);
+      await sut.connect();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('should fail fast when the command publish is deduplicated by the stream', async () => {
+      // Given: the stream reports the publish as a duplicate — the original
+      // command owns the reply, this correlation id will never receive one
+      mockJs.publish.mockResolvedValue(createMock<PubAck>({ duplicate: true, seq: 5 }));
+
+      // When: sending an RPC whose messageId was already used
+      const result = firstValueFrom(sut.send('rpc.dup', {}));
+
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Then: rejected immediately instead of hanging until the RPC timeout
+      await vi.advanceTimersByTimeAsync(DEFAULT_JETSTREAM_RPC_TIMEOUT);
+      await expect(result).rejects.toThrow(/duplicate/i);
+    });
+  });
+
   describe('disconnect handling (JetStream RPC mode)', () => {
     beforeEach(async () => {
       vi.useFakeTimers();
