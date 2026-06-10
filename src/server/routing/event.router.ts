@@ -59,6 +59,15 @@ interface ResolvedEvent {
   readonly data: unknown;
 }
 
+/**
+ * A delivered message parked in the concurrency backlog, together with the
+ * ack-extension timer that keeps it alive while it waits for a slot.
+ */
+interface QueuedMessage {
+  readonly msg: JsMsg;
+  readonly stopAckExtension: (() => void) | null;
+}
+
 const eventConsumeKindFor = (kind: StreamKind): EventConsumeKind => {
   if (kind === StreamKind.Broadcast) return ConsumeKind.Broadcast;
   if (kind === StreamKind.Ordered) return ConsumeKind.Ordered;
@@ -534,7 +543,7 @@ export class EventRouter {
     const backlogWarnThreshold = 1_000;
     let active = 0;
     let backlogWarned = false;
-    const backlog: JsMsg[] = [];
+    const backlog: QueuedMessage[] = [];
 
     const onAsyncDone = (): void => {
       active--;
@@ -567,11 +576,14 @@ export class EventRouter {
         const next = backlog.shift();
 
         if (next === undefined) return;
+        // The processing-phase timer is started inside route(); the waiting
+        // phase is over.
+        next.stopAckExtension?.();
         active++;
-        const result = routeSafely(next);
+        const result = routeSafely(next.msg);
 
         if (result !== undefined) {
-          trackAsync(result, next);
+          trackAsync(result, next.msg);
         } else {
           active--;
         }
@@ -583,7 +595,15 @@ export class EventRouter {
     const subscription = stream$.subscribe({
       next: (msg: JsMsg): void => {
         if (active >= maxActive) {
-          backlog.push(msg);
+          // A parked message was already delivered — its ack_wait clock is
+          // running on the server. Without extension a long wait ends in
+          // redelivery and double processing.
+          backlog.push({
+            msg,
+            stopAckExtension: hasAckExtension
+              ? startAckExtensionTimer(msg, ackExtensionInterval)
+              : null,
+          });
           if (!backlogWarned && backlog.length >= backlogWarnThreshold) {
             backlogWarned = true;
             logger.warn(
@@ -607,6 +627,16 @@ export class EventRouter {
       error: (err: unknown): void => {
         logger.error(`Stream error in ${kind} router`, err);
       },
+    });
+
+    // Backlogged messages keep extension timers alive — stop them when the
+    // router unsubscribes so a destroyed router leaves nothing ticking.
+    subscription.add(() => {
+      for (const queued of backlog) {
+        queued.stopAckExtension?.();
+      }
+
+      backlog.length = 0;
     });
 
     this.subscriptions.push(subscription);

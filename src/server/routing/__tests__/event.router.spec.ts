@@ -1617,6 +1617,44 @@ describe(EventRouter, () => {
       expect((msg.working as ReturnType<typeof vi.fn>).mock.calls.length).toBe(countAfterDone);
     });
 
+    it('should extend ack for backlogged messages while they wait for a slot', async () => {
+      // Given: concurrency 1 with ackExtension; the first handler hangs and
+      // holds the only slot, so the second message parks in the backlog —
+      // its ack_wait clock is already running on the server
+      sut = new EventRouter(messageProvider, patternRegistry, codec, eventBus, undefined, {
+        events: { concurrency: 1, ackExtension: 30 },
+      });
+      sut.start();
+
+      let resolveHandler!: () => void;
+      const handlerPromise = new Promise<void>((r) => {
+        resolveHandler = r;
+      });
+      const handler = vi.fn().mockReturnValue(handlerPromise);
+
+      patternRegistry.getHandler.mockReturnValue(handler);
+
+      const inFlight = createMock<JsMsg>({
+        subject: 'first.subject',
+        data: new TextEncoder().encode(JSON.stringify({})),
+      });
+      const queued = createMock<JsMsg>({
+        subject: 'second.subject',
+        data: new TextEncoder().encode(JSON.stringify({})),
+      });
+
+      // When: the second message waits in the backlog
+      events$.next(inFlight);
+      events$.next(queued);
+      await new Promise((r) => setTimeout(r, 120));
+
+      // Then: the queued message kept its ack alive while waiting
+      expect(queued.working).toHaveBeenCalled();
+
+      resolveHandler();
+      await new Promise((r) => setTimeout(r, 10));
+    });
+
     it('should not call working() when ackExtension is disabled', async () => {
       // Given: default sut (no processingConfig)
       sut.start();
