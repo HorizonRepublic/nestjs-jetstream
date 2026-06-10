@@ -507,15 +507,21 @@ export class EventRouter {
    * failed and we still have to surface the message somewhere observable.
    */
   private async fallbackToOnDeadLetterCallback(info: DeadLetterInfo, msg: JsMsg): Promise<void> {
-    // Safety net: deadLetterConfig is guaranteed by isDeadLetter() guard,
-    // but if somehow null, term the message to prevent infinite redelivery.
-    if (!this.deadLetterConfig) {
-      msg.term('Dead letter config unavailable');
+    const onDeadLetter = this.deadLetterConfig?.onDeadLetter;
+
+    if (!onDeadLetter) {
+      // dlq-only mode and the DLQ publish failed: there is no callback to fall
+      // back to. Keep the message in the stream rather than deleting it.
+      this.logger.error(
+        `Dead letter for ${msg.subject} could not be captured (DLQ publish failed, no onDeadLetter callback) — leaving the message in the stream`,
+      );
+      msg.nak();
+
       return;
     }
 
     try {
-      await this.deadLetterConfig.onDeadLetter(info);
+      await onDeadLetter(info);
       msg.term('Dead letter processed via fallback callback');
     } catch (hookErr) {
       this.logger.error(

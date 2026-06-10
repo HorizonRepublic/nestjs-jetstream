@@ -159,6 +159,66 @@ describe('Dead Letter Queue Hook', () => {
       expect(controller.attempts).toBe(2);
     });
   });
+  describe('with native DLQ configured and no onDeadLetter callback', () => {
+    let app: INestApplication;
+    let module: TestingModule;
+    let client: ClientProxy;
+    let serviceName: string;
+    let controller: AlwaysFailingController;
+
+    beforeEach(async () => {
+      serviceName = uniqueServiceName();
+
+      ({ app, module } = await createTestApp(
+        {
+          name: serviceName,
+          port,
+          dlq: {},
+          events: {
+            consumer: {
+              max_deliver: 2,
+              ack_wait: toNanos(2, 'seconds'),
+            },
+          },
+        },
+        [AlwaysFailingController],
+        [serviceName],
+      ));
+
+      client = module.get<ClientProxy>(getClientToken(serviceName));
+      controller = module.get(AlwaysFailingController);
+    });
+
+    afterEach(async () => {
+      await app.close();
+      await cleanupStreams(nc, serviceName);
+    });
+
+    it('should republish exhausted messages to the DLQ stream in dlq-only mode', async () => {
+      // Given: emit an event that will always fail
+      await firstValueFrom(client.emit('order.doomed', { orderId: 'dlq-only-1' }));
+
+      // When: all delivery attempts are exhausted
+      await waitForCondition(() => controller.attempts >= 2, 10_000);
+
+      // Then: the dead letter lands in the DLQ stream without any callback configured
+      const jsm = await jetstreamManager(nc);
+      const dlqName = dlqStreamName(serviceName);
+
+      await waitForCondition(async () => {
+        const info = await jsm.streams.info(dlqName);
+
+        return info.state.messages === 1;
+      }, 10_000);
+
+      const msg = await jsm.streams.getMessage(dlqName, { seq: 1 });
+      const decoded = JSON.parse(new TextDecoder().decode(msg!.data));
+
+      expect(decoded.orderId).toBe('dlq-only-1');
+      expect(msg!.header.get(JetstreamDlqHeader.DeliveryCount)).toBe('2');
+    });
+  });
+
   describe('with native DLQ configured', () => {
     let app: INestApplication;
     let module: TestingModule;

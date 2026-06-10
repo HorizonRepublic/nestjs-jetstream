@@ -388,12 +388,15 @@ export class JetstreamModule implements OnApplicationShutdown {
         ): EventRouter | null => {
           if (options.consumer === false) return null;
 
-          const deadLetterConfig: DeadLetterConfig | undefined = options.onDeadLetter
-            ? {
-                maxDeliverByStream: new Map(),
-                onDeadLetter: options.onDeadLetter,
-              }
-            : undefined;
+          // Dead-letter detection is needed for both capture mechanisms:
+          // the DLQ stream (options.dlq) and the onDeadLetter callback.
+          const deadLetterConfig: DeadLetterConfig | undefined =
+            options.onDeadLetter || options.dlq
+              ? {
+                  maxDeliverByStream: new Map(),
+                  onDeadLetter: options.onDeadLetter,
+                }
+              : undefined;
 
           const processingConfig: EventProcessingConfig = {
             events: {
