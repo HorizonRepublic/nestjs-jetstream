@@ -8,6 +8,7 @@ import { ConnectionProvider } from '../../../connection';
 import { StreamKind } from '../../../interfaces';
 import type { JetstreamModuleOptions, StreamConfigOverrides } from '../../../interfaces';
 import {
+  DEFAULT_BROADCAST_STREAM_CONFIG,
   DEFAULT_DLQ_STREAM_CONFIG,
   DEFAULT_EVENT_STREAM_CONFIG,
   internalName,
@@ -178,6 +179,52 @@ describe(StreamProvider, () => {
         expect(subjects).toEqual([`${name}.ordered.>`]);
         expect(subjects.some((s) => s.includes('_sch'))).toBe(false);
       });
+    });
+  });
+
+  describe('shared broadcast stream protection', () => {
+    const sharedBroadcastConfig = (overrides: Record<string, unknown> = {}) => ({
+      ...DEFAULT_BROADCAST_STREAM_CONFIG,
+      name: 'broadcast-stream',
+      subjects: ['broadcast.>'],
+      description: 'JetStream broadcast stream (shared across services)',
+      ...overrides,
+    });
+
+    it('should not strip subjects or rewrite the description set by other services', async () => {
+      // Given: another service enabled broadcast scheduling, so the shared
+      // stream carries an extra subject this service's config does not declare
+      mockJsm.streams.info.mockResolvedValue(
+        createMock<StreamInfo>({
+          config: sharedBroadcastConfig({ subjects: ['broadcast.>', 'broadcast._sch.>'] }),
+        }),
+      );
+      mockJsm.streams.update.mockResolvedValue(createMock<StreamInfo>());
+
+      // When
+      await sut.ensureStreams([StreamKind.Broadcast]);
+
+      // Then: no update — the local config must not clobber the shared stream
+      expect(mockJsm.streams.update).not.toHaveBeenCalled();
+      expect(mockJsm.streams.add).not.toHaveBeenCalled();
+    });
+
+    it('should refuse destructive migration of the shared broadcast stream', async () => {
+      // Given: an immutable diff on the shared stream and the migration flag on
+      options.allowDestructiveMigration = true;
+      sut = new StreamProvider(options, connection);
+
+      mockJsm.streams.info.mockResolvedValue(
+        createMock<StreamInfo>({
+          config: sharedBroadcastConfig({ storage: StorageType.Memory }),
+        }),
+      );
+
+      // When/Then: recreating broadcast-stream would delete every other
+      // service's durable consumers — fail loudly instead
+      await expect(sut.ensureStreams([StreamKind.Broadcast])).rejects.toThrow(
+        /broadcast-stream.*shared|shared.*broadcast-stream/i,
+      );
     });
   });
 
