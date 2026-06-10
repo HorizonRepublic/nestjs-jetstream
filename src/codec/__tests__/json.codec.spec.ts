@@ -26,6 +26,22 @@ describe(JsonCodec, () => {
       });
     });
 
+    describe('when encoding undefined (void handler results, payload-less emits)', () => {
+      it('should roundtrip undefined through an empty payload', () => {
+        // Given/When: undefined encoded and decoded back
+        const encoded = sut.encode(undefined);
+        const decoded = sut.decode(encoded);
+
+        // Then: empty wire payload, decodes back to undefined instead of throwing
+        expect(encoded).toHaveLength(0);
+        expect(decoded).toBeUndefined();
+      });
+
+      it('should decode an empty payload from a foreign publisher as undefined', () => {
+        expect(sut.decode(new Uint8Array(0))).toBeUndefined();
+      });
+    });
+
     describe('when encoding primitives', () => {
       it.each([
         ['string', faker.lorem.word()],

@@ -24,6 +24,11 @@ class JsRpcController {
     throw new RpcException('Not found');
   }
 
+  @MessagePattern('user.touch')
+  touchUser(@Payload() _data: { id: number }): void {
+    // command-style handler with no return value
+  }
+
   @MessagePattern('user.ctx')
   getUserWithCtx(
     @Payload() data: { id: number },
@@ -76,6 +81,15 @@ describe('JetStream RPC Round-Trip', () => {
     const result = await firstValueFrom(client.send('user.get', { id: 7 }));
 
     expect(result).toEqual({ id: 7, name: 'JS User' });
+  });
+
+  it('should complete cleanly when the handler returns nothing', async () => {
+    // Given/When: calling a void handler. NestJS skips next() for undefined
+    // responses, so the observable completes empty — the call must not
+    // surface a decode error.
+    await expect(
+      firstValueFrom(client.send('user.touch', { id: 7 }), { defaultValue: undefined }),
+    ).resolves.toBeUndefined();
   });
 
   it('should receive RpcException error via inbox', async () => {
