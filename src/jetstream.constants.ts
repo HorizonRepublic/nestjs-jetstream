@@ -146,7 +146,7 @@ export const DEFAULT_ORDERED_STREAM_CONFIG: Partial<StreamConfig> = {
 /** Default config for dead-letter queue (DLQ) streams. */
 export const DEFAULT_DLQ_STREAM_CONFIG: Partial<StreamConfig> = {
   ...baseStreamConfig,
-  retention: RetentionPolicy.Workqueue,
+  retention: RetentionPolicy.Limits,
   allow_rollup_hdrs: false,
   max_consumers: 100,
   max_msg_size: 10 * MB,
