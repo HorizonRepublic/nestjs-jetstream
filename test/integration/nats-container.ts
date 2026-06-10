@@ -185,6 +185,11 @@ export const startNatsCluster = async (
   opts: NatsClusterOptions = {},
 ): Promise<NatsClusterResult> => {
   const nodeCount = opts.nodes ?? 3;
+
+  if (nodeCount < 1) {
+    throw new Error('Cluster requires at least one node');
+  }
+
   const aliases = Array.from({ length: nodeCount }, (_, i) => `n${i}`);
   const maxFileStore = opts.maxFileStoreBytes ?? 5 * 1024 * 1024 * 1024;
   const routes = aliases.map((a) => `nats-route://${a}:6222`).join(', ');
