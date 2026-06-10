@@ -231,6 +231,19 @@ export class JetstreamClient extends ClientProxy {
     if (!this.readyForPublish) await this.connect();
     const { data, hdrs, messageId, schedule, ttl } = this.extractRecordData(packet.data);
 
+    const publishKind = detectEventKind(packet.pattern);
+
+    if (schedule && publishKind === PublishKind.Ordered) {
+      // The schedule holder lives in the event stream's _sch namespace, but the
+      // target subject belongs to the ordered stream — the server requires the
+      // schedule target to be a subject of the same stream, so this can never
+      // be delivered. Fail loudly instead of dropping the message.
+      throw new Error(
+        `scheduleAt() is not supported for ordered events (pattern: ${packet.pattern}). ` +
+          'Scheduled delivery is available for workqueue events and broadcasts.',
+      );
+    }
+
     const eventSubject = this.buildEventSubject(packet.pattern);
     // Replace kind segment with _sch: {svc}.ev.{pattern} → {svc}._sch.{pattern}
     // For broadcast: broadcast.{pattern} → broadcast._sch.{pattern}
@@ -241,7 +254,6 @@ export class JetstreamClient extends ClientProxy {
     const record =
       packet.data instanceof JetstreamRecord ? packet.data : new JetstreamRecord(data, new Map());
 
-    const publishKind = detectEventKind(packet.pattern);
     const declaredPattern = declaredEventPattern(packet.pattern);
     const streamKind = eventStreamKind(publishKind);
     const startedAt = performance.now();

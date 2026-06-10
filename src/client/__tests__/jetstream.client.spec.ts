@@ -358,31 +358,20 @@ describe(JetstreamClient, () => {
         );
       });
 
-      it('should publish ordered schedule to _sch subject with ordered target', async () => {
-        // Given: ordered event with schedule
+      it('should reject scheduleAt for ordered patterns', async () => {
+        // Given: ordered event with schedule — the schedule holder would land
+        // in the event stream while the target lives in the ordered stream,
+        // which the server rejects (schedule target must share the stream)
         const data = { status: faker.lorem.word() };
         const futureDate = new Date(Date.now() + 60_000);
         const record = new JetstreamRecordBuilder(data).scheduleAt(futureDate).build();
 
-        // When: ordered event emitted with schedule
-        await firstValueFrom(sut.emit('ordered:order.status', record));
-
-        // Then: published to _sch namespace with ordered target and a unique suffix
-        const expectedScheduleSubject = new RegExp(
-          `^${targetName}__microservice\\._sch\\.order\\.status\\.[A-Za-z0-9]+$`,
+        // When/Then: emit rejects with a descriptive error, nothing is published
+        await expect(firstValueFrom(sut.emit('ordered:order.status', record))).rejects.toThrow(
+          /scheduleAt.*ordered/i,
         );
-        const expectedOrderedTarget = `${targetName}__microservice.ordered.order.status`;
 
-        expect(mockJs.publish).toHaveBeenCalledWith(
-          expect.stringMatching(expectedScheduleSubject),
-          codec.encode(data),
-          expect.objectContaining({
-            schedule: {
-              specification: futureDate,
-              target: expectedOrderedTarget,
-            },
-          }),
-        );
+        expect(mockJs.publish).not.toHaveBeenCalled();
       });
 
       it('should apply ttl to the delivered message, not the schedule holder', async () => {
