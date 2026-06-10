@@ -158,51 +158,34 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
       await this.streamProvider.ensureStreams(streamKinds);
 
       // 4. Ensure durable consumers exist (ordered consumers are ephemeral — skip)
+      let consumers: Map<StreamKind, ConsumerInfo> | null = null;
+
       if (durableKinds.length > 0) {
-        const consumers = await this.consumerProvider.ensureConsumers(durableKinds);
+        consumers = await this.consumerProvider.ensureConsumers(durableKinds);
 
         // 5. Populate shared ack_wait map from actual NATS consumer configs
         this.populateAckWaitMap(consumers);
 
         // 6. Update DLQ thresholds from actual NATS consumer configs
         this.eventRouter.updateMaxDeliverMap(this.buildMaxDeliverMap(consumers));
-
-        // 7. Start durable message consumption
-        this.messageProvider.start(consumers);
       }
 
-      // 8. Start ordered consumer if handlers are registered
-      if (this.patternRegistry.hasOrderedHandlers()) {
-        const orderedStreamName = this.streamProvider.getStreamName(StreamKind.Ordered);
+      // 7. Subscribe routers BEFORE consumption starts. Consumers flush any
+      // pending backlog the moment they go live, and a message pushed into a
+      // subject with no observers is dropped unsettled — for commands
+      // (max_deliver: 1) that loss is permanent.
+      await this.startRouters();
 
-        await this.messageProvider.startOrdered(
-          orderedStreamName,
-          this.patternRegistry.getOrderedSubjects(),
-          this.options.ordered,
-        );
-      }
-
-      // 9. Start event router if any event-type handlers exist
-      if (
-        this.patternRegistry.hasEventHandlers() ||
-        this.patternRegistry.hasBroadcastHandlers() ||
-        this.patternRegistry.hasOrderedHandlers()
-      ) {
-        this.eventRouter.start();
-      }
-
-      // 10. Start RPC router if JetStream mode
-      if (isJetStreamRpcMode(this.options.rpc) && this.patternRegistry.hasRpcHandlers()) {
-        await this.rpcRouter.start();
-      }
+      // 8. Start durable and ordered message consumption
+      await this.startConsumption(consumers);
     }
 
-    // 11. Start Core RPC server if core mode
+    // 9. Start Core RPC server if core mode
     if (isCoreRpcMode(this.options.rpc) && this.patternRegistry.hasRpcHandlers()) {
       await this.coreRpcServer.start();
     }
 
-    // 12. Publish handler metadata to KV (non-critical — errors logged, not thrown)
+    // 10. Publish handler metadata to KV (non-critical — errors logged, not thrown)
     if (this.metadataProvider && this.patternRegistry.hasMetadata()) {
       await this.metadataProvider.publish(this.patternRegistry.getMetadataEntries());
     }
@@ -238,7 +221,38 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     return { streams, durableConsumers };
   }
 
-  /** Populate the shared ack_wait map from actual NATS consumer configs. */
+  /** Subscribe the event and RPC routers to the message subjects. */
+  private async startRouters(): Promise<void> {
+    if (
+      this.patternRegistry.hasEventHandlers() ||
+      this.patternRegistry.hasBroadcastHandlers() ||
+      this.patternRegistry.hasOrderedHandlers()
+    ) {
+      this.eventRouter.start();
+    }
+
+    if (isJetStreamRpcMode(this.options.rpc) && this.patternRegistry.hasRpcHandlers()) {
+      await this.rpcRouter.start();
+    }
+  }
+
+  /** Begin durable and ordered consumption; routers must already be subscribed. */
+  private async startConsumption(consumers: Map<StreamKind, ConsumerInfo> | null): Promise<void> {
+    if (consumers !== null) {
+      this.messageProvider.start(consumers);
+    }
+
+    if (this.patternRegistry.hasOrderedHandlers()) {
+      const orderedStreamName = this.streamProvider.getStreamName(StreamKind.Ordered);
+
+      await this.messageProvider.startOrdered(
+        orderedStreamName,
+        this.patternRegistry.getOrderedSubjects(),
+        this.options.ordered,
+      );
+    }
+  }
+
   private populateAckWaitMap(consumers: Map<StreamKind, ConsumerInfo>): void {
     for (const [kind, info] of consumers) {
       if (info.config.ack_wait) {
