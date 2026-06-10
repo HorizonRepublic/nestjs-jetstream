@@ -160,6 +160,10 @@ export class StreamProvider {
       async () => {
         this.logger.log(`Ensuring stream: ${config.name}`);
 
+        // A leftover migration backup means a previous process died
+        // mid-migration — finish its job before reconciling the config.
+        await this.migration.recoverInterrupted(jsm, config.name, config);
+
         try {
           const currentInfo = await jsm.streams.info(config.name);
 

@@ -50,6 +50,22 @@ describe(StreamProvider, () => {
 
   afterEach(vi.resetAllMocks);
 
+  const streamNotFound = (): JetStreamApiError =>
+    new JetStreamApiError({
+      err_code: 10059,
+      code: 404,
+      description: 'stream not found',
+    });
+
+  /** Resolve `info` for real streams; report migration backups as absent. */
+  const mockStreamInfo = (info: StreamInfo): void => {
+    mockJsm.streams.info.mockImplementation(async (name: string) => {
+      if (name.endsWith('__migration_backup')) throw streamNotFound();
+
+      return info;
+    });
+  };
+
   describe('getStreamName', () => {
     describe('when kind is Event', () => {
       it('should return the correct stream name', () => {
@@ -183,7 +199,9 @@ describe(StreamProvider, () => {
   });
 
   describe('shared broadcast stream protection', () => {
-    const sharedBroadcastConfig = (overrides: Record<string, unknown> = {}) => ({
+    const sharedBroadcastConfig = (
+      overrides: Record<string, unknown> = {},
+    ): Record<string, unknown> => ({
       ...DEFAULT_BROADCAST_STREAM_CONFIG,
       name: 'broadcast-stream',
       subjects: ['broadcast.>'],
@@ -194,7 +212,7 @@ describe(StreamProvider, () => {
     it('should not strip subjects or rewrite the description set by other services', async () => {
       // Given: another service enabled broadcast scheduling, so the shared
       // stream carries an extra subject this service's config does not declare
-      mockJsm.streams.info.mockResolvedValue(
+      mockStreamInfo(
         createMock<StreamInfo>({
           config: sharedBroadcastConfig({ subjects: ['broadcast.>', 'broadcast._sch.>'] }),
         }),
@@ -214,7 +232,7 @@ describe(StreamProvider, () => {
       options.allowDestructiveMigration = true;
       sut = new StreamProvider(options, connection);
 
-      mockJsm.streams.info.mockResolvedValue(
+      mockStreamInfo(
         createMock<StreamInfo>({
           config: sharedBroadcastConfig({ storage: StorageType.Memory }),
         }),
@@ -266,7 +284,7 @@ describe(StreamProvider, () => {
           },
         });
 
-        mockJsm.streams.info.mockResolvedValue(existingInfo);
+        mockStreamInfo(existingInfo);
 
         const updated = createMock<StreamInfo>();
 
@@ -291,7 +309,7 @@ describe(StreamProvider, () => {
           max_age: 999,
         };
 
-        mockJsm.streams.info.mockResolvedValue(createMock<StreamInfo>({ config: existingConfig }));
+        mockStreamInfo(createMock<StreamInfo>({ config: existingConfig }));
         mockJsm.streams.update.mockResolvedValue(createMock<StreamInfo>());
 
         // When
@@ -313,7 +331,7 @@ describe(StreamProvider, () => {
           storage: StorageType.Memory,
         };
 
-        mockJsm.streams.info.mockResolvedValue(createMock<StreamInfo>({ config: existingConfig }));
+        mockStreamInfo(createMock<StreamInfo>({ config: existingConfig }));
 
         // When (allowDestructiveMigration is false by default)
         await sut.ensureStreams([StreamKind.Event]);
@@ -335,7 +353,7 @@ describe(StreamProvider, () => {
           max_age: 999,
         };
 
-        mockJsm.streams.info.mockResolvedValue(createMock<StreamInfo>({ config: existingConfig }));
+        mockStreamInfo(createMock<StreamInfo>({ config: existingConfig }));
         mockJsm.streams.update.mockResolvedValue(createMock<StreamInfo>());
 
         // When
@@ -362,7 +380,7 @@ describe(StreamProvider, () => {
           retention: RetentionPolicy.Limits,
         };
 
-        mockJsm.streams.info.mockResolvedValue(createMock<StreamInfo>({ config: existingConfig }));
+        mockStreamInfo(createMock<StreamInfo>({ config: existingConfig }));
 
         // When / Then
         await expect(sut.ensureStreams([StreamKind.Event])).rejects.toThrow(
@@ -466,12 +484,7 @@ describe(StreamProvider, () => {
           options = { ...options, dlq: {} };
           sut = new StreamProvider(options, connection);
 
-          // First call (event stream) returns not-found, second call (DLQ) returns info
-          const notFoundError = new JetStreamApiError({
-            err_code: 10059,
-            code: 404,
-            description: 'stream not found',
-          });
+          // Event stream is absent (gets created); the DLQ stream exists
           const existingDlqInfo = createMock<StreamInfo>({
             config: {
               ...DEFAULT_DLQ_STREAM_CONFIG,
@@ -481,9 +494,11 @@ describe(StreamProvider, () => {
             } as StreamInfo['config'],
           });
 
-          mockJsm.streams.info
-            .mockRejectedValueOnce(notFoundError) // event stream → create
-            .mockResolvedValueOnce(existingDlqInfo); // DLQ stream → exists
+          mockJsm.streams.info.mockImplementation(async (name: string) => {
+            if (name.endsWith('_dlq-stream')) return existingDlqInfo;
+
+            throw streamNotFound();
+          });
 
           mockJsm.streams.add.mockResolvedValue(createMock<StreamInfo>());
 

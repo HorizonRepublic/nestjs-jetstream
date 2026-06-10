@@ -26,8 +26,14 @@ describe(StreamMigration.name, () => {
     num_replicas: 1,
   };
 
+  /** A drained source entry as the server reports it after a full sync. */
+  const drainedSources = [
+    { name: testStreamName, lag: 0, active: 1_000 },
+    { name: backupStreamName, lag: 0, active: 1_000 },
+  ];
+
   const buildMockJsm = (messageCount: number): JetStreamManager => {
-    const mockInfo = createMock<StreamInfo>({
+    const streamInfo = createMock<StreamInfo>({
       config: {
         name: testStreamName,
         storage: StorageType.File,
@@ -36,37 +42,46 @@ describe(StreamMigration.name, () => {
         num_replicas: 1,
       } as StreamConfig,
       state: { messages: messageCount } as StreamInfo['state'],
+      sources: drainedSources,
     });
 
-    let infoCallCount = 0;
+    let backupExists = false;
 
     return createMock<JetStreamManager>({
       streams: {
         info: vi.fn().mockImplementation(async (name: string) => {
           if (name === backupStreamName) {
-            // Orphan check — not found (first call), subsequent: has messages
-            if (infoCallCount++ === 0) {
-              throw streamNotFoundError;
-            }
+            if (!backupExists) throw streamNotFoundError;
 
-            return {
-              ...mockInfo,
-              config: { ...mockInfo.config, name },
-              state: { messages: messageCount },
-            };
+            return createMock<StreamInfo>({
+              config: {
+                name: backupStreamName,
+                sources: [{ name: testStreamName }],
+              } as unknown as StreamConfig,
+              state: { messages: messageCount } as StreamInfo['state'],
+              sources: drainedSources,
+            });
           }
 
-          return mockInfo;
+          return streamInfo;
         }),
-        add: vi.fn().mockResolvedValue(mockInfo),
-        update: vi.fn().mockResolvedValue(mockInfo),
-        delete: vi.fn().mockResolvedValue(true),
+        add: vi.fn().mockImplementation(async (config: StreamConfig) => {
+          if (config.name === backupStreamName) backupExists = true;
+
+          return createMock<StreamInfo>();
+        }),
+        update: vi.fn().mockResolvedValue(createMock<StreamInfo>()),
+        delete: vi.fn().mockImplementation(async (name: string) => {
+          if (name === backupStreamName) backupExists = false;
+
+          return true;
+        }),
       },
     });
   };
 
   describe('empty stream', () => {
-    it('should delete and create without sourcing', async () => {
+    it('should quiesce, then delete and create without sourcing', async () => {
       // Given
       const sut = new StreamMigration();
       const jsm = buildMockJsm(0);
@@ -74,17 +89,21 @@ describe(StreamMigration.name, () => {
       // When
       await sut.migrate(jsm, testStreamName, newConfig);
 
-      // Then: delete + create, no backup sourcing
+      // Then: intake stopped before the count snapshot
+      const firstUpdate = vi.mocked(jsm.streams.update).mock.calls[0]!;
+
+      expect(firstUpdate[0]).toBe(testStreamName);
+      expect(firstUpdate[1]).toMatchObject({ subjects: [] });
+
+      // And: delete + create, no backup sourcing
       expect(jsm.streams.delete).toHaveBeenCalledWith(testStreamName);
       expect(jsm.streams.add).toHaveBeenCalledWith(newConfig);
-
-      // No backup stream created (only the new stream via add)
       expect(jsm.streams.add).toHaveBeenCalledTimes(1);
     });
   });
 
   describe('stream with messages', () => {
-    it('should create backup, delete, create new, restore, cleanup', async () => {
+    it('should quiesce, back up, delete, create new, restore, cleanup', async () => {
       // Given
       const sut = new StreamMigration();
       const jsm = buildMockJsm(100);
@@ -92,61 +111,69 @@ describe(StreamMigration.name, () => {
       // When
       await sut.migrate(jsm, testStreamName, newConfig);
 
-      // Then: Phase 1 — backup created with sources
+      // Then: backup created with sources and the migration metadata stamp
       const addCalls = vi.mocked(jsm.streams.add).mock.calls;
 
       expect(addCalls[0]![0]).toMatchObject({
         name: backupStreamName,
         subjects: [],
+        sources: [{ name: testStreamName }],
       });
+      expect(
+        (addCalls[0]![0] as StreamConfig).metadata?.['nestjs-jetstream-migration-started-at'],
+      ).toBeDefined();
 
-      // Phase 2 — delete original
+      // And: original deleted, new stream created
       expect(jsm.streams.delete).toHaveBeenCalledWith(testStreamName);
-
-      // Phase 3 — create new
       expect(addCalls[1]![0]).toMatchObject(newConfig);
 
-      // Phase 4 — restore via sources, then remove sources, then delete backup
-      expect(jsm.streams.update).toHaveBeenCalled();
+      // And: restored from the backup, backup removed
       expect(jsm.streams.delete).toHaveBeenCalledWith(backupStreamName);
     });
-  });
 
-  describe('orphaned backup cleanup', () => {
-    it('should delete orphaned backup before starting migration', async () => {
-      // Given: backup stream exists from previous failed migration
+    it('should clear backup sources before restore to prevent a sourcing cycle', async () => {
+      // Given
       const sut = new StreamMigration();
-      const jsm = buildMockJsm(0);
-
-      // Override: backup exists on first info call
-      vi.mocked(jsm.streams.info).mockImplementation(async (name: string) => {
-        if (name === backupStreamName) {
-          return createMock<StreamInfo>({ state: { messages: 0 } as StreamInfo['state'] });
-        }
-
-        return createMock<StreamInfo>({
-          state: { messages: 0 } as StreamInfo['state'],
-          config: { name: testStreamName } as StreamConfig,
-        });
-      });
+      const jsm = buildMockJsm(100);
 
       // When
       await sut.migrate(jsm, testStreamName, newConfig);
 
-      // Then: backup deleted before migration
-      const deleteCalls = vi.mocked(jsm.streams.delete).mock.calls.map((c) => c[0]);
+      // Then: updates ordered quiesce → clear backup sources → attach restore
+      const updateCalls = vi.mocked(jsm.streams.update).mock.calls;
 
-      expect(deleteCalls).toContain(backupStreamName);
+      expect(updateCalls[0]![0]).toBe(testStreamName);
+      expect(updateCalls[0]![1]).toMatchObject({ subjects: [] });
+
+      expect(updateCalls[1]![0]).toBe(backupStreamName);
+      expect(updateCalls[1]![1]).toMatchObject({ sources: [] });
+
+      expect(updateCalls[2]![0]).toBe(testStreamName);
+      expect(updateCalls[2]![1]).toMatchObject({ sources: [{ name: backupStreamName }] });
     });
-  });
 
-  describe('Phase 2 failure (delete original fails)', () => {
-    it('should cleanup backup and rethrow when delete original throws', async () => {
-      // Given: stream with 100 messages, backup successfully created
+    it('should delete the backup before detaching the restore source', async () => {
+      // The surviving order is what makes interrupted-restore recovery safe:
+      // "backup present with no source attached" can only mean the restore
+      // never started.
       const sut = new StreamMigration();
       const jsm = buildMockJsm(100);
 
-      // Override: delete throws on original stream name
+      await sut.migrate(jsm, testStreamName, newConfig);
+
+      const deleteBackupOrder = vi.mocked(jsm.streams.delete).mock.invocationCallOrder.at(-1)!;
+      const detachOrder = vi.mocked(jsm.streams.update).mock.invocationCallOrder.at(-1)!;
+
+      expect(deleteBackupOrder).toBeLessThan(detachOrder);
+    });
+  });
+
+  describe('failure before the original is deleted', () => {
+    it('should roll back the quiesce, drop the backup, and rethrow', async () => {
+      // Given: deleting the original fails
+      const sut = new StreamMigration();
+      const jsm = buildMockJsm(100);
+
       vi.mocked(jsm.streams.delete).mockImplementation(async (name: string) => {
         if (name !== backupStreamName) {
           throw new Error('permission denied');
@@ -155,137 +182,182 @@ describe(StreamMigration.name, () => {
         return true;
       });
 
-      // When/Then: error is rethrown
+      // When/Then
       await expect(sut.migrate(jsm, testStreamName, newConfig)).rejects.toThrow(
         'permission denied',
       );
 
-      // And: cleanup — backup delete was called
+      // And: the original's subjects were restored and the backup removed
+      const lastUpdate = vi.mocked(jsm.streams.update).mock.calls.at(-1)!;
+
+      expect(lastUpdate[0]).toBe(testStreamName);
+      expect(lastUpdate[1]).toMatchObject({ subjects: ['test.ev.>'] });
       expect(jsm.streams.delete).toHaveBeenCalledWith(backupStreamName);
     });
   });
 
-  describe('Phase 3 failure (create new stream fails)', () => {
-    it('should PRESERVE backup and rethrow (backup is the only copy after Phase 2)', async () => {
-      // Given: stream with messages, backup + delete succeed, Phase 3 fails
+  describe('failure after the original is deleted', () => {
+    it('should preserve the backup (it is the only copy) and rethrow', async () => {
+      // Given: creating the new stream fails after the delete
       const sut = new StreamMigration();
       const jsm = buildMockJsm(100);
 
       let addCallCount = 0;
+      const originalAdd = vi.mocked(jsm.streams.add).getMockImplementation()!;
 
-      // Override: second add call (new stream creation) throws
-      vi.mocked(jsm.streams.add).mockImplementation(async () => {
+      vi.mocked(jsm.streams.add).mockImplementation(async (config) => {
         addCallCount++;
+
         if (addCallCount === 2) {
           throw new Error('resource limit exceeded');
         }
 
-        return createMock<StreamInfo>();
+        return originalAdd(config);
       });
 
-      // When/Then: error is rethrown
+      // When/Then
       await expect(sut.migrate(jsm, testStreamName, newConfig)).rejects.toThrow(
         'resource limit exceeded',
       );
 
-      // And: backup NOT deleted — it's the only copy after original was deleted in Phase 2
+      // And: backup NOT deleted
       const deleteCalls = vi.mocked(jsm.streams.delete).mock.calls.map((c) => c[0]);
 
       expect(deleteCalls).not.toContain(backupStreamName);
     });
   });
 
-  describe('Phase 4 backup sources clearing', () => {
-    it('should clear backup sources before restore to prevent detected-cycle error', async () => {
-      // Given: stream with 100 messages
-      const sut = new StreamMigration();
-      const jsm = buildMockJsm(100);
-
-      // When
-      await sut.migrate(jsm, testStreamName, newConfig);
-
-      // Then: first update call clears backup sources (cycle prevention)
-      const updateCalls = vi.mocked(jsm.streams.update).mock.calls;
-      const firstUpdateName = updateCalls[0]![0];
-      const firstUpdateConfig = updateCalls[0]![1];
-
-      expect(firstUpdateName).toBe(backupStreamName);
-      expect(firstUpdateConfig).toMatchObject({ sources: [] });
-
-      // And: second update call restores with backup as source
-      const secondUpdateName = updateCalls[1]![0];
-      const secondUpdateConfig = updateCalls[1]![1];
-
-      expect(secondUpdateName).toBe(testStreamName);
-      expect(secondUpdateConfig).toMatchObject({
-        sources: [{ name: backupStreamName }],
-      });
-    });
-
-    it('should include full newConfig properties in restore update call', async () => {
-      // Given: stream with 100 messages
-      const sut = new StreamMigration();
-      const jsm = buildMockJsm(100);
-
-      // When
-      await sut.migrate(jsm, testStreamName, newConfig);
-
-      // Then: restore update passes full config AND sources
-      const updateCalls = vi.mocked(jsm.streams.update).mock.calls;
-      const restoreCall = updateCalls[1]![1];
-
-      expect(restoreCall).toMatchObject({
-        name: newConfig.name,
-        subjects: newConfig.subjects,
-        storage: newConfig.storage,
-        retention: newConfig.retention,
-        num_replicas: newConfig.num_replicas,
-        sources: [{ name: backupStreamName }],
-      });
-    });
-  });
-
   describe('sourcing timeout', () => {
-    it('should throw and cleanup backup on timeout', async () => {
-      // Given: backup never reaches expected message count
-      const sut = new StreamMigration(1_000); // 1s timeout for test speed
+    it('should roll back and rethrow when the backup never drains', async () => {
+      // Given: the backup's source entry never reports activity
+      const sut = new StreamMigration(500);
+      const jsm = buildMockJsm(100);
+      const original = vi.mocked(jsm.streams.info).getMockImplementation()!;
 
-      let backupCreated = false;
+      vi.mocked(jsm.streams.info).mockImplementation(async (name: string) => {
+        const info = (await original(name)) as StreamInfo;
 
-      const jsm = createMock<JetStreamManager>({
-        streams: {
-          info: vi.fn().mockImplementation(async (name: string) => {
-            if (name === backupStreamName && !backupCreated) {
-              throw streamNotFoundError;
-            }
+        if (name === backupStreamName) {
+          return { ...info, sources: [{ name: testStreamName, lag: 0, active: -1 }] };
+        }
 
-            if (name === backupStreamName && backupCreated) {
-              // Always returns 0 messages — simulates stuck sourcing
-              return createMock<StreamInfo>({ state: { messages: 0 } as StreamInfo['state'] });
-            }
-
-            return createMock<StreamInfo>({
-              state: { messages: 100 } as StreamInfo['state'],
-              config: { name: testStreamName } as StreamConfig,
-            });
-          }),
-          add: vi.fn().mockImplementation(async () => {
-            backupCreated = true;
-
-            return createMock<StreamInfo>();
-          }),
-          update: vi.fn().mockResolvedValue(createMock<StreamInfo>()),
-          delete: vi.fn().mockResolvedValue(true),
-        },
+        return info;
       });
 
-      // When/Then: should throw timeout error
+      // When/Then
       await expect(sut.migrate(jsm, testStreamName, newConfig)).rejects.toThrow(
         /sourcing timeout/i,
       );
 
-      // And: backup cleaned up — original stream was NOT deleted (Phase 1 timeout)
+      // And: the original was not deleted; our backup was cleaned up
+      const deleteCalls = vi.mocked(jsm.streams.delete).mock.calls.map((c) => c[0]);
+
+      expect(deleteCalls).toContain(backupStreamName);
+      expect(deleteCalls).not.toContain(testStreamName);
+    });
+  });
+
+  describe('concurrent migration protection', () => {
+    const freshBackupInfo = (): StreamInfo =>
+      createMock<StreamInfo>({
+        config: {
+          name: backupStreamName,
+          metadata: { 'nestjs-jetstream-migration-started-at': new Date().toISOString() },
+        } as unknown as StreamConfig,
+        state: { messages: 5 } as StreamInfo['state'],
+      });
+
+    it("should leave another instance's live backup alone during recovery", async () => {
+      // Given: a backup stamped moments ago — a peer is migrating right now
+      const sut = new StreamMigration(200, 200);
+      const jsm = createMock<JetStreamManager>({
+        streams: {
+          info: vi.fn().mockResolvedValue(freshBackupInfo()),
+          add: vi.fn(),
+          update: vi.fn(),
+          delete: vi.fn(),
+        },
+      });
+
+      // When
+      const recovered = await sut.recoverInterrupted(jsm, testStreamName, newConfig);
+
+      // Then: nothing was touched
+      expect(recovered).toBe(false);
+      expect(jsm.streams.delete).not.toHaveBeenCalled();
+      expect(jsm.streams.add).not.toHaveBeenCalled();
+      expect(jsm.streams.update).not.toHaveBeenCalled();
+    });
+
+    it('should wait out a peer backup in migrate() and never delete it', async () => {
+      // Given: the peer's backup never clears within the wait budget
+      const sut = new StreamMigration(200, 200);
+      const jsm = createMock<JetStreamManager>({
+        streams: {
+          info: vi.fn().mockImplementation(async (name: string) => {
+            if (name === backupStreamName) return freshBackupInfo();
+
+            return createMock<StreamInfo>();
+          }),
+          add: vi.fn(),
+          update: vi.fn(),
+          delete: vi.fn(),
+        },
+      });
+
+      // When/Then: migrate gives up loudly instead of deleting the peer's data
+      await expect(sut.migrate(jsm, testStreamName, newConfig)).rejects.toThrow(/did not clear/);
+
+      expect(jsm.streams.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('interrupted-migration recovery', () => {
+    it('should delete a stale empty backup when the stream is healthy', async () => {
+      // Given: an empty leftover backup without a freshness stamp
+      const sut = new StreamMigration();
+      const jsm = createMock<JetStreamManager>({
+        streams: {
+          info: vi.fn().mockImplementation(async (name: string) => {
+            if (name === backupStreamName) {
+              return createMock<StreamInfo>({
+                config: { name: backupStreamName } as StreamConfig,
+                state: { messages: 0 } as StreamInfo['state'],
+              });
+            }
+
+            return createMock<StreamInfo>({
+              config: { name: testStreamName } as StreamConfig,
+            });
+          }),
+          add: vi.fn(),
+          update: vi.fn(),
+          delete: vi.fn().mockResolvedValue(true),
+        },
+      });
+
+      // When
+      const recovered = await sut.recoverInterrupted(jsm, testStreamName, newConfig);
+
+      // Then
+      expect(recovered).toBe(true);
       expect(jsm.streams.delete).toHaveBeenCalledWith(backupStreamName);
+    });
+
+    it('should report no recovery when no backup exists', async () => {
+      // Given
+      const sut = new StreamMigration();
+      const jsm = createMock<JetStreamManager>({
+        streams: {
+          info: vi.fn().mockRejectedValue(streamNotFoundError),
+          add: vi.fn(),
+          update: vi.fn(),
+          delete: vi.fn(),
+        },
+      });
+
+      // When/Then
+      await expect(sut.recoverInterrupted(jsm, testStreamName, newConfig)).resolves.toBe(false);
     });
   });
 });
