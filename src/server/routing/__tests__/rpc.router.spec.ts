@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type Mocked } from 'vitest';
 import { createMock } from '@golevelup/ts-vitest';
 import { faker } from '@faker-js/faker';
 import type { MsgHdrs, NatsConnection } from '@nats-io/transport-node';
@@ -423,6 +423,76 @@ describe(RpcRouter, () => {
 
         sut.destroy();
         vi.useRealTimers();
+      });
+    });
+
+    describe('when term throws inside the timeout timer', () => {
+      it('should contain the failure instead of crashing the process', async () => {
+        vi.useFakeTimers();
+
+        // Given: a hanging handler and a term that throws (degraded connection)
+        sut = new RpcRouter(messageProvider, patternRegistry, connection, codec, eventBus, {
+          timeout: 100,
+        });
+        await sut.start();
+
+        const handler = vi.fn().mockReturnValue(new Promise(() => {}));
+
+        patternRegistry.getHandler.mockReturnValue(handler);
+
+        const correlationId = faker.string.uuid();
+        const msg = createRpcMsg('slow.cmd', {}, faker.string.uuid(), correlationId);
+
+        (msg.term as Mock).mockImplementation(() => {
+          throw new Error('connection closed');
+        });
+
+        commands$.next(msg);
+
+        // Then: the timer callback must not surface the throw as an uncaught
+        // exception, and the timeout signal still fires
+        expect(() => vi.advanceTimersByTime(100)).not.toThrow();
+        expect(eventBus.emit).toHaveBeenCalledWith(
+          TransportEvent.RpcTimeout,
+          msg.subject,
+          correlationId,
+        );
+
+        sut.destroy();
+        vi.useRealTimers();
+      });
+    });
+
+    describe('when ack throws on the sync path with bounded concurrency', () => {
+      it('should release the slot and keep processing', async () => {
+        // Given: concurrency 1, sync handler, first message's ack throws
+        sut = new RpcRouter(messageProvider, patternRegistry, connection, codec, eventBus, {
+          concurrency: 1,
+        });
+        await sut.start();
+
+        const handler = vi.fn().mockReturnValue({ ok: true });
+
+        patternRegistry.getHandler.mockReturnValue(handler);
+
+        const failing = createRpcMsg('cmd.one', {}, faker.string.uuid(), faker.string.uuid());
+
+        (failing.ack as Mock).mockImplementation(() => {
+          throw new Error('connection closed');
+        });
+
+        const healthy = createRpcMsg('cmd.two', {}, faker.string.uuid(), faker.string.uuid());
+
+        // When: both commands arrive
+        commands$.next(failing);
+        commands$.next(healthy);
+        await new Promise(process.nextTick);
+
+        // Then: the second command is still handled
+        expect(handler).toHaveBeenCalledTimes(2);
+        expect(healthy.ack).toHaveBeenCalled();
+
+        sut.destroy();
       });
     });
 

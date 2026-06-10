@@ -20,6 +20,7 @@ import type {
 import {
   isPromiseLike,
   resolveAckExtensionInterval,
+  settleQuietly,
   startAckExtensionTimer,
   unwrapResult,
 } from '../../utils';
@@ -197,7 +198,9 @@ export class EventRouter {
       data: unknown,
     ): Promise<void> | undefined => {
       if (ctx.shouldTerminate) {
-        msg.term(ctx.terminateReason);
+        settleQuietly(logger, `Failed to term ${msg.subject}:`, () => {
+          msg.term(ctx.terminateReason);
+        });
 
         return undefined;
       }
@@ -211,12 +214,16 @@ export class EventRouter {
           );
         }
 
-        msg.nak(ctx.retryDelay);
+        settleQuietly(logger, `Failed to nak ${msg.subject}:`, () => {
+          msg.nak(ctx.retryDelay);
+        });
 
         return undefined;
       }
 
-      msg.ack();
+      settleQuietly(logger, `Failed to ack ${msg.subject}:`, () => {
+        msg.ack();
+      });
 
       return undefined;
     };
@@ -228,7 +235,9 @@ export class EventRouter {
         return;
       }
 
-      msg.nak();
+      settleQuietly(logger, `Failed to nak ${msg.subject}:`, () => {
+        msg.nak();
+      });
     };
 
     /**
@@ -532,16 +541,37 @@ export class EventRouter {
       drainBacklog();
     };
 
+    // route() is not expected to throw — every settlement inside it is
+    // guarded — but a failure here must never leak the concurrency slot or
+    // escape into the RxJS observer and kill the subscription.
+    const routeSafely = (msg: JsMsg): Promise<void> | undefined => {
+      try {
+        return route(msg);
+      } catch (err) {
+        logger.error(`Unexpected routing failure for ${msg.subject}:`, err);
+
+        return undefined;
+      }
+    };
+
+    const trackAsync = (result: Promise<void>, msg: JsMsg): void => {
+      void result
+        .catch((err: unknown) => {
+          logger.error(`Unexpected routing failure for ${msg.subject}:`, err);
+        })
+        .finally(onAsyncDone);
+    };
+
     const drainBacklog = (): void => {
       while (active < maxActive) {
         const next = backlog.shift();
 
         if (next === undefined) return;
         active++;
-        const result = route(next);
+        const result = routeSafely(next);
 
         if (result !== undefined) {
-          void result.finally(onAsyncDone);
+          trackAsync(result, next);
         } else {
           active--;
         }
@@ -565,10 +595,10 @@ export class EventRouter {
         }
 
         active++;
-        const result = route(msg);
+        const result = routeSafely(msg);
 
         if (result !== undefined) {
-          void result.finally(onAsyncDone);
+          trackAsync(result, msg);
         } else {
           active--;
           if (backlog.length > 0) drainBacklog();
@@ -610,20 +640,26 @@ export class EventRouter {
       this.logger.error(
         `Dead letter for ${msg.subject} could not be captured (DLQ publish failed, no onDeadLetter callback) — leaving the message in the stream`,
       );
-      msg.nak();
+      settleQuietly(this.logger, `Failed to nak ${msg.subject}:`, () => {
+        msg.nak();
+      });
 
       return;
     }
 
     try {
       await onDeadLetter(info);
-      msg.term('Dead letter processed via fallback callback');
+      settleQuietly(this.logger, `Failed to term ${msg.subject}:`, () => {
+        msg.term('Dead letter processed via fallback callback');
+      });
     } catch (hookErr) {
       this.logger.error(
         `Fallback onDeadLetter callback failed for ${msg.subject} — the message stays in the stream and will not be redelivered (max_deliver exhausted); recover it manually:`,
         hookErr,
       );
-      msg.nak();
+      settleQuietly(this.logger, `Failed to nak ${msg.subject}:`, () => {
+        msg.nak();
+      });
     }
   }
 
@@ -735,7 +771,9 @@ export class EventRouter {
         }
       }
 
-      msg.term('Moved to DLQ stream');
+      settleQuietly(this.logger, `Failed to term ${msg.subject}:`, () => {
+        msg.term('Moved to DLQ stream');
+      });
     } catch (publishErr) {
       this.logger.error(`Failed to publish to DLQ for ${msg.subject}:`, publishErr);
       await this.fallbackToOnDeadLetterCallback(info, msg);

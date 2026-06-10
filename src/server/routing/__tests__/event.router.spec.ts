@@ -80,6 +80,83 @@ describe(EventRouter, () => {
     });
   });
 
+  describe('settlement resilience', () => {
+    const createSettleMsg = (subject: string, ackImpl?: () => void): JsMsg =>
+      createMock<JsMsg>({
+        subject,
+        data: new TextEncoder().encode(JSON.stringify({})),
+        ...(ackImpl ? { ack: vi.fn(ackImpl) } : {}),
+      });
+
+    it('should keep routing after ack throws on the sync path with bounded concurrency', async () => {
+      // Given: concurrency 1 and a sync handler; the first message's ack
+      // throws (settlement is a publish — it fails when the connection drops)
+      const processingConfig: EventProcessingConfig = { events: { concurrency: 1 } };
+
+      sut = new EventRouter(
+        messageProvider,
+        patternRegistry,
+        codec,
+        eventBus,
+        undefined,
+        processingConfig,
+      );
+      sut.start();
+
+      const handler = vi.fn().mockReturnValue(undefined);
+
+      patternRegistry.getHandler.mockReturnValue(handler);
+
+      const failing = createSettleMsg('first.subject', () => {
+        throw new Error('connection closed');
+      });
+      const healthy = createSettleMsg('second.subject');
+
+      // When: both messages arrive
+      events$.next(failing);
+      events$.next(healthy);
+      await new Promise(process.nextTick);
+
+      // Then: the slot was released and the second message processed normally
+      expect(handler).toHaveBeenCalledTimes(2);
+      expect(healthy.ack).toHaveBeenCalled();
+    });
+
+    it('should free the concurrency slot when settlement fails on the async path', async () => {
+      // Given: concurrency 1 and an async handler; the first message's ack throws
+      const processingConfig: EventProcessingConfig = { events: { concurrency: 1 } };
+
+      sut = new EventRouter(
+        messageProvider,
+        patternRegistry,
+        codec,
+        eventBus,
+        undefined,
+        processingConfig,
+      );
+      sut.start();
+
+      const handler = vi.fn().mockResolvedValue(undefined);
+
+      patternRegistry.getHandler.mockReturnValue(handler);
+
+      const failing = createSettleMsg('first.subject', () => {
+        throw new Error('connection closed');
+      });
+      const healthy = createSettleMsg('second.subject');
+
+      // When: both messages arrive
+      events$.next(failing);
+      events$.next(healthy);
+      await new Promise(process.nextTick);
+      await new Promise(process.nextTick);
+
+      // Then: no unhandled rejection escapes and the second message is processed
+      expect(handler).toHaveBeenCalledTimes(2);
+      expect(healthy.ack).toHaveBeenCalled();
+    });
+  });
+
   describe('message handling', () => {
     beforeEach(() => {
       sut.start();
