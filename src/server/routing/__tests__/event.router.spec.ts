@@ -930,6 +930,65 @@ describe(EventRouter, () => {
           expect(msg.term).toHaveBeenCalledWith('Moved to DLQ stream');
         });
 
+        it('should strip NATS control headers from the DLQ republish', async () => {
+          // Given: a message that carries server control headers from the
+          // original publish (per-message TTL, dedup id)
+          const options: JetstreamModuleOptions = {
+            name: 'my-service',
+            servers: ['nats://localhost:4222'],
+            dlq: {},
+          };
+
+          sut = new EventRouter(
+            messageProvider,
+            patternRegistry,
+            codec,
+            eventBus,
+            deadLetterConfig,
+            undefined,
+            undefined,
+            connection,
+            options,
+          );
+          sut.start();
+
+          const handler = vi.fn().mockRejectedValue(new Error('handler error'));
+
+          patternRegistry.getHandler.mockReturnValue(handler);
+
+          const mockHeaders = new Map([
+            ['Nats-TTL', ['30s']],
+            ['Nats-Msg-Id', ['original-id']],
+            ['X-Trace-Id', ['abc123']],
+          ]);
+          const msg = createMock<JsMsg>({
+            subject: 'test.subject',
+            data: new TextEncoder().encode(JSON.stringify({ key: 'value' })),
+            headers: mockHeaders as unknown as JsMsg['headers'],
+            info: {
+              deliveryCount: 3,
+              stream: streamName,
+              streamSequence: 42,
+              redelivered: true,
+              timestampNanos: Date.now() * 1_000_000,
+            } as DeliveryInfo,
+          });
+
+          // When: dead-letter message arrives
+          events$.next(msg);
+          await new Promise(process.nextTick);
+
+          // Then: control headers are gone (a copied Nats-TTL would expire the
+          // DLQ entry or get the publish rejected), diagnostics are preserved
+          const publishCall = mockJs.publish.mock.calls[0]!;
+          const dlqHeaders = publishCall[2].headers;
+
+          expect(dlqHeaders.get('Nats-TTL')).toBe('');
+          expect(dlqHeaders.get('Nats-Msg-Id')).toBe('');
+          expect(dlqHeaders.get('X-Trace-Id')).toBe('abc123');
+          expect(msg.term).toHaveBeenCalledWith('Moved to DLQ stream');
+        });
+
         it('should use error.message as reason for Error instances', async () => {
           // Given: handler throws a proper Error
           const options: JetstreamModuleOptions = {

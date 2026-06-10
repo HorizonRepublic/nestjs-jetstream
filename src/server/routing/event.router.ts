@@ -26,7 +26,11 @@ import {
 
 import { MessageProvider } from '../infrastructure';
 import { PatternRegistry } from './pattern-registry';
-import { dlqStreamName, JetstreamDlqHeader } from '../../jetstream.constants';
+import {
+  dlqStreamName,
+  JetstreamDlqHeader,
+  NATS_CONTROL_HEADER_PREFIX,
+} from '../../jetstream.constants';
 import {
   ConsumeKind,
   deriveOtelAttrs,
@@ -624,6 +628,28 @@ export class EventRouter {
   }
 
   /**
+   * Copy the original message headers for the DLQ republish, dropping NATS
+   * server control headers: a copied Nats-TTL expires the DLQ entry (or gets
+   * the publish rejected when the DLQ stream has no allow_msg_ttl), a copied
+   * Nats-Msg-Id collides with the DLQ dedup window.
+   */
+  private buildDlqHeaders(msg: JsMsg): MsgHdrs {
+    const hdrs = natsHeaders();
+
+    if (!msg.headers) return hdrs;
+
+    for (const [k, v] of msg.headers) {
+      if (k.toLowerCase().startsWith(NATS_CONTROL_HEADER_PREFIX)) continue;
+
+      for (const val of v) {
+        hdrs.append(k, val);
+      }
+    }
+
+    return hdrs;
+  }
+
+  /**
    * Attempt the DLQ publish up to {@link DLQ_PUBLISH_ATTEMPTS} times.
    *
    * Past `max_deliver` the server never redelivers, so an in-process retry is
@@ -678,15 +704,7 @@ export class EventRouter {
     }
 
     const destinationSubject = dlqStreamName(serviceName);
-    const hdrs = natsHeaders();
-
-    if (msg.headers) {
-      for (const [k, v] of msg.headers) {
-        for (const val of v) {
-          hdrs.append(k, val);
-        }
-      }
-    }
+    const hdrs = this.buildDlqHeaders(msg);
 
     let reason = String(error);
 
