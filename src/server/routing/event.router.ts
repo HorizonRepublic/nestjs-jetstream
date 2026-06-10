@@ -177,10 +177,37 @@ export class EventRouter {
           this.handleDeadLetter(msg, data, err)
       : null;
 
-    const settleSuccess = (msg: JsMsg, ctx: RpcContext): void => {
-      if (ctx.shouldTerminate) msg.term(ctx.terminateReason);
-      else if (ctx.shouldRetry) msg.nak(ctx.retryDelay);
-      else msg.ack();
+    /**
+     * Settle a message whose handler completed without throwing.
+     *
+     * Returns a Promise only when a `retry()` on the final permitted delivery
+     * escalates to dead-letter handling — a nak at that point would strand the
+     * message, since the server never redelivers past `max_deliver`.
+     */
+    const settleSuccess = (msg: JsMsg, ctx: RpcContext, data: unknown): Promise<void> | undefined => {
+      if (ctx.shouldTerminate) {
+        msg.term(ctx.terminateReason);
+
+        return undefined;
+      }
+
+      if (ctx.shouldRetry) {
+        if (handleDeadLetter !== null && isDeadLetter(msg)) {
+          return handleDeadLetter(
+            msg,
+            data,
+            new Error('Retry requested on the final delivery attempt'),
+          );
+        }
+
+        msg.nak(ctx.retryDelay);
+
+        return undefined;
+      }
+
+      msg.ack();
+
+      return undefined;
     };
 
     const settleFailure = async (msg: JsMsg, data: unknown, err: unknown): Promise<void> => {
@@ -309,18 +336,31 @@ export class EventRouter {
       }
 
       if (!isPromiseLike(pending)) {
-        settleSuccess(msg, ctx);
-        reportHandlerCompleted(msg, startedAt, statusForContext(ctx));
-        if (stopAckExtension !== null) stopAckExtension();
+        const settled = settleSuccess(msg, ctx, data);
 
-        return undefined;
+        reportHandlerCompleted(msg, startedAt, statusForContext(ctx));
+
+        if (settled === undefined) {
+          if (stopAckExtension !== null) stopAckExtension();
+
+          return undefined;
+        }
+
+        // Same ack-extension reasoning as the failure path: the dead-letter
+        // publish may outlast ack_wait.
+        return settled.finally(() => {
+          if (stopAckExtension !== null) stopAckExtension();
+        });
       }
 
       return (pending as Promise<unknown>).then(
-        () => {
-          settleSuccess(msg, ctx);
-          reportHandlerCompleted(msg, startedAt, statusForContext(ctx));
-          if (stopAckExtension !== null) stopAckExtension();
+        async () => {
+          try {
+            await settleSuccess(msg, ctx, data);
+            reportHandlerCompleted(msg, startedAt, statusForContext(ctx));
+          } finally {
+            if (stopAckExtension !== null) stopAckExtension();
+          }
         },
         async (err: unknown) => {
           eventBus.emit(
