@@ -585,7 +585,7 @@ describe(StreamProvider, () => {
       });
 
       mockJsm.getAccountInfo = getAccountInfo;
-      mockJsm.streams.info.mockResolvedValue({
+      mockStreamInfo({
         config: { ...DEFAULT_EVENT_STREAM_CONFIG, name: sut.getStreamName(StreamKind.Event) },
       } as never);
 
