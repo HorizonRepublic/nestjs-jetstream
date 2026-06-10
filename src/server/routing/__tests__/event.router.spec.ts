@@ -1069,6 +1069,47 @@ describe(EventRouter, () => {
       });
 
       describe('when options.dlq is set — publish fails', () => {
+        it('should retry the DLQ publish before falling back', async () => {
+          // Given: DLQ publish fails once, then succeeds
+          const options: JetstreamModuleOptions = {
+            name: 'my-service',
+            servers: ['nats://localhost:4222'],
+            dlq: {},
+          };
+
+          mockJs.publish
+            .mockRejectedValueOnce(new Error('transient NATS hiccup'))
+            .mockResolvedValue(undefined);
+
+          sut = new EventRouter(
+            messageProvider,
+            patternRegistry,
+            codec,
+            eventBus,
+            deadLetterConfig,
+            undefined,
+            undefined,
+            connection,
+            options,
+          );
+          sut.start();
+
+          const handler = vi.fn().mockRejectedValue(new Error('handler error'));
+
+          patternRegistry.getHandler.mockReturnValue(handler);
+
+          const msg = createDeadLetterMsg();
+
+          // When: dead-letter message arrives
+          events$.next(msg);
+          await new Promise(process.nextTick);
+
+          // Then: second attempt landed the message in the DLQ — no fallback path
+          expect(mockJs.publish).toHaveBeenCalledTimes(2);
+          expect(msg.term).toHaveBeenCalledWith('Moved to DLQ stream');
+          expect(msg.nak).not.toHaveBeenCalled();
+        });
+
         it('should fall back to onDeadLetter callback and nak when DLQ publish throws', async () => {
           // Given: DLQ publish fails
           const options: JetstreamModuleOptions = {

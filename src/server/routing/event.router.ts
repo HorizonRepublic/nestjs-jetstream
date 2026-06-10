@@ -7,7 +7,7 @@ import { RpcContext } from '../../context';
 import { EventBus } from '../../hooks';
 import { MessageKind, StreamKind, TransportEvent } from '../../interfaces';
 import { ConnectionProvider } from '../../connection';
-import { headers as natsHeaders } from '@nats-io/transport-node';
+import { headers as natsHeaders, type MsgHdrs } from '@nats-io/transport-node';
 
 import type {
   Codec,
@@ -39,6 +39,9 @@ import {
 
 /** Narrow consume-kind tag emitted by the event router (no `Rpc` here). */
 type EventConsumeKind = Exclude<ConsumeKind, ConsumeKind.Rpc>;
+
+/** How many times a dead letter is published to the DLQ stream before falling back. */
+const DLQ_PUBLISH_ATTEMPTS = 3;
 
 /**
  * Resolved routing shape for one incoming event/broadcast/ordered message —
@@ -542,9 +545,10 @@ export class EventRouter {
 
   /**
    * Last-resort path for a dead letter: invoke `onDeadLetter`, then `term` on
-   * success or `nak` on hook failure so NATS retries on the next delivery
-   * cycle. Used when DLQ stream isn't configured, or when publishing to it
-   * failed and we still have to surface the message somewhere observable.
+   * success. On failure the message is nak'd to release it, but the server
+   * never redelivers past `max_deliver` — it stays in the stream for manual
+   * recovery. Used when the DLQ stream isn't configured, or when publishing
+   * to it failed and we still have to surface the message somewhere.
    */
   private async fallbackToOnDeadLetterCallback(info: DeadLetterInfo, msg: JsMsg): Promise<void> {
     const onDeadLetter = this.deadLetterConfig?.onDeadLetter;
@@ -565,11 +569,46 @@ export class EventRouter {
       msg.term('Dead letter processed via fallback callback');
     } catch (hookErr) {
       this.logger.error(
-        `Fallback onDeadLetter callback failed for ${msg.subject}, nak for retry:`,
+        `Fallback onDeadLetter callback failed for ${msg.subject} — the message stays in the stream and will not be redelivered (max_deliver exhausted); recover it manually:`,
         hookErr,
       );
       msg.nak();
     }
+  }
+
+  /**
+   * Attempt the DLQ publish up to {@link DLQ_PUBLISH_ATTEMPTS} times.
+   *
+   * Past `max_deliver` the server never redelivers, so an in-process retry is
+   * the only second chance a dead letter gets. There is no artificial delay
+   * between attempts: when the broker is unreachable each publish already
+   * spends its own request timeout, which spaces the attempts naturally.
+   */
+  private async publishToDlqWithRetry(
+    connection: ConnectionProvider,
+    subject: string,
+    data: Uint8Array,
+    headers: MsgHdrs,
+  ): Promise<void> {
+    let lastErr: unknown;
+
+    for (let attempt = 1; attempt <= DLQ_PUBLISH_ATTEMPTS; attempt += 1) {
+      try {
+        await connection.getJetStreamClient().publish(subject, data, { headers });
+
+        return;
+      } catch (err) {
+        lastErr = err;
+
+        if (attempt < DLQ_PUBLISH_ATTEMPTS) {
+          this.logger.warn(
+            `DLQ publish attempt ${attempt}/${DLQ_PUBLISH_ATTEMPTS} failed for ${subject}, retrying`,
+          );
+        }
+      }
+    }
+
+    throw lastErr;
   }
 
   /**
@@ -617,9 +656,7 @@ export class EventRouter {
     hdrs.set(JetstreamDlqHeader.DeliveryCount, msg.info.deliveryCount.toString());
 
     try {
-      const js = this.connection.getJetStreamClient();
-
-      await js.publish(destinationSubject, msg.data, { headers: hdrs });
+      await this.publishToDlqWithRetry(this.connection, destinationSubject, msg.data, hdrs);
       this.logger.log(`Message sent to DLQ: ${msg.subject}`);
 
       if (this.deadLetterConfig?.onDeadLetter) {
