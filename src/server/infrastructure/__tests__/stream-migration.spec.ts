@@ -312,7 +312,148 @@ describe(StreamMigration.name, () => {
     });
   });
 
+  describe('peer migration completed while waiting', () => {
+    it('should apply the config without recreating when the peer result is compatible', async () => {
+      // Given: the peer's backup clears on the second poll, and the stream it
+      // left behind already matches the desired immutable properties
+      const sut = new StreamMigration(200, 2_000);
+
+      let backupPolls = 0;
+
+      const jsm = createMock<JetStreamManager>({
+        streams: {
+          info: vi.fn().mockImplementation(async (name: string) => {
+            if (name === backupStreamName) {
+              backupPolls++;
+
+              if (backupPolls > 1) throw streamNotFoundError;
+
+              return createMock<StreamInfo>({
+                config: { name: backupStreamName } as StreamConfig,
+              });
+            }
+
+            return createMock<StreamInfo>({
+              config: { ...newConfig } as StreamConfig,
+            });
+          }),
+          add: vi.fn(),
+          update: vi.fn().mockResolvedValue(createMock<StreamInfo>()),
+          delete: vi.fn(),
+        },
+      });
+
+      // When
+      await sut.migrate(jsm, testStreamName, newConfig);
+
+      // Then: mutable reconciliation only — nothing recreated
+      expect(jsm.streams.update).toHaveBeenCalledWith(testStreamName, newConfig);
+      expect(jsm.streams.add).not.toHaveBeenCalled();
+      expect(jsm.streams.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('rollback failure', () => {
+    it('should propagate the original error when the rollback itself fails', async () => {
+      // Given: deleting the original fails AND the quiesce rollback fails too
+      const sut = new StreamMigration();
+      const jsm = buildMockJsm(100);
+
+      vi.mocked(jsm.streams.delete).mockRejectedValue(new Error('permission denied'));
+      vi.mocked(jsm.streams.update).mockImplementation(async () => {
+        // The first update is the quiesce; subsequent ones include the rollback
+        if (vi.mocked(jsm.streams.update).mock.calls.length > 1) {
+          throw new Error('connection lost');
+        }
+
+        return createMock<StreamInfo>();
+      });
+
+      // When/Then: the caller sees the migration failure, not the rollback one
+      await expect(sut.migrate(jsm, testStreamName, newConfig)).rejects.toThrow(
+        'permission denied',
+      );
+    });
+  });
+
   describe('interrupted-migration recovery', () => {
+    it('should recreate the stream and drop an empty backup after a delete/create crash', async () => {
+      // Given: only an empty stale backup exists — the original was deleted
+      // and held no messages when the process died
+      const sut = new StreamMigration();
+      const jsm = createMock<JetStreamManager>({
+        streams: {
+          info: vi.fn().mockImplementation(async (name: string) => {
+            if (name === backupStreamName) {
+              return createMock<StreamInfo>({
+                config: { name: backupStreamName } as StreamConfig,
+                state: { messages: 0 } as StreamInfo['state'],
+              });
+            }
+
+            throw streamNotFoundError;
+          }),
+          add: vi.fn().mockResolvedValue(createMock<StreamInfo>()),
+          update: vi.fn(),
+          delete: vi.fn().mockResolvedValue(true),
+        },
+      });
+
+      // When
+      const recovered = await sut.recoverInterrupted(jsm, testStreamName, newConfig);
+
+      // Then: stream recreated, backup removed, no restore wiring
+      expect(recovered).toBe(true);
+      expect(jsm.streams.add).toHaveBeenCalledWith(newConfig);
+      expect(jsm.streams.delete).toHaveBeenCalledWith(backupStreamName);
+      expect(jsm.streams.update).not.toHaveBeenCalled();
+    });
+
+    it('should finish a restore whose source is still attached', async () => {
+      // Given: the stream still sources from the backup — the process died
+      // mid-restore and the server kept the source position
+      const sut = new StreamMigration();
+      const jsm = createMock<JetStreamManager>({
+        streams: {
+          info: vi.fn().mockImplementation(async (name: string) => {
+            if (name === backupStreamName) {
+              return createMock<StreamInfo>({
+                config: { name: backupStreamName } as StreamConfig,
+                state: { messages: 5 } as StreamInfo['state'],
+              });
+            }
+
+            return createMock<StreamInfo>({
+              config: {
+                name: testStreamName,
+                sources: [{ name: backupStreamName }],
+              } as unknown as StreamConfig,
+              state: { messages: 5 } as StreamInfo['state'],
+              sources: [{ name: backupStreamName, lag: 0, active: 1_000 }],
+            });
+          }),
+          add: vi.fn(),
+          update: vi.fn().mockResolvedValue(createMock<StreamInfo>()),
+          delete: vi.fn().mockResolvedValue(true),
+        },
+      });
+
+      // When
+      const recovered = await sut.recoverInterrupted(jsm, testStreamName, newConfig);
+
+      // Then: drained, backup removed, source detached — in that order
+      expect(recovered).toBe(true);
+      expect(jsm.streams.delete).toHaveBeenCalledWith(backupStreamName);
+
+      const detachCall = vi.mocked(jsm.streams.update).mock.calls.at(-1)!;
+
+      expect(detachCall[0]).toBe(testStreamName);
+      expect(detachCall[1]).toMatchObject({ sources: [] });
+      expect(vi.mocked(jsm.streams.delete).mock.invocationCallOrder[0]!).toBeLessThan(
+        vi.mocked(jsm.streams.update).mock.invocationCallOrder.at(-1)!,
+      );
+    });
+
     it('should delete a stale empty backup when the stream is healthy', async () => {
       // Given: an empty leftover backup without a freshness stamp
       const sut = new StreamMigration();
