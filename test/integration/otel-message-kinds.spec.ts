@@ -183,7 +183,7 @@ describe('OTel message-kind attributes integration — broadcast, ordered, sched
       expect(publish).toBeDefined();
       expect(publish!.attributes['jetstream.schedule.target']).toMatch(/orders\.scheduled$/u);
       expect(publish!.attributes['messaging.destination.name']).toMatch(
-        /_sch\..*orders\.scheduled$/u,
+        /_sch\..*orders\.scheduled\.[A-Za-z0-9]+$/u,
       );
 
       // Consumer span sees the original subject after the broker redelivers

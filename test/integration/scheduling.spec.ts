@@ -3,10 +3,18 @@ import { Controller, INestApplication } from '@nestjs/common';
 import { ClientProxy, Ctx, EventPattern, Payload } from '@nestjs/microservices';
 import { TestingModule } from '@nestjs/testing';
 import type { NatsConnection } from '@nats-io/transport-node';
+import { jetstreamManager } from '@nats-io/jetstream';
 import { firstValueFrom } from 'rxjs';
 import type { StartedTestContainer } from 'testcontainers';
 
-import { getClientToken, JetstreamRecordBuilder, RpcContext } from '../../src';
+import {
+  getClientToken,
+  internalName,
+  JetstreamRecordBuilder,
+  RpcContext,
+  StreamKind,
+  streamName,
+} from '../../src';
 
 import {
   cleanupStreams,
@@ -281,8 +289,6 @@ describe('Message Scheduling (Delayed Jobs)', () => {
 
     it('should deliver all scheduled messages on different subjects', async () => {
       // Given: three messages scheduled at staggered delays on different subjects
-      // (NATS scheduling replaces previous schedule per _sch subject, so each
-      //  message uses a distinct event pattern to avoid replacement)
       const now = Date.now();
 
       const recordA = new JetstreamRecordBuilder({ orderId: 1 })
@@ -314,6 +320,93 @@ describe('Message Scheduling (Delayed Jobs)', () => {
       expect(receivedOrderIds).toContain(1);
       expect(receivedOrderIds).toContain(2);
       expect(receivedOrderIds).toContain(3);
+    });
+  });
+
+  describe('concurrent schedules of the same pattern', () => {
+    let app: INestApplication;
+    let module: TestingModule;
+    let client: ClientProxy;
+    let serviceName: string;
+    let controller: ScheduledEventController;
+
+    beforeEach(async () => {
+      serviceName = uniqueServiceName();
+
+      ({ app, module } = await createTestApp(
+        {
+          name: serviceName,
+          port,
+          events: {
+            stream: { allow_msg_schedules: true },
+          },
+        },
+        [ScheduledEventController],
+        [serviceName],
+      ));
+
+      client = module.get<ClientProxy>(getClientToken(serviceName));
+      controller = module.get(ScheduledEventController);
+    });
+
+    afterEach(async () => {
+      await app.close();
+      await cleanupStreams(nc, serviceName);
+    });
+
+    it('should deliver every pending schedule of the same pattern instead of replacing it', async () => {
+      // Given: three messages scheduled on the SAME pattern while earlier ones are pending.
+      // ADR-51 rollup semantics allow one active schedule per subject, so the schedule
+      // subject must be unique per message — otherwise only the last schedule survives.
+      const now = Date.now();
+
+      const records = [1, 2, 3].map((orderId) =>
+        new JetstreamRecordBuilder({ orderId }).scheduleAt(new Date(now + 2_000)).build(),
+      );
+
+      // When: emit all three before the first one fires
+      for (const record of records) {
+        await firstValueFrom(client.emit('order.reminder', record));
+      }
+
+      // Then: all three arrive
+      await waitForCondition(() => controller.received.length >= 3, 15_000);
+
+      const receivedOrderIds = controller.received.map((r) => (r as { orderId: number }).orderId);
+
+      expect(receivedOrderIds.toSorted((a, b) => a - b)).toEqual([1, 2, 3]);
+    });
+
+    it('should purge fired schedule messages so unique subjects do not accumulate', async () => {
+      // Given: two messages scheduled on the same pattern
+      const now = Date.now();
+
+      const records = [1, 2].map((orderId) =>
+        new JetstreamRecordBuilder({ orderId }).scheduleAt(new Date(now + 1_000)).build(),
+      );
+
+      for (const record of records) {
+        await firstValueFrom(client.emit('order.reminder', record));
+      }
+
+      // When: both schedules fire and are delivered
+      await waitForCondition(() => controller.received.length >= 2, 15_000);
+
+      // Then: the server self-purges one-shot @at schedule holders after firing,
+      // so per-message unique _sch subjects leave no residue in the workqueue stream
+      const jsm = await jetstreamManager(nc);
+      const stream = streamName(serviceName, StreamKind.Event);
+      const scheduleFilter = `${internalName(serviceName)}._sch.>`;
+
+      const countScheduleMessages = async (): Promise<number> => {
+        const info = await jsm.streams.info(stream, { subjects_filter: scheduleFilter });
+
+        return Object.values(info.state.subjects ?? {}).reduce((sum, n) => sum + n, 0);
+      };
+
+      await waitForCondition(async () => (await countScheduleMessages()) === 0, 10_000);
+
+      expect(await countScheduleMessages()).toBe(0);
     });
   });
 

@@ -314,12 +314,15 @@ describe(JetstreamClient, () => {
         // When: event emitted with schedule
         await firstValueFrom(sut.emit('order.reminder', record));
 
-        // Then: published to _sch namespace (not matched by consumer)
-        const expectedScheduleSubject = `${targetName}__microservice._sch.order.reminder`;
+        // Then: published to _sch namespace (not matched by consumer) with a
+        // per-message unique suffix — ADR-51 allows one active schedule per subject
+        const expectedScheduleSubject = new RegExp(
+          `^${targetName}__microservice\\._sch\\.order\\.reminder\\.[A-Za-z0-9]+$`,
+        );
         const expectedEventSubject = `${targetName}__microservice.ev.order.reminder`;
 
         expect(mockJs.publish).toHaveBeenCalledWith(
-          expectedScheduleSubject,
+          expect.stringMatching(expectedScheduleSubject),
           codec.encode(data),
           expect.objectContaining({
             schedule: {
@@ -339,12 +342,12 @@ describe(JetstreamClient, () => {
         // When: broadcast event emitted with schedule
         await firstValueFrom(sut.emit('broadcast:config.updated', record));
 
-        // Then: published to broadcast._sch namespace
-        const expectedScheduleSubject = 'broadcast._sch.config.updated';
+        // Then: published to broadcast._sch namespace with a unique suffix
+        const expectedScheduleSubject = /^broadcast\._sch\.config\.updated\.[A-Za-z0-9]+$/;
         const expectedBroadcastTarget = 'broadcast.config.updated';
 
         expect(mockJs.publish).toHaveBeenCalledWith(
-          expectedScheduleSubject,
+          expect.stringMatching(expectedScheduleSubject),
           codec.encode(data),
           expect.objectContaining({
             schedule: {
@@ -364,12 +367,14 @@ describe(JetstreamClient, () => {
         // When: ordered event emitted with schedule
         await firstValueFrom(sut.emit('ordered:order.status', record));
 
-        // Then: published to _sch namespace with ordered target
-        const expectedScheduleSubject = `${targetName}__microservice._sch.order.status`;
+        // Then: published to _sch namespace with ordered target and a unique suffix
+        const expectedScheduleSubject = new RegExp(
+          `^${targetName}__microservice\\._sch\\.order\\.status\\.[A-Za-z0-9]+$`,
+        );
         const expectedOrderedTarget = `${targetName}__microservice.ordered.order.status`;
 
         expect(mockJs.publish).toHaveBeenCalledWith(
-          expectedScheduleSubject,
+          expect.stringMatching(expectedScheduleSubject),
           codec.encode(data),
           expect.objectContaining({
             schedule: {
@@ -378,6 +383,23 @@ describe(JetstreamClient, () => {
             },
           }),
         );
+      });
+
+      it('should use a distinct schedule subject for each message of the same pattern', async () => {
+        // Given: two records scheduled on the same pattern
+        const futureDate = new Date(Date.now() + 60_000);
+        const recordA = new JetstreamRecordBuilder({ orderId: 1 }).scheduleAt(futureDate).build();
+        const recordB = new JetstreamRecordBuilder({ orderId: 2 }).scheduleAt(futureDate).build();
+
+        // When: both emitted while the first schedule would still be pending
+        await firstValueFrom(sut.emit('order.reminder', recordA));
+        await firstValueFrom(sut.emit('order.reminder', recordB));
+
+        // Then: each publish used its own schedule subject (no rollup replacement)
+        const subjects = mockJs.publish.mock.calls.map((call) => call[0]);
+
+        expect(subjects).toHaveLength(2);
+        expect(subjects[0]).not.toBe(subjects[1]);
       });
 
       it('should NOT include schedule in publish options when not set', async () => {

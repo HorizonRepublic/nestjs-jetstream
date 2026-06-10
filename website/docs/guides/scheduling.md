@@ -8,7 +8,7 @@ schema:
   headline: "How to schedule delayed messages with NestJS JetStream"
   description: "One-shot delayed message delivery via the Nats-Schedule header (NATS 2.12, ADR-51)."
   datePublished: "2026-04-01"
-  dateModified: "2026-05-27"
+  dateModified: "2026-06-10"
 ---
 
 import Since from '@site/src/components/Since';
@@ -70,15 +70,15 @@ handleReminder(@Payload() data: OrderReminder) {
 ## How it works
 
 1. `scheduleAt(date)` stores the delivery time in the record
-2. On publish, the library routes to a `_sch` subject within the event stream (a library convention to separate scheduled messages from regular events)
-3. The publish includes `Nats-Schedule` and `Nats-Schedule-Target` headers ([ADR-51](https://github.com/nats-io/nats-architecture-and-design/blob/main/adr/ADR-51.md)) — the server uses these headers, not the subject, to manage scheduling
-4. NATS holds the message until the scheduled time, then publishes a **new message** to the target event subject
+2. On publish, the library routes to a per-message unique `_sch` subject within the event stream (a library convention to separate scheduled messages from regular events). The unique suffix matters: the server stores schedules as rollup messages — one active schedule per subject ([ADR-51](https://github.com/nats-io/nats-architecture-and-design/blob/main/adr/ADR-51.md)) — so a shared subject would silently replace a pending schedule on every publish
+3. The publish includes `Nats-Schedule` and `Nats-Schedule-Target` headers (ADR-51) — the server uses these headers, not the subject, to manage scheduling
+4. NATS holds the message until the scheduled time, then publishes a **new message** to the target event subject and purges the fired schedule holder, so unique `_sch` subjects do not accumulate
 5. The event consumer processes it normally
 
 ```mermaid
 flowchart LR
     subgraph stream["Event stream"]
-        sch["{svc}._sch.order.reminder"]
+        sch["{svc}._sch.order.reminder.&lt;id&gt;"]
         ev["{svc}.ev.order.reminder"]
     end
 

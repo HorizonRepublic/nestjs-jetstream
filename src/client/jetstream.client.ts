@@ -781,13 +781,17 @@ export class JetstreamClient extends ClientProxy {
    * uses a separate `_sch` namespace that is NOT matched by any consumer filter.
    * NATS holds the message and publishes it to the target subject after the delay.
    *
+   * A unique per-message suffix is appended because the server stores schedules
+   * as rollup messages — one active schedule per subject (ADR-51). Without it,
+   * concurrent schedules of the same pattern would silently replace each other.
+   *
    * Examples:
-   * - `{svc}__microservice.ev.order.reminder` → `{svc}__microservice._sch.order.reminder`
-   * - `broadcast.config.updated` → `broadcast._sch.config.updated`
+   * - `{svc}__microservice.ev.order.reminder` → `{svc}__microservice._sch.order.reminder.<nuid>`
+   * - `broadcast.config.updated` → `broadcast._sch.config.updated.<nuid>`
    */
   private buildScheduleSubject(eventSubject: string): string {
     if (eventSubject.startsWith('broadcast.')) {
-      return eventSubject.replace('broadcast.', 'broadcast._sch.');
+      return `${eventSubject.replace('broadcast.', 'broadcast._sch.')}.${nuid.next()}`;
     }
 
     // For event/ordered subjects: {svc}__microservice.{kind}.{pattern}
@@ -808,6 +812,6 @@ export class JetstreamClient extends ClientProxy {
 
     const pattern = withoutPrefix.slice(dotIndex + 1);
 
-    return `${targetPrefix}_sch.${pattern}`;
+    return `${targetPrefix}_sch.${pattern}.${nuid.next()}`;
   }
 }
