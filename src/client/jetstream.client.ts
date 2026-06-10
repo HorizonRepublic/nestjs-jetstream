@@ -275,15 +275,18 @@ export class JetstreamClient extends ClientProxy {
           };
 
           if (schedule) {
+            // ttl belongs to the delivered message (Nats-Schedule-TTL). As a
+            // top-level option it would become Nats-TTL on the schedule holder
+            // and cancel the schedule once it elapses.
             const ack = await this.connection
               .getJetStreamClient()
               .publish(publishSubject, encoded, {
                 headers: msgHeaders,
                 msgID: effectiveMsgId,
-                ttl,
                 schedule: {
                   specification: schedule.at,
                   target: eventSubject,
+                  ttl,
                 },
               });
 

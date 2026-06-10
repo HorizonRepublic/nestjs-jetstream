@@ -385,6 +385,29 @@ describe(JetstreamClient, () => {
         );
       });
 
+      it('should apply ttl to the delivered message, not the schedule holder', async () => {
+        // Given: a scheduled record with a per-message TTL
+        const data = { orderId: faker.number.int() };
+        const futureDate = new Date(Date.now() + 60_000);
+        const record = new JetstreamRecordBuilder(data)
+          .scheduleAt(futureDate)
+          .ttl(30 * 1_000_000_000)
+          .build();
+
+        // When: event emitted with schedule + ttl
+        await firstValueFrom(sut.emit('order.reminder', record));
+
+        // Then: ttl rides on the schedule (Nats-Schedule-TTL) — a top-level ttl
+        // would become Nats-TTL on the holder and cancel the schedule on expiry
+        const publishOpts = mockJs.publish.mock.calls[0]![2]!;
+
+        expect(publishOpts.ttl).toBeUndefined();
+        expect(publishOpts.schedule).toMatchObject({
+          specification: futureDate,
+          ttl: '30s',
+        });
+      });
+
       it('should use a distinct schedule subject for each message of the same pattern', async () => {
         // Given: two records scheduled on the same pattern
         const futureDate = new Date(Date.now() + 60_000);
