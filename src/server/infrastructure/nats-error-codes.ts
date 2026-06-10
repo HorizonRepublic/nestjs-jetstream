@@ -2,7 +2,7 @@
  * NATS JetStream API error codes used by the transport.
  *
  * Ref: https://github.com/nats-io/nats-server (server error definitions)
- * Verified on NATS 2.12.6 via integration tests (2026-04-02).
+ * Codes verified across NATS 2.12.6–2.14.1 via integration tests (original codes: 2026-04-02).
  */
 export enum NatsErrorCode {
   /** Consumer does not exist on the specified stream. */
@@ -13,4 +13,13 @@ export enum NatsErrorCode {
 
   /** Stream does not exist. */
   StreamNotFound = 10059,
+
+  /** Storage resources exceeded — reservation exceeds server `max_file_store`. */
+  StorageResourcesExceeded = 10047,
+
+  /**
+   * No suitable peers for placement (fewer healthy peers than `num_replicas`,
+   * or no peer has storage headroom). Confirmed at runtime by the cluster integration test.
+   */
+  NoSuitablePeers = 10005,
 }

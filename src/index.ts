@@ -13,6 +13,7 @@ export type {
   JetstreamModuleOptions,
   MetadataRegistryOptions,
   OrderedEventOverrides,
+  ProvisioningOptions,
   RpcConfig,
   ScheduleRecordOptions,
   StreamConfigOverrides,
@@ -76,6 +77,8 @@ export {
 
 // Error codes
 export { NatsErrorCode } from './server/infrastructure/nats-error-codes';
+
+export { JetstreamProvisioningError } from './server/infrastructure/provisioning-error';
 
 // Server (for advanced use cases)
 export { JetstreamStrategy } from './server';

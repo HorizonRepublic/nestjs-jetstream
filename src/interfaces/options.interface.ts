@@ -166,6 +166,15 @@ export interface MetadataRegistryOptions {
   ttl?: number;
 }
 
+/** Provisioning behavior. Stream reservations are always logged at boot (INFO). */
+export interface ProvisioningOptions {
+  /**
+   * Opt-in storage budget check via `getAccountInfo()` before provisioning.
+   * Warn-only; never blocks boot. Off by default.
+   */
+  preflightStorageCheck?: boolean;
+}
+
 /**
  * Root module configuration for `JetstreamModule.forRoot()`.
  *
@@ -347,6 +356,9 @@ export interface JetstreamModuleOptions {
    * @see OtelOptions
    */
   otel?: OtelOptions | boolean;
+
+  /** Provisioning behavior. */
+  provisioning?: ProvisioningOptions;
 }
 
 /** Options for `JetstreamModule.forFeature()`. */

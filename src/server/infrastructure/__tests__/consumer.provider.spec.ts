@@ -114,7 +114,7 @@ describe(ConsumerProvider, () => {
         expect(result.get(StreamKind.Event)).toBe(existingInfo);
       });
 
-      it('should rethrow non-race errors from add()', async () => {
+      it('should wrap non-race add() failures into JetstreamProvisioningError', async () => {
         // Given: info → not found, add → resource limit (not a race)
         const notFoundError = new JetStreamApiError({
           err_code: 10014,
@@ -130,10 +130,12 @@ describe(ConsumerProvider, () => {
         mockJsm.consumers.info.mockRejectedValue(notFoundError);
         mockJsm.consumers.add.mockRejectedValue(resourceError);
 
-        // When/Then: error propagates
-        await expect(sut.ensureConsumers([StreamKind.Event])).rejects.toThrow(
-          'resource limits exceeded',
-        );
+        // When/Then: the API error is wrapped, not rethrown raw
+        await expect(sut.ensureConsumers([StreamKind.Event])).rejects.toMatchObject({
+          name: 'JetstreamProvisioningError',
+          entity: 'consumer',
+          errCode: 10025,
+        });
 
         expect(mockJsm.consumers.update).not.toHaveBeenCalled();
       });
@@ -238,6 +240,33 @@ describe(ConsumerProvider, () => {
 
         // And: consumer was NOT created
         expect(mockJsm.consumers.add).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('error wrapping', () => {
+    it('should wrap a non-recoverable JetStreamApiError from consumers.add', async () => {
+      // Given: consumer not found, then add fails with insufficient resources
+      const notFound = new JetStreamApiError({
+        err_code: 10014,
+        code: 404,
+        description: 'consumer not found',
+      });
+      const resourceErr = new JetStreamApiError({
+        err_code: 10047,
+        code: 500,
+        description: 'insufficient resources',
+      });
+
+      mockJsm.consumers.info.mockRejectedValue(notFound);
+      mockJsm.consumers.update.mockRejectedValue(notFound);
+      mockJsm.consumers.add.mockRejectedValue(resourceErr);
+
+      // When / Then
+      await expect(sut.ensureConsumer(mockJsm as never, StreamKind.Event)).rejects.toMatchObject({
+        name: 'JetstreamProvisioningError',
+        entity: 'consumer',
+        errCode: 10047,
       });
     });
   });

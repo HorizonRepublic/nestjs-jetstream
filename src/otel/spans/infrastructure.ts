@@ -12,7 +12,10 @@ import {
   ATTR_JETSTREAM_MIGRATION_REASON,
   ATTR_JETSTREAM_PROVISIONING_ACTION,
   ATTR_JETSTREAM_PROVISIONING_ENTITY,
+  ATTR_JETSTREAM_PROVISIONING_MAX_BYTES,
   ATTR_JETSTREAM_PROVISIONING_NAME,
+  ATTR_JETSTREAM_PROVISIONING_NUM_REPLICAS,
+  ATTR_JETSTREAM_PROVISIONING_RESERVATION,
   ATTR_JETSTREAM_SELF_HEALING_REASON,
   ATTR_JETSTREAM_SERVICE_NAME,
   ATTR_MESSAGING_CONSUMER_GROUP_NAME,
@@ -203,6 +206,9 @@ export interface ProvisioningSpanContext extends InfrastructureSpanContext {
   readonly entity: ProvisioningEntity;
   readonly name: string;
   readonly action: ProvisioningAction;
+  readonly maxBytes?: number;
+  readonly numReplicas?: number;
+  readonly reservation?: number;
 }
 
 export const withProvisioningSpan = <T>(
@@ -219,6 +225,9 @@ export const withProvisioningSpan = <T>(
       [ATTR_JETSTREAM_PROVISIONING_ENTITY]: ctx.entity,
       [ATTR_JETSTREAM_PROVISIONING_ACTION]: ctx.action,
       [ATTR_JETSTREAM_PROVISIONING_NAME]: ctx.name,
+      [ATTR_JETSTREAM_PROVISIONING_MAX_BYTES]: ctx.maxBytes,
+      [ATTR_JETSTREAM_PROVISIONING_NUM_REPLICAS]: ctx.numReplicas,
+      [ATTR_JETSTREAM_PROVISIONING_RESERVATION]: ctx.reservation,
     },
     op,
   );
