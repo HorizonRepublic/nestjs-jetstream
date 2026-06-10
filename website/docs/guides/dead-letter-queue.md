@@ -8,7 +8,7 @@ schema:
   headline: "How to configure a Dead Letter Queue"
   description: "Capture NestJS NATS JetStream messages that exhaust all delivery attempts via a DLQ stream or onDeadLetter callback."
   datePublished: "2026-03-21"
-  dateModified: "2026-05-27"
+  dateModified: "2026-06-10"
 ---
 
 import Since from '@site/src/components/Since';
@@ -26,9 +26,14 @@ Start with either. For maximum durability, use them together — the full fallba
 
 ## What is a dead letter?
 
-In NATS JetStream, each consumer has a `max_deliver` setting (default: **3**). Every time a handler throws an exception, the message is `nak`'d and redelivered. Once the delivery count reaches `max_deliver`, the message has nowhere to go — it's "dead."
+In NATS JetStream, each consumer has a `max_deliver` setting (default: **3**). Every time a handler throws an exception — or requests a business retry via [`ctx.retry()`](/docs/guides/handler-context) — the message is `nak`'d and redelivered. Once the delivery count reaches `max_deliver`, the message has nowhere to go — it's "dead."
 
 Without a DLQ strategy, the transport would simply `term()` the message after the final failed attempt. With the DLQ stream or callback, you get a chance to save it before it's gone.
+
+Two more cases are captured as dead letters immediately, regardless of delivery count, because redelivery can never fix them:
+
+- **No registered handler** for the subject (e.g. a handler was renamed mid-rolling-deploy while producers still publish the old pattern).
+- **Undecodable payload** (codec mismatch between producer and consumer). The original bytes are preserved in the DLQ entry.
 
 ```mermaid
 sequenceDiagram

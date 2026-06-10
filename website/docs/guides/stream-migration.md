@@ -8,7 +8,7 @@ schema:
   headline: "How to migrate immutable stream properties"
   description: "Safely change immutable stream properties without losing messages via blue-green sourcing."
   datePublished: "2026-04-02"
-  dateModified: "2026-05-27"
+  dateModified: "2026-06-10"
 ---
 
 import Since from '@site/src/components/Since';
@@ -54,18 +54,22 @@ Without `allowDestructiveMigration`, the transport logs a warning and continues 
 The transport uses **blue-green recreation** via [NATS stream sourcing](https://docs.nats.io/nats-concepts/jetstream/streams#sources) — a server-side message copy mechanism that preserves all messages:
 
 ```text
-Phase 1/4  Create backup stream ← sourcing ← original
-           (server-side copy, no application-level consumption)
+Phase 1/4  Quiesce: remove the original's subjects
+           (new publishes are rejected loudly instead of being acked
+            into a stream that is about to be deleted)
 
-Phase 2/4  Delete original stream
+Phase 2/4  Create backup stream ← sourcing ← original
+           (server-side copy; completion is tracked via source lag)
 
-Phase 3/4  Create original stream with new config (e.g., Memory storage)
+Phase 3/4  Delete original, create it again with the new config
 
 Phase 4/4  Original ← sourcing ← backup
-           → restore all messages → remove sources → delete backup
+           → drain → delete backup → detach source
 ```
 
 The stream keeps its original name. Consumers are recreated automatically after migration by each pod's startup sequence or self-healing.
+
+Every acknowledged publish is preserved: a producer either gets a successful ack (the message survives the migration) or a loud rejection it can retry — never an ack for a message that later disappears.
 
 ### Backup stream as a distributed lock
 
@@ -78,12 +82,12 @@ During migration, the backup stream (`{stream}__migration_backup`) serves a dual
 
 ### To publishers
 
-There is a **brief window** between Phase 2 (delete) and Phase 3 (create) where the stream does not exist — in practice this is one round-trip to the NATS server, but the window is real. Publishers will receive "stream not found" errors during it.
+From the quiesce (Phase 1) until the restore completes, publishes to the migrating stream are **rejected** — the subject has no stream behind it, so producers receive "no stream matches subject" / no-responders errors.
 
-- **`client.emit()`** (fire-and-forget) — the event is lost. If you need guaranteed delivery during migration, implement retry logic in the caller.
+- **`client.emit()`** (fire-and-forget) — the publish rejects with an error. Implement retry logic in the caller if you need delivery during migration.
 - **`client.send()`** (RPC) — the caller receives an error and can retry.
 
-For most services, this window is too short to matter. If you need zero-loss guarantees during migration, schedule it during a maintenance window with publishers paused.
+The rejection window lasts as long as the message copy does — milliseconds for small streams. This is deliberate: a rejected publish is retryable, while an acknowledged write into a stream that is about to be deleted would be silent data loss. If you need a zero-rejection migration, schedule it during a maintenance window with publishers paused.
 
 ### To consumers on other pods (rolling updates)
 
@@ -109,17 +113,18 @@ Expect migration time to scale roughly linearly with message count. For small st
 
 ## Error handling
 
-- **Backup creation fails.** The original stream is untouched; an error is thrown.
-- **Phase 2/3 fails (delete or create).** The backup is cleaned up; an error is thrown.
-- **Sourcing timeout during Phase 4 (30s default).** The stream exists with the new config but holds incomplete messages. The backup is cleaned up and an error is thrown — manual intervention may be needed, check the stream message count.
-- **Process killed mid-migration.** The orphaned backup is detected on the next application startup, cleaned up, and the migration is retried from scratch.
-- **NATS connection lost.** The transport reconnects and the migration resumes from the beginning.
+- **Failure before the original is deleted.** The quiesce is rolled back (subjects restored), the backup is removed, and an error is thrown — the original stream is intact and serving traffic.
+- **Failure after the original is deleted.** The backup is the only copy of the data and is always preserved. Restoration resumes automatically on the next application startup.
+- **Sourcing timeout (30s default).** Same as above: the backup is preserved and the restore resumes on the next startup. Nothing is lost.
+- **Process killed mid-migration.** Detected on the next startup: a stranded backup is restored into the stream (recreating it first if the crash happened between delete and create), then cleaned up.
+- **Two instances migrating concurrently (rolling deploy).** Backups carry a freshness stamp. An instance that finds another instance's live backup waits for that migration to finish instead of interfering; only stale leftovers are recovered.
 
 ## Limitations
 
 - **`retention` is not migratable.** It is controlled by the transport (`Workqueue` for events/commands, `Limits` for broadcast/ordered). A mismatch always throws an error on startup.
 - **The publisher gap is inherent.** NATS does not support atomic stream rename or swap. The millisecond window between delete and create cannot be eliminated.
-- **`allowDestructiveMigration` applies to all streams.** It's a single flag at the module level. You cannot enable migration for the event stream but not the broadcast stream — if any stream has an immutable conflict, it will be migrated.
+- **`allowDestructiveMigration` applies to all service-owned streams.** It's a single flag at the module level — if any of them has an immutable conflict, it will be migrated.
+- **The shared broadcast stream is never destructively migrated.** `broadcast-stream` is shared by every service in the cluster; recreating it would delete other services' durable consumers and replay retained history to them. An immutable conflict on it throws an error instead — coordinate that change manually.
 
 ## Example: switching to in-memory streams
 
