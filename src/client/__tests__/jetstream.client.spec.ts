@@ -976,12 +976,14 @@ describe(JetstreamClient, () => {
 
       // When: sending an RPC whose messageId was already used
       const result = firstValueFrom(sut.send('rpc.dup', {}));
+      // Attach the expectation before the rejection settles
+      const assertion = expect(result).rejects.toThrow(/duplicate/i);
 
       await vi.advanceTimersByTimeAsync(0);
 
       // Then: rejected immediately instead of hanging until the RPC timeout
       await vi.advanceTimersByTimeAsync(DEFAULT_JETSTREAM_RPC_TIMEOUT);
-      await expect(result).rejects.toThrow(/duplicate/i);
+      await assertion;
     });
   });
 
