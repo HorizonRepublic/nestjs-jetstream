@@ -54,76 +54,14 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
    *
    * Called by NestJS when `connectMicroservice()` is used, or internally by the module.
    */
-  public async listen(callback: () => void): Promise<void> {
-    if (this.started) {
-      this.logger.warn('listen() called more than once — ignoring');
-
-      return;
+  public async listen(callback: (...args: unknown[]) => void): Promise<void> {
+    try {
+      await this.doListen(callback);
+    } catch (err) {
+      // NestJS bridges listen() via a callback — forward errors there so
+      // startAllMicroservices() rejects instead of leaving an unhandled rejection.
+      callback(err);
     }
-
-    this.started = true;
-
-    // 1. Register all NestJS handlers
-    this.patternRegistry.registerHandlers(this.getHandlers());
-
-    // 2. Determine which streams and durable consumers are needed
-    const { streams: streamKinds, durableConsumers: durableKinds } = this.resolveRequiredKinds();
-
-    if (streamKinds.length > 0) {
-      // 3. Ensure streams exist
-      await this.streamProvider.ensureStreams(streamKinds);
-
-      // 4. Ensure durable consumers exist (ordered consumers are ephemeral — skip)
-      if (durableKinds.length > 0) {
-        const consumers = await this.consumerProvider.ensureConsumers(durableKinds);
-
-        // 5. Populate shared ack_wait map from actual NATS consumer configs
-        this.populateAckWaitMap(consumers);
-
-        // 6. Update DLQ thresholds from actual NATS consumer configs
-        this.eventRouter.updateMaxDeliverMap(this.buildMaxDeliverMap(consumers));
-
-        // 7. Start durable message consumption
-        this.messageProvider.start(consumers);
-      }
-
-      // 8. Start ordered consumer if handlers are registered
-      if (this.patternRegistry.hasOrderedHandlers()) {
-        const orderedStreamName = this.streamProvider.getStreamName(StreamKind.Ordered);
-
-        await this.messageProvider.startOrdered(
-          orderedStreamName,
-          this.patternRegistry.getOrderedSubjects(),
-          this.options.ordered,
-        );
-      }
-
-      // 9. Start event router if any event-type handlers exist
-      if (
-        this.patternRegistry.hasEventHandlers() ||
-        this.patternRegistry.hasBroadcastHandlers() ||
-        this.patternRegistry.hasOrderedHandlers()
-      ) {
-        this.eventRouter.start();
-      }
-
-      // 10. Start RPC router if JetStream mode
-      if (isJetStreamRpcMode(this.options.rpc) && this.patternRegistry.hasRpcHandlers()) {
-        await this.rpcRouter.start();
-      }
-    }
-
-    // 11. Start Core RPC server if core mode
-    if (isCoreRpcMode(this.options.rpc) && this.patternRegistry.hasRpcHandlers()) {
-      await this.coreRpcServer.start();
-    }
-
-    // 12. Publish handler metadata to KV (non-critical — errors logged, not thrown)
-    if (this.metadataProvider && this.patternRegistry.hasMetadata()) {
-      await this.metadataProvider.publish(this.patternRegistry.getMetadataEntries());
-    }
-
-    callback();
   }
 
   /** Stop all consumers, routers, subscriptions, and metadata heartbeat. Called during shutdown. */
@@ -198,6 +136,78 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
   /** Access the pattern registry (for module-level introspection). */
   public getPatternRegistry(): PatternRegistry {
     return this.patternRegistry;
+  }
+
+  private async doListen(callback: (...args: unknown[]) => void): Promise<void> {
+    if (this.started) {
+      this.logger.warn('listen() called more than once — ignoring');
+
+      return;
+    }
+
+    this.started = true;
+
+    // 1. Register all NestJS handlers
+    this.patternRegistry.registerHandlers(this.getHandlers());
+
+    // 2. Determine which streams and durable consumers are needed
+    const { streams: streamKinds, durableConsumers: durableKinds } = this.resolveRequiredKinds();
+
+    if (streamKinds.length > 0) {
+      // 3. Ensure streams exist
+      await this.streamProvider.ensureStreams(streamKinds);
+
+      // 4. Ensure durable consumers exist (ordered consumers are ephemeral — skip)
+      if (durableKinds.length > 0) {
+        const consumers = await this.consumerProvider.ensureConsumers(durableKinds);
+
+        // 5. Populate shared ack_wait map from actual NATS consumer configs
+        this.populateAckWaitMap(consumers);
+
+        // 6. Update DLQ thresholds from actual NATS consumer configs
+        this.eventRouter.updateMaxDeliverMap(this.buildMaxDeliverMap(consumers));
+
+        // 7. Start durable message consumption
+        this.messageProvider.start(consumers);
+      }
+
+      // 8. Start ordered consumer if handlers are registered
+      if (this.patternRegistry.hasOrderedHandlers()) {
+        const orderedStreamName = this.streamProvider.getStreamName(StreamKind.Ordered);
+
+        await this.messageProvider.startOrdered(
+          orderedStreamName,
+          this.patternRegistry.getOrderedSubjects(),
+          this.options.ordered,
+        );
+      }
+
+      // 9. Start event router if any event-type handlers exist
+      if (
+        this.patternRegistry.hasEventHandlers() ||
+        this.patternRegistry.hasBroadcastHandlers() ||
+        this.patternRegistry.hasOrderedHandlers()
+      ) {
+        this.eventRouter.start();
+      }
+
+      // 10. Start RPC router if JetStream mode
+      if (isJetStreamRpcMode(this.options.rpc) && this.patternRegistry.hasRpcHandlers()) {
+        await this.rpcRouter.start();
+      }
+    }
+
+    // 11. Start Core RPC server if core mode
+    if (isCoreRpcMode(this.options.rpc) && this.patternRegistry.hasRpcHandlers()) {
+      await this.coreRpcServer.start();
+    }
+
+    // 12. Publish handler metadata to KV (non-critical — errors logged, not thrown)
+    if (this.metadataProvider && this.patternRegistry.hasMetadata()) {
+      await this.metadataProvider.publish(this.patternRegistry.getMetadataEntries());
+    }
+
+    callback();
   }
 
   /** Determine which streams and durable consumers are needed. */

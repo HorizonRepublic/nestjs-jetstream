@@ -19,6 +19,7 @@ import {
 } from '../../otel';
 import { PatternRegistry } from '../routing';
 
+import { mapProvisioningError, type ProvisioningErrorContext } from './provisioning-error';
 import { NatsErrorCode } from './nats-error-codes';
 import { MIGRATION_BACKUP_SUFFIX } from './stream-migration';
 import { StreamProvider } from './stream.provider';
@@ -99,11 +100,13 @@ export class ConsumerProvider {
       async () => {
         this.logger.log(`Ensuring consumer: ${name} on stream: ${stream}`);
 
+        const ctx: ProvisioningErrorContext = { entity: 'consumer', name, kind };
+
         try {
           await jsm.consumers.info(stream, name);
           this.logger.debug(`Consumer exists, updating: ${name}`);
 
-          return await jsm.consumers.update(stream, name, config);
+          return await this.runConsumerOp(ctx, () => jsm.consumers.update(stream, name, config));
         } catch (err) {
           if (
             !(err instanceof JetStreamApiError) ||
@@ -112,7 +115,7 @@ export class ConsumerProvider {
             throw err;
           }
 
-          return await this.createConsumer(jsm, stream, name, config);
+          return await this.createConsumer(jsm, stream, name, kind, config);
         }
       },
     );
@@ -165,7 +168,7 @@ export class ConsumerProvider {
             throw err;
           }
 
-          return await this.createConsumer(jsm, stream, name, config);
+          return await this.createConsumer(jsm, stream, name, kind, config);
         }
       },
     );
@@ -211,10 +214,13 @@ export class ConsumerProvider {
     jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
     stream: string,
     name: string,
+    kind: StreamKind,
     /* eslint-disable-next-line @typescript-eslint/naming-convention -- NATS API uses snake_case */
     config: Partial<ConsumerConfig> & { durable_name: string },
   ): Promise<ConsumerInfo> {
     this.logger.log(`Creating consumer: ${name}`);
+
+    const ctx: ProvisioningErrorContext = { entity: 'consumer', name, kind };
 
     try {
       return await jsm.consumers.add(stream, config);
@@ -228,7 +234,23 @@ export class ConsumerProvider {
         return await jsm.consumers.info(stream, name);
       }
 
+      if (addErr instanceof JetStreamApiError) {
+        throw mapProvisioningError(addErr, ctx);
+      }
+
       throw addErr;
+    }
+  }
+
+  private async runConsumerOp<T>(ctx: ProvisioningErrorContext, op: () => Promise<T>): Promise<T> {
+    try {
+      return await op();
+    } catch (err) {
+      if (err instanceof JetStreamApiError) {
+        throw mapProvisioningError(err, ctx);
+      }
+
+      throw err;
     }
   }
 

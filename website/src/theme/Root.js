@@ -159,6 +159,14 @@ export default function Root({ children }) {
   "dateModified": "2026-05-27"
 },
       
+    '/docs/guides/storage-budgeting/': {
+  "@type": "Article",
+  "headline": "Storage budgeting & provisioning",
+  "description": "How JetStream stream reservations relate to the server max_file_store, and how to read the boot-time provisioning summary.",
+  "datePublished": "2026-06-02",
+  "dateModified": "2026-06-03"
+},
+      
     '/docs/guides/stream-migration/': {
   "@type": "Article",
   "headline": "How to migrate immutable stream properties",

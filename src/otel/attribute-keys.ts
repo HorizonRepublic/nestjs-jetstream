@@ -60,6 +60,14 @@ export const ATTR_JETSTREAM_PROVISIONING_ACTION = 'jetstream.provisioning.action
 
 export const ATTR_JETSTREAM_PROVISIONING_NAME = 'jetstream.provisioning.name' as const;
 
+export const ATTR_JETSTREAM_PROVISIONING_MAX_BYTES = 'jetstream.provisioning.max_bytes' as const;
+
+export const ATTR_JETSTREAM_PROVISIONING_NUM_REPLICAS =
+  'jetstream.provisioning.num_replicas' as const;
+
+export const ATTR_JETSTREAM_PROVISIONING_RESERVATION =
+  'jetstream.provisioning.reservation_bytes' as const;
+
 export const ATTR_JETSTREAM_SELF_HEALING_REASON = 'jetstream.self_healing.reason' as const;
 
 export const ATTR_JETSTREAM_MIGRATION_REASON = 'jetstream.migration.reason' as const;

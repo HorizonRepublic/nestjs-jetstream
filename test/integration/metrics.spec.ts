@@ -315,12 +315,14 @@ describe('Metrics — integration', () => {
       // Given/When: emit one message so the stream has state worth observing
       await firstValueFrom(client.emit('orders.created', { id: 'p1' }));
 
-      // Wait for a poll cycle (intervalMs=100 + slack)
-      await waitForCondition(async () => {
-        const text = await register.metrics();
+      // Wait for the poll cycle that publishes the asserted stream gauge; that cycle
+      // also publishes the consumer gauges, so this avoids a stream/consumer race under load.
+      const streamGauge = new RegExp(
+        `^jetstream_stream_messages\\{stream="${streamName(serviceName, StreamKind.Event)}"\\}`,
+        'm',
+      );
 
-        return /^jetstream_consumer_num_ack_pending\{/m.test(text);
-      }, 5_000);
+      await waitForCondition(async () => streamGauge.test(await register.metrics()), 10_000);
 
       // Then
       const text = await register.metrics();

@@ -86,6 +86,22 @@ describe(JetstreamStrategy, () => {
       expect(secondCallback).not.toHaveBeenCalled();
       expect(patternRegistry.registerHandlers).toHaveBeenCalledTimes(1);
     });
+
+    it('should forward doListen errors to callback and resolve (not rethrow)', async () => {
+      // Given: event handlers present so ensureStreams is reached; it rejects
+      const sentinelError = new Error('stream provisioning failed');
+
+      patternRegistry.hasEventHandlers = vi.fn().mockReturnValue(true);
+      streamProvider.ensureStreams = vi.fn().mockRejectedValue(sentinelError);
+      const callback = vi.fn();
+
+      // When
+      await sut.listen(callback);
+
+      // Then: error forwarded to callback; listen() itself resolved
+      expect(callback).toHaveBeenCalledTimes(1);
+      expect(callback).toHaveBeenCalledWith(sentinelError);
+    });
   });
 
   describe('metadata publishing', () => {

@@ -49,6 +49,7 @@ const sidebars: SidebarsConfig = {
         'guides/dead-letter-queue',
         'guides/health-checks',
         'guides/graceful-shutdown',
+        'guides/storage-budgeting',
       ],
     },
     {
