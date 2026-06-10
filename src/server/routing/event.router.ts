@@ -187,7 +187,11 @@ export class EventRouter {
      * escalates to dead-letter handling — a nak at that point would strand the
      * message, since the server never redelivers past `max_deliver`.
      */
-    const settleSuccess = (msg: JsMsg, ctx: RpcContext, data: unknown): Promise<void> | undefined => {
+    const settleSuccess = (
+      msg: JsMsg,
+      ctx: RpcContext,
+      data: unknown,
+    ): Promise<void> | undefined => {
       if (ctx.shouldTerminate) {
         msg.term(ctx.terminateReason);
 
@@ -224,21 +228,54 @@ export class EventRouter {
     };
 
     /**
+     * Capture a message that can never be routed (no handler, undecodable
+     * payload). Redelivery cannot fix these, so they go straight to
+     * dead-letter handling regardless of delivery count. On a workqueue
+     * stream a plain term() would delete the payload permanently.
+     */
+    const captureUnroutable = (
+      capture: NonNullable<typeof handleDeadLetter>,
+      msg: JsMsg,
+      err: Error,
+    ): Promise<void> => {
+      let data: unknown;
+
+      try {
+        data = codec.decode(msg.data);
+      } catch {
+        data = undefined;
+      }
+
+      return capture(msg, data, err).catch((captureErr: unknown) => {
+        logger.error(`Dead-letter capture failed for unroutable ${msg.subject}:`, captureErr);
+      });
+    };
+
+    /**
      * Resolve the handler and decode payload for one event.
      *
-     * Returns `null` when the message cannot be routed (no handler, decode
-     * error, or unexpected pre-dispatch failure) — those branches settle the
-     * message synchronously inside the helper and produce nothing to dispatch.
+     * Returns `null` when the message cannot be routed and was settled
+     * synchronously, a Promise when an unroutable message is being captured
+     * by dead-letter handling, and a {@link ResolvedEvent} otherwise.
      */
-    const resolveEvent = (msg: JsMsg): ResolvedEvent | null => {
+    const resolveEvent = (msg: JsMsg): ResolvedEvent | Promise<void> | null => {
       const subject = msg.subject;
 
       try {
         const handler = patternRegistry.getHandler(subject);
 
         if (!handler) {
-          msg.term(`No handler for event: ${subject}`);
           logger.error(`No handler for subject: ${subject}`);
+
+          if (handleDeadLetter !== null) {
+            return captureUnroutable(
+              handleDeadLetter,
+              msg,
+              new Error(`No handler for event: ${subject}`),
+            );
+          }
+
+          msg.term(`No handler for event: ${subject}`);
 
           return null;
         }
@@ -248,8 +285,17 @@ export class EventRouter {
         try {
           data = codec.decode(msg.data);
         } catch (err) {
-          msg.term('Decode error');
           logger.error(`Decode error for ${subject}:`, err);
+
+          if (handleDeadLetter !== null) {
+            return captureUnroutable(
+              handleDeadLetter,
+              msg,
+              new Error(`Decode error: ${err instanceof Error ? err.message : String(err)}`),
+            );
+          }
+
+          msg.term('Decode error');
 
           return null;
         }
@@ -293,6 +339,7 @@ export class EventRouter {
       const resolved = resolveEvent(msg);
 
       if (resolved === null) return undefined;
+      if (isPromiseLike(resolved)) return resolved as Promise<void>;
 
       const { handler, data } = resolved;
       const ctx = new RpcContext([msg]);

@@ -7,8 +7,14 @@ import { firstValueFrom } from 'rxjs';
 import type { StartedTestContainer } from 'testcontainers';
 
 import type { DeadLetterInfo, RpcContext } from '../../src';
-import { getClientToken, toNanos, dlqStreamName, JetstreamDlqHeader } from '../../src';
-import { jetstreamManager } from '@nats-io/jetstream';
+import {
+  getClientToken,
+  internalName,
+  toNanos,
+  dlqStreamName,
+  JetstreamDlqHeader,
+} from '../../src';
+import { jetstream, jetstreamManager } from '@nats-io/jetstream';
 
 import {
   cleanupStreams,
@@ -285,6 +291,76 @@ describe('Dead Letter Queue Hook', () => {
 
       expect(decoded.orderId).toBe('dlq-only-1');
       expect(msg!.header.get(JetstreamDlqHeader.DeliveryCount)).toBe('2');
+    });
+  });
+
+  describe('unroutable messages with DLQ configured', () => {
+    let app: INestApplication;
+    let module: TestingModule;
+    let client: ClientProxy;
+    let serviceName: string;
+
+    beforeEach(async () => {
+      serviceName = uniqueServiceName();
+
+      ({ app, module } = await createTestApp(
+        {
+          name: serviceName,
+          port,
+          dlq: {},
+        },
+        [AlwaysFailingController],
+        [serviceName],
+      ));
+
+      client = module.get<ClientProxy>(getClientToken(serviceName));
+    });
+
+    afterEach(async () => {
+      await app.close();
+      await cleanupStreams(nc, serviceName);
+    });
+
+    const dlqMessageCount = async (): Promise<number> => {
+      const jsm = await jetstreamManager(nc);
+      const info = await jsm.streams.info(dlqStreamName(serviceName));
+
+      return info.state.messages;
+    };
+
+    it('should capture events without a registered handler in the DLQ', async () => {
+      // Given: an event pattern no controller handles
+      await firstValueFrom(client.emit('order.unknown', { orderId: 'orphan-1' }));
+
+      // Then: the message lands in the DLQ instead of being deleted
+      await waitForCondition(async () => (await dlqMessageCount()) === 1, 10_000);
+
+      const jsm = await jetstreamManager(nc);
+      const msg = await jsm.streams.getMessage(dlqStreamName(serviceName), { seq: 1 });
+
+      expect(msg!.header.get(JetstreamDlqHeader.DeadLetterReason)).toContain('No handler');
+
+      const decoded = JSON.parse(new TextDecoder().decode(msg!.data));
+
+      expect(decoded.orderId).toBe('orphan-1');
+    });
+
+    it('should capture undecodable payloads in the DLQ', async () => {
+      // Given: raw bytes that are not valid JSON, published to a handled subject
+      const js = jetstream(nc);
+      const subject = `${internalName(serviceName)}.ev.order.doomed`;
+      const garbage = new Uint8Array([0xff, 0xfe, 0x00, 0x7b]);
+
+      await js.publish(subject, garbage);
+
+      // Then: the message lands in the DLQ with the original bytes intact
+      await waitForCondition(async () => (await dlqMessageCount()) === 1, 10_000);
+
+      const jsm = await jetstreamManager(nc);
+      const msg = await jsm.streams.getMessage(dlqStreamName(serviceName), { seq: 1 });
+
+      expect(msg!.header.get(JetstreamDlqHeader.DeadLetterReason)).toContain('Decode error');
+      expect(new Uint8Array(msg!.data)).toEqual(garbage);
     });
   });
 
