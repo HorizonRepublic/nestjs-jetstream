@@ -9,6 +9,20 @@ import { TransportHooks } from './hooks.interface';
 import type { MetricsOption } from '../metrics/metrics.config';
 import type { OtelOptions } from '../otel';
 
+/** How the library provisions a JetStream entity. */
+export enum ManagementMode {
+  /** Library creates/updates the entity (current behavior). Default. */
+  Auto = 'auto',
+  /** Bind to an externally-provisioned entity; never create or update. */
+  Manual = 'manual',
+}
+
+/** Per-entity provisioning control for one stream kind. */
+export interface EntityManagement {
+  stream?: ManagementMode;
+  consumer?: ManagementMode;
+}
+
 /**
  * Stream config overrides exposed to users.
  *
@@ -54,6 +68,12 @@ export type RpcConfig =
        * The RPC handler timeout (`setTimeout` + `msg.term()`) still acts as the hard cap.
        */
       ackExtension?: boolean | number;
+
+      /** Provisioning control for RPC stream/consumer. Falls back to provisioning.management. */
+      management?: EntityManagement;
+
+      /** Custom subject prefix (trailing dot normalized), e.g. 'company.orders.'. */
+      subjectPrefix?: string;
     };
 
 /** Overrides for JetStream stream and consumer configuration. */
@@ -93,6 +113,12 @@ export interface StreamConsumerOverrides {
    * - `number`: explicit extension interval in milliseconds.
    */
   ackExtension?: boolean | number;
+
+  /** Provisioning control for this kind's stream/consumer. Falls back to provisioning.management. */
+  management?: EntityManagement;
+
+  /** Custom subject prefix (trailing dot normalized), e.g. 'company.orders.'. */
+  subjectPrefix?: string;
 }
 
 /**
@@ -129,6 +155,12 @@ export interface OrderedEventOverrides {
    * @default ReplayPolicy.Instant
    */
   replayPolicy?: ReplayPolicy;
+
+  /** Provisioning control for this kind's stream/consumer. Falls back to provisioning.management. */
+  management?: EntityManagement;
+
+  /** Custom subject prefix (trailing dot normalized), e.g. 'company.orders.'. */
+  subjectPrefix?: string;
 }
 
 /**
@@ -173,6 +205,9 @@ export interface ProvisioningOptions {
    * Warn-only; never blocks boot. Off by default.
    */
   preflightStorageCheck?: boolean;
+
+  /** Default management mode for every stream and consumer. @default ManagementMode.Auto */
+  management?: ManagementMode;
 }
 
 /**
@@ -269,7 +304,11 @@ export interface JetstreamModuleOptions {
    * })
    * ```
    */
-  dlq?: { stream?: StreamConfigOverrides };
+  dlq?: {
+    stream?: StreamConfigOverrides;
+    /** Provisioning control for the DLQ stream. Falls back to provisioning.management. */
+    management?: EntityManagement;
+  };
 
   /**
    * Graceful shutdown timeout in ms.

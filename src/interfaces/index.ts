@@ -13,7 +13,10 @@ export type {
 
 export type { JetstreamHealthStatus } from './health.interface';
 
+export { ManagementMode } from './options.interface';
+
 export type {
+  EntityManagement,
   JetstreamFeatureOptions,
   JetstreamModuleAsyncOptions,
   JetstreamModuleOptions,

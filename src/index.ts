@@ -2,11 +2,12 @@
 export { JetstreamModule } from './jetstream.module';
 
 // Interfaces
-export { MessageKind, StreamKind, TransportEvent } from './interfaces';
+export { ManagementMode, MessageKind, StreamKind, TransportEvent } from './interfaces';
 
 export type {
   Codec,
   DeadLetterInfo,
+  EntityManagement,
   JetstreamFeatureOptions,
   JetstreamHealthStatus,
   JetstreamModuleAsyncOptions,
