@@ -150,6 +150,7 @@ website/docs/reference/api/
 # AI tools
 .claude/
 .copilot/
+.serena/
 CLAUDE.md
 GEMINI.md
 AGENTS.md
