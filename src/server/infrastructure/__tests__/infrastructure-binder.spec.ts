@@ -17,6 +17,7 @@ import type { JetstreamModuleOptions } from '../../../interfaces';
 import { PatternRegistry } from '../../routing';
 
 import { InfrastructureBinder } from '../infrastructure-binder';
+import { JetstreamProvisioningError } from '../provisioning-error';
 import { NameResolver } from '../name-resolver';
 
 // ---------------------------------------------------------------------------
@@ -146,14 +147,17 @@ describe(InfrastructureBinder.name, () => {
 
   describe('bindStream() — missing stream', () => {
     describe('when stream does not exist', () => {
-      it('should throw naming the stream and instructing to provision it', async () => {
+      it('should throw a JetstreamProvisioningError naming the stream and instructing to provision it', async () => {
         // Given: jsm.streams.info throws StreamNotFound
         const jsm = makeJsm({ streamInfo: vi.fn().mockRejectedValue(streamNotFound()) });
         const sut = makeSut();
 
         // When / Then
-        await expect(sut.bindStream(jsm, StreamKind.Event)).rejects.toThrow(
-          names.streamName(StreamKind.Event),
+        await expect(sut.bindStream(jsm, StreamKind.Event)).rejects.toSatisfy(
+          (err: unknown) =>
+            err instanceof JetstreamProvisioningError &&
+            err.message.includes(names.streamName(StreamKind.Event)) &&
+            err.message.includes('Manual'),
         );
       });
     });
@@ -165,13 +169,17 @@ describe(InfrastructureBinder.name, () => {
 
   describe('bindDlqStream() — missing DLQ stream', () => {
     describe('when DLQ stream does not exist', () => {
-      it('should throw naming the DLQ stream', async () => {
+      it('should throw a JetstreamProvisioningError naming the DLQ stream', async () => {
         // Given: jsm.streams.info throws StreamNotFound
         const jsm = makeJsm({ streamInfo: vi.fn().mockRejectedValue(streamNotFound()) });
         const sut = makeSut();
 
         // When / Then
-        await expect(sut.bindDlqStream(jsm)).rejects.toThrow(names.dlqStreamName());
+        await expect(sut.bindDlqStream(jsm)).rejects.toSatisfy(
+          (err: unknown) =>
+            err instanceof JetstreamProvisioningError &&
+            err.message.includes(names.dlqStreamName()),
+        );
       });
     });
   });
@@ -182,14 +190,17 @@ describe(InfrastructureBinder.name, () => {
 
   describe('bindConsumer() — missing consumer', () => {
     describe('when consumer does not exist', () => {
-      it('should throw naming the consumer and the stream', async () => {
+      it('should throw a JetstreamProvisioningError naming the consumer and instructing to provision it', async () => {
         // Given: jsm.consumers.info throws ConsumerNotFound
         const jsm = makeJsm({ consumerInfo: vi.fn().mockRejectedValue(consumerNotFound()) });
         const sut = makeSut();
 
         // When / Then
-        await expect(sut.bindConsumer(jsm, StreamKind.Event)).rejects.toThrow(
-          names.consumerName(StreamKind.Event),
+        await expect(sut.bindConsumer(jsm, StreamKind.Event)).rejects.toSatisfy(
+          (err: unknown) =>
+            err instanceof JetstreamProvisioningError &&
+            err.message.includes(names.consumerName(StreamKind.Event)) &&
+            err.message.includes('Manual'),
         );
       });
     });

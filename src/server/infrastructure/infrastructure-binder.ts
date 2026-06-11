@@ -7,6 +7,7 @@ import type { JetstreamModuleOptions } from '../../interfaces';
 import { resolveAckExtensionInterval } from '../../utils/ack-extension';
 import { PatternRegistry } from '../routing';
 
+import { JetstreamProvisioningError } from './provisioning-error';
 import { NameResolver } from './name-resolver';
 import { NatsErrorCode } from './nats-error-codes';
 import { subjectCovers } from './subject-utils';
@@ -140,10 +141,18 @@ export class InfrastructureBinder {
         err instanceof JetStreamApiError &&
         err.apiError().err_code === NatsErrorCode.StreamNotFound
       ) {
-        throw new Error(
-          `Stream "${name}" (kind=${String(kind)}) not found. ` +
-            `Management mode is Manual — the stream must be provisioned externally before boot.`,
-        );
+        const api = err.apiError();
+
+        throw new JetstreamProvisioningError({
+          entity: 'stream',
+          target: name,
+          kind: String(kind),
+          errCode: api.err_code,
+          errDescription: api.description,
+          remediation:
+            'Management mode is Manual — the stream must be provisioned externally before boot.',
+          cause: err,
+        });
       }
 
       throw err;
@@ -161,10 +170,18 @@ export class InfrastructureBinder {
         err instanceof JetStreamApiError &&
         err.apiError().err_code === NatsErrorCode.ConsumerNotFound
       ) {
-        throw new Error(
-          `Consumer "${consumer}" on stream "${stream}" (kind=${String(kind)}) not found. ` +
-            `Management mode is Manual — the consumer must be provisioned externally before boot.`,
-        );
+        const api = err.apiError();
+
+        throw new JetstreamProvisioningError({
+          entity: 'consumer',
+          target: `${consumer} on stream "${stream}"`,
+          kind: String(kind),
+          errCode: api.err_code,
+          errDescription: api.description,
+          remediation:
+            'Management mode is Manual — the consumer must be provisioned externally before boot.',
+          cause: err,
+        });
       }
 
       throw err;
