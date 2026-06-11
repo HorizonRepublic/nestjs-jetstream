@@ -345,8 +345,9 @@ export enum PatternPrefix {
 }
 
 /** Check if the RPC config specifies JetStream mode. */
-export const isJetStreamRpcMode = (rpc: RpcConfig | undefined): boolean =>
-  rpc?.mode === 'jetstream';
+export const isJetStreamRpcMode = (
+  rpc: RpcConfig | undefined,
+): rpc is Extract<RpcConfig, { mode: 'jetstream' }> => rpc?.mode === 'jetstream';
 
 /** Check if the RPC config specifies Core mode (default). */
 export const isCoreRpcMode = (rpc: RpcConfig | undefined): boolean => !rpc || rpc.mode === 'core';

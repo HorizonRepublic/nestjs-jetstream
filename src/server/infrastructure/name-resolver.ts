@@ -1,5 +1,10 @@
 import { StreamKind } from '../../interfaces';
-import type { JetstreamModuleOptions, OrderedEventOverrides, RpcConfig } from '../../interfaces';
+import type {
+  JetstreamModuleOptions,
+  OrderedEventOverrides,
+  StreamConfigOverrides,
+} from '../../interfaces';
+import type { ConsumerConfig } from '@nats-io/jetstream';
 import {
   buildBroadcastSubject,
   buildSubject,
@@ -10,16 +15,12 @@ import {
   streamName,
 } from '../../jetstream.constants';
 
-/** Structural shape for a per-kind option block that may carry custom names/prefix. */
 interface KindOptionBlock {
-  stream?: { name?: string };
-  /* eslint-disable @typescript-eslint/naming-convention */
-  consumer?: { durable_name?: string };
-  /* eslint-enable @typescript-eslint/naming-convention */
+  stream?: StreamConfigOverrides;
+  consumer?: Partial<ConsumerConfig>;
   subjectPrefix?: string;
 }
 
-/** Precomputed names and subject fragments for one StreamKind. */
 interface KindNames {
   stream: string;
   consumer: string;
@@ -132,7 +133,7 @@ export class NameResolver {
 
     if (!isJetStreamRpcMode(rpc)) return undefined;
 
-    return rpc as Extract<RpcConfig, { mode: 'jetstream' }>;
+    return rpc;
   }
 
   private normalizePrefix(raw: string): string {
