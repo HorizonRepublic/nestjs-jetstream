@@ -200,7 +200,7 @@ export const withSelfHealingSpan = <T>(
 
 export type ProvisioningEntity = 'stream' | 'consumer';
 
-export type ProvisioningAction = 'create' | 'update' | 'ensure' | 'recover' | 'bind';
+export type ProvisioningAction = 'create' | 'update' | 'ensure' | 'recover' | 'bind' | 'rebind';
 
 export interface ProvisioningSpanContext extends InfrastructureSpanContext {
   readonly entity: ProvisioningEntity;

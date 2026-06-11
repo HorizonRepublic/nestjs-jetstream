@@ -5,11 +5,13 @@ import type { ConsumerInfo, StreamInfo } from '@nats-io/jetstream';
 import { JetStreamApiError } from '@nats-io/jetstream';
 
 import { ConnectionProvider } from '../../../connection';
-import { StreamKind } from '../../../interfaces';
+import { ManagementMode, StreamKind } from '../../../interfaces';
 import type { JetstreamModuleOptions } from '../../../interfaces';
+import { internalName } from '../../../jetstream.constants';
 import { PatternRegistry } from '../../routing';
 
 import { ConsumerProvider } from '../consumer.provider';
+import { InfrastructureBinder } from '../infrastructure-binder';
 import { NameResolver } from '../name-resolver';
 import { StreamProvider } from '../stream.provider';
 
@@ -20,6 +22,7 @@ describe(ConsumerProvider, () => {
   let connection: Mocked<ConnectionProvider>;
   let streamProvider: Mocked<StreamProvider>;
   let patternRegistry: Mocked<PatternRegistry>;
+  let mockBinder: Mocked<InfrastructureBinder>;
   let mockJsm: {
     consumers: {
       info: ReturnType<typeof vi.fn>;
@@ -30,6 +33,16 @@ describe(ConsumerProvider, () => {
       info: ReturnType<typeof vi.fn>;
     };
   };
+
+  const makeSut = (): ConsumerProvider =>
+    new ConsumerProvider(
+      options,
+      connection,
+      streamProvider,
+      patternRegistry,
+      new NameResolver(options),
+      mockBinder,
+    );
 
   beforeEach(() => {
     options = { name: faker.lorem.word(), servers: ['nats://localhost:4222'] };
@@ -59,14 +72,9 @@ describe(ConsumerProvider, () => {
       getStreamName: vi.fn().mockReturnValue('test-stream'),
     });
     patternRegistry = createMock<PatternRegistry>();
+    mockBinder = createMock<InfrastructureBinder>();
 
-    sut = new ConsumerProvider(
-      options,
-      connection,
-      streamProvider,
-      patternRegistry,
-      new NameResolver(options),
-    );
+    sut = makeSut();
   });
 
   afterEach(vi.resetAllMocks);
@@ -380,6 +388,65 @@ describe(ConsumerProvider, () => {
       });
     });
 
+    describe('Manual management', () => {
+      it('should bind without add/update when the consumer is Manual', async () => {
+        // Given
+        options.events = { management: { consumer: ManagementMode.Manual } };
+        sut = makeSut();
+        mockBinder.bindConsumer.mockResolvedValue(
+          createMock<ConsumerInfo>({
+            config: {
+              filter_subject: `${internalName(options.name)}.ev.>`,
+            } as ConsumerInfo['config'],
+          }),
+        );
+
+        // When
+        await sut.ensureConsumers([StreamKind.Event]);
+
+        // Then
+        expect(mockJsm.consumers.add).not.toHaveBeenCalled();
+        expect(mockJsm.consumers.update).not.toHaveBeenCalled();
+      });
+
+      it('recoverConsumer should throw externally-managed error and NEVER create for Manual consumers', async () => {
+        // Given
+        options.events = { management: { consumer: ManagementMode.Manual } };
+        sut = makeSut();
+        mockJsm.consumers.info.mockRejectedValue(
+          new JetStreamApiError({
+            err_code: 10014,
+            code: 404,
+            description: 'consumer not found',
+          }),
+        );
+
+        const jsm = await connection.getJetStreamManager();
+
+        // When/Then
+        await expect(sut.recoverConsumer(jsm as never, StreamKind.Event)).rejects.toThrow(
+          /externally managed/i,
+        );
+
+        expect(mockJsm.consumers.add).not.toHaveBeenCalled();
+      });
+
+      it('recoverConsumer should skip the migration-backup lock for Manual consumers', async () => {
+        // Given
+        options.events = { management: { consumer: ManagementMode.Manual } };
+        sut = makeSut();
+        mockJsm.consumers.info.mockResolvedValue(createMock<ConsumerInfo>());
+
+        const jsm = await connection.getJetStreamManager();
+
+        // When
+        await sut.recoverConsumer(jsm as never, StreamKind.Event);
+
+        // Then
+        expect(mockJsm.streams.info).not.toHaveBeenCalled();
+      });
+    });
+
     describe('when events have a custom subjectPrefix', () => {
       it('should use exact per-pattern filters instead of a wildcard', async () => {
         // Given: custom prefix on events, one registered pattern
@@ -399,6 +466,7 @@ describe(ConsumerProvider, () => {
           streamProvider,
           patternRegistry,
           customNames,
+          mockBinder,
         );
 
         patternRegistry.getEventPatterns.mockReturnValue(['order.created']);

@@ -342,6 +342,7 @@ export class JetstreamModule implements OnApplicationShutdown {
           StreamProvider,
           PatternRegistry,
           NameResolver,
+          InfrastructureBinder,
         ],
         useFactory: (
           options: JetstreamModuleOptions,
@@ -349,10 +350,18 @@ export class JetstreamModule implements OnApplicationShutdown {
           streamProvider: StreamProvider,
           patternRegistry: PatternRegistry,
           names: NameResolver,
+          binder: InfrastructureBinder,
         ): ConsumerProvider | null => {
           if (options.consumer === false) return null;
 
-          return new ConsumerProvider(options, connection, streamProvider, patternRegistry, names);
+          return new ConsumerProvider(
+            options,
+            connection,
+            streamProvider,
+            patternRegistry,
+            names,
+            binder,
+          );
         },
       },
 

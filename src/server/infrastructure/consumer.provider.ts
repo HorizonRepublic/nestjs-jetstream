@@ -2,7 +2,7 @@ import { Logger } from '@nestjs/common';
 import { JetStreamApiError, type ConsumerConfig, type ConsumerInfo } from '@nats-io/jetstream';
 
 import { ConnectionProvider } from '../../connection';
-import { StreamKind } from '../../interfaces';
+import { ManagementMode, StreamKind } from '../../interfaces';
 import type { JetstreamModuleOptions } from '../../interfaces';
 import {
   DEFAULT_BROADCAST_CONSUMER_CONFIG,
@@ -20,6 +20,8 @@ import { PatternRegistry } from '../routing';
 import { mapProvisioningError, type ProvisioningErrorContext } from './provisioning-error';
 import { NatsErrorCode } from './nats-error-codes';
 import { NameResolver } from './name-resolver';
+import { resolveManagementMode } from './management';
+import { InfrastructureBinder } from './infrastructure-binder';
 import { MIGRATION_BACKUP_SUFFIX } from './stream-migration';
 import { StreamProvider } from './stream.provider';
 
@@ -42,6 +44,7 @@ export class ConsumerProvider {
     private readonly streamProvider: StreamProvider,
     private readonly patternRegistry: PatternRegistry,
     private readonly names: NameResolver,
+    private readonly binder: InfrastructureBinder,
   ) {
     const derived = deriveOtelAttrs(options);
 
@@ -88,13 +91,23 @@ export class ConsumerProvider {
     const config = this.buildConfig(kind);
     const name = config.durable_name;
 
+    const spanAttrs = {
+      serviceName: this.otelServiceName,
+      endpoint: this.otelEndpoint,
+      entity: 'consumer' as const,
+      name,
+    };
+
+    if (resolveManagementMode(this.options, kind, 'consumer') === ManagementMode.Manual) {
+      return withProvisioningSpan(this.otel, { ...spanAttrs, action: 'bind' }, () =>
+        this.binder.bindConsumer(jsm, kind),
+      );
+    }
+
     return withProvisioningSpan(
       this.otel,
       {
-        serviceName: this.otelServiceName,
-        endpoint: this.otelEndpoint,
-        entity: 'consumer',
-        name,
+        ...spanAttrs,
         action: 'ensure',
       },
       async () => {
@@ -142,13 +155,37 @@ export class ConsumerProvider {
     const config = this.buildConfig(kind);
     const name = config.durable_name;
 
+    const spanAttrs = {
+      serviceName: this.otelServiceName,
+      endpoint: this.otelEndpoint,
+      entity: 'consumer' as const,
+      name,
+    };
+
+    if (resolveManagementMode(this.options, kind, 'consumer') === ManagementMode.Manual) {
+      return withProvisioningSpan(this.otel, { ...spanAttrs, action: 'rebind' }, async () => {
+        try {
+          return await jsm.consumers.info(stream, name);
+        } catch (err) {
+          if (
+            err instanceof JetStreamApiError &&
+            err.apiError().err_code === NatsErrorCode.ConsumerNotFound
+          ) {
+            throw new Error(
+              `Consumer ${name} on ${stream} is externally managed and currently absent — ` +
+                `waiting for it to be restored.`,
+            );
+          }
+
+          throw err;
+        }
+      });
+    }
+
     return withProvisioningSpan(
       this.otel,
       {
-        serviceName: this.otelServiceName,
-        endpoint: this.otelEndpoint,
-        entity: 'consumer',
-        name,
+        ...spanAttrs,
         action: 'recover',
       },
       async () => {
