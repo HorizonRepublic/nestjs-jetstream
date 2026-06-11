@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.12.1](https://github.com/HorizonRepublic/nestjs-jetstream/compare/v2.12.0...v2.12.1) (2026-06-11)
+
+
+### Bug Fixes
+
+* **streams:** drop the self-overlapping broadcast schedule subject ([#185](https://github.com/HorizonRepublic/nestjs-jetstream/issues/185)) ([cde5fd9](https://github.com/HorizonRepublic/nestjs-jetstream/commit/cde5fd9176455f1a47ab7097e399a36800db5b5c))
+
 ## [2.12.0](https://github.com/HorizonRepublic/nestjs-jetstream/compare/v2.11.1...v2.12.0) (2026-06-11)
 
 
