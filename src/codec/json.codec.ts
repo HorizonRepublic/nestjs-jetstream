@@ -18,14 +18,12 @@ const decoder = new TextDecoder();
  */
 export class JsonCodec implements Codec {
   public encode(data: unknown): Uint8Array {
-    // JSON.stringify(undefined) returns undefined, which TextEncoder turns
-    // into an empty payload — the symmetric decode() guard restores it.
+    // JSON.stringify(undefined) yields an empty payload; decode() restores it.
     return encoder.encode(JSON.stringify(data));
   }
 
   public decode(data: Uint8Array): unknown {
-    // Empty payloads come from void handler replies, payload-less emits, and
-    // foreign publishers. JSON.parse('') would throw on all of them.
+    // Void replies and payload-less emits arrive empty; JSON.parse('') would throw.
     if (data.length === 0) return undefined;
 
     return JSON.parse(decoder.decode(data));

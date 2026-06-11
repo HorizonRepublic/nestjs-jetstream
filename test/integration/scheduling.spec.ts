@@ -356,9 +356,8 @@ describe('Message Scheduling (Delayed Jobs)', () => {
     });
 
     it('should deliver every pending schedule of the same pattern instead of replacing it', async () => {
-      // Given: three messages scheduled on the SAME pattern while earlier ones are pending.
-      // ADR-51 rollup semantics allow one active schedule per subject, so the schedule
-      // subject must be unique per message — otherwise only the last schedule survives.
+      // Given: three schedules on the SAME pattern — per ADR-51 a shared
+      // schedule subject would keep only the last one.
       const now = Date.now();
 
       const records = [1, 2, 3].map((orderId) =>

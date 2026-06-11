@@ -160,8 +160,7 @@ export class StreamProvider {
       async () => {
         this.logger.log(`Ensuring stream: ${config.name}`);
 
-        // A leftover migration backup means a previous process died
-        // mid-migration — finish its job before reconciling the config.
+        // Finish any migration a previous process left unfinished.
         await this.migration.recoverInterrupted(jsm, config.name, config);
 
         try {
@@ -236,10 +235,8 @@ export class StreamProvider {
     ctx: ProvisioningErrorContext,
   ): Promise<StreamInfo> {
     if (this.isSharedStream(config.name)) {
-      // The broadcast stream is shared by every service in the cluster. Other
-      // services may have added subjects (e.g. broadcast._sch.> for
-      // scheduling) that this service's config does not declare — an update
-      // with the local subject list would strip them.
+      // Other services may have added subjects (e.g. broadcast._sch.>) that
+      // the local config does not declare — don't strip them.
       config.subjects = [...new Set([...config.subjects, ...currentInfo.config.subjects])];
     }
 
@@ -411,8 +408,7 @@ export class StreamProvider {
   ): Partial<StreamConfig> & { name: string; subjects: string[] } {
     const name = this.getStreamName(kind);
     const subjects = this.getSubjects(kind);
-    // The shared stream's description must not embed a service name — each
-    // deploy of a different service would rewrite it back and forth.
+    // A service-specific description on the shared stream would flip-flop on every deploy.
     const description =
       kind === StreamKind.Broadcast
         ? 'JetStream broadcast stream (shared across services)'

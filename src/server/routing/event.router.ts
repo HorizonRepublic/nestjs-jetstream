@@ -59,10 +59,7 @@ interface ResolvedEvent {
   readonly data: unknown;
 }
 
-/**
- * A delivered message parked in the concurrency backlog, together with the
- * ack-extension timer that keeps it alive while it waits for a slot.
- */
+/** A message parked in the concurrency backlog with its ack-extension timer. */
 interface QueuedMessage {
   readonly msg: JsMsg;
   readonly stopAckExtension: (() => void) | null;
@@ -194,13 +191,8 @@ export class EventRouter {
           this.handleDeadLetter(msg, data, err)
       : null;
 
-    /**
-     * Settle a message whose handler completed without throwing.
-     *
-     * Returns a Promise only when a `retry()` on the final permitted delivery
-     * escalates to dead-letter handling — a nak at that point would strand the
-     * message, since the server never redelivers past `max_deliver`.
-     */
+    // Returns a Promise only when retry() on the final delivery escalates to
+    // dead-letter handling — a nak there would strand the message.
     const settleSuccess = (
       msg: JsMsg,
       ctx: RpcContext,
@@ -249,12 +241,8 @@ export class EventRouter {
       });
     };
 
-    /**
-     * Capture a message that can never be routed (no handler, undecodable
-     * payload). Redelivery cannot fix these, so they go straight to
-     * dead-letter handling regardless of delivery count. On a workqueue
-     * stream a plain term() would delete the payload permanently.
-     */
+    // Unroutable messages can't be fixed by redelivery — capture them
+    // immediately; term() on a workqueue stream would delete the payload.
     const captureUnroutable = (
       capture: NonNullable<typeof handleDeadLetter>,
       msg: JsMsg,
@@ -273,13 +261,8 @@ export class EventRouter {
       });
     };
 
-    /**
-     * Resolve the handler and decode payload for one event.
-     *
-     * Returns `null` when the message cannot be routed and was settled
-     * synchronously, a Promise when an unroutable message is being captured
-     * by dead-letter handling, and a {@link ResolvedEvent} otherwise.
-     */
+    // Returns null when the message was settled synchronously (unroutable, no
+    // dead-letter config) and a Promise while an unroutable one is captured.
     const resolveEvent = (msg: JsMsg): ResolvedEvent | Promise<void> | null => {
       const subject = msg.subject;
 
@@ -418,8 +401,7 @@ export class EventRouter {
           return undefined;
         }
 
-        // Same ack-extension reasoning as the failure path: the dead-letter
-        // publish may outlast ack_wait.
+        // The dead-letter publish may outlast ack_wait — keep the extension alive.
         return settled.finally(() => {
           if (stopAckExtension !== null) stopAckExtension();
         });
@@ -550,9 +532,7 @@ export class EventRouter {
       drainBacklog();
     };
 
-    // route() is not expected to throw — every settlement inside it is
-    // guarded — but a failure here must never leak the concurrency slot or
-    // escape into the RxJS observer and kill the subscription.
+    // A throw here must not leak the concurrency slot or kill the subscription.
     const routeSafely = (msg: JsMsg): Promise<void> | undefined => {
       try {
         return route(msg);
@@ -576,8 +556,6 @@ export class EventRouter {
         const next = backlog.shift();
 
         if (next === undefined) return;
-        // The processing-phase timer is started inside route(); the waiting
-        // phase is over.
         next.stopAckExtension?.();
         active++;
         const result = routeSafely(next.msg);
@@ -595,9 +573,7 @@ export class EventRouter {
     const subscription = stream$.subscribe({
       next: (msg: JsMsg): void => {
         if (active >= maxActive) {
-          // A parked message was already delivered — its ack_wait clock is
-          // running on the server. Without extension a long wait ends in
-          // redelivery and double processing.
+          // A parked message's ack_wait clock is already running on the server.
           backlog.push({
             msg,
             stopAckExtension: hasAckExtension
@@ -629,8 +605,7 @@ export class EventRouter {
       },
     });
 
-    // Backlogged messages keep extension timers alive — stop them when the
-    // router unsubscribes so a destroyed router leaves nothing ticking.
+    // Stop the parked timers on unsubscribe.
     subscription.add(() => {
       for (const queued of backlog) {
         queued.stopAckExtension?.();
@@ -655,18 +630,14 @@ export class EventRouter {
   }
 
   /**
-   * Last-resort path for a dead letter: invoke `onDeadLetter`, then `term` on
-   * success. On failure the message is nak'd to release it, but the server
-   * never redelivers past `max_deliver` — it stays in the stream for manual
-   * recovery. Used when the DLQ stream isn't configured, or when publishing
-   * to it failed and we still have to surface the message somewhere.
+   * Last resort: invoke onDeadLetter, then term on success. On failure the
+   * message is nak'd — never redelivered past max_deliver, but preserved.
    */
   private async fallbackToOnDeadLetterCallback(info: DeadLetterInfo, msg: JsMsg): Promise<void> {
     const onDeadLetter = this.deadLetterConfig?.onDeadLetter;
 
     if (!onDeadLetter) {
-      // dlq-only mode and the DLQ publish failed: there is no callback to fall
-      // back to. Keep the message in the stream rather than deleting it.
+      // dlq-only mode with a failed DLQ publish — keep the message in the stream.
       this.logger.error(
         `Dead letter for ${msg.subject} could not be captured (DLQ publish failed, no onDeadLetter callback) — leaving the message in the stream`,
       );
@@ -694,10 +665,8 @@ export class EventRouter {
   }
 
   /**
-   * Copy the original message headers for the DLQ republish, dropping NATS
-   * server control headers: a copied Nats-TTL expires the DLQ entry (or gets
-   * the publish rejected when the DLQ stream has no allow_msg_ttl), a copied
-   * Nats-Msg-Id collides with the DLQ dedup window.
+   * Copy headers for the DLQ republish, dropping NATS control headers — a
+   * copied Nats-TTL would expire the DLQ entry, Nats-Msg-Id trips dedup.
    */
   private buildDlqHeaders(msg: JsMsg): MsgHdrs {
     const hdrs = natsHeaders();
@@ -716,12 +685,9 @@ export class EventRouter {
   }
 
   /**
-   * Attempt the DLQ publish up to {@link DLQ_PUBLISH_ATTEMPTS} times.
-   *
-   * Past `max_deliver` the server never redelivers, so an in-process retry is
-   * the only second chance a dead letter gets. There is no artificial delay
-   * between attempts: when the broker is unreachable each publish already
-   * spends its own request timeout, which spaces the attempts naturally.
+   * Past max_deliver the server never redelivers, so these in-process attempts
+   * are the only second chance a dead letter gets. No artificial delay — an
+   * unreachable broker already spaces attempts via its own request timeout.
    */
   private async publishToDlqWithRetry(
     connection: ConnectionProvider,

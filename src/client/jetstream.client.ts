@@ -234,10 +234,7 @@ export class JetstreamClient extends ClientProxy {
     const publishKind = detectEventKind(packet.pattern);
 
     if (schedule && publishKind === PublishKind.Ordered) {
-      // The schedule holder lives in the event stream's _sch namespace, but the
-      // target subject belongs to the ordered stream — the server requires the
-      // schedule target to be a subject of the same stream, so this can never
-      // be delivered. Fail loudly instead of dropping the message.
+      // ADR-51: the schedule target must live in the same stream as the holder — impossible for ordered patterns.
       throw new Error(
         `scheduleAt() is not supported for ordered events (pattern: ${packet.pattern}). ` +
           'Scheduled delivery is available for workqueue events and broadcasts.',
@@ -287,9 +284,7 @@ export class JetstreamClient extends ClientProxy {
           };
 
           if (schedule) {
-            // ttl belongs to the delivered message (Nats-Schedule-TTL). As a
-            // top-level option it would become Nats-TTL on the schedule holder
-            // and cancel the schedule once it elapses.
+            // As a top-level option ttl would expire the schedule holder itself; it belongs to the delivered message.
             const ack = await this.connection
               .getJetStreamClient()
               .publish(publishSubject, encoded, {
@@ -574,10 +569,7 @@ export class JetstreamClient extends ClientProxy {
       );
 
       if (ack.duplicate) {
-        // The stream dropped this publish as a duplicate (messageId reused
-        // within the dedup window). The original command owns the reply — this
-        // correlation id will never receive one, so fail now instead of
-        // burning the full RPC timeout.
+        // The reply belongs to the original (deduped) request — fail fast instead of waiting out the timeout.
         throw new Error(
           `Duplicate RPC publish for ${subject}: the messageId was already used within the ` +
             'stream dedup window, so the reply belongs to the original request',
