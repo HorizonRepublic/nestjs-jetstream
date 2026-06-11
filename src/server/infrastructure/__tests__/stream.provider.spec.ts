@@ -225,6 +225,22 @@ describe(StreamProvider, () => {
       expect(mockJsm.streams.add).not.toHaveBeenCalled();
     });
 
+    it('should keep a literal subject that the catch-all does not match', async () => {
+      // Given: NATS '>' matches one-or-more tokens, so broadcast.> does not cover 'broadcast'
+      mockStreamInfo(
+        createMock<StreamInfo>({
+          config: sharedBroadcastConfig({ subjects: ['broadcast.>', 'broadcast'] }),
+        }),
+      );
+      mockJsm.streams.update.mockResolvedValue(createMock<StreamInfo>());
+
+      // When
+      await sut.ensureStreams([StreamKind.Broadcast]);
+
+      // Then
+      expect(mockJsm.streams.update).not.toHaveBeenCalled();
+    });
+
     it('should collapse subjects covered by a broader one out of the shared-stream union', async () => {
       // Given: the live stream still carries a legacy broadcast._sch.>
       mockStreamInfo(
