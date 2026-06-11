@@ -31,6 +31,7 @@ import { mapProvisioningError, type ProvisioningErrorContext } from './provision
 import {
   formatProvisioningSummary,
   type ExternalBinding,
+  type ReservationKind,
   type StreamReservation,
 } from './provisioning-summary';
 import { resolveManagementMode } from './management';
@@ -38,9 +39,6 @@ import { InfrastructureBinder } from './infrastructure-binder';
 import { compareStreamConfig, type StreamConfigDiffResult } from './stream-config-diff';
 import { StreamMigration } from './stream-migration';
 import { subjectCovers } from './subject-utils';
-
-/** A `StreamKind` or the `'dlq'` label, used for reservation/error provenance. */
-type ReservationKind = StreamKind | 'dlq';
 
 /**
  * Manages JetStream stream lifecycle: creation, updates, and idempotent ensures.
@@ -89,12 +87,12 @@ export class StreamProvider {
       this.buildReservation(kind, this.buildConfig(kind)),
     );
     const external: ExternalBinding[] = externalKinds.map((kind) => ({
-      kind: String(kind),
+      kind,
       name: this.names.streamName(kind),
     }));
 
     const dlqIsManual =
-      this.options.dlq !== undefined &&
+      !!this.options.dlq &&
       resolveManagementMode(this.options, 'dlq', 'stream') === ManagementMode.Manual;
 
     if (this.options.dlq) {

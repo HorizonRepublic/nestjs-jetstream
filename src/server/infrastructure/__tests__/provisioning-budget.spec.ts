@@ -3,6 +3,7 @@ import { createMock } from '@golevelup/ts-vitest';
 import { Logger } from '@nestjs/common';
 import { RetentionPolicy, StorageType } from '@nats-io/jetstream';
 
+import { StreamKind } from '../../../interfaces';
 import { assertStorageBudget } from '../provisioning-budget';
 import { type StreamReservation } from '../provisioning-summary';
 
@@ -13,7 +14,7 @@ const reservation = (
   maxBytes: number,
   storage: StorageType = StorageType.File,
 ): StreamReservation => ({
-  kind: 'ev',
+  kind: StreamKind.Event,
   name: 'svc__microservice_ev-stream',
   storage,
   numReplicas,

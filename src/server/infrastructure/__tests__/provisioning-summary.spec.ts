@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { RetentionPolicy, StorageType } from '@nats-io/jetstream';
 
+import { StreamKind } from '../../../interfaces';
 import {
   formatProvisioningSummary,
   type ExternalBinding,
@@ -13,7 +14,7 @@ describe('formatProvisioningSummary', () => {
   // Given: two streams with different replicas
   const reservations: StreamReservation[] = [
     {
-      kind: 'ev',
+      kind: StreamKind.Event,
       name: 'svc__microservice_ev-stream',
       storage: StorageType.File,
       numReplicas: 3,
@@ -22,7 +23,7 @@ describe('formatProvisioningSummary', () => {
       retention: RetentionPolicy.Workqueue,
     },
     {
-      kind: 'broadcast',
+      kind: StreamKind.Broadcast,
       name: 'broadcast-stream',
       storage: StorageType.File,
       numReplicas: 3,
@@ -56,7 +57,7 @@ describe('formatProvisioningSummary', () => {
     // Given: one file stream (2 GiB) + one memory stream (3 GiB)
     const mixed: StreamReservation[] = [
       {
-        kind: 'ev',
+        kind: StreamKind.Event,
         name: 'svc__microservice_ev-stream',
         storage: StorageType.File,
         numReplicas: 1,
@@ -65,7 +66,7 @@ describe('formatProvisioningSummary', () => {
         retention: RetentionPolicy.Limits,
       },
       {
-        kind: 'broadcast',
+        kind: StreamKind.Broadcast,
         name: 'broadcast-stream',
         storage: StorageType.Memory,
         numReplicas: 1,
@@ -86,7 +87,7 @@ describe('formatProvisioningSummary', () => {
     // Given: a stream with no byte limit
     const zero: StreamReservation[] = [
       {
-        kind: 'ev',
+        kind: StreamKind.Event,
         name: 'svc__microservice_ev-stream',
         storage: StorageType.File,
         numReplicas: 3,
@@ -106,7 +107,7 @@ describe('formatProvisioningSummary', () => {
 
   describe('external bindings', () => {
     const external: ExternalBinding[] = [
-      { kind: 'ev', name: 'acme__microservice_ev-stream' },
+      { kind: StreamKind.Event, name: 'acme__microservice_ev-stream' },
       { kind: 'dlq', name: 'acme__microservice_dlq-stream' },
     ];
 
@@ -123,7 +124,7 @@ describe('formatProvisioningSummary', () => {
       // Given: one Auto reservation + two external bindings
       const auto: StreamReservation[] = [
         {
-          kind: 'broadcast',
+          kind: StreamKind.Broadcast,
           name: 'broadcast-stream',
           storage: StorageType.File,
           numReplicas: 1,

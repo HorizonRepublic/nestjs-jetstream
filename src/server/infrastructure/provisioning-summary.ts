@@ -1,8 +1,13 @@
 import { type RetentionPolicy, StorageType } from '@nats-io/jetstream';
 
+import { StreamKind } from '../../interfaces';
+
+/** A `StreamKind` or the `'dlq'` label, used for reservation/error provenance. */
+export type ReservationKind = StreamKind | 'dlq';
+
 /** One stream's provisioning footprint, used to build the boot summary. */
 export interface StreamReservation {
-  readonly kind: string;
+  readonly kind: ReservationKind;
   readonly name: string;
   readonly storage: StorageType;
   readonly numReplicas: number;
@@ -15,7 +20,7 @@ export interface StreamReservation {
 
 /** An externally-managed stream that is bound (not provisioned) by this library. */
 export interface ExternalBinding {
-  readonly kind: string;
+  readonly kind: ReservationKind;
   readonly name: string;
 }
 
