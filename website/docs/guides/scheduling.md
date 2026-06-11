@@ -111,11 +111,12 @@ Setting `max_age: 0` disables automatic cleanup for **all** messages in the even
 ## Limitations
 
 - **One-shot only.** No cron or interval scheduling. NATS supports these ([ADR-51](https://github.com/nats-io/nats-architecture-and-design/blob/main/adr/ADR-51.md)), but the library currently exposes only `scheduleAt()` for one-shot delivery.
-- **Events only.** `scheduleAt()` is ignored for RPC ([`client.send()`](/docs/patterns/rpc)); a warning is logged.
+- **Workqueue events and broadcasts only.** `scheduleAt()` is ignored for RPC ([`client.send()`](/docs/patterns/rpc)) with a logged warning, and **throws** for [`ordered:` patterns](/docs/patterns/ordered-events) — the schedule holder cannot live in the same stream as an ordered target, which the server requires.
 - **Future dates only.** `scheduleAt()` throws if the date is not in the future.
 - **NATS >= 2.12.** `allow_msg_schedules` is not supported by older server versions.
-- **`max_age` constraint.** Schedule delay must not exceed the stream's `max_age`.
+- **`max_age` constraint.** Schedule delay must not exceed the stream's `max_age` — the pending schedule is an ordinary stored message and expires with the stream's retention. Note the **broadcast stream default is 1 hour**: scheduling a broadcast further out requires raising its `max_age`.
 - **Per-stream opt-in.** Broadcast scheduling requires `allow_msg_schedules: true` on the [broadcast stream](/docs/patterns/broadcast) config separately.
+- **`ttl()` applies to the delivered message.** Combining `.ttl()` with `.scheduleAt()` sets `Nats-Schedule-TTL`: the countdown starts when the scheduled message fires, not when it is published.
 
 ## See also
 

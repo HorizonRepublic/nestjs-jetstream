@@ -14,6 +14,7 @@ import {
   RpcContext,
   StreamKind,
   streamName,
+  toNanos,
 } from '../../src';
 
 import {
@@ -407,6 +408,57 @@ describe('Message Scheduling (Delayed Jobs)', () => {
       await waitForCondition(async () => (await countScheduleMessages()) === 0, 10_000);
 
       expect(await countScheduleMessages()).toBe(0);
+    });
+  });
+
+  describe('scheduling combined with per-message TTL', () => {
+    let app: INestApplication;
+    let module: TestingModule;
+    let client: ClientProxy;
+    let serviceName: string;
+    let controller: ScheduledEventController;
+
+    beforeEach(async () => {
+      serviceName = uniqueServiceName();
+
+      ({ app, module } = await createTestApp(
+        {
+          name: serviceName,
+          port,
+          events: {
+            stream: { allow_msg_schedules: true, allow_msg_ttl: true },
+          },
+        },
+        [ScheduledEventController],
+        [serviceName],
+      ));
+
+      client = module.get<ClientProxy>(getClientToken(serviceName));
+      controller = module.get(ScheduledEventController);
+    });
+
+    afterEach(async () => {
+      await app.close();
+      await cleanupStreams(nc, serviceName);
+    });
+
+    it('should deliver a scheduled message whose ttl is shorter than the schedule delay', async () => {
+      // Given: ttl 1s, delivery scheduled 3s out — the ttl belongs to the
+      // delivered message, so it must not expire the pending schedule
+      const payload = { orderId: 7, reminder: true };
+
+      const record = new JetstreamRecordBuilder(payload)
+        .scheduleAt(new Date(Date.now() + 3_000))
+        .ttl(toNanos(1, 'seconds'))
+        .build();
+
+      // When: emit and wait past the ttl and up to the schedule
+      await firstValueFrom(client.emit('order.reminder', record));
+
+      // Then: the message still fires at the scheduled time
+      await waitForCondition(() => controller.received.length > 0, 10_000);
+
+      expect(controller.received[0]).toEqual(payload);
     });
   });
 

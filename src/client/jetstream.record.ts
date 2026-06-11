@@ -1,5 +1,5 @@
 import type { ScheduleRecordOptions } from '../interfaces';
-import { RESERVED_HEADERS } from '../jetstream.constants';
+import { NATS_CONTROL_HEADER_PREFIX, RESERVED_HEADERS } from '../jetstream.constants';
 
 /**
  * Immutable message record for JetStream transport.
@@ -208,7 +208,17 @@ export class JetstreamRecordBuilder<TData = unknown> {
    * lockstep. `RESERVED_HEADERS` is defined as an all-lowercase set.
    */
   private validateHeaderKey(key: string): void {
-    if (RESERVED_HEADERS.has(key.toLowerCase())) {
+    const normalized = key.toLowerCase();
+
+    if (normalized.startsWith(NATS_CONTROL_HEADER_PREFIX)) {
+      throw new Error(
+        `Header "${key}" is reserved for the NATS server and cannot be set manually. ` +
+          'Use setMessageId() for deduplication, ttl() for per-message expiry, ' +
+          'and scheduleAt() for delayed delivery.',
+      );
+    }
+
+    if (RESERVED_HEADERS.has(normalized)) {
       throw new Error(
         `Header "${key}" is reserved by the JetStream transport and cannot be set manually. ` +
           `Reserved headers: ${[...RESERVED_HEADERS].join(', ')}`,

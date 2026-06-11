@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type Mocked } from 'vitest';
+import { Logger } from '@nestjs/common';
 import { createMock } from '@golevelup/ts-vitest';
 import { faker } from '@faker-js/faker';
 import type { MsgHdrs, NatsConnection } from '@nats-io/transport-node';
@@ -426,6 +427,155 @@ describe(RpcRouter, () => {
       });
     });
 
+    describe('when term throws inside the timeout timer', () => {
+      it('should contain the failure instead of crashing the process', async () => {
+        vi.useFakeTimers();
+
+        // Given: a hanging handler and a term that throws (degraded connection)
+        sut = new RpcRouter(messageProvider, patternRegistry, connection, codec, eventBus, {
+          timeout: 100,
+        });
+        await sut.start();
+
+        const handler = vi.fn().mockReturnValue(new Promise(() => {}));
+
+        patternRegistry.getHandler.mockReturnValue(handler);
+
+        const correlationId = faker.string.uuid();
+        const msg = createRpcMsg('slow.cmd', {}, faker.string.uuid(), correlationId);
+
+        (msg.term as Mock).mockImplementation(() => {
+          throw new Error('connection closed');
+        });
+
+        commands$.next(msg);
+
+        // Then: the timer callback must not surface the throw as an uncaught
+        // exception, and the timeout signal still fires
+        expect(() => vi.advanceTimersByTime(100)).not.toThrow();
+        expect(eventBus.emit).toHaveBeenCalledWith(
+          TransportEvent.RpcTimeout,
+          msg.subject,
+          correlationId,
+        );
+
+        sut.destroy();
+        vi.useRealTimers();
+      });
+    });
+
+    describe('when ack throws on the sync path with bounded concurrency', () => {
+      it('should release the slot and keep processing', async () => {
+        // Given: concurrency 1, sync handler, first message's ack throws
+        sut = new RpcRouter(messageProvider, patternRegistry, connection, codec, eventBus, {
+          concurrency: 1,
+        });
+        await sut.start();
+
+        const handler = vi.fn().mockReturnValue({ ok: true });
+
+        patternRegistry.getHandler.mockReturnValue(handler);
+
+        const failing = createRpcMsg('cmd.one', {}, faker.string.uuid(), faker.string.uuid());
+
+        (failing.ack as Mock).mockImplementation(() => {
+          throw new Error('connection closed');
+        });
+
+        const healthy = createRpcMsg('cmd.two', {}, faker.string.uuid(), faker.string.uuid());
+
+        // When: both commands arrive
+        commands$.next(failing);
+        commands$.next(healthy);
+        await new Promise(process.nextTick);
+
+        // Then: the second command is still handled
+        expect(handler).toHaveBeenCalledTimes(2);
+        expect(healthy.ack).toHaveBeenCalled();
+
+        sut.destroy();
+      });
+    });
+
+    describe('when the handler throws synchronously', () => {
+      it('should reply with the error and term the command', async () => {
+        // Given: a handler that throws before returning a promise
+        await sut.start();
+
+        const handler = vi.fn().mockImplementation(() => {
+          throw new Error('sync failure');
+        });
+
+        patternRegistry.getHandler.mockReturnValue(handler);
+
+        const replyTo = faker.string.uuid();
+        const correlationId = faker.string.uuid();
+        const msg = createRpcMsg('cmd.sync-fail', {}, replyTo, correlationId);
+
+        // When: the command arrives
+        commands$.next(msg);
+        await new Promise(process.nextTick);
+
+        // Then: caller gets an error reply, the command is terminated, no ack
+        expect(mockNc.publish).toHaveBeenCalledWith(
+          replyTo,
+          expect.any(Uint8Array),
+          expect.anything(),
+        );
+        expect(msg.term).toHaveBeenCalledWith('Handler error: cmd.sync-fail');
+        expect(msg.ack).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('when the commands stream errors', () => {
+      it('should log and not crash', async () => {
+        // Given
+        const errorSpy = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+
+        await sut.start();
+
+        // When: the underlying observable errors
+        commands$.error(new Error('stream exploded'));
+
+        // Then
+        expect(errorSpy).toHaveBeenCalledWith('Stream error in RPC router', expect.any(Error));
+
+        errorSpy.mockRestore();
+      });
+    });
+
+    describe('when the routing promise itself rejects', () => {
+      it('should log the failure and release the concurrency slot', async () => {
+        // Given: concurrency 1; the handler rejects AND the error-reporting
+        // hook throws, so the rejection escapes the settlement path entirely
+        sut = new RpcRouter(messageProvider, patternRegistry, connection, codec, eventBus, {
+          concurrency: 1,
+        });
+        await sut.start();
+
+        eventBus.emit.mockImplementation(() => {
+          throw new Error('hook exploded');
+        });
+
+        const handler = vi.fn().mockRejectedValue(new Error('handler failed'));
+
+        patternRegistry.getHandler.mockReturnValue(handler);
+
+        const failing = createRpcMsg('cmd.one', {}, faker.string.uuid(), faker.string.uuid());
+        const healthy = createRpcMsg('cmd.two', {}, faker.string.uuid(), faker.string.uuid());
+
+        // When: both commands arrive
+        commands$.next(failing);
+        commands$.next(healthy);
+        await new Promise((r) => setTimeout(r, 20));
+
+        // Then: no unhandled rejection escaped and the slot was released
+        expect(handler).toHaveBeenCalledTimes(2);
+
+        sut.destroy();
+      });
+    });
+
     describe('when handle() throws an unexpected error', () => {
       it('should catch via catchError and keep the subscription alive', async () => {
         await sut.start();
@@ -605,6 +755,77 @@ describe(RpcRouter, () => {
       await new Promise((r) => setTimeout(r, 100));
 
       expect((msg.working as ReturnType<typeof vi.fn>).mock.calls.length).toBe(countAfterDone);
+    });
+
+    it('should extend ack for backlogged commands while they wait for a slot', async () => {
+      // Given: concurrency 1 with ackExtension; the first handler hangs and
+      // holds the only slot, so the second command parks in the backlog
+      sut = new RpcRouter(messageProvider, patternRegistry, connection, codec, eventBus, {
+        concurrency: 1,
+        ackExtension: 30,
+      });
+      await sut.start();
+
+      let resolveHandler!: () => void;
+      const handlerPromise = new Promise<void>((r) => {
+        resolveHandler = r;
+      });
+      const handler = vi.fn().mockReturnValue(handlerPromise);
+
+      patternRegistry.getHandler.mockReturnValue(handler);
+
+      const inFlight = createRpcMsg('cmd.one', {}, faker.string.uuid(), faker.string.uuid());
+      const queued = createRpcMsg('cmd.two', {}, faker.string.uuid(), faker.string.uuid());
+
+      // When: the second command waits in the backlog
+      commands$.next(inFlight);
+      commands$.next(queued);
+      await new Promise((r) => setTimeout(r, 120));
+
+      // Then: the queued command kept its ack alive while waiting
+      expect(queued.working).toHaveBeenCalled();
+
+      resolveHandler();
+      await new Promise((r) => setTimeout(r, 10));
+      sut.destroy();
+    });
+
+    it('should stop parked extension timers when the router is destroyed', async () => {
+      // Given: a command parked in the backlog with its waiting-phase timer
+      sut = new RpcRouter(messageProvider, patternRegistry, connection, codec, eventBus, {
+        concurrency: 1,
+        ackExtension: 30,
+      });
+      await sut.start();
+
+      let resolveHandler!: () => void;
+      const handlerPromise = new Promise<void>((r) => {
+        resolveHandler = r;
+      });
+      const handler = vi.fn().mockReturnValue(handlerPromise);
+
+      patternRegistry.getHandler.mockReturnValue(handler);
+
+      const inFlight = createRpcMsg('cmd.one', {}, faker.string.uuid(), faker.string.uuid());
+      const queued = createRpcMsg('cmd.two', {}, faker.string.uuid(), faker.string.uuid());
+
+      commands$.next(inFlight);
+      commands$.next(queued);
+      await new Promise((r) => setTimeout(r, 70));
+
+      // When: the router shuts down
+      sut.destroy();
+
+      const countAtDestroy = (queued.working as ReturnType<typeof vi.fn>).mock.calls.length;
+
+      // Then: nothing keeps ticking for the parked command
+      await new Promise((r) => setTimeout(r, 100));
+
+      expect((queued.working as ReturnType<typeof vi.fn>).mock.calls.length).toBe(countAtDestroy);
+
+      // Settle the in-flight handler so its processing-phase timer stops too
+      resolveHandler();
+      await new Promise((r) => setTimeout(r, 10));
     });
 
     it('should clear working() interval on timeout', async () => {

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type Mocked } from 'vitest';
+import { Logger } from '@nestjs/common';
 import { createMock } from '@golevelup/ts-vitest';
 import { faker } from '@faker-js/faker';
 import type { DeliveryInfo, JsMsg } from '@nats-io/jetstream';
@@ -77,6 +78,198 @@ describe(EventRouter, () => {
         expect(events$.observed).toBe(false);
         expect(broadcasts$.observed).toBe(false);
       });
+    });
+  });
+
+  describe('routing resilience', () => {
+    it('should release the slot when a post-settlement hook throws on the sync path', async () => {
+      // Given: concurrency 1; HandlerCompleted reporting is enabled and the
+      // hook throws — the failure escapes settlement and hits the limiter
+      const processingConfig: EventProcessingConfig = { events: { concurrency: 1 } };
+
+      eventBus.hasHook.mockReturnValue(true);
+      eventBus.emit.mockImplementation(() => {
+        throw new Error('hook exploded');
+      });
+
+      sut = new EventRouter(
+        messageProvider,
+        patternRegistry,
+        codec,
+        eventBus,
+        undefined,
+        processingConfig,
+      );
+      sut.start();
+
+      const handler = vi.fn().mockReturnValue(undefined);
+
+      patternRegistry.getHandler.mockReturnValue(handler);
+
+      const first = createMock<JsMsg>({
+        subject: 'first.subject',
+        data: new TextEncoder().encode(JSON.stringify({})),
+      });
+      const second = createMock<JsMsg>({
+        subject: 'second.subject',
+        data: new TextEncoder().encode(JSON.stringify({})),
+      });
+
+      // When
+      events$.next(first);
+      events$.next(second);
+      await new Promise(process.nextTick);
+
+      // Then: both messages were settled despite the throwing hook
+      expect(handler).toHaveBeenCalledTimes(2);
+      expect(first.ack).toHaveBeenCalled();
+      expect(second.ack).toHaveBeenCalled();
+    });
+
+    it('should log and not crash when the message stream errors', () => {
+      // Given
+      const errorSpy = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+
+      sut.start();
+
+      // When: the underlying observable errors
+      events$.error(new Error('stream exploded'));
+
+      // Then
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Stream error'),
+        expect.any(Error),
+      );
+
+      errorSpy.mockRestore();
+    });
+
+    it('should log and survive a failing dead-letter capture for unroutable messages', async () => {
+      // Given: dlq configured, no handler for the subject, and the capture
+      // chain rejects (the DeadLetter hook emit throws)
+      const errorSpy = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      const options: JetstreamModuleOptions = {
+        name: 'my-service',
+        servers: ['nats://localhost:4222'],
+        dlq: {},
+      };
+      const dlqConfig: DeadLetterConfig = { maxDeliverByStream: new Map() };
+      const connection = createMock<ConnectionProvider>({
+        getJetStreamClient: vi.fn().mockReturnValue({ publish: vi.fn() }),
+      });
+
+      eventBus.emit.mockImplementation(() => {
+        throw new Error('hook exploded');
+      });
+
+      sut = new EventRouter(
+        messageProvider,
+        patternRegistry,
+        codec,
+        eventBus,
+        dlqConfig,
+        undefined,
+        undefined,
+        connection,
+        options,
+      );
+      sut.start();
+
+      patternRegistry.getHandler.mockReturnValue(null);
+
+      const msg = createMock<JsMsg>({
+        subject: 'orphan.subject',
+        data: new TextEncoder().encode(JSON.stringify({})),
+      });
+
+      // When: the unroutable message arrives
+      events$.next(msg);
+      await new Promise(process.nextTick);
+
+      // Then: the failure is logged, nothing escapes as an unhandled rejection
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Dead-letter capture failed for unroutable'),
+        expect.anything(),
+      );
+
+      errorSpy.mockRestore();
+    });
+  });
+
+  describe('settlement resilience', () => {
+    const createSettleMsg = (subject: string, ackImpl?: () => void): JsMsg =>
+      createMock<JsMsg>({
+        subject,
+        data: new TextEncoder().encode(JSON.stringify({})),
+        ...(ackImpl ? { ack: vi.fn(ackImpl) } : {}),
+      });
+
+    it('should keep routing after ack throws on the sync path with bounded concurrency', async () => {
+      // Given: concurrency 1 and a sync handler; the first message's ack
+      // throws (settlement is a publish — it fails when the connection drops)
+      const processingConfig: EventProcessingConfig = { events: { concurrency: 1 } };
+
+      sut = new EventRouter(
+        messageProvider,
+        patternRegistry,
+        codec,
+        eventBus,
+        undefined,
+        processingConfig,
+      );
+      sut.start();
+
+      const handler = vi.fn().mockReturnValue(undefined);
+
+      patternRegistry.getHandler.mockReturnValue(handler);
+
+      const failing = createSettleMsg('first.subject', () => {
+        throw new Error('connection closed');
+      });
+      const healthy = createSettleMsg('second.subject');
+
+      // When: both messages arrive
+      events$.next(failing);
+      events$.next(healthy);
+      await new Promise(process.nextTick);
+
+      // Then: the slot was released and the second message processed normally
+      expect(handler).toHaveBeenCalledTimes(2);
+      expect(healthy.ack).toHaveBeenCalled();
+    });
+
+    it('should free the concurrency slot when settlement fails on the async path', async () => {
+      // Given: concurrency 1 and an async handler; the first message's ack throws
+      const processingConfig: EventProcessingConfig = { events: { concurrency: 1 } };
+
+      sut = new EventRouter(
+        messageProvider,
+        patternRegistry,
+        codec,
+        eventBus,
+        undefined,
+        processingConfig,
+      );
+      sut.start();
+
+      const handler = vi.fn().mockResolvedValue(undefined);
+
+      patternRegistry.getHandler.mockReturnValue(handler);
+
+      const failing = createSettleMsg('first.subject', () => {
+        throw new Error('connection closed');
+      });
+      const healthy = createSettleMsg('second.subject');
+
+      // When: both messages arrive
+      events$.next(failing);
+      events$.next(healthy);
+      await new Promise(process.nextTick);
+      await new Promise(process.nextTick);
+
+      // Then: no unhandled rejection escapes and the second message is processed
+      expect(handler).toHaveBeenCalledTimes(2);
+      expect(healthy.ack).toHaveBeenCalled();
     });
   });
 
@@ -541,6 +734,36 @@ describe(EventRouter, () => {
       });
     });
 
+    describe('when ordered handler throws synchronously', () => {
+      it('should contain the throw and keep processing the stream', async () => {
+        // Given: a handler that throws before returning a promise
+        const handler = vi.fn().mockImplementation(() => {
+          throw new Error('sync failure');
+        });
+
+        patternRegistry.getHandler.mockReturnValue(handler);
+
+        const failing = createMock<JsMsg>({
+          subject: 'first.ordered',
+          data: new TextEncoder().encode(JSON.stringify({})),
+        });
+        const healthy = createMock<JsMsg>({
+          subject: 'second.ordered',
+          data: new TextEncoder().encode(JSON.stringify({})),
+        });
+
+        // When: both ordered messages arrive
+        ordered$.next(failing);
+        ordered$.next(healthy);
+        await new Promise(process.nextTick);
+
+        // Then: no settlement attempted, the stream stays alive
+        expect(handler).toHaveBeenCalledTimes(2);
+        expect(failing.nak).not.toHaveBeenCalled();
+        expect(failing.term).not.toHaveBeenCalled();
+      });
+    });
+
     describe('when no handler is found for ordered message', () => {
       it('should NOT call term (ordered consumers are ephemeral)', async () => {
         // Given: no handler registered
@@ -930,6 +1153,65 @@ describe(EventRouter, () => {
           expect(msg.term).toHaveBeenCalledWith('Moved to DLQ stream');
         });
 
+        it('should strip NATS control headers from the DLQ republish', async () => {
+          // Given: a message that carries server control headers from the
+          // original publish (per-message TTL, dedup id)
+          const options: JetstreamModuleOptions = {
+            name: 'my-service',
+            servers: ['nats://localhost:4222'],
+            dlq: {},
+          };
+
+          sut = new EventRouter(
+            messageProvider,
+            patternRegistry,
+            codec,
+            eventBus,
+            deadLetterConfig,
+            undefined,
+            undefined,
+            connection,
+            options,
+          );
+          sut.start();
+
+          const handler = vi.fn().mockRejectedValue(new Error('handler error'));
+
+          patternRegistry.getHandler.mockReturnValue(handler);
+
+          const mockHeaders = new Map([
+            ['Nats-TTL', ['30s']],
+            ['Nats-Msg-Id', ['original-id']],
+            ['X-Trace-Id', ['abc123']],
+          ]);
+          const msg = createMock<JsMsg>({
+            subject: 'test.subject',
+            data: new TextEncoder().encode(JSON.stringify({ key: 'value' })),
+            headers: mockHeaders as unknown as JsMsg['headers'],
+            info: {
+              deliveryCount: 3,
+              stream: streamName,
+              streamSequence: 42,
+              redelivered: true,
+              timestampNanos: Date.now() * 1_000_000,
+            } as DeliveryInfo,
+          });
+
+          // When: dead-letter message arrives
+          events$.next(msg);
+          await new Promise(process.nextTick);
+
+          // Then: control headers are gone (a copied Nats-TTL would expire the
+          // DLQ entry or get the publish rejected), diagnostics are preserved
+          const publishCall = mockJs.publish.mock.calls[0]!;
+          const dlqHeaders = publishCall[2].headers;
+
+          expect(dlqHeaders.get('Nats-TTL')).toBe('');
+          expect(dlqHeaders.get('Nats-Msg-Id')).toBe('');
+          expect(dlqHeaders.get('X-Trace-Id')).toBe('abc123');
+          expect(msg.term).toHaveBeenCalledWith('Moved to DLQ stream');
+        });
+
         it('should use error.message as reason for Error instances', async () => {
           // Given: handler throws a proper Error
           const options: JetstreamModuleOptions = {
@@ -1069,6 +1351,86 @@ describe(EventRouter, () => {
       });
 
       describe('when options.dlq is set — publish fails', () => {
+        it('should nak and preserve the message in dlq-only mode (no callback to fall back to)', async () => {
+          // Given: dlq-only configuration and a DLQ publish that never succeeds
+          const options: JetstreamModuleOptions = {
+            name: 'my-service',
+            servers: ['nats://localhost:4222'],
+            dlq: {},
+          };
+          const dlqOnlyConfig: DeadLetterConfig = { maxDeliverByStream };
+
+          mockJs.publish.mockRejectedValue(new Error('NATS down'));
+
+          sut = new EventRouter(
+            messageProvider,
+            patternRegistry,
+            codec,
+            eventBus,
+            dlqOnlyConfig,
+            undefined,
+            undefined,
+            connection,
+            options,
+          );
+          sut.start();
+
+          const handler = vi.fn().mockRejectedValue(new Error('handler error'));
+
+          patternRegistry.getHandler.mockReturnValue(handler);
+
+          const msg = createDeadLetterMsg();
+
+          // When: dead-letter message arrives and every capture attempt fails
+          events$.next(msg);
+          await new Promise(process.nextTick);
+
+          // Then: the message is released but never deleted
+          expect(msg.nak).toHaveBeenCalled();
+          expect(msg.term).not.toHaveBeenCalled();
+        });
+
+        it('should retry the DLQ publish before falling back', async () => {
+          // Given: DLQ publish fails once, then succeeds
+          const options: JetstreamModuleOptions = {
+            name: 'my-service',
+            servers: ['nats://localhost:4222'],
+            dlq: {},
+          };
+
+          mockJs.publish
+            .mockRejectedValueOnce(new Error('transient NATS hiccup'))
+            .mockResolvedValue(undefined);
+
+          sut = new EventRouter(
+            messageProvider,
+            patternRegistry,
+            codec,
+            eventBus,
+            deadLetterConfig,
+            undefined,
+            undefined,
+            connection,
+            options,
+          );
+          sut.start();
+
+          const handler = vi.fn().mockRejectedValue(new Error('handler error'));
+
+          patternRegistry.getHandler.mockReturnValue(handler);
+
+          const msg = createDeadLetterMsg();
+
+          // When: dead-letter message arrives
+          events$.next(msg);
+          await new Promise(process.nextTick);
+
+          // Then: second attempt landed the message in the DLQ — no fallback path
+          expect(mockJs.publish).toHaveBeenCalledTimes(2);
+          expect(msg.term).toHaveBeenCalledWith('Moved to DLQ stream');
+          expect(msg.nak).not.toHaveBeenCalled();
+        });
+
         it('should fall back to onDeadLetter callback and nak when DLQ publish throws', async () => {
           // Given: DLQ publish fails
           const options: JetstreamModuleOptions = {
@@ -1438,6 +1800,44 @@ describe(EventRouter, () => {
       await new Promise((r) => setTimeout(r, 100));
 
       expect((msg.working as ReturnType<typeof vi.fn>).mock.calls.length).toBe(countAfterDone);
+    });
+
+    it('should extend ack for backlogged messages while they wait for a slot', async () => {
+      // Given: concurrency 1 with ackExtension; the first handler hangs and
+      // holds the only slot, so the second message parks in the backlog —
+      // its ack_wait clock is already running on the server
+      sut = new EventRouter(messageProvider, patternRegistry, codec, eventBus, undefined, {
+        events: { concurrency: 1, ackExtension: 30 },
+      });
+      sut.start();
+
+      let resolveHandler!: () => void;
+      const handlerPromise = new Promise<void>((r) => {
+        resolveHandler = r;
+      });
+      const handler = vi.fn().mockReturnValue(handlerPromise);
+
+      patternRegistry.getHandler.mockReturnValue(handler);
+
+      const inFlight = createMock<JsMsg>({
+        subject: 'first.subject',
+        data: new TextEncoder().encode(JSON.stringify({})),
+      });
+      const queued = createMock<JsMsg>({
+        subject: 'second.subject',
+        data: new TextEncoder().encode(JSON.stringify({})),
+      });
+
+      // When: the second message waits in the backlog
+      events$.next(inFlight);
+      events$.next(queued);
+      await new Promise((r) => setTimeout(r, 120));
+
+      // Then: the queued message kept its ack alive while waiting
+      expect(queued.working).toHaveBeenCalled();
+
+      resolveHandler();
+      await new Promise((r) => setTimeout(r, 10));
     });
 
     it('should not call working() when ackExtension is disabled', async () => {

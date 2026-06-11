@@ -8,7 +8,7 @@ schema:
   headline: "RpcContext — Handler Context & Message Settlement"
   description: "Access JetStream metadata and control ack, retry, and terminate actions in NestJS message handlers via RpcContext."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-11"
+  dateModified: "2026-06-10"
 ---
 
 import Since from '@site/src/components/Since';
@@ -97,7 +97,7 @@ class RpcContext {
 
 Control how the transport acknowledges the message — without throwing errors.
 
-**`ctx.retry({ delayMs? })`** → `msg.nak(delayMs)`, redelivering the message. Use for business-level retries (external service unavailable, resource locked).
+**`ctx.retry({ delayMs? })`** → `msg.nak(delayMs)`, redelivering the message. Use for business-level retries (external service unavailable, resource locked). Each retry consumes a delivery attempt; a `retry()` on the final permitted delivery is routed through [dead-letter handling](/docs/guides/dead-letter-queue) just like a throwing handler, so the message is captured instead of stranded.
 
 **`ctx.terminate(reason?)`** → `msg.term(reason)`, permanently rejecting. Use when the message is no longer relevant (order cancelled, entity deleted).
 

@@ -358,31 +358,43 @@ describe(JetstreamClient, () => {
         );
       });
 
-      it('should publish ordered schedule to _sch subject with ordered target', async () => {
-        // Given: ordered event with schedule
+      it('should reject scheduleAt for ordered patterns', async () => {
+        // Given: ordered event with schedule — the schedule holder would land
+        // in the event stream while the target lives in the ordered stream,
+        // which the server rejects (schedule target must share the stream)
         const data = { status: faker.lorem.word() };
         const futureDate = new Date(Date.now() + 60_000);
         const record = new JetstreamRecordBuilder(data).scheduleAt(futureDate).build();
 
-        // When: ordered event emitted with schedule
-        await firstValueFrom(sut.emit('ordered:order.status', record));
-
-        // Then: published to _sch namespace with ordered target and a unique suffix
-        const expectedScheduleSubject = new RegExp(
-          `^${targetName}__microservice\\._sch\\.order\\.status\\.[A-Za-z0-9]+$`,
+        // When/Then: emit rejects with a descriptive error, nothing is published
+        await expect(firstValueFrom(sut.emit('ordered:order.status', record))).rejects.toThrow(
+          /scheduleAt.*ordered/i,
         );
-        const expectedOrderedTarget = `${targetName}__microservice.ordered.order.status`;
 
-        expect(mockJs.publish).toHaveBeenCalledWith(
-          expect.stringMatching(expectedScheduleSubject),
-          codec.encode(data),
-          expect.objectContaining({
-            schedule: {
-              specification: futureDate,
-              target: expectedOrderedTarget,
-            },
-          }),
-        );
+        expect(mockJs.publish).not.toHaveBeenCalled();
+      });
+
+      it('should apply ttl to the delivered message, not the schedule holder', async () => {
+        // Given: a scheduled record with a per-message TTL
+        const data = { orderId: faker.number.int() };
+        const futureDate = new Date(Date.now() + 60_000);
+        const record = new JetstreamRecordBuilder(data)
+          .scheduleAt(futureDate)
+          .ttl(30 * 1_000_000_000)
+          .build();
+
+        // When: event emitted with schedule + ttl
+        await firstValueFrom(sut.emit('order.reminder', record));
+
+        // Then: ttl rides on the schedule (Nats-Schedule-TTL) — a top-level ttl
+        // would become Nats-TTL on the holder and cancel the schedule on expiry
+        const publishOpts = mockJs.publish.mock.calls[0]![2]!;
+
+        expect(publishOpts.ttl).toBeUndefined();
+        expect(publishOpts.schedule).toMatchObject({
+          specification: futureDate,
+          ttl: '30s',
+        });
       });
 
       it('should use a distinct schedule subject for each message of the same pattern', async () => {
@@ -941,6 +953,37 @@ describe(JetstreamClient, () => {
       }
 
       vi.useRealTimers();
+    });
+  });
+
+  describe('duplicate publish detection (JetStream RPC mode)', () => {
+    beforeEach(async () => {
+      vi.useFakeTimers();
+
+      options.rpc = { mode: 'jetstream' };
+      sut = new JetstreamClient(options, targetName, connection, codec, eventBus);
+      await sut.connect();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('should fail fast when the command publish is deduplicated by the stream', async () => {
+      // Given: the stream reports the publish as a duplicate — the original
+      // command owns the reply, this correlation id will never receive one
+      mockJs.publish.mockResolvedValue(createMock<PubAck>({ duplicate: true, seq: 5 }));
+
+      // When: sending an RPC whose messageId was already used
+      const result = firstValueFrom(sut.send('rpc.dup', {}));
+      // Attach the expectation before the rejection settles
+      const assertion = expect(result).rejects.toThrow(/duplicate/i);
+
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Then: rejected immediately instead of hanging until the RPC timeout
+      await vi.advanceTimersByTimeAsync(DEFAULT_JETSTREAM_RPC_TIMEOUT);
+      await assertion;
     });
   });
 

@@ -43,8 +43,11 @@ export interface DeadLetterConfig {
    * Used to detect when a message from a given stream has exhausted all delivery attempts.
    */
   maxDeliverByStream: Map<string, number>;
-  /** Async callback invoked when a message exhausts all deliveries. */
-  onDeadLetter(info: DeadLetterInfo): Promise<void>;
+  /**
+   * Async callback invoked when a message exhausts all deliveries.
+   * Optional: in dlq-only mode dead letters go to the DLQ stream without a callback.
+   */
+  onDeadLetter?(info: DeadLetterInfo): Promise<void>;
 }
 
 /** Options for configuring RPC processing behavior. */

@@ -8,6 +8,7 @@ import { ConnectionProvider } from '../../../connection';
 import { StreamKind } from '../../../interfaces';
 import type { JetstreamModuleOptions, StreamConfigOverrides } from '../../../interfaces';
 import {
+  DEFAULT_BROADCAST_STREAM_CONFIG,
   DEFAULT_DLQ_STREAM_CONFIG,
   DEFAULT_EVENT_STREAM_CONFIG,
   internalName,
@@ -48,6 +49,22 @@ describe(StreamProvider, () => {
   });
 
   afterEach(vi.resetAllMocks);
+
+  const streamNotFound = (): JetStreamApiError =>
+    new JetStreamApiError({
+      err_code: 10059,
+      code: 404,
+      description: 'stream not found',
+    });
+
+  /** Resolve `info` for real streams; report migration backups as absent. */
+  const mockStreamInfo = (info: StreamInfo): void => {
+    mockJsm.streams.info.mockImplementation(async (name: string) => {
+      if (name.endsWith('__migration_backup')) throw streamNotFound();
+
+      return info;
+    });
+  };
 
   describe('getStreamName', () => {
     describe('when kind is Event', () => {
@@ -181,6 +198,54 @@ describe(StreamProvider, () => {
     });
   });
 
+  describe('shared broadcast stream protection', () => {
+    const sharedBroadcastConfig = (
+      overrides: Record<string, unknown> = {},
+    ): Record<string, unknown> => ({
+      ...DEFAULT_BROADCAST_STREAM_CONFIG,
+      name: 'broadcast-stream',
+      subjects: ['broadcast.>'],
+      description: 'JetStream broadcast stream (shared across services)',
+      ...overrides,
+    });
+
+    it('should not strip subjects or rewrite the description set by other services', async () => {
+      // Given: another service enabled broadcast scheduling, so the shared
+      // stream carries an extra subject this service's config does not declare
+      mockStreamInfo(
+        createMock<StreamInfo>({
+          config: sharedBroadcastConfig({ subjects: ['broadcast.>', 'broadcast._sch.>'] }),
+        }),
+      );
+      mockJsm.streams.update.mockResolvedValue(createMock<StreamInfo>());
+
+      // When
+      await sut.ensureStreams([StreamKind.Broadcast]);
+
+      // Then: no update — the local config must not clobber the shared stream
+      expect(mockJsm.streams.update).not.toHaveBeenCalled();
+      expect(mockJsm.streams.add).not.toHaveBeenCalled();
+    });
+
+    it('should refuse destructive migration of the shared broadcast stream', async () => {
+      // Given: an immutable diff on the shared stream and the migration flag on
+      options.allowDestructiveMigration = true;
+      sut = new StreamProvider(options, connection);
+
+      mockStreamInfo(
+        createMock<StreamInfo>({
+          config: sharedBroadcastConfig({ storage: StorageType.Memory }),
+        }),
+      );
+
+      // When/Then: recreating broadcast-stream would delete every other
+      // service's durable consumers — fail loudly instead
+      await expect(sut.ensureStreams([StreamKind.Broadcast])).rejects.toThrow(
+        /broadcast-stream.*shared|shared.*broadcast-stream/i,
+      );
+    });
+  });
+
   describe('ensureStreams', () => {
     describe('when the stream does not exist', () => {
       it('should create the stream', async () => {
@@ -219,7 +284,7 @@ describe(StreamProvider, () => {
           },
         });
 
-        mockJsm.streams.info.mockResolvedValue(existingInfo);
+        mockStreamInfo(existingInfo);
 
         const updated = createMock<StreamInfo>();
 
@@ -244,7 +309,7 @@ describe(StreamProvider, () => {
           max_age: 999,
         };
 
-        mockJsm.streams.info.mockResolvedValue(createMock<StreamInfo>({ config: existingConfig }));
+        mockStreamInfo(createMock<StreamInfo>({ config: existingConfig }));
         mockJsm.streams.update.mockResolvedValue(createMock<StreamInfo>());
 
         // When
@@ -266,7 +331,7 @@ describe(StreamProvider, () => {
           storage: StorageType.Memory,
         };
 
-        mockJsm.streams.info.mockResolvedValue(createMock<StreamInfo>({ config: existingConfig }));
+        mockStreamInfo(createMock<StreamInfo>({ config: existingConfig }));
 
         // When (allowDestructiveMigration is false by default)
         await sut.ensureStreams([StreamKind.Event]);
@@ -288,7 +353,7 @@ describe(StreamProvider, () => {
           max_age: 999,
         };
 
-        mockJsm.streams.info.mockResolvedValue(createMock<StreamInfo>({ config: existingConfig }));
+        mockStreamInfo(createMock<StreamInfo>({ config: existingConfig }));
         mockJsm.streams.update.mockResolvedValue(createMock<StreamInfo>());
 
         // When
@@ -315,7 +380,7 @@ describe(StreamProvider, () => {
           retention: RetentionPolicy.Limits,
         };
 
-        mockJsm.streams.info.mockResolvedValue(createMock<StreamInfo>({ config: existingConfig }));
+        mockStreamInfo(createMock<StreamInfo>({ config: existingConfig }));
 
         // When / Then
         await expect(sut.ensureStreams([StreamKind.Event])).rejects.toThrow(
@@ -419,12 +484,7 @@ describe(StreamProvider, () => {
           options = { ...options, dlq: {} };
           sut = new StreamProvider(options, connection);
 
-          // First call (event stream) returns not-found, second call (DLQ) returns info
-          const notFoundError = new JetStreamApiError({
-            err_code: 10059,
-            code: 404,
-            description: 'stream not found',
-          });
+          // Event stream is absent (gets created); the DLQ stream exists
           const existingDlqInfo = createMock<StreamInfo>({
             config: {
               ...DEFAULT_DLQ_STREAM_CONFIG,
@@ -434,9 +494,11 @@ describe(StreamProvider, () => {
             } as StreamInfo['config'],
           });
 
-          mockJsm.streams.info
-            .mockRejectedValueOnce(notFoundError) // event stream → create
-            .mockResolvedValueOnce(existingDlqInfo); // DLQ stream → exists
+          mockJsm.streams.info.mockImplementation(async (name: string) => {
+            if (name.endsWith('_dlq-stream')) return existingDlqInfo;
+
+            throw streamNotFound();
+          });
 
           mockJsm.streams.add.mockResolvedValue(createMock<StreamInfo>());
 
@@ -523,7 +585,7 @@ describe(StreamProvider, () => {
       });
 
       mockJsm.getAccountInfo = getAccountInfo;
-      mockJsm.streams.info.mockResolvedValue({
+      mockStreamInfo({
         config: { ...DEFAULT_EVENT_STREAM_CONFIG, name: sut.getStreamName(StreamKind.Event) },
       } as never);
 

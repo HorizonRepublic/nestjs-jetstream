@@ -300,6 +300,17 @@ describe(JetstreamRecordBuilder, () => {
           expect(() => sut.setHeader(header, 'value')).toThrow(/reserved/i);
         },
       );
+
+      it.each(['Nats-Rollup', 'Nats-TTL', 'Nats-Msg-Id', 'Nats-Schedule', 'nats-expected-stream'])(
+        'should reject the NATS server control header %s',
+        (header) => {
+          // Nats-* headers drive server behavior: Nats-Rollup purges every
+          // pending message on the subject, Nats-TTL expires the message,
+          // Nats-Msg-Id is owned by setMessageId(). All of them have dedicated
+          // builder APIs or are not meant to be set on application messages.
+          expect(() => sut.setHeader(header, 'value')).toThrow(/reserved/i);
+        },
+      );
     });
 
     describe('when setting reserved headers via setHeaders()', () => {
