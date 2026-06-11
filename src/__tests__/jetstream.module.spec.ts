@@ -9,6 +9,8 @@ import { JETSTREAM_OPTIONS } from '../jetstream.constants';
 import { JetstreamModule, warnIfManualWithDestructive } from '../jetstream.module';
 import { NameResolver } from '../server/infrastructure/name-resolver';
 
+type ModuleFactoryProvider = Extract<Provider, { provide: unknown; useFactory: unknown }>;
+
 const baseOptions = (): JetstreamModuleOptions => ({
   name: 'svc',
   servers: ['nats://localhost:4222'],
@@ -83,8 +85,7 @@ describe('NameResolver factory wiring', () => {
     // Extract the NameResolver provider from the real forRoot() provider list
     const { providers = [] } = JetstreamModule.forRoot(options);
     const nameResolverProvider = (providers as Provider[]).find(
-      (p): p is Extract<Provider, { provide: unknown; useFactory: unknown }> =>
-        'provide' in p && p.provide === NameResolver,
+      (p): p is ModuleFactoryProvider => 'provide' in p && p.provide === NameResolver,
     );
 
     // When — compile a minimal module: options value + the real NameResolver factory
