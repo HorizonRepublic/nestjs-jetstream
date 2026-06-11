@@ -17,7 +17,7 @@ import { ConnectionProvider } from './connection';
 import { deriveOtelAttrs, withSelfHealingSpan } from './otel';
 import { EventBus } from './hooks';
 import { JetstreamHealthIndicator } from './health';
-import { StreamKind } from './interfaces';
+import { ManagementMode, StreamKind } from './interfaces';
 import type {
   Codec,
   DeadLetterConfig,
@@ -53,6 +53,20 @@ import { ShutdownManager } from './shutdown';
 
 /** DI token for the shared ackWaitMap instance (populated at runtime by strategy). */
 const JETSTREAM_ACK_WAIT_MAP = Symbol('JETSTREAM_ACK_WAIT_MAP');
+
+export const warnIfManualWithDestructive = (
+  options: JetstreamModuleOptions,
+  logger: Logger,
+): void => {
+  if (
+    options.allowDestructiveMigration &&
+    options.provisioning?.management === ManagementMode.Manual
+  ) {
+    logger.warn(
+      'allowDestructiveMigration has no effect under provisioning.management: Manual — the library never migrates externally managed streams.',
+    );
+  }
+};
 
 /**
  * Root module for the NestJS JetStream transport.
@@ -284,6 +298,10 @@ export class JetstreamModule implements OnApplicationShutdown {
         provide: NameResolver,
         inject: [JETSTREAM_OPTIONS],
         useFactory: (options: JetstreamModuleOptions): NameResolver => {
+          const logger = new Logger('Jetstream:Module');
+
+          warnIfManualWithDestructive(options, logger);
+
           return new NameResolver(options);
         },
       },
