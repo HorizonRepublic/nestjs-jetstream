@@ -95,7 +95,6 @@ export class StreamProvider {
 
     const dlqIsManual =
       this.options.dlq !== undefined &&
-      this.options.dlq !== false &&
       resolveManagementMode(this.options, 'dlq', 'stream') === ManagementMode.Manual;
 
     if (this.options.dlq) {
@@ -403,6 +402,61 @@ export class StreamProvider {
 
       throw err;
     }
+  }
+
+  private partitionByManagement(kinds: StreamKind[]): {
+    autoKinds: StreamKind[];
+    externalKinds: StreamKind[];
+  } {
+    const autoKinds: StreamKind[] = [];
+    const externalKinds: StreamKind[] = [];
+
+    for (const kind of kinds) {
+      if (resolveManagementMode(this.options, kind, 'stream') === ManagementMode.Manual) {
+        externalKinds.push(kind);
+      } else {
+        autoKinds.push(kind);
+      }
+    }
+
+    return { autoKinds, externalKinds };
+  }
+
+  private async bindStream(
+    jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
+    kind: StreamKind,
+  ): Promise<StreamInfo> {
+    const name = this.names.streamName(kind);
+
+    return withProvisioningSpan(
+      this.otel,
+      {
+        serviceName: this.otelServiceName,
+        endpoint: this.otelEndpoint,
+        entity: 'stream',
+        name,
+        action: 'bind',
+      },
+      () => this.binder.bindStream(jsm, kind),
+    );
+  }
+
+  private async bindDlqStream(
+    jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
+  ): Promise<StreamInfo> {
+    const name = this.names.dlqStreamName();
+
+    return withProvisioningSpan(
+      this.otel,
+      {
+        serviceName: this.otelServiceName,
+        endpoint: this.otelEndpoint,
+        entity: 'stream',
+        name,
+        action: 'bind',
+      },
+      () => this.binder.bindDlqStream(jsm),
+    );
   }
 
   /** The broadcast stream is global — every service in the cluster shares it. */

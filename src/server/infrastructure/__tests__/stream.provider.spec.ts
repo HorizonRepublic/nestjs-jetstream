@@ -725,8 +725,8 @@ describe(StreamProvider, () => {
       await sut.ensureStreams([StreamKind.Event]);
 
       // Then: streams.info was never called for a migration_backup name
-      const infoCallNames = mockJsm.streams.info.mock.calls.map(
-        ([name]: [string]) => name,
+      const infoCallNames = mockJsm.streams.info.mock.calls.map((args: unknown[]) =>
+        String(args[0]),
       );
 
       expect(infoCallNames.every((n: string) => !n.includes('__migration_backup'))).toBe(true);
@@ -760,7 +760,7 @@ describe(StreamProvider, () => {
 
       // And the summary contains an external marker
       const summaryLog = logSpy.mock.calls
-        .map(([msg]: [unknown]) => String(msg))
+        .map((args: unknown[]) => String(args[0]))
         .find((m: string) => m.includes(options.name) && m.includes('external'));
 
       expect(summaryLog).toBeDefined();

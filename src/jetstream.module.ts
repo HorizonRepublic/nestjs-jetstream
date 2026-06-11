@@ -47,6 +47,7 @@ import {
   StreamProvider,
   type ConsumerRecoveryFn,
 } from './server';
+import { InfrastructureBinder } from './server/infrastructure/infrastructure-binder';
 import { NameResolver } from './server/infrastructure/name-resolver';
 import { ShutdownManager } from './shutdown';
 
@@ -301,18 +302,34 @@ export class JetstreamModule implements OnApplicationShutdown {
         },
       },
 
+      // InfrastructureBinder — bind-only validation for Manual streams/consumers
+      {
+        provide: InfrastructureBinder,
+        inject: [JETSTREAM_OPTIONS, NameResolver, PatternRegistry],
+        useFactory: (
+          options: JetstreamModuleOptions,
+          names: NameResolver,
+          registry: PatternRegistry,
+        ): InfrastructureBinder | null => {
+          if (options.consumer === false) return null;
+
+          return new InfrastructureBinder(options, names, registry);
+        },
+      },
+
       // StreamProvider — JetStream stream lifecycle
       {
         provide: StreamProvider,
-        inject: [JETSTREAM_OPTIONS, JETSTREAM_CONNECTION, NameResolver],
+        inject: [JETSTREAM_OPTIONS, JETSTREAM_CONNECTION, NameResolver, InfrastructureBinder],
         useFactory: (
           options: JetstreamModuleOptions,
           connection: ConnectionProvider,
           names: NameResolver,
+          binder: InfrastructureBinder,
         ): StreamProvider | null => {
           if (options.consumer === false) return null;
 
-          return new StreamProvider(options, connection, names);
+          return new StreamProvider(options, connection, names, binder);
         },
       },
 
