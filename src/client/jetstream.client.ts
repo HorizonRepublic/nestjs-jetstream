@@ -738,8 +738,7 @@ export class JetstreamClient extends ClientProxy {
    * between the event, broadcast, and ordered prefixes.
    *
    * For self-targets the resolver drives subject construction so custom
-   * subjectPrefix options are honoured. Broadcast subjects are always
-   * convention-based (no per-service prefix).
+   * subjectPrefix options are honoured.
    *
    * The leading-char check short-circuits the `startsWith` comparisons for
    * patterns that cannot possibly carry a broadcast/ordered marker, which is

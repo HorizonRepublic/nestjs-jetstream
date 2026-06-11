@@ -144,9 +144,10 @@ describe(JetstreamMetricsModule, () => {
       // When
       const service = moduleRef.get(JetstreamMetricsService);
 
-      // Then: private field 'names' is set (not null)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      expect((service as any).names).toBe(names);
+      // Then: private field 'names' is set via DI
+      const injectedNames = Reflect.get(service, 'names') as unknown;
+
+      expect(injectedNames).toBe(names);
     });
   });
 
