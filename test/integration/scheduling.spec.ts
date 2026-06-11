@@ -69,6 +69,16 @@ class HeaderCapturingController {
   }
 }
 
+@Controller()
+class BroadcastScheduledController {
+  public readonly received: unknown[] = [];
+
+  @EventPattern('promo.start', { broadcast: true })
+  handlePromo(@Payload() data: unknown): void {
+    this.received.push(data);
+  }
+}
+
 describe('Message Scheduling (Delayed Jobs)', () => {
   let nc: NatsConnection;
   let container: StartedTestContainer;
@@ -407,6 +417,55 @@ describe('Message Scheduling (Delayed Jobs)', () => {
       await waitForCondition(async () => (await countScheduleMessages()) === 0, 10_000);
 
       expect(await countScheduleMessages()).toBe(0);
+    });
+  });
+
+  describe('broadcast scheduling', () => {
+    let app: INestApplication;
+    let module: TestingModule;
+    let client: ClientProxy;
+    let serviceName: string;
+    let controller: BroadcastScheduledController;
+
+    beforeEach(async () => {
+      serviceName = uniqueServiceName();
+
+      ({ app, module } = await createTestApp(
+        {
+          name: serviceName,
+          port,
+          broadcast: {
+            stream: { allow_msg_schedules: true },
+          },
+        },
+        [BroadcastScheduledController],
+        [serviceName],
+      ));
+
+      client = module.get<ClientProxy>(getClientToken(serviceName));
+      controller = module.get(BroadcastScheduledController);
+    });
+
+    afterEach(async () => {
+      await app.close();
+      await cleanupStreams(nc, serviceName);
+    });
+
+    it('should boot with broadcast scheduling enabled and deliver a scheduled broadcast', async () => {
+      // Given: a broadcast scheduled 1.5s out
+      const payload = { promo: 'summer' };
+
+      const record = new JetstreamRecordBuilder(payload)
+        .scheduleAt(new Date(Date.now() + 1_500))
+        .build();
+
+      // When
+      await firstValueFrom(client.emit('broadcast:promo.start', record));
+
+      // Then
+      await waitForCondition(() => controller.received.length > 0, 10_000);
+
+      expect(controller.received[0]).toEqual(payload);
     });
   });
 
