@@ -8,7 +8,7 @@ import {
 } from '@nats-io/jetstream';
 
 import { ConnectionProvider } from '../../connection';
-import { StreamKind } from '../../interfaces';
+import { ManagementMode, StreamKind } from '../../interfaces';
 import type { JetstreamModuleOptions } from '../../interfaces';
 import {
   DEFAULT_BROADCAST_STREAM_CONFIG,
@@ -28,7 +28,13 @@ import {
 import { NatsErrorCode } from './nats-error-codes';
 import { assertStorageBudget } from './provisioning-budget';
 import { mapProvisioningError, type ProvisioningErrorContext } from './provisioning-error';
-import { formatProvisioningSummary, type StreamReservation } from './provisioning-summary';
+import {
+  formatProvisioningSummary,
+  type ExternalBinding,
+  type StreamReservation,
+} from './provisioning-summary';
+import { resolveManagementMode } from './management';
+import { InfrastructureBinder } from './infrastructure-binder';
 import { compareStreamConfig, type StreamConfigDiffResult } from './stream-config-diff';
 import { StreamMigration } from './stream-migration';
 import { subjectCovers } from './subject-utils';
@@ -58,6 +64,7 @@ export class StreamProvider {
     private readonly options: JetstreamModuleOptions,
     private readonly connection: ConnectionProvider,
     private readonly names: NameResolver,
+    private readonly binder: InfrastructureBinder,
   ) {
     const derived = deriveOtelAttrs(options);
 
@@ -76,21 +83,46 @@ export class StreamProvider {
   public async ensureStreams(kinds: StreamKind[]): Promise<void> {
     const jsm = await this.connection.getJetStreamManager();
 
-    const reservations = kinds.map((kind) => this.buildReservation(kind, this.buildConfig(kind)));
+    const { autoKinds, externalKinds } = this.partitionByManagement(kinds);
+
+    const reservations = autoKinds.map((kind) =>
+      this.buildReservation(kind, this.buildConfig(kind)),
+    );
+    const external: ExternalBinding[] = externalKinds.map((kind) => ({
+      kind: String(kind),
+      name: this.names.streamName(kind),
+    }));
+
+    const dlqIsManual =
+      this.options.dlq !== undefined &&
+      this.options.dlq !== false &&
+      resolveManagementMode(this.options, 'dlq', 'stream') === ManagementMode.Manual;
 
     if (this.options.dlq) {
-      reservations.push(this.buildReservation('dlq', this.buildDlqConfig()));
+      if (dlqIsManual) {
+        external.push({ kind: 'dlq', name: this.names.dlqStreamName() });
+      } else {
+        reservations.push(this.buildReservation('dlq', this.buildDlqConfig()));
+      }
     }
 
-    this.logger.log(`\n${formatProvisioningSummary(this.options.name, reservations)}`);
+    this.logger.log(`\n${formatProvisioningSummary(this.options.name, reservations, external)}`);
 
-    if (this.options.provisioning?.preflightStorageCheck) {
+    if (this.options.provisioning?.preflightStorageCheck && reservations.length > 0) {
       await assertStorageBudget(jsm, this.options.name, reservations, this.logger);
     }
 
-    await Promise.all(kinds.map((kind) => this.ensureStream(jsm, kind)));
+    await Promise.all([
+      ...autoKinds.map((kind) => this.ensureStream(jsm, kind)),
+      ...externalKinds.map((kind) => this.bindStream(jsm, kind)),
+    ]);
+
     if (this.options.dlq) {
-      await this.ensureDlqStream(jsm);
+      if (dlqIsManual) {
+        await this.bindDlqStream(jsm);
+      } else {
+        await this.ensureDlqStream(jsm);
+      }
     }
   }
 

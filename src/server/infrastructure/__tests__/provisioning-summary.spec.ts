@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { RetentionPolicy, StorageType } from '@nats-io/jetstream';
 
-import { formatProvisioningSummary, type StreamReservation } from '../provisioning-summary';
+import {
+  formatProvisioningSummary,
+  type ExternalBinding,
+  type StreamReservation,
+} from '../provisioning-summary';
 
 const GIB = 1024 ** 3;
 
@@ -98,5 +102,58 @@ describe('formatProvisioningSummary', () => {
     // Then
     expect(result).toContain('max_bytes=0 B');
     expect(result).toContain('max_age=unlimited');
+  });
+
+  describe('external bindings', () => {
+    const external: ExternalBinding[] = [
+      { kind: 'ev', name: 'acme__microservice_ev-stream' },
+      { kind: 'dlq', name: 'acme__microservice_dlq-stream' },
+    ];
+
+    it('should render external rows with an "external (bound)" marker', () => {
+      // When
+      const result = formatProvisioningSummary('acme', [], external);
+
+      // Then
+      expect(result).toContain('acme__microservice_ev-stream');
+      expect(result).toContain('external (bound)');
+    });
+
+    it('should not include external rows in the file-backed footprint total', () => {
+      // Given: one Auto reservation + two external bindings
+      const auto: StreamReservation[] = [
+        {
+          kind: 'broadcast',
+          name: 'broadcast-stream',
+          storage: StorageType.File,
+          numReplicas: 1,
+          maxBytes: 2 * GIB,
+          maxAge: 0,
+          retention: RetentionPolicy.Limits,
+        },
+      ];
+
+      // When
+      const result = formatProvisioningSummary('acme', auto, external);
+
+      // Then: totals only include the auto broadcast stream (2 GiB), not externals
+      expect(result).toContain('per-node file-backed footprint ≈ 2.00 GiB');
+    });
+
+    it('should count both auto and external rows in the header stream count', () => {
+      // When: 0 auto + 2 external
+      const result = formatProvisioningSummary('acme', [], external);
+
+      // Then: header says 2 stream(s) — the externals count as streams for operator visibility
+      expect(result).toContain('2 stream(s)');
+    });
+
+    it('should work when external list is omitted (backward-compatible default)', () => {
+      // When: no third argument
+      const result = formatProvisioningSummary('svc', reservations);
+
+      // Then: existing tests remain valid — no crash, no "external" text
+      expect(result).not.toContain('external');
+    });
   });
 });

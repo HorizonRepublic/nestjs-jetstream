@@ -13,6 +13,12 @@ export interface StreamReservation {
   readonly retention: RetentionPolicy;
 }
 
+/** An externally-managed stream that is bound (not provisioned) by this library. */
+export interface ExternalBinding {
+  readonly kind: string;
+  readonly name: string;
+}
+
 const GIB = 1024 ** 3;
 const NANOS_PER_SECOND = 1e9;
 const NANOS_PER_HOUR = 3_600 * NANOS_PER_SECOND;
@@ -36,8 +42,10 @@ const formatAge = (nanos: number): string => {
 export const formatProvisioningSummary = (
   serviceName: string,
   reservations: StreamReservation[],
+  external: ExternalBinding[] = [],
 ): string => {
-  const lines: string[] = [`Provisioning ${reservations.length} stream(s) for "${serviceName}":`];
+  const totalStreams = reservations.length + external.length;
+  const lines: string[] = [`Provisioning ${totalStreams} stream(s) for "${serviceName}":`];
 
   let totalFileMaxBytes = 0;
 
@@ -51,6 +59,10 @@ export const formatProvisioningSummary = (
         `max_bytes=${formatBytes(r.maxBytes)} max_age=${formatAge(r.maxAge)} retention=${r.retention} ` +
         `→ cluster reservation ${formatBytes(clusterReservation)}`,
     );
+  }
+
+  for (const e of external) {
+    lines.push(`  • ${e.name} [${e.kind}] external (bound)`);
   }
 
   lines.push(

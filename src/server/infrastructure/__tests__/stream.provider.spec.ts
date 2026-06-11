@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 import { createMock } from '@golevelup/ts-vitest';
 import { faker } from '@faker-js/faker';
@@ -5,7 +6,7 @@ import type { StreamInfo } from '@nats-io/jetstream';
 import { JetStreamApiError, RetentionPolicy, StorageType } from '@nats-io/jetstream';
 
 import { ConnectionProvider } from '../../../connection';
-import { StreamKind } from '../../../interfaces';
+import { ManagementMode, StreamKind } from '../../../interfaces';
 import type { JetstreamModuleOptions, StreamConfigOverrides } from '../../../interfaces';
 import {
   DEFAULT_BROADCAST_STREAM_CONFIG,
@@ -14,7 +15,9 @@ import {
   internalName,
 } from '../../../jetstream.constants';
 
+import { InfrastructureBinder } from '../infrastructure-binder';
 import { NameResolver } from '../name-resolver';
+import { PatternRegistry } from '../../routing';
 import { StreamProvider } from '../stream.provider';
 
 describe(StreamProvider, () => {
@@ -31,8 +34,13 @@ describe(StreamProvider, () => {
     getAccountInfo?: ReturnType<typeof vi.fn>;
   };
 
-  const makeSut = (): StreamProvider =>
-    new StreamProvider(options, connection, new NameResolver(options));
+  const makeSut = (binder?: InfrastructureBinder): StreamProvider => {
+    const names = new NameResolver(options);
+    const resolvedBinder =
+      binder ?? new InfrastructureBinder(options, names, createMock<PatternRegistry>());
+
+    return new StreamProvider(options, connection, names, resolvedBinder);
+  };
 
   beforeEach(() => {
     options = { name: faker.lorem.word(), servers: ['nats://localhost:4222'] };
@@ -662,6 +670,100 @@ describe(StreamProvider, () => {
       sut = makeSut();
 
       expect(sut.getSubjects(StreamKind.Event)).toEqual(['company.orders.>']);
+    });
+  });
+
+  describe('Manual management', () => {
+    it('should bind without add/update/migration when the stream is Manual', async () => {
+      // Given
+      options.events = { management: { stream: ManagementMode.Manual } };
+      sut = makeSut();
+      mockStreamInfo(
+        createMock<StreamInfo>({
+          config: {
+            name: `${options.name}__microservice_ev-stream`,
+            retention: RetentionPolicy.Workqueue,
+            subjects: [`${internalName(options.name)}.ev.>`],
+          } as StreamInfo['config'],
+        }),
+      );
+
+      // When
+      await sut.ensureStreams([StreamKind.Event]);
+
+      // Then
+      expect(mockJsm.streams.add).not.toHaveBeenCalled();
+      expect(mockJsm.streams.update).not.toHaveBeenCalled();
+    });
+
+    it('should throw when a Manual stream is missing', async () => {
+      // Given
+      options.events = { management: { stream: ManagementMode.Manual } };
+      sut = makeSut();
+      mockJsm.streams.info.mockRejectedValue(streamNotFound());
+
+      // When / Then
+      await expect(sut.ensureStreams([StreamKind.Event])).rejects.toThrow(/[Mm]anual/);
+      expect(mockJsm.streams.add).not.toHaveBeenCalled();
+    });
+
+    it('should skip migration recovery for Manual streams', async () => {
+      // Given: global Manual; live stream exists
+      options.provisioning = { management: ManagementMode.Manual };
+      sut = makeSut();
+      mockStreamInfo(
+        createMock<StreamInfo>({
+          config: {
+            name: `${options.name}__microservice_ev-stream`,
+            retention: RetentionPolicy.Workqueue,
+            subjects: [`${internalName(options.name)}.ev.>`],
+          } as StreamInfo['config'],
+        }),
+      );
+
+      // When
+      await sut.ensureStreams([StreamKind.Event]);
+
+      // Then: streams.info was never called for a migration_backup name
+      const infoCallNames = mockJsm.streams.info.mock.calls.map(
+        ([name]: [string]) => name,
+      );
+
+      expect(infoCallNames.every((n: string) => !n.includes('__migration_backup'))).toBe(true);
+    });
+
+    it('should exclude Manual streams from storage reservations and show them as external', async () => {
+      // Given: global Manual + preflightStorageCheck enabled
+      options.provisioning = { management: ManagementMode.Manual, preflightStorageCheck: true };
+      sut = makeSut();
+
+      const getAccountInfo = vi.fn();
+
+      mockJsm.getAccountInfo = getAccountInfo;
+      mockStreamInfo(
+        createMock<StreamInfo>({
+          config: {
+            name: `${options.name}__microservice_ev-stream`,
+            retention: RetentionPolicy.Workqueue,
+            subjects: [`${internalName(options.name)}.ev.>`],
+          } as StreamInfo['config'],
+        }),
+      );
+
+      const logSpy = vi.spyOn(Logger.prototype, 'log');
+
+      // When
+      await sut.ensureStreams([StreamKind.Event]);
+
+      // Then: no storage budget check for all-Manual setup
+      expect(getAccountInfo).not.toHaveBeenCalled();
+
+      // And the summary contains an external marker
+      const summaryLog = logSpy.mock.calls
+        .map(([msg]: [unknown]) => String(msg))
+        .find((m: string) => m.includes(options.name) && m.includes('external'));
+
+      expect(summaryLog).toBeDefined();
     });
   });
 
