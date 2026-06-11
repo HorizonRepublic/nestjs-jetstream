@@ -13,7 +13,7 @@ allowBuilds:
 # Security floors for transitive deps (Dependabot advisories). Drop an entry
 # once the parent chain resolves a patched version on its own.
 overrides:
-  vite: 7.3.5
+  vite: 8.0.16
   'qs@>=6.11.1 <6.15.2': 6.15.2
   ws: ^8.21.0
   'serialize-javascript@>=5.0.0 <7.0.5': ^7.0.5
