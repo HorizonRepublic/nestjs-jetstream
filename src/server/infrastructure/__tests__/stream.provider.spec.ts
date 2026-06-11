@@ -765,6 +765,116 @@ describe(StreamProvider, () => {
 
       expect(summaryLog).toBeDefined();
     });
+
+    it('should provision the Auto kind and bind the Manual kind in a mixed partition', async () => {
+      // Given: Event=Manual, Command=Auto
+      options.events = { management: { stream: ManagementMode.Manual } };
+      sut = makeSut();
+
+      const evStreamName = `${options.name}__microservice_ev-stream`;
+      const cmdStreamName = `${options.name}__microservice_cmd-stream`;
+
+      mockJsm.streams.info.mockImplementation(async (name: string) => {
+        if (name === evStreamName) {
+          return createMock<StreamInfo>({
+            config: {
+              name: evStreamName,
+              retention: RetentionPolicy.Workqueue,
+              subjects: [`${internalName(options.name)}.ev.>`],
+            } as StreamInfo['config'],
+          });
+        }
+
+        if (name.endsWith('__migration_backup')) throw streamNotFound();
+
+        throw streamNotFound();
+      });
+
+      mockJsm.streams.add.mockResolvedValue(createMock<StreamInfo>());
+
+      // When
+      await sut.ensureStreams([StreamKind.Event, StreamKind.Command]);
+
+      // Then: Command (Auto) was created; Event (Manual) was only looked up via info
+      expect(mockJsm.streams.add).toHaveBeenCalledOnce();
+
+      const addedName = (mockJsm.streams.add.mock.calls[0]![0] as { name: string }).name;
+
+      expect(addedName).toBe(cmdStreamName);
+      expect(mockJsm.streams.update).not.toHaveBeenCalled();
+      expect(mockJsm.streams.info).toHaveBeenCalledWith(evStreamName);
+    });
+
+    it('should bind the DLQ stream externally when dlq management is Manual', async () => {
+      // Given: DLQ Manual; Event Auto (does not exist → created)
+      options.dlq = { management: { stream: ManagementMode.Manual } };
+      sut = makeSut();
+
+      const dlqName = `${options.name}__microservice_dlq-stream`;
+
+      mockJsm.streams.info.mockImplementation(async (name: string) => {
+        if (name === dlqName) {
+          return createMock<StreamInfo>({
+            config: {
+              name: dlqName,
+              retention: RetentionPolicy.Limits,
+              subjects: [dlqName],
+            } as StreamInfo['config'],
+          });
+        }
+
+        if (name.endsWith('__migration_backup')) throw streamNotFound();
+
+        throw streamNotFound();
+      });
+
+      mockJsm.streams.add.mockResolvedValue(createMock<StreamInfo>());
+
+      const logSpy = vi.spyOn(Logger.prototype, 'log');
+
+      // When
+      await sut.ensureStreams([StreamKind.Event]);
+
+      // Then: DLQ bound via info only — no add/update for the dlq stream
+      expect(mockJsm.streams.info).toHaveBeenCalledWith(dlqName);
+      expect(mockJsm.streams.add).not.toHaveBeenCalledWith(
+        expect.objectContaining({ name: dlqName }),
+      );
+      expect(mockJsm.streams.update).not.toHaveBeenCalled();
+
+      // And the boot summary marks it as external
+      const summaryLog = logSpy.mock.calls
+        .map((args: unknown[]) => String(args[0]))
+        .find((m: string) => m.includes(dlqName) && m.includes('external'));
+
+      expect(summaryLog).toBeDefined();
+    });
+
+    it('should bind the Broadcast stream externally when broadcast management is Manual', async () => {
+      // Given: Broadcast=Manual; shared stream exists with correct subjects
+      options.broadcast = { management: { stream: ManagementMode.Manual } };
+      sut = makeSut();
+
+      const broadcastStreamName = 'broadcast-stream';
+
+      mockJsm.streams.info.mockResolvedValue(
+        createMock<StreamInfo>({
+          config: {
+            name: broadcastStreamName,
+            retention: RetentionPolicy.Limits,
+            subjects: ['broadcast.>'],
+          } as StreamInfo['config'],
+        }),
+      );
+
+      // When
+      await sut.ensureStreams([StreamKind.Broadcast]);
+
+      // Then: only info was called — no provisioning for the external broadcast stream
+      expect(mockJsm.streams.info).toHaveBeenCalledWith(broadcastStreamName);
+      expect(mockJsm.streams.add).not.toHaveBeenCalled();
+      expect(mockJsm.streams.update).not.toHaveBeenCalled();
+    });
   });
 
   describe('getSubjects (via ensureStreams)', () => {
