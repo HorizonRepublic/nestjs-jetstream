@@ -8,6 +8,7 @@ import {
   JETSTREAM_EVENT_BUS,
   JETSTREAM_OPTIONS,
 } from '../jetstream.constants';
+import { NameResolver } from '../server/infrastructure/name-resolver';
 import { PatternRegistry } from '../server/routing/pattern-registry';
 
 import type { MetricsConfig, MetricsOption } from './metrics.config';
@@ -96,6 +97,7 @@ export class JetstreamMetricsModule {
         JETSTREAM_OPTIONS,
         { token: PatternRegistry, optional: true },
         { token: JETSTREAM_CONNECTION, optional: true },
+        { token: NameResolver, optional: true },
       ],
       useFactory: (
         eventBus: EventBus,
@@ -104,7 +106,17 @@ export class JetstreamMetricsModule {
         opts: JetstreamModuleOptions,
         patternRegistry: PatternRegistry | null,
         connection: ConnectionProvider | null,
-      ) => new JetstreamMetricsService(eventBus, cfg, runtime, opts, patternRegistry, connection),
+        names: NameResolver | null,
+      ) =>
+        new JetstreamMetricsService(
+          eventBus,
+          cfg,
+          runtime,
+          opts,
+          patternRegistry,
+          connection,
+          names,
+        ),
     };
 
     return {

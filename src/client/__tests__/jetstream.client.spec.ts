@@ -16,6 +16,7 @@ import {
   JetstreamHeader,
 } from '../../jetstream.constants';
 
+import { NameResolver } from '../../server/infrastructure/name-resolver';
 import { JetstreamClient } from '../jetstream.client';
 import { JetstreamRecordBuilder } from '../jetstream.record';
 
@@ -1199,6 +1200,88 @@ describe(JetstreamClient, () => {
 
         expect(completed![3]).toBe('timeout');
       });
+    });
+  });
+
+  describe('self-RPC subject routing', () => {
+    it('should publish send() to the resolver subject when targeting self with custom rpc.subjectPrefix', async () => {
+      // Given: self-target client, custom command prefix, jetstream RPC mode
+      vi.useFakeTimers();
+
+      const selfOptions: JetstreamModuleOptions = {
+        name: 'orders',
+        servers: ['nats://localhost:4222'],
+        rpc: { mode: 'jetstream', subjectPrefix: 'company.cmd.' },
+      };
+      const selfNames = new NameResolver(selfOptions);
+
+      sut = new JetstreamClient(selfOptions, 'orders', connection, codec, eventBus, selfNames);
+      await sut.connect();
+
+      // When: RPC sent to self
+      firstValueFrom(sut.send('do.x', {})).catch(() => {});
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Then: published under the custom command prefix, not the convention
+      expect(mockJs.publish).toHaveBeenCalledWith(
+        'company.cmd.do.x',
+        expect.anything(),
+        expect.anything(),
+      );
+
+      vi.useRealTimers();
+    });
+
+    it('should keep the convention command subject for foreign targets', async () => {
+      // Given: own service has custom rpc prefix; client targets a DIFFERENT service
+      vi.useFakeTimers();
+
+      const selfOptions: JetstreamModuleOptions = {
+        name: 'orders',
+        servers: ['nats://localhost:4222'],
+        rpc: { mode: 'jetstream', subjectPrefix: 'company.cmd.' },
+      };
+
+      sut = new JetstreamClient(selfOptions, 'other-svc', connection, codec, eventBus);
+      await sut.connect();
+
+      // When: RPC sent to foreign target
+      firstValueFrom(sut.send('do.y', {})).catch(() => {});
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Then: uses convention subject for the foreign service
+      expect(mockJs.publish).toHaveBeenCalledWith(
+        'other-svc__microservice.cmd.do.y',
+        expect.anything(),
+        expect.anything(),
+      );
+
+      vi.useRealTimers();
+    });
+  });
+
+  describe('broadcast subject routing', () => {
+    it('should publish emit() broadcast under the custom broadcast.subjectPrefix', async () => {
+      // Given: own service has a custom broadcast prefix
+      const selfOptions: JetstreamModuleOptions = {
+        name: 'orders',
+        servers: ['nats://localhost:4222'],
+        broadcast: { subjectPrefix: 'company.bc.' },
+      };
+      const selfNames = new NameResolver(selfOptions);
+
+      sut = new JetstreamClient(selfOptions, 'orders', connection, codec, eventBus, selfNames);
+      await sut.connect();
+
+      // When: broadcast event emitted
+      await firstValueFrom(sut.emit('broadcast:config.updated', {}));
+
+      // Then: published under the custom broadcast prefix
+      expect(mockJs.publish).toHaveBeenCalledWith(
+        'company.bc.config.updated',
+        expect.anything(),
+        expect.anything(),
+      );
     });
   });
 

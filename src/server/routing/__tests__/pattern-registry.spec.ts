@@ -258,27 +258,6 @@ describe(PatternRegistry, () => {
     });
   });
 
-  describe('normalizeSubject()', () => {
-    it.each([
-      ['cmd', `CMD_PLACEHOLDER.cmd.get.user`, 'get.user'],
-      ['ev', `CMD_PLACEHOLDER.ev.user.created`, 'user.created'],
-      ['ordered', `CMD_PLACEHOLDER.ordered.order.status`, 'order.status'],
-      ['broadcast', 'broadcast.config.updated', 'config.updated'],
-    ])('should strip %s prefix', (_kind, subject, expected) => {
-      const resolvedSubject = subject.replace('CMD_PLACEHOLDER', `${serviceName}__microservice`);
-
-      expect(sut.normalizeSubject(resolvedSubject)).toBe(expected);
-    });
-
-    describe('when no prefix matches', () => {
-      it('should return the subject as-is', () => {
-        const subject = faker.lorem.word();
-
-        expect(sut.normalizeSubject(subject)).toBe(subject);
-      });
-    });
-  });
-
   describe('error paths', () => {
     describe('when handler has both broadcast and ordered', () => {
       it('should throw a descriptive error', () => {

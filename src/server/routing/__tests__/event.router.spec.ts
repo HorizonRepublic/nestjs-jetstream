@@ -21,6 +21,7 @@ import { EventRouter } from '../event.router';
 import { PatternRegistry } from '../pattern-registry';
 import { ConnectionProvider } from '../../../connection';
 import { dlqStreamName, JetstreamDlqHeader } from '../../../jetstream.constants';
+import { NameResolver } from '../../infrastructure/name-resolver';
 
 describe(EventRouter, () => {
   let sut: EventRouter;
@@ -1505,6 +1506,48 @@ describe(EventRouter, () => {
           // Then: last resort nak
           expect(msg.nak).toHaveBeenCalled();
           expect(msg.term).not.toHaveBeenCalled();
+        });
+      });
+
+      describe('when router is constructed with NameResolver', () => {
+        it('should publish to the DLQ stream name from the resolver', async () => {
+          // Given: options with custom DLQ stream name via resolver
+          const options: JetstreamModuleOptions = {
+            name: 'my-service',
+            servers: ['nats://localhost:4222'],
+            dlq: { stream: { name: 'resolver-dlq' } },
+          };
+          const names = new NameResolver(options);
+
+          sut = new EventRouter(
+            messageProvider,
+            patternRegistry,
+            codec,
+            eventBus,
+            deadLetterConfig,
+            undefined,
+            undefined,
+            connection,
+            options,
+            names,
+          );
+          sut.start();
+
+          const handler = vi.fn().mockRejectedValue(new Error('handler error'));
+
+          patternRegistry.getHandler.mockReturnValue(handler);
+
+          const msg = createDeadLetterMsg();
+
+          events$.next(msg);
+          await new Promise(process.nextTick);
+
+          // Then: published to resolver's dlqStreamName()
+          expect(mockJs.publish).toHaveBeenCalled();
+
+          const publishCall = mockJs.publish.mock.calls[0]!;
+
+          expect(publishCall[0]).toBe(names.dlqStreamName());
         });
       });
 

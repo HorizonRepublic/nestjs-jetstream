@@ -7,6 +7,7 @@ import { Registry, register as globalRegister } from 'prom-client';
 import { EventBus } from '../../hooks';
 import type { JetstreamModuleOptions } from '../../interfaces';
 import { JETSTREAM_EVENT_BUS, JETSTREAM_OPTIONS } from '../../jetstream.constants';
+import { NameResolver } from '../../server/infrastructure/name-resolver';
 
 import {
   JETSTREAM_METRICS_CONFIG,
@@ -27,14 +28,19 @@ const baseOptions: JetstreamModuleOptions = {
 const compile = async (
   options: JetstreamModuleOptions,
   eventBus: EventBus,
+  names?: NameResolver,
 ): Promise<import('@nestjs/testing').TestingModule> => {
+  const extraProviders = names ? [{ provide: NameResolver, useValue: names }] : [];
+  const extraExports = names ? [NameResolver] : [];
+
   @Global()
   @Module({
     providers: [
       { provide: JETSTREAM_EVENT_BUS, useValue: eventBus },
       { provide: JETSTREAM_OPTIONS, useValue: options },
+      ...extraProviders,
     ],
-    exports: [JETSTREAM_EVENT_BUS, JETSTREAM_OPTIONS],
+    exports: [JETSTREAM_EVENT_BUS, JETSTREAM_OPTIONS, ...extraExports],
   })
   class TestRootModule {}
 
@@ -121,6 +127,26 @@ describe(JetstreamMetricsModule, () => {
       expect(text).toContain('jetstream_messages_received_total');
 
       await moduleRef.close();
+    });
+  });
+
+  describe('NameResolver forwarding', () => {
+    it('should inject NameResolver into JetstreamMetricsService when available in DI', async () => {
+      // Given: NameResolver is provided (as JetstreamModule does via exports)
+      const customOptions: JetstreamModuleOptions = {
+        ...baseOptions,
+        metrics: true,
+        events: { stream: { name: 'custom-ev-stream' } },
+      };
+      const names = new NameResolver(customOptions);
+      const moduleRef = await compile(customOptions, eventBus, names);
+
+      // When
+      const service = moduleRef.get(JetstreamMetricsService);
+
+      // Then: private field 'names' is set (not null)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect((service as any).names).toBe(names);
     });
   });
 

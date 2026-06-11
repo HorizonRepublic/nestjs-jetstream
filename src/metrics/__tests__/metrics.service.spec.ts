@@ -14,6 +14,7 @@ import { MessageKind, StreamKind, TransportEvent } from '../../interfaces';
 import { streamName } from '../../jetstream.constants';
 import { PatternRegistry } from '../../server/routing/pattern-registry';
 
+import { NameResolver } from '../../server/infrastructure/name-resolver';
 import { DEFAULT_POLL_INTERVAL_MS, UNMATCHED_SUBJECT_LABEL } from '../metrics.constants';
 import { JetstreamMetricsService } from '../metrics.service';
 import type { PromClientRuntime } from '../metrics.types';
@@ -598,6 +599,52 @@ describe(JetstreamMetricsService, () => {
         await histogramCount(register, 'jetstream_rpc_duration_seconds', {
           subject: 'orders.get',
           status: 'timeout',
+        }),
+      ).toBe(1);
+    });
+  });
+
+  describe('HandlerCompleted stream label with custom NameResolver', () => {
+    it('should use resolver stream name in the stream label when names is provided', async () => {
+      // Given: options with custom event stream name
+      const customOptions: JetstreamModuleOptions = {
+        name: 'orders',
+        servers: ['nats://localhost:4222'],
+        metrics: true,
+        events: { stream: { name: 'custom-ev-stream' } },
+      };
+      const names = new NameResolver(customOptions);
+
+      const subs = captureSubscribers(eventBus);
+      const sut = new JetstreamMetricsService(
+        eventBus,
+        { register, pollInterval: 0 },
+        promClient,
+        customOptions,
+        null,
+        null,
+        names,
+      );
+
+      await sut.onApplicationBootstrap();
+
+      // When
+      dispatch(
+        subs,
+        TransportEvent.HandlerCompleted,
+        'orders.created',
+        StreamKind.Event,
+        100,
+        'success',
+      );
+
+      // Then: stream label must come from the resolver, not the convention helper
+      expect(
+        await sampleValue(register, 'jetstream_messages_processed_total', {
+          stream: 'custom-ev-stream',
+          subject: 'orders.created',
+          kind: 'event',
+          status: 'success',
         }),
       ).toBe(1);
     });

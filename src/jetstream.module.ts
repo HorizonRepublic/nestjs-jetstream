@@ -122,6 +122,7 @@ export class JetstreamModule implements OnApplicationShutdown {
         ShutdownManager,
         JetstreamStrategy,
         JetstreamHealthIndicator,
+        NameResolver,
       ],
     };
   }
@@ -153,6 +154,7 @@ export class JetstreamModule implements OnApplicationShutdown {
         ShutdownManager,
         JetstreamStrategy,
         JetstreamHealthIndicator,
+        NameResolver,
       ],
     };
   }
@@ -171,16 +173,30 @@ export class JetstreamModule implements OnApplicationShutdown {
 
     const clientProvider: Provider = {
       provide: clientToken,
-      inject: [JETSTREAM_OPTIONS, JETSTREAM_CONNECTION, JETSTREAM_CODEC, JETSTREAM_EVENT_BUS],
+      inject: [
+        JETSTREAM_OPTIONS,
+        JETSTREAM_CONNECTION,
+        JETSTREAM_CODEC,
+        JETSTREAM_EVENT_BUS,
+        { token: NameResolver, optional: true },
+      ],
       useFactory: (
         rootOptions: JetstreamModuleOptions,
         connection: ConnectionProvider,
         rootCodec: Codec,
         eventBus: EventBus,
+        names: NameResolver | null,
       ) => {
         const codec = options.codec ?? rootCodec;
 
-        return new JetstreamClient(rootOptions, options.name, connection, codec, eventBus);
+        return new JetstreamClient(
+          rootOptions,
+          options.name,
+          connection,
+          codec,
+          eventBus,
+          names ?? undefined,
+        );
       },
     };
 

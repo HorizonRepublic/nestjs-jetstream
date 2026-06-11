@@ -3,7 +3,7 @@ import { MessageHandler } from '@nestjs/microservices';
 
 import { MessageKind, StreamKind } from '../../interfaces';
 import type { JetstreamModuleOptions, PatternsByKind, RegisteredHandler } from '../../interfaces';
-import { internalName, metadataKey } from '../../jetstream.constants';
+import { metadataKey } from '../../jetstream.constants';
 import { NameResolver } from '../infrastructure/name-resolver';
 
 /** Maps StreamKind to a human-readable label for logging. */
@@ -182,25 +182,6 @@ export class PatternRegistry {
       broadcasts: [...patterns.broadcasts],
       ordered: [...patterns.ordered],
     };
-  }
-
-  /** Normalize a full NATS subject back to the user-facing pattern. */
-  public normalizeSubject(subject: string): string {
-    const name = internalName(this.options.name);
-    const prefixes = [
-      `${name}.${StreamKind.Command}.`,
-      `${name}.${StreamKind.Event}.`,
-      `${name}.${StreamKind.Ordered}.`,
-      `${StreamKind.Broadcast}.`,
-    ];
-
-    for (const prefix of prefixes) {
-      if (subject.startsWith(prefix)) {
-        return subject.slice(prefix.length);
-      }
-    }
-
-    return subject;
   }
 
   private buildPatternsByKind(): PatternsByKind {

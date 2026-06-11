@@ -100,16 +100,13 @@ export class JetstreamClient extends ClientProxy {
   /** Pre-cached caller name derived from rootOptions.name, computed once in constructor. */
   private readonly callerName: string;
 
-  /**
-   * Subject prefixes of the form `{serviceName}__microservice.{kind}.` — one
-   * per stream kind this client may publish to. Built once in the constructor
-   * so producing a full subject is a single string concat with the user pattern.
-   * For self-targets with custom prefixes, these are set to empty string and
-   * subject construction delegates to the resolver.
-   */
+  /** Convention subject prefixes for foreign targets; one per stream kind. */
   private readonly eventSubjectPrefix: string;
   private readonly commandSubjectPrefix: string;
   private readonly orderedSubjectPrefix: string;
+
+  /** Broadcast subject prefix derived from the own resolver; never null. */
+  private readonly broadcastPrefix: string;
 
   /** Resolver for self-target subjects; null when targeting a foreign service. */
   private readonly selfNames: NameResolver | null;
@@ -161,8 +158,12 @@ export class JetstreamClient extends ClientProxy {
     this.callerName = internalName(this.rootOptions.name);
 
     const isSelf = targetServiceName === rootOptions.name;
+    const ownNames = names ?? (isSelf ? new NameResolver(rootOptions) : null);
 
-    this.selfNames = isSelf ? (names ?? new NameResolver(rootOptions)) : null;
+    this.selfNames = isSelf ? ownNames : null;
+    this.broadcastPrefix = ownNames
+      ? ownNames.subject(StreamKind.Broadcast, '')
+      : BROADCAST_SUBJECT_PREFIX;
 
     const targetInternal = internalName(targetServiceName);
 
@@ -338,7 +339,9 @@ export class JetstreamClient extends ClientProxy {
    * JetStream mode: publishes to stream + waits for inbox response.
    */
   protected publish(packet: ReadPacket, callback: (p: WritePacket) => void): () => void {
-    const subject = this.commandSubjectPrefix + packet.pattern;
+    const subject = this.selfNames
+      ? this.selfNames.subject(StreamKind.Command, packet.pattern)
+      : this.commandSubjectPrefix + packet.pattern;
     const { data, hdrs, timeout, messageId, schedule, ttl } = this.extractRecordData(packet.data);
 
     if (schedule) {
@@ -744,7 +747,7 @@ export class JetstreamClient extends ClientProxy {
    */
   private buildEventSubject(pattern: string): string {
     if (pattern.charCodeAt(0) === 98 /* 'b' */ && pattern.startsWith(PatternPrefix.Broadcast)) {
-      return BROADCAST_SUBJECT_PREFIX + pattern.slice(PatternPrefix.Broadcast.length);
+      return this.broadcastPrefix + pattern.slice(PatternPrefix.Broadcast.length);
     }
 
     if (pattern.charCodeAt(0) === 111 /* 'o' */ && pattern.startsWith(PatternPrefix.Ordered)) {
@@ -830,8 +833,13 @@ export class JetstreamClient extends ClientProxy {
    * - `broadcast.config.updated` → `broadcast._sch.config.updated.<nuid>`
    */
   private buildScheduleSubject(eventSubject: string): string {
-    if (eventSubject.startsWith('broadcast.')) {
-      return `${eventSubject.replace('broadcast.', 'broadcast._sch.')}.${nuid.next()}`;
+    if (eventSubject.startsWith(this.broadcastPrefix)) {
+      const bare = eventSubject.slice(this.broadcastPrefix.length);
+      const schedulePrefix = this.selfNames
+        ? this.selfNames.schedulePrefix(StreamKind.Broadcast)
+        : `${this.broadcastPrefix.replace(/\.$/, '')}._sch.`;
+
+      return `${schedulePrefix}${bare}.${nuid.next()}`;
     }
 
     if (this.selfNames) {
@@ -860,35 +868,14 @@ export class JetstreamClient extends ClientProxy {
   }
 
   private buildSelfScheduleSubject(eventSubject: string, names: NameResolver): string {
-    // Detect the stream kind from event subject by trying each known prefix.
-    // We only support Event and Ordered (broadcast handled above).
     for (const kind of [StreamKind.Event, StreamKind.Ordered]) {
-      const subjectForKind = names.subject(kind, '');
-      const prefix = subjectForKind === '' ? '' : subjectForKind;
+      const prefix = names.subject(kind, '');
 
-      if (eventSubject.startsWith(prefix) && prefix !== '') {
-        const pattern = eventSubject.slice(prefix.length);
-
-        return `${names.schedulePrefix(kind)}${pattern}.${nuid.next()}`;
+      if (prefix && eventSubject.startsWith(prefix)) {
+        return `${names.schedulePrefix(kind)}${eventSubject.slice(prefix.length)}.${nuid.next()}`;
       }
     }
 
-    // Fallback: convention-based parse (e.g. targeting self without custom prefix)
-    const targetPrefix = `${internalName(this.targetName)}.`;
-
-    if (!eventSubject.startsWith(targetPrefix)) {
-      throw new Error(`Unexpected event subject format: ${eventSubject}`);
-    }
-
-    const withoutPrefix = eventSubject.slice(targetPrefix.length);
-    const dotIndex = withoutPrefix.indexOf('.');
-
-    if (dotIndex === -1) {
-      throw new Error(`Event subject missing pattern segment: ${eventSubject}`);
-    }
-
-    const pattern = withoutPrefix.slice(dotIndex + 1);
-
-    return `${targetPrefix}_sch.${pattern}.${nuid.next()}`;
+    throw new Error(`Unexpected event subject format: ${eventSubject}`);
   }
 }
