@@ -7,7 +7,7 @@ import { RpcContext } from '../../context';
 import { EventBus } from '../../hooks';
 import { MessageKind, StreamKind, TransportEvent } from '../../interfaces';
 import { ConnectionProvider } from '../../connection';
-import { headers as natsHeaders } from '@nats-io/transport-node';
+import { headers as natsHeaders, type MsgHdrs } from '@nats-io/transport-node';
 
 import type {
   Codec,
@@ -20,13 +20,18 @@ import type {
 import {
   isPromiseLike,
   resolveAckExtensionInterval,
+  settleQuietly,
   startAckExtensionTimer,
   unwrapResult,
 } from '../../utils';
 
 import { MessageProvider } from '../infrastructure';
 import { PatternRegistry } from './pattern-registry';
-import { dlqStreamName, JetstreamDlqHeader } from '../../jetstream.constants';
+import {
+  dlqStreamName,
+  JetstreamDlqHeader,
+  NATS_CONTROL_HEADER_PREFIX,
+} from '../../jetstream.constants';
 import {
   ConsumeKind,
   deriveOtelAttrs,
@@ -40,6 +45,9 @@ import {
 /** Narrow consume-kind tag emitted by the event router (no `Rpc` here). */
 type EventConsumeKind = Exclude<ConsumeKind, ConsumeKind.Rpc>;
 
+/** How many times a dead letter is published to the DLQ stream before falling back. */
+const DLQ_PUBLISH_ATTEMPTS = 3;
+
 /**
  * Resolved routing shape for one incoming event/broadcast/ordered message —
  * the handler selected for dispatch and the decoded payload. `null` is
@@ -49,6 +57,15 @@ type EventConsumeKind = Exclude<ConsumeKind, ConsumeKind.Rpc>;
 interface ResolvedEvent {
   readonly handler: MessageHandler;
   readonly data: unknown;
+}
+
+/**
+ * A delivered message parked in the concurrency backlog, together with the
+ * ack-extension timer that keeps it alive while it waits for a slot.
+ */
+interface QueuedMessage {
+  readonly msg: JsMsg;
+  readonly stopAckExtension: (() => void) | null;
 }
 
 const eventConsumeKindFor = (kind: StreamKind): EventConsumeKind => {
@@ -177,10 +194,47 @@ export class EventRouter {
           this.handleDeadLetter(msg, data, err)
       : null;
 
-    const settleSuccess = (msg: JsMsg, ctx: RpcContext): void => {
-      if (ctx.shouldTerminate) msg.term(ctx.terminateReason);
-      else if (ctx.shouldRetry) msg.nak(ctx.retryDelay);
-      else msg.ack();
+    /**
+     * Settle a message whose handler completed without throwing.
+     *
+     * Returns a Promise only when a `retry()` on the final permitted delivery
+     * escalates to dead-letter handling — a nak at that point would strand the
+     * message, since the server never redelivers past `max_deliver`.
+     */
+    const settleSuccess = (
+      msg: JsMsg,
+      ctx: RpcContext,
+      data: unknown,
+    ): Promise<void> | undefined => {
+      if (ctx.shouldTerminate) {
+        settleQuietly(logger, `Failed to term ${msg.subject}:`, () => {
+          msg.term(ctx.terminateReason);
+        });
+
+        return undefined;
+      }
+
+      if (ctx.shouldRetry) {
+        if (handleDeadLetter !== null && isDeadLetter(msg)) {
+          return handleDeadLetter(
+            msg,
+            data,
+            new Error('Retry requested on the final delivery attempt'),
+          );
+        }
+
+        settleQuietly(logger, `Failed to nak ${msg.subject}:`, () => {
+          msg.nak(ctx.retryDelay);
+        });
+
+        return undefined;
+      }
+
+      settleQuietly(logger, `Failed to ack ${msg.subject}:`, () => {
+        msg.ack();
+      });
+
+      return undefined;
     };
 
     const settleFailure = async (msg: JsMsg, data: unknown, err: unknown): Promise<void> => {
@@ -190,25 +244,60 @@ export class EventRouter {
         return;
       }
 
-      msg.nak();
+      settleQuietly(logger, `Failed to nak ${msg.subject}:`, () => {
+        msg.nak();
+      });
+    };
+
+    /**
+     * Capture a message that can never be routed (no handler, undecodable
+     * payload). Redelivery cannot fix these, so they go straight to
+     * dead-letter handling regardless of delivery count. On a workqueue
+     * stream a plain term() would delete the payload permanently.
+     */
+    const captureUnroutable = (
+      capture: NonNullable<typeof handleDeadLetter>,
+      msg: JsMsg,
+      err: Error,
+    ): Promise<void> => {
+      let data: unknown;
+
+      try {
+        data = codec.decode(msg.data);
+      } catch {
+        data = undefined;
+      }
+
+      return capture(msg, data, err).catch((captureErr: unknown) => {
+        logger.error(`Dead-letter capture failed for unroutable ${msg.subject}:`, captureErr);
+      });
     };
 
     /**
      * Resolve the handler and decode payload for one event.
      *
-     * Returns `null` when the message cannot be routed (no handler, decode
-     * error, or unexpected pre-dispatch failure) — those branches settle the
-     * message synchronously inside the helper and produce nothing to dispatch.
+     * Returns `null` when the message cannot be routed and was settled
+     * synchronously, a Promise when an unroutable message is being captured
+     * by dead-letter handling, and a {@link ResolvedEvent} otherwise.
      */
-    const resolveEvent = (msg: JsMsg): ResolvedEvent | null => {
+    const resolveEvent = (msg: JsMsg): ResolvedEvent | Promise<void> | null => {
       const subject = msg.subject;
 
       try {
         const handler = patternRegistry.getHandler(subject);
 
         if (!handler) {
-          msg.term(`No handler for event: ${subject}`);
           logger.error(`No handler for subject: ${subject}`);
+
+          if (handleDeadLetter !== null) {
+            return captureUnroutable(
+              handleDeadLetter,
+              msg,
+              new Error(`No handler for event: ${subject}`),
+            );
+          }
+
+          msg.term(`No handler for event: ${subject}`);
 
           return null;
         }
@@ -218,8 +307,17 @@ export class EventRouter {
         try {
           data = codec.decode(msg.data);
         } catch (err) {
-          msg.term('Decode error');
           logger.error(`Decode error for ${subject}:`, err);
+
+          if (handleDeadLetter !== null) {
+            return captureUnroutable(
+              handleDeadLetter,
+              msg,
+              new Error(`Decode error: ${err instanceof Error ? err.message : String(err)}`),
+            );
+          }
+
+          msg.term('Decode error');
 
           return null;
         }
@@ -263,6 +361,7 @@ export class EventRouter {
       const resolved = resolveEvent(msg);
 
       if (resolved === null) return undefined;
+      if (isPromiseLike(resolved)) return resolved as Promise<void>;
 
       const { handler, data } = resolved;
       const ctx = new RpcContext([msg]);
@@ -309,18 +408,31 @@ export class EventRouter {
       }
 
       if (!isPromiseLike(pending)) {
-        settleSuccess(msg, ctx);
-        reportHandlerCompleted(msg, startedAt, statusForContext(ctx));
-        if (stopAckExtension !== null) stopAckExtension();
+        const settled = settleSuccess(msg, ctx, data);
 
-        return undefined;
+        reportHandlerCompleted(msg, startedAt, statusForContext(ctx));
+
+        if (settled === undefined) {
+          if (stopAckExtension !== null) stopAckExtension();
+
+          return undefined;
+        }
+
+        // Same ack-extension reasoning as the failure path: the dead-letter
+        // publish may outlast ack_wait.
+        return settled.finally(() => {
+          if (stopAckExtension !== null) stopAckExtension();
+        });
       }
 
       return (pending as Promise<unknown>).then(
-        () => {
-          settleSuccess(msg, ctx);
-          reportHandlerCompleted(msg, startedAt, statusForContext(ctx));
-          if (stopAckExtension !== null) stopAckExtension();
+        async () => {
+          try {
+            await settleSuccess(msg, ctx, data);
+            reportHandlerCompleted(msg, startedAt, statusForContext(ctx));
+          } finally {
+            if (stopAckExtension !== null) stopAckExtension();
+          }
         },
         async (err: unknown) => {
           eventBus.emit(
@@ -431,11 +543,32 @@ export class EventRouter {
     const backlogWarnThreshold = 1_000;
     let active = 0;
     let backlogWarned = false;
-    const backlog: JsMsg[] = [];
+    const backlog: QueuedMessage[] = [];
 
     const onAsyncDone = (): void => {
       active--;
       drainBacklog();
+    };
+
+    // route() is not expected to throw — every settlement inside it is
+    // guarded — but a failure here must never leak the concurrency slot or
+    // escape into the RxJS observer and kill the subscription.
+    const routeSafely = (msg: JsMsg): Promise<void> | undefined => {
+      try {
+        return route(msg);
+      } catch (err) {
+        logger.error(`Unexpected routing failure for ${msg.subject}:`, err);
+
+        return undefined;
+      }
+    };
+
+    const trackAsync = (result: Promise<void>, msg: JsMsg): void => {
+      void result
+        .catch((err: unknown) => {
+          logger.error(`Unexpected routing failure for ${msg.subject}:`, err);
+        })
+        .finally(onAsyncDone);
     };
 
     const drainBacklog = (): void => {
@@ -443,11 +576,14 @@ export class EventRouter {
         const next = backlog.shift();
 
         if (next === undefined) return;
+        // The processing-phase timer is started inside route(); the waiting
+        // phase is over.
+        next.stopAckExtension?.();
         active++;
-        const result = route(next);
+        const result = routeSafely(next.msg);
 
         if (result !== undefined) {
-          void result.finally(onAsyncDone);
+          trackAsync(result, next.msg);
         } else {
           active--;
         }
@@ -459,7 +595,15 @@ export class EventRouter {
     const subscription = stream$.subscribe({
       next: (msg: JsMsg): void => {
         if (active >= maxActive) {
-          backlog.push(msg);
+          // A parked message was already delivered — its ack_wait clock is
+          // running on the server. Without extension a long wait ends in
+          // redelivery and double processing.
+          backlog.push({
+            msg,
+            stopAckExtension: hasAckExtension
+              ? startAckExtensionTimer(msg, ackExtensionInterval)
+              : null,
+          });
           if (!backlogWarned && backlog.length >= backlogWarnThreshold) {
             backlogWarned = true;
             logger.warn(
@@ -471,10 +615,10 @@ export class EventRouter {
         }
 
         active++;
-        const result = route(msg);
+        const result = routeSafely(msg);
 
         if (result !== undefined) {
-          void result.finally(onAsyncDone);
+          trackAsync(result, msg);
         } else {
           active--;
           if (backlog.length > 0) drainBacklog();
@@ -483,6 +627,16 @@ export class EventRouter {
       error: (err: unknown): void => {
         logger.error(`Stream error in ${kind} router`, err);
       },
+    });
+
+    // Backlogged messages keep extension timers alive — stop them when the
+    // router unsubscribes so a destroyed router leaves nothing ticking.
+    subscription.add(() => {
+      for (const queued of backlog) {
+        queued.stopAckExtension?.();
+      }
+
+      backlog.length = 0;
     });
 
     this.subscriptions.push(subscription);
@@ -502,28 +656,98 @@ export class EventRouter {
 
   /**
    * Last-resort path for a dead letter: invoke `onDeadLetter`, then `term` on
-   * success or `nak` on hook failure so NATS retries on the next delivery
-   * cycle. Used when DLQ stream isn't configured, or when publishing to it
-   * failed and we still have to surface the message somewhere observable.
+   * success. On failure the message is nak'd to release it, but the server
+   * never redelivers past `max_deliver` — it stays in the stream for manual
+   * recovery. Used when the DLQ stream isn't configured, or when publishing
+   * to it failed and we still have to surface the message somewhere.
    */
   private async fallbackToOnDeadLetterCallback(info: DeadLetterInfo, msg: JsMsg): Promise<void> {
-    // Safety net: deadLetterConfig is guaranteed by isDeadLetter() guard,
-    // but if somehow null, term the message to prevent infinite redelivery.
-    if (!this.deadLetterConfig) {
-      msg.term('Dead letter config unavailable');
+    const onDeadLetter = this.deadLetterConfig?.onDeadLetter;
+
+    if (!onDeadLetter) {
+      // dlq-only mode and the DLQ publish failed: there is no callback to fall
+      // back to. Keep the message in the stream rather than deleting it.
+      this.logger.error(
+        `Dead letter for ${msg.subject} could not be captured (DLQ publish failed, no onDeadLetter callback) — leaving the message in the stream`,
+      );
+      settleQuietly(this.logger, `Failed to nak ${msg.subject}:`, () => {
+        msg.nak();
+      });
+
       return;
     }
 
     try {
-      await this.deadLetterConfig.onDeadLetter(info);
-      msg.term('Dead letter processed via fallback callback');
+      await onDeadLetter(info);
+      settleQuietly(this.logger, `Failed to term ${msg.subject}:`, () => {
+        msg.term('Dead letter processed via fallback callback');
+      });
     } catch (hookErr) {
       this.logger.error(
-        `Fallback onDeadLetter callback failed for ${msg.subject}, nak for retry:`,
+        `Fallback onDeadLetter callback failed for ${msg.subject} — the message stays in the stream and will not be redelivered (max_deliver exhausted); recover it manually:`,
         hookErr,
       );
-      msg.nak();
+      settleQuietly(this.logger, `Failed to nak ${msg.subject}:`, () => {
+        msg.nak();
+      });
     }
+  }
+
+  /**
+   * Copy the original message headers for the DLQ republish, dropping NATS
+   * server control headers: a copied Nats-TTL expires the DLQ entry (or gets
+   * the publish rejected when the DLQ stream has no allow_msg_ttl), a copied
+   * Nats-Msg-Id collides with the DLQ dedup window.
+   */
+  private buildDlqHeaders(msg: JsMsg): MsgHdrs {
+    const hdrs = natsHeaders();
+
+    if (!msg.headers) return hdrs;
+
+    for (const [k, v] of msg.headers) {
+      if (k.toLowerCase().startsWith(NATS_CONTROL_HEADER_PREFIX)) continue;
+
+      for (const val of v) {
+        hdrs.append(k, val);
+      }
+    }
+
+    return hdrs;
+  }
+
+  /**
+   * Attempt the DLQ publish up to {@link DLQ_PUBLISH_ATTEMPTS} times.
+   *
+   * Past `max_deliver` the server never redelivers, so an in-process retry is
+   * the only second chance a dead letter gets. There is no artificial delay
+   * between attempts: when the broker is unreachable each publish already
+   * spends its own request timeout, which spaces the attempts naturally.
+   */
+  private async publishToDlqWithRetry(
+    connection: ConnectionProvider,
+    subject: string,
+    data: Uint8Array,
+    headers: MsgHdrs,
+  ): Promise<void> {
+    let lastErr: unknown;
+
+    for (let attempt = 1; attempt <= DLQ_PUBLISH_ATTEMPTS; attempt += 1) {
+      try {
+        await connection.getJetStreamClient().publish(subject, data, { headers });
+
+        return;
+      } catch (err) {
+        lastErr = err;
+
+        if (attempt < DLQ_PUBLISH_ATTEMPTS) {
+          this.logger.warn(
+            `DLQ publish attempt ${attempt}/${DLQ_PUBLISH_ATTEMPTS} failed for ${subject}, retrying`,
+          );
+        }
+      }
+    }
+
+    throw lastErr;
   }
 
   /**
@@ -546,15 +770,7 @@ export class EventRouter {
     }
 
     const destinationSubject = dlqStreamName(serviceName);
-    const hdrs = natsHeaders();
-
-    if (msg.headers) {
-      for (const [k, v] of msg.headers) {
-        for (const val of v) {
-          hdrs.append(k, val);
-        }
-      }
-    }
+    const hdrs = this.buildDlqHeaders(msg);
 
     let reason = String(error);
 
@@ -571,9 +787,7 @@ export class EventRouter {
     hdrs.set(JetstreamDlqHeader.DeliveryCount, msg.info.deliveryCount.toString());
 
     try {
-      const js = this.connection.getJetStreamClient();
-
-      await js.publish(destinationSubject, msg.data, { headers: hdrs });
+      await this.publishToDlqWithRetry(this.connection, destinationSubject, msg.data, hdrs);
       this.logger.log(`Message sent to DLQ: ${msg.subject}`);
 
       if (this.deadLetterConfig?.onDeadLetter) {
@@ -587,7 +801,9 @@ export class EventRouter {
         }
       }
 
-      msg.term('Moved to DLQ stream');
+      settleQuietly(this.logger, `Failed to term ${msg.subject}:`, () => {
+        msg.term('Moved to DLQ stream');
+      });
     } catch (publishErr) {
       this.logger.error(`Failed to publish to DLQ for ${msg.subject}:`, publishErr);
       await this.fallbackToOnDeadLetterCallback(info, msg);

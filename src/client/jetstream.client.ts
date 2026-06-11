@@ -231,6 +231,19 @@ export class JetstreamClient extends ClientProxy {
     if (!this.readyForPublish) await this.connect();
     const { data, hdrs, messageId, schedule, ttl } = this.extractRecordData(packet.data);
 
+    const publishKind = detectEventKind(packet.pattern);
+
+    if (schedule && publishKind === PublishKind.Ordered) {
+      // The schedule holder lives in the event stream's _sch namespace, but the
+      // target subject belongs to the ordered stream — the server requires the
+      // schedule target to be a subject of the same stream, so this can never
+      // be delivered. Fail loudly instead of dropping the message.
+      throw new Error(
+        `scheduleAt() is not supported for ordered events (pattern: ${packet.pattern}). ` +
+          'Scheduled delivery is available for workqueue events and broadcasts.',
+      );
+    }
+
     const eventSubject = this.buildEventSubject(packet.pattern);
     // Replace kind segment with _sch: {svc}.ev.{pattern} → {svc}._sch.{pattern}
     // For broadcast: broadcast.{pattern} → broadcast._sch.{pattern}
@@ -241,7 +254,6 @@ export class JetstreamClient extends ClientProxy {
     const record =
       packet.data instanceof JetstreamRecord ? packet.data : new JetstreamRecord(data, new Map());
 
-    const publishKind = detectEventKind(packet.pattern);
     const declaredPattern = declaredEventPattern(packet.pattern);
     const streamKind = eventStreamKind(publishKind);
     const startedAt = performance.now();
@@ -275,15 +287,18 @@ export class JetstreamClient extends ClientProxy {
           };
 
           if (schedule) {
+            // ttl belongs to the delivered message (Nats-Schedule-TTL). As a
+            // top-level option it would become Nats-TTL on the schedule holder
+            // and cancel the schedule once it elapses.
             const ack = await this.connection
               .getJetStreamClient()
               .publish(publishSubject, encoded, {
                 headers: msgHeaders,
                 msgID: effectiveMsgId,
-                ttl,
                 schedule: {
                   specification: schedule.at,
                   target: eventSubject,
+                  ttl,
                 },
               });
 
@@ -551,12 +566,24 @@ export class JetstreamClient extends ClientProxy {
       // Run the publish under the CLIENT span's context so any handler /
       // interceptor spans around the publish itself nest under the CLIENT
       // round-trip span rather than the ambient context.
-      await context.with(spanHandle.activeContext, () =>
+      const ack = await context.with(spanHandle.activeContext, () =>
         this.connection.getJetStreamClient().publish(subject, encoded, {
           headers: hdrs,
           msgID: messageId ?? nuid.next(),
         }),
       );
+
+      if (ack.duplicate) {
+        // The stream dropped this publish as a duplicate (messageId reused
+        // within the dedup window). The original command owns the reply — this
+        // correlation id will never receive one, so fail now instead of
+        // burning the full RPC timeout.
+        throw new Error(
+          `Duplicate RPC publish for ${subject}: the messageId was already used within the ` +
+            'stream dedup window, so the reply belongs to the original request',
+        );
+      }
+
       // Publish leg succeeded; RpcCompleted fires from the inbox reply or
       // the timeout branch once the round-trip settles.
       this.reportPublished(declaredPattern, StreamKind.Command, startedAt, 'success');

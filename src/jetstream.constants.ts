@@ -265,6 +265,14 @@ export const RESERVED_HEADERS = new Set<string>([
 ]);
 
 /**
+ * Lowercase prefix of NATS server control headers (Nats-Msg-Id, Nats-TTL,
+ * Nats-Rollup, Nats-Schedule-*, Nats-Expected-*). These drive server-side
+ * behavior — a stray Nats-Rollup purges every pending message on the
+ * subject — so they are managed exclusively through builder APIs.
+ */
+export const NATS_CONTROL_HEADER_PREFIX = 'nats-';
+
+/**
  * Build the internal service name with microservice suffix.
  *
  * @param name - Service name from `forRoot({ name })`.

@@ -475,6 +475,179 @@ describe('Stream sourcing behavior (NATS verification)', () => {
       });
     });
 
+    describe('messages published during migration', () => {
+      it('should preserve every acked publish across the migration', async () => {
+        const serviceName = uniqueServiceName();
+
+        // Given: a File-backed stream with seed traffic
+        const { app: app1 } = await createTestApp(
+          { name: serviceName, port, events: { stream: { storage: StorageType.File } } },
+          [MigrationTestController],
+          [serviceName],
+        );
+
+        await app1.close();
+
+        const subject = buildSubject(serviceName, StreamKind.Event, 'migration.test');
+        const encoder = new TextEncoder();
+
+        for (let i = 0; i < 20; i++) {
+          await js.publish(subject, encoder.encode(JSON.stringify({ seed: i })));
+        }
+
+        // A producer keeps publishing while the migration runs. Only acked
+        // publishes count — a rejected publish never happened for a producer
+        // with retry logic, but an acked one is a delivery promise.
+        let acked = 20;
+        let stop = false;
+        const publisher = (async (): Promise<void> => {
+          let i = 0;
+
+          // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- mutated outside the closure
+          while (!stop) {
+            try {
+              await js.publish(subject, encoder.encode(JSON.stringify({ live: i++ })));
+              acked++;
+            } catch {
+              await new Promise((r) => setTimeout(r, 20));
+            }
+          }
+        })();
+
+        // When: storage migration runs under live traffic
+        const { app: app2, module: module2 } = await createTestApp(
+          {
+            name: serviceName,
+            port,
+            allowDestructiveMigration: true,
+            events: {
+              stream: { storage: StorageType.Memory, max_bytes: MEMORY_STREAM_MAX_BYTES },
+            },
+          },
+          [MigrationTestController],
+          [serviceName],
+        );
+
+        stop = true;
+        await publisher;
+
+        // Then: every acked message is delivered exactly once
+        const controller = module2.get(MigrationTestController);
+
+        await waitForCondition(() => controller.received.length >= acked, 20_000);
+        await new Promise((r) => setTimeout(r, 1_000));
+
+        expect(controller.received).toHaveLength(acked);
+
+        await app2.close();
+        await cleanupStreams(nc, serviceName);
+      });
+    });
+
+    describe('interrupted migration recovery', () => {
+      it('should restore the stream from a stranded backup on startup', async () => {
+        const serviceName = uniqueServiceName();
+        const evStreamName = streamName(serviceName, StreamKind.Event);
+        const backupName = `${evStreamName}__migration_backup`;
+        const subject = buildSubject(serviceName, StreamKind.Event, 'migration.test');
+        const encoder = new TextEncoder();
+
+        // Given: a crash between delete and create left only the backup —
+        // the sole copy of the data (no metadata, like a stale leftover)
+        await jsm.streams.add({
+          name: backupName,
+          subjects: [subject],
+          retention: RetentionPolicy.Workqueue,
+          storage: StorageType.File,
+          num_replicas: 1,
+        });
+
+        for (let i = 0; i < 5; i++) {
+          await js.publish(subject, encoder.encode(JSON.stringify({ i })));
+        }
+
+        // The real backup holds no subjects — clear them so the recreated
+        // event stream does not overlap
+        const backupInfo = await jsm.streams.info(backupName);
+
+        await jsm.streams.update(backupName, { ...backupInfo.config, subjects: [] });
+
+        // When: the service boots normally
+        const { app, module } = await createTestApp(
+          { name: serviceName, port },
+          [MigrationTestController],
+          [serviceName],
+        );
+
+        // Then: the data is restored and delivered; the backup is cleaned up
+        const controller = module.get(MigrationTestController);
+
+        await waitForCondition(() => controller.received.length >= 5, 20_000);
+
+        expect(controller.received).toHaveLength(5);
+
+        await expect(jsm.streams.info(backupName)).rejects.toThrow();
+
+        await app.close();
+        await cleanupStreams(nc, serviceName);
+      });
+
+      it('should finish the restore when the previous run died after recreating the stream', async () => {
+        const serviceName = uniqueServiceName();
+        const evStreamName = streamName(serviceName, StreamKind.Event);
+        const backupName = `${evStreamName}__migration_backup`;
+        const subject = buildSubject(serviceName, StreamKind.Event, 'migration.test');
+        const encoder = new TextEncoder();
+
+        // Given: a backup holding the data (created first so its temporary
+        // subject does not overlap the recreated stream)
+        await jsm.streams.add({
+          name: backupName,
+          subjects: [subject],
+          retention: RetentionPolicy.Workqueue,
+          storage: StorageType.File,
+          num_replicas: 1,
+        });
+
+        for (let i = 0; i < 5; i++) {
+          await js.publish(subject, encoder.encode(JSON.stringify({ i })));
+        }
+
+        const backupInfo = await jsm.streams.info(backupName);
+
+        await jsm.streams.update(backupName, { ...backupInfo.config, subjects: [] });
+
+        // ...and the recreated-but-empty stream, as left behind by a process
+        // that died right after Phase 3
+        await jsm.streams.add({
+          name: evStreamName,
+          subjects: [`${serviceName}__microservice.ev.>`],
+          retention: RetentionPolicy.Workqueue,
+          storage: StorageType.File,
+          num_replicas: 1,
+        });
+
+        // When: the service boots again
+        const { app, module } = await createTestApp(
+          { name: serviceName, port },
+          [MigrationTestController],
+          [serviceName],
+        );
+
+        // Then: backup contents are restored into the live stream
+        const controller = module.get(MigrationTestController);
+
+        await waitForCondition(() => controller.received.length >= 5, 20_000);
+
+        expect(controller.received).toHaveLength(5);
+
+        await expect(jsm.streams.info(backupName)).rejects.toThrow();
+
+        await app.close();
+        await cleanupStreams(nc, serviceName);
+      });
+    });
+
     describe('orphaned backup cleanup', () => {
       it('should clean up orphaned backup stream before migration', async () => {
         const serviceName = uniqueServiceName();

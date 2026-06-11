@@ -160,6 +160,10 @@ export class StreamProvider {
       async () => {
         this.logger.log(`Ensuring stream: ${config.name}`);
 
+        // A leftover migration backup means a previous process died
+        // mid-migration — finish its job before reconciling the config.
+        await this.migration.recoverInterrupted(jsm, config.name, config);
+
         try {
           const currentInfo = await jsm.streams.info(config.name);
 
@@ -231,6 +235,14 @@ export class StreamProvider {
     config: Partial<StreamConfig> & { name: string; subjects: string[] },
     ctx: ProvisioningErrorContext,
   ): Promise<StreamInfo> {
+    if (this.isSharedStream(config.name)) {
+      // The broadcast stream is shared by every service in the cluster. Other
+      // services may have added subjects (e.g. broadcast._sch.> for
+      // scheduling) that this service's config does not declare — an update
+      // with the local subject list would strip them.
+      config.subjects = [...new Set([...config.subjects, ...currentInfo.config.subjects])];
+    }
+
     const diff = compareStreamConfig(currentInfo.config, config);
 
     if (!diff.hasChanges) {
@@ -274,6 +286,14 @@ export class StreamProvider {
       }
 
       return currentInfo;
+    }
+
+    if (this.isSharedStream(config.name)) {
+      throw new Error(
+        `Stream ${config.name} is shared across services and cannot be destructively migrated: ` +
+          "recreating it would delete every other service's durable broadcast consumers and " +
+          'replay retained history to them. Coordinate a manual migration instead.',
+      );
     }
 
     // Destructive migration
@@ -380,13 +400,23 @@ export class StreamProvider {
     }
   }
 
+  /** The broadcast stream is global — every service in the cluster shares it. */
+  private isSharedStream(name: string): boolean {
+    return name === this.getStreamName(StreamKind.Broadcast);
+  }
+
   /** Build the full stream config by merging defaults with user overrides. */
   private buildConfig(
     kind: StreamKind,
   ): Partial<StreamConfig> & { name: string; subjects: string[] } {
     const name = this.getStreamName(kind);
     const subjects = this.getSubjects(kind);
-    const description = `JetStream ${kind} stream for ${this.options.name}`;
+    // The shared stream's description must not embed a service name — each
+    // deploy of a different service would rewrite it back and forth.
+    const description =
+      kind === StreamKind.Broadcast
+        ? 'JetStream broadcast stream (shared across services)'
+        : `JetStream ${kind} stream for ${this.options.name}`;
 
     const defaults = this.getDefaults(kind);
     const overrides = this.getOverrides(kind);

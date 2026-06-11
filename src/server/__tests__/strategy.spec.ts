@@ -104,6 +104,25 @@ describe(JetstreamStrategy, () => {
     });
   });
 
+  describe('startup ordering', () => {
+    it('should subscribe routers before starting consumption', async () => {
+      // Given: event handlers exist, so a durable consumer will be started
+      patternRegistry.hasEventHandlers.mockReturnValue(true);
+
+      // When: transport starts
+      await sut.listen(vi.fn());
+
+      // Then: the router observes the message subjects before the consumer
+      // begins delivering — consumers flush pending backlog immediately, and
+      // a Subject with no observers drops messages silently
+      expect(eventRouter.start).toHaveBeenCalled();
+      expect(messageProvider.start).toHaveBeenCalled();
+      expect(eventRouter.start.mock.invocationCallOrder[0]!).toBeLessThan(
+        messageProvider.start.mock.invocationCallOrder[0]!,
+      );
+    });
+  });
+
   describe('metadata publishing', () => {
     it('should publish metadata when handlers have meta', async () => {
       // Given: pattern registry has metadata

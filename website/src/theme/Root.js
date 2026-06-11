@@ -84,7 +84,7 @@ export default function Root({ children }) {
   "headline": "How to configure a Dead Letter Queue",
   "description": "Capture NestJS NATS JetStream messages that exhaust all delivery attempts via a DLQ stream or onDeadLetter callback.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-05-27"
+  "dateModified": "2026-06-10"
 },
       
     '/docs/guides/graceful-shutdown/': {
@@ -100,7 +100,7 @@ export default function Root({ children }) {
   "headline": "RpcContext — Handler Context & Message Settlement",
   "description": "Access JetStream metadata and control ack, retry, and terminate actions in NestJS message handlers via RpcContext.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-04-11"
+  "dateModified": "2026-06-10"
 },
       
     '/docs/guides/health-checks/': {
@@ -172,7 +172,7 @@ export default function Root({ children }) {
   "headline": "How to migrate immutable stream properties",
   "description": "Safely change immutable stream properties without losing messages via blue-green sourcing.",
   "datePublished": "2026-04-02",
-  "dateModified": "2026-05-27"
+  "dateModified": "2026-06-10"
 },
       
     '/docs/guides/troubleshooting/': {

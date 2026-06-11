@@ -82,8 +82,21 @@ describe(MsgpackCodec, () => {
       };
       const sut = new MsgpackCodec(packr);
 
+      // When + Then: non-empty input — empty payloads short-circuit to undefined
+      expect(() => sut.decode(new Uint8Array([0x91]))).toThrow('truncated frame');
+    });
+
+    it('should decode an empty payload as undefined without calling unpack', () => {
+      // Given
+      const packr: PackrLike = {
+        pack: vi.fn(),
+        unpack: vi.fn(),
+      };
+      const sut = new MsgpackCodec(packr);
+
       // When + Then
-      expect(() => sut.decode(new Uint8Array())).toThrow('truncated frame');
+      expect(sut.decode(new Uint8Array(0))).toBeUndefined();
+      expect(packr.unpack).not.toHaveBeenCalled();
     });
   });
 });

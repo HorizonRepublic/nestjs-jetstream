@@ -27,6 +27,7 @@ import {
   isPromiseLike,
   resolveAckExtensionInterval,
   serializeError,
+  settleQuietly,
   startAckExtensionTimer,
   unwrapResult,
 } from '../../utils';
@@ -45,6 +46,15 @@ interface ResolvedCommand {
   readonly data: unknown;
   readonly replyTo: string;
   readonly correlationId: string;
+}
+
+/**
+ * A delivered command parked in the concurrency backlog, together with the
+ * ack-extension timer that keeps it alive while it waits for a slot.
+ */
+interface QueuedCommand {
+  readonly msg: JsMsg;
+  readonly stopAckExtension: (() => void) | null;
 }
 
 /**
@@ -259,7 +269,9 @@ export class RpcRouter {
           `rpc-handler:${subject}`,
         );
         publishErrorReply(replyTo, correlationId, subject, err);
-        msg.term(`Handler error: ${subject}`);
+        settleQuietly(logger, `Failed to term ${subject}:`, () => {
+          msg.term(`Handler error: ${subject}`);
+        });
       };
 
       // Abort wire that the handler-deadline timer uses to close the
@@ -294,7 +306,9 @@ export class RpcRouter {
 
       if (!isPromiseLike(pending)) {
         if (stopAckExtension !== null) stopAckExtension();
-        msg.ack();
+        settleQuietly(logger, `Failed to ack ${subject}:`, () => {
+          msg.ack();
+        });
         publishReply(replyTo, correlationId, pending);
         reportHandlerCompleted(msg, startedAt, 'success');
 
@@ -311,7 +325,11 @@ export class RpcRouter {
         abortController.abort();
         // RpcTimeout hook is the canonical signal here — no separate log.
         emitRpcTimeout(subject, correlationId);
-        msg.term('Handler timeout');
+        // This runs inside a bare timer callback — an unguarded term throw
+        // on a degraded connection would surface as an uncaught exception.
+        settleQuietly(logger, `Failed to term ${subject}:`, () => {
+          msg.term('Handler timeout');
+        });
         // Transport outcome is terminated — the handler's eventual resolution
         // is irrelevant once we've replied with timeout.
         reportHandlerCompleted(msg, startedAt, 'terminated');
@@ -323,7 +341,9 @@ export class RpcRouter {
           settled = true;
           clearTimeout(timeoutId);
           if (stopAckExtension !== null) stopAckExtension();
-          msg.ack();
+          settleQuietly(logger, `Failed to ack ${subject}:`, () => {
+            msg.ack();
+          });
           publishReply(replyTo, correlationId, result);
           reportHandlerCompleted(msg, startedAt, 'success');
         },
@@ -344,11 +364,32 @@ export class RpcRouter {
     const backlogWarnThreshold = 1_000;
     let active = 0;
     let backlogWarned = false;
-    const backlog: JsMsg[] = [];
+    const backlog: QueuedCommand[] = [];
 
     const onAsyncDone = (): void => {
       active--;
       drainBacklog();
+    };
+
+    // handleSafe() is not expected to throw — settlement inside it is guarded
+    // — but a failure here must never leak the concurrency slot or escape
+    // into the RxJS observer and kill the subscription.
+    const routeSafely = (msg: JsMsg): Promise<void> | undefined => {
+      try {
+        return handleSafe(msg);
+      } catch (err) {
+        logger.error(`Unexpected routing failure for ${msg.subject}:`, err);
+
+        return undefined;
+      }
+    };
+
+    const trackAsync = (result: Promise<void>, msg: JsMsg): void => {
+      void result
+        .catch((err: unknown) => {
+          logger.error(`Unexpected routing failure for ${msg.subject}:`, err);
+        })
+        .finally(onAsyncDone);
     };
 
     const drainBacklog = (): void => {
@@ -356,11 +397,14 @@ export class RpcRouter {
         const next = backlog.shift();
 
         if (next === undefined) return;
+        // The processing-phase timer is started inside handleSafe(); the
+        // waiting phase is over.
+        next.stopAckExtension?.();
         active++;
-        const result = handleSafe(next);
+        const result = routeSafely(next.msg);
 
         if (result !== undefined) {
-          void result.finally(onAsyncDone);
+          trackAsync(result, next.msg);
         } else {
           active--;
         }
@@ -372,7 +416,15 @@ export class RpcRouter {
     this.subscription = this.messageProvider.commands$.subscribe({
       next: (msg: JsMsg): void => {
         if (active >= maxActive) {
-          backlog.push(msg);
+          // A parked command was already delivered — its ack_wait clock is
+          // running on the server. Without extension a long wait ends in
+          // redelivery and a duplicate execution.
+          backlog.push({
+            msg,
+            stopAckExtension: hasAckExtension
+              ? startAckExtensionTimer(msg, ackExtensionInterval)
+              : null,
+          });
           if (!backlogWarned && backlog.length >= backlogWarnThreshold) {
             backlogWarned = true;
             logger.warn(
@@ -384,10 +436,10 @@ export class RpcRouter {
         }
 
         active++;
-        const result = handleSafe(msg);
+        const result = routeSafely(msg);
 
         if (result !== undefined) {
-          void result.finally(onAsyncDone);
+          trackAsync(result, msg);
         } else {
           active--;
           if (backlog.length > 0) drainBacklog();
@@ -396,6 +448,16 @@ export class RpcRouter {
       error: (err: unknown): void => {
         logger.error('Stream error in RPC router', err);
       },
+    });
+
+    // Backlogged commands keep extension timers alive — stop them when the
+    // router unsubscribes so a destroyed router leaves nothing ticking.
+    this.subscription.add(() => {
+      for (const queued of backlog) {
+        queued.stopAckExtension?.();
+      }
+
+      backlog.length = 0;
     });
   }
 
