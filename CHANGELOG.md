@@ -1,5 +1,32 @@
 # Changelog
 
+## [2.12.0](https://github.com/HorizonRepublic/nestjs-jetstream/compare/v2.11.1...v2.12.0) (2026-06-11)
+
+
+### Features
+
+* **provisioning:** boot summary, actionable errors, and opt-in storage preflight ([#175](https://github.com/HorizonRepublic/nestjs-jetstream/issues/175)) ([815fb6c](https://github.com/HorizonRepublic/nestjs-jetstream/commit/815fb6c0eaa31c5f467489172333248009e9e403))
+
+
+### Bug Fixes
+
+* **client:** apply ttl to the delivered message instead of the schedule holder ([3ece450](https://github.com/HorizonRepublic/nestjs-jetstream/commit/3ece450a805f51f10bc14e12d51de6c2f96d7855))
+* **client:** fail fast when a JetStream RPC publish is deduplicated ([3ece450](https://github.com/HorizonRepublic/nestjs-jetstream/commit/3ece450a805f51f10bc14e12d51de6c2f96d7855))
+* **client:** publish each scheduled message to a unique schedule subject ([#178](https://github.com/HorizonRepublic/nestjs-jetstream/issues/178)) ([573253b](https://github.com/HorizonRepublic/nestjs-jetstream/commit/573253b0f188a2b00c46e851b8dec9330a3f7236))
+* **client:** reject scheduleAt for ordered patterns ([3ece450](https://github.com/HorizonRepublic/nestjs-jetstream/commit/3ece450a805f51f10bc14e12d51de6c2f96d7855))
+* **codec:** decode empty payloads as undefined ([3ece450](https://github.com/HorizonRepublic/nestjs-jetstream/commit/3ece450a805f51f10bc14e12d51de6c2f96d7855))
+* **dlq:** change Dead Letter Queue retention policy to Limits ([#177](https://github.com/HorizonRepublic/nestjs-jetstream/issues/177)) ([6f1b220](https://github.com/HorizonRepublic/nestjs-jetstream/commit/6f1b22057ce37d93bdccbdfeefb988366ed1928b))
+* **dlq:** engage dead-letter handling when dlq is configured without onDeadLetter ([3ece450](https://github.com/HorizonRepublic/nestjs-jetstream/commit/3ece450a805f51f10bc14e12d51de6c2f96d7855))
+* **dlq:** retry the DLQ publish in-process and stop promising redelivery ([3ece450](https://github.com/HorizonRepublic/nestjs-jetstream/commit/3ece450a805f51f10bc14e12d51de6c2f96d7855))
+* **events:** capture unroutable messages in the DLQ instead of terminating them ([3ece450](https://github.com/HorizonRepublic/nestjs-jetstream/commit/3ece450a805f51f10bc14e12d51de6c2f96d7855))
+* **events:** escalate ctx.retry() on the final delivery to dead-letter handling ([3ece450](https://github.com/HorizonRepublic/nestjs-jetstream/commit/3ece450a805f51f10bc14e12d51de6c2f96d7855))
+* **headers:** block user-set NATS control headers and drop them from DLQ republish ([3ece450](https://github.com/HorizonRepublic/nestjs-jetstream/commit/3ece450a805f51f10bc14e12d51de6c2f96d7855))
+* **migration:** close the data-loss windows in destructive stream migration ([3ece450](https://github.com/HorizonRepublic/nestjs-jetstream/commit/3ece450a805f51f10bc14e12d51de6c2f96d7855))
+* **routing:** contain settlement failures on degraded connections ([3ece450](https://github.com/HorizonRepublic/nestjs-jetstream/commit/3ece450a805f51f10bc14e12d51de6c2f96d7855))
+* **routing:** keep ack extension running for backlogged messages ([3ece450](https://github.com/HorizonRepublic/nestjs-jetstream/commit/3ece450a805f51f10bc14e12d51de6c2f96d7855))
+* **server:** subscribe routers before consumers start delivering ([3ece450](https://github.com/HorizonRepublic/nestjs-jetstream/commit/3ece450a805f51f10bc14e12d51de6c2f96d7855))
+* **streams:** stop services from clobbering the shared broadcast stream ([3ece450](https://github.com/HorizonRepublic/nestjs-jetstream/commit/3ece450a805f51f10bc14e12d51de6c2f96d7855))
+
 ## [2.11.1](https://github.com/HorizonRepublic/nestjs-jetstream/compare/v2.11.0...v2.11.1) (2026-05-27)
 
 
