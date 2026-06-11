@@ -136,7 +136,6 @@ export class StreamProvider {
       case StreamKind.Command:
         return [`${name}.${StreamKind.Command}.>`];
       case StreamKind.Broadcast:
-        // No _sch entry: broadcast.> already covers it, a sibling would self-overlap (err 10052).
         return ['broadcast.>'];
 
       case StreamKind.Ordered:
@@ -245,7 +244,6 @@ export class StreamProvider {
     ctx: ProvisioningErrorContext,
   ): Promise<StreamInfo> {
     if (this.isSharedStream(config.name)) {
-      // Keep other services' subjects, but drop entries covered by a broader one (err 10052).
       const merged = [...new Set([...config.subjects, ...currentInfo.config.subjects])];
 
       config.subjects = merged.filter((s) => !merged.some((other) => subjectCovers(other, s)));

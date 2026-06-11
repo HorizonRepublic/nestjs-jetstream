@@ -430,7 +430,6 @@ describe('Message Scheduling (Delayed Jobs)', () => {
     beforeEach(async () => {
       serviceName = uniqueServiceName();
 
-      // Boot is part of the assertion — self-overlapping subjects fail here
       ({ app, module } = await createTestApp(
         {
           name: serviceName,
@@ -453,7 +452,7 @@ describe('Message Scheduling (Delayed Jobs)', () => {
     });
 
     it('should boot with broadcast scheduling enabled and deliver a scheduled broadcast', async () => {
-      // Given: a scheduled broadcast — its holder rides broadcast.> itself
+      // Given: a broadcast scheduled 1.5s out
       const payload = { promo: 'summer' };
 
       const record = new JetstreamRecordBuilder(payload)
