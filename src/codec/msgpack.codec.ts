@@ -48,8 +48,7 @@ export class MsgpackCodec implements Codec {
   }
 
   public decode(data: Uint8Array): unknown {
-    // Mirror JsonCodec: empty payloads (payload-less emits from foreign
-    // publishers) decode to undefined instead of throwing.
+    // Mirror JsonCodec: empty payloads decode to undefined.
     if (data.length === 0) return undefined;
 
     return this.packr.unpack(data);

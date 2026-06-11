@@ -14,11 +14,7 @@ const DEFAULT_SOURCING_TIMEOUT_MS = 30_000;
 const SOURCING_POLL_INTERVAL_MS = 100;
 /** How long migrate() waits for another instance's in-flight migration to finish. */
 const DEFAULT_PEER_WAIT_MS = 60_000;
-/**
- * Backups younger than this are treated as another instance's live migration
- * and never touched. Stale ones (older, or without the metadata stamp) are
- * leftovers of an interrupted run and get recovered.
- */
+/** Younger backups belong to a live peer migration; older ones get recovered. */
 const ACTIVE_MIGRATION_GRACE_MS = 90_000;
 const MIGRATION_STARTED_AT_KEY = 'nestjs-jetstream-migration-started-at';
 
@@ -29,25 +25,17 @@ type MigrationStreamConfig = Partial<StreamConfig> & { name: string; subjects: s
  * Orchestrates blue-green stream recreation for immutable property changes.
  *
  * Uses NATS stream sourcing (server-side copy) to preserve messages:
- *   1. Quiesce: remove the original's subjects so new publishes are rejected
- *      loudly instead of acked into a stream that is about to be deleted
- *   2. Backup: create temp stream sourcing from the original; wait for the
- *      source lag to reach zero (immune to message-count races)
- *   3. Delete original
- *   4. Create original with the new config
- *   5. Restore: source from the backup into the new original, drain, then
- *      delete the backup BEFORE detaching the source — the surviving order
- *      guarantees "backup exists with no source attached" can only mean the
- *      restore never started, which {@link recoverInterrupted} re-runs safely
+ *   1. Quiesce: drop the original's subjects — publishes reject loudly instead
+ *      of being acked into a stream that is about to be deleted
+ *   2. Backup: temp stream sources the original; drain tracked via source lag
+ *   3. Delete the original, recreate it with the new config
+ *   4. Restore: source the backup back, drain, delete the backup BEFORE
+ *      detaching the source — so "backup without an attached source" can only
+ *      mean the restore never started, which makes recovery re-runnable
  *
- * Publishers see "no stream matches subject" errors from quiesce until
- * Phase 4 completes. Client-side retry is the caller's responsibility — the
- * alternative was acknowledged writes that silently vanished.
- *
- * A process dying mid-migration leaves the backup behind;
- * {@link recoverInterrupted} finishes the job on the next startup. Backups
- * created moments ago belong to another instance's live migration (rolling
- * deploys) and are waited out, never deleted.
+ * A process dying mid-migration leaves the backup behind and
+ * {@link recoverInterrupted} finishes the job on the next startup; a fresh
+ * backup means a live peer migration and is waited out, never deleted.
  *
  * Ref: https://docs.nats.io/nats-concepts/jetstream/streams#sources
  */
@@ -83,8 +71,7 @@ export class StreamMigration {
     let drainedCount = 0;
 
     try {
-      // Phase 1: Quiesce — without this, a publish acked between the backup
-      // catching up and the delete would be destroyed with the stream.
+      // Phase 1: Quiesce — an acked publish after this point cannot be lost.
       this.logger.log(`  Phase 1/4: Quiescing ${streamName} (publishes rejected during migration)`);
       await jsm.streams.update(streamName, { ...currentInfo.config, subjects: [] });
 
@@ -117,8 +104,7 @@ export class StreamMigration {
       }
     } catch (err) {
       if (originalDeleted) {
-        // The backup is the only copy now — recoverInterrupted() resumes the
-        // restore on the next startup.
+        // The backup is the only copy now; recovery resumes on the next startup.
         this.logger.error(
           `Migration of ${streamName} failed after the original was deleted. ` +
             `Backup ${backupName} preserved — restoration resumes on the next startup.`,
@@ -138,11 +124,8 @@ export class StreamMigration {
   }
 
   /**
-   * Detect and finish a migration that a previous process left unfinished.
-   * Safe against concurrent instances: a backup fresh enough to belong to a
-   * live migration is left alone.
-   *
-   * @returns true when recovery work was performed.
+   * Finish a migration a previous process left unfinished; a backup fresh
+   * enough to belong to a live peer migration is left alone.
    */
   public async recoverInterrupted(
     jsm: JetStreamManager,
@@ -175,8 +158,7 @@ export class StreamMigration {
     const hasBackupSource = (streamInfo.config.sources ?? []).some((s) => s.name === backupName);
 
     if (hasBackupSource) {
-      // Died mid-restore: the source keeps its position server-side — let it
-      // finish, then clean up.
+      // Died mid-restore: the source keeps its position — let it finish.
       this.logger.warn(`Stream ${streamName}: finishing interrupted restore from ${backupName}`);
       await this.waitForSourceDrained(jsm, streamName, backupName, backupInfo.state.messages);
       await jsm.streams.delete(backupName);
@@ -192,9 +174,8 @@ export class StreamMigration {
       return true;
     }
 
-    // Died after the recreate but before the restore was wired up. Nothing
-    // from the backup has been sourced yet (sources are only detached after a
-    // full drain), so re-running the restore cannot duplicate messages.
+    // Died before the restore was wired up — nothing sourced yet, so
+    // re-running it cannot duplicate messages.
     this.logger.warn(
       `Stream ${streamName}: restoring ${backupInfo.state.messages} messages from stale ${backupName}`,
     );
@@ -215,8 +196,7 @@ export class StreamMigration {
     streamConfig: MigrationStreamConfig,
     backupName: string,
   ): Promise<void> {
-    // The backup's own source still points at the (recreated) original —
-    // stale, and a cycle once the original sources from the backup.
+    // Clear the backup's stale source ref — it would form a sourcing cycle.
     const backupInfo = await jsm.streams.info(backupName);
 
     if ((backupInfo.config.sources ?? []).length > 0) {
@@ -226,18 +206,15 @@ export class StreamMigration {
     await jsm.streams.update(streamName, { ...streamConfig, sources: [{ name: backupName }] });
     await this.waitForSourceDrained(jsm, streamName, backupName, backupInfo.state.messages);
 
-    // Delete the backup before detaching the source — see the class doc for
-    // why this order is what makes recoverInterrupted() safe.
+    // Backup deleted before the source detaches — the order recovery relies on.
     await jsm.streams.delete(backupName);
     await jsm.streams.update(streamName, { ...streamConfig, sources: [] });
   }
 
   /**
-   * Wait until `sourceName` is fully drained into `streamName`. Lag-based, so
-   * concurrent live publishes to the target cannot fake completion the way a
-   * bare message-count comparison could. A freshly attached source reports
-   * `lag: 0, active: -1` before its first sync — `active >= 0` filters that
-   * false positive out (verified against NATS 2.12.6).
+   * Lag-based drain check — live publishes cannot fake completion. A fresh
+   * source reports lag 0 / active -1 before its first sync (NATS 2.12.6),
+   * hence the active guard.
    */
   private async waitForSourceDrained(
     jsm: JetStreamManager,
@@ -270,12 +247,8 @@ export class StreamMigration {
   }
 
   /**
-   * A backup already present when migrate() begins belongs to another
-   * instance migrating right now (rolling deploy) — wait for it to finish.
-   * Stale leftovers are handled by recoverInterrupted() before migrate() runs,
-   * so a timeout here means something is genuinely stuck.
-   *
-   * @returns true when a peer's backup was observed and cleared.
+   * A backup present at migrate() start is a live peer migration — wait it
+   * out. Stale leftovers were already handled by recoverInterrupted().
    */
   private async waitOutPeerMigration(jsm: JetStreamManager, backupName: string): Promise<boolean> {
     if ((await this.tryInfo(jsm, backupName)) === null) return false;

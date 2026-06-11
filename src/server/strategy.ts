@@ -170,10 +170,8 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
         this.eventRouter.updateMaxDeliverMap(this.buildMaxDeliverMap(consumers));
       }
 
-      // 7. Subscribe routers BEFORE consumption starts. Consumers flush any
-      // pending backlog the moment they go live, and a message pushed into a
-      // subject with no observers is dropped unsettled — for commands
-      // (max_deliver: 1) that loss is permanent.
+      // 7. Subscribe routers BEFORE consumption starts — consumers flush their
+      // backlog immediately, and a subject with no observers drops messages.
       await this.startRouters();
 
       // 8. Start durable and ordered message consumption

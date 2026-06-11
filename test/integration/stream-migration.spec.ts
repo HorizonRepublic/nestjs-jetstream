@@ -495,9 +495,7 @@ describe('Stream sourcing behavior (NATS verification)', () => {
           await js.publish(subject, encoder.encode(JSON.stringify({ seed: i })));
         }
 
-        // A producer keeps publishing while the migration runs. Only acked
-        // publishes count — a rejected publish never happened for a producer
-        // with retry logic, but an acked one is a delivery promise.
+        // Only acked publishes count: a rejection is retryable, an ack is a delivery promise.
         let acked = 20;
         let stop = false;
         const publisher = (async (): Promise<void> => {

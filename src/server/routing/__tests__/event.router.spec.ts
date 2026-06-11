@@ -1803,9 +1803,8 @@ describe(EventRouter, () => {
     });
 
     it('should extend ack for backlogged messages while they wait for a slot', async () => {
-      // Given: concurrency 1 with ackExtension; the first handler hangs and
-      // holds the only slot, so the second message parks in the backlog —
-      // its ack_wait clock is already running on the server
+      // Given: concurrency 1, the first handler hangs — the second message
+      // parks in the backlog with its ack_wait clock running
       sut = new EventRouter(messageProvider, patternRegistry, codec, eventBus, undefined, {
         events: { concurrency: 1, ackExtension: 30 },
       });
