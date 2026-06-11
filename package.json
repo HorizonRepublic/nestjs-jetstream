@@ -99,6 +99,9 @@
   "devDependencies": {
     "@faker-js/faker": "^10.4.0",
     "@golevelup/ts-vitest": "^4.0.0",
+    "@nestjs/common": "^11.1.26",
+    "@nestjs/core": "^11.1.26",
+    "@nestjs/microservices": "^11.1.26",
     "@nestjs/platform-express": "^11.1.26",
     "@nestjs/testing": "^11.1.26",
     "@opentelemetry/api": "^1.9.1",
