@@ -16,6 +16,7 @@ import {
 } from '../otel';
 import { isPromiseLike, serializeError, unwrapResult } from '../utils';
 
+import { NameResolver } from './infrastructure/name-resolver';
 import { PatternRegistry } from './routing/pattern-registry';
 
 /**
@@ -40,6 +41,7 @@ export class CoreRpcServer {
     private readonly patternRegistry: PatternRegistry,
     private readonly codec: Codec,
     private readonly eventBus: EventBus,
+    private readonly names?: NameResolver,
   ) {
     const derived = deriveOtelAttrs(options);
 
@@ -51,7 +53,9 @@ export class CoreRpcServer {
   /** Start listening for RPC requests on the command subject. */
   public async start(): Promise<void> {
     const nc = await this.connection.getConnection();
-    const subject = `${this.serviceName}.cmd.>`;
+    const subject = this.names
+      ? this.names.filterSubject(StreamKind.Command)
+      : `${this.serviceName}.cmd.>`;
     const queue = `${this.serviceName}_cmd_queue`;
 
     this.subscription = nc.subscribe(subject, {

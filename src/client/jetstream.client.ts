@@ -34,6 +34,7 @@ import {
   JetstreamHeader,
   PatternPrefix,
 } from '../jetstream.constants';
+import { NameResolver } from '../server/infrastructure/name-resolver';
 import {
   beginRpcClientSpan,
   deriveOtelAttrs,
@@ -103,10 +104,15 @@ export class JetstreamClient extends ClientProxy {
    * Subject prefixes of the form `{serviceName}__microservice.{kind}.` — one
    * per stream kind this client may publish to. Built once in the constructor
    * so producing a full subject is a single string concat with the user pattern.
+   * For self-targets with custom prefixes, these are set to empty string and
+   * subject construction delegates to the resolver.
    */
   private readonly eventSubjectPrefix: string;
   private readonly commandSubjectPrefix: string;
   private readonly orderedSubjectPrefix: string;
+
+  /** Resolver for self-target subjects; null when targeting a foreign service. */
+  private readonly selfNames: NameResolver | null;
 
   /**
    * RPC configuration snapshots. The values are derived from rootOptions at
@@ -148,10 +154,15 @@ export class JetstreamClient extends ClientProxy {
     private readonly connection: ConnectionProvider,
     private readonly codec: Codec,
     private readonly eventBus: EventBus,
+    names?: NameResolver,
   ) {
     super();
     this.targetName = targetServiceName;
     this.callerName = internalName(this.rootOptions.name);
+
+    const isSelf = targetServiceName === rootOptions.name;
+
+    this.selfNames = isSelf ? (names ?? new NameResolver(rootOptions)) : null;
 
     const targetInternal = internalName(targetServiceName);
 
@@ -161,7 +172,7 @@ export class JetstreamClient extends ClientProxy {
 
     this.isCoreMode = isCoreRpcMode(this.rootOptions.rpc);
     this.defaultRpcTimeout = isJetStreamRpcMode(this.rootOptions.rpc)
-      ? (this.rootOptions.rpc?.timeout ?? DEFAULT_JETSTREAM_RPC_TIMEOUT)
+      ? (this.rootOptions.rpc.timeout ?? DEFAULT_JETSTREAM_RPC_TIMEOUT)
       : (this.rootOptions.rpc?.timeout ?? DEFAULT_RPC_TIMEOUT);
 
     const derived = deriveOtelAttrs(this.rootOptions);
@@ -723,6 +734,10 @@ export class JetstreamClient extends ClientProxy {
    * Resolve a user pattern to a fully-qualified NATS subject, dispatching
    * between the event, broadcast, and ordered prefixes.
    *
+   * For self-targets the resolver drives subject construction so custom
+   * subjectPrefix options are honoured. Broadcast subjects are always
+   * convention-based (no per-service prefix).
+   *
    * The leading-char check short-circuits the `startsWith` comparisons for
    * patterns that cannot possibly carry a broadcast/ordered marker, which is
    * the overwhelmingly common case.
@@ -733,8 +748,14 @@ export class JetstreamClient extends ClientProxy {
     }
 
     if (pattern.charCodeAt(0) === 111 /* 'o' */ && pattern.startsWith(PatternPrefix.Ordered)) {
-      return this.orderedSubjectPrefix + pattern.slice(PatternPrefix.Ordered.length);
+      const bare = pattern.slice(PatternPrefix.Ordered.length);
+
+      if (this.selfNames) return this.selfNames.subject(StreamKind.Ordered, bare);
+
+      return this.orderedSubjectPrefix + bare;
     }
+
+    if (this.selfNames) return this.selfNames.subject(StreamKind.Event, pattern);
 
     return this.eventSubjectPrefix + pattern;
   }
@@ -813,7 +834,11 @@ export class JetstreamClient extends ClientProxy {
       return `${eventSubject.replace('broadcast.', 'broadcast._sch.')}.${nuid.next()}`;
     }
 
-    // For event/ordered subjects: {svc}__microservice.{kind}.{pattern}
+    if (this.selfNames) {
+      return this.buildSelfScheduleSubject(eventSubject, this.selfNames);
+    }
+
+    // Convention subjects: {svc}__microservice.{kind}.{pattern}
     // Replace the kind segment with _sch: {svc}__microservice._sch.{pattern}
     const targetPrefix = `${internalName(this.targetName)}.`;
 
@@ -823,6 +848,39 @@ export class JetstreamClient extends ClientProxy {
 
     const withoutPrefix = eventSubject.slice(targetPrefix.length);
     // withoutPrefix is "{kind}.{pattern}" — strip the kind segment
+    const dotIndex = withoutPrefix.indexOf('.');
+
+    if (dotIndex === -1) {
+      throw new Error(`Event subject missing pattern segment: ${eventSubject}`);
+    }
+
+    const pattern = withoutPrefix.slice(dotIndex + 1);
+
+    return `${targetPrefix}_sch.${pattern}.${nuid.next()}`;
+  }
+
+  private buildSelfScheduleSubject(eventSubject: string, names: NameResolver): string {
+    // Detect the stream kind from event subject by trying each known prefix.
+    // We only support Event and Ordered (broadcast handled above).
+    for (const kind of [StreamKind.Event, StreamKind.Ordered]) {
+      const subjectForKind = names.subject(kind, '');
+      const prefix = subjectForKind === '' ? '' : subjectForKind;
+
+      if (eventSubject.startsWith(prefix) && prefix !== '') {
+        const pattern = eventSubject.slice(prefix.length);
+
+        return `${names.schedulePrefix(kind)}${pattern}.${nuid.next()}`;
+      }
+    }
+
+    // Fallback: convention-based parse (e.g. targeting self without custom prefix)
+    const targetPrefix = `${internalName(this.targetName)}.`;
+
+    if (!eventSubject.startsWith(targetPrefix)) {
+      throw new Error(`Unexpected event subject format: ${eventSubject}`);
+    }
+
+    const withoutPrefix = eventSubject.slice(targetPrefix.length);
     const dotIndex = withoutPrefix.indexOf('.');
 
     if (dotIndex === -1) {

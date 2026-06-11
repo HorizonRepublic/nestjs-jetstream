@@ -5,6 +5,7 @@ import { faker } from '@faker-js/faker';
 import { StreamKind } from '../../../interfaces';
 import type { JetstreamModuleOptions } from '../../../interfaces';
 import { metadataKey } from '../../../jetstream.constants';
+import { NameResolver } from '../../infrastructure/name-resolver';
 
 import { PatternRegistry } from '../pattern-registry';
 
@@ -46,7 +47,7 @@ describe(PatternRegistry, () => {
       servers: ['nats://localhost:4222'],
     };
 
-    sut = new PatternRegistry(options);
+    sut = new PatternRegistry(options, new NameResolver(options));
   });
 
   afterEach(vi.resetAllMocks);
@@ -462,6 +463,26 @@ describe(PatternRegistry, () => {
         // Then
         expect(sut.getMetadataEntries().size).toBe(0);
       });
+    });
+  });
+
+  describe('custom subjectPrefix', () => {
+    it('should register handler subjects under the custom prefix', () => {
+      // Given: resolver with events.subjectPrefix
+      const customOptions: JetstreamModuleOptions = {
+        name: 'orders',
+        servers: ['nats://localhost:4222'],
+        events: { subjectPrefix: 'company.orders.' },
+      };
+      const customSut = new PatternRegistry(customOptions, new NameResolver(customOptions));
+      const handler = createHandler({ isEvent: true });
+      const handlers = new Map<string, MessageHandler>([['order.created', handler]]);
+
+      // When: registered
+      customSut.registerHandlers(handlers);
+
+      // Then: mapped under custom prefix
+      expect(customSut.getHandler('company.orders.order.created')).toBe(handler);
     });
   });
 });

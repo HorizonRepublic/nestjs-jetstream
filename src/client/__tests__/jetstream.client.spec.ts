@@ -1201,4 +1201,50 @@ describe(JetstreamClient, () => {
       });
     });
   });
+
+  describe('self vs foreign subject routing', () => {
+    it('should publish self events under the custom subjectPrefix', async () => {
+      // Given: own service has a custom events.subjectPrefix; client targets itself
+      const selfOptions: JetstreamModuleOptions = {
+        name: 'orders',
+        servers: ['nats://localhost:4222'],
+        events: { subjectPrefix: 'company.orders.' },
+      };
+
+      sut = new JetstreamClient(selfOptions, 'orders', connection, codec, eventBus);
+      await sut.connect();
+
+      // When: event emitted to self
+      await firstValueFrom(sut.emit('order.created', {}));
+
+      // Then: published under the custom prefix, not the convention
+      expect(mockJs.publish).toHaveBeenCalledWith(
+        'company.orders.order.created',
+        expect.anything(),
+        expect.anything(),
+      );
+    });
+
+    it('should keep the convention subject for foreign targets regardless of own prefix', async () => {
+      // Given: own service has custom prefix; client targets a DIFFERENT service
+      const selfOptions: JetstreamModuleOptions = {
+        name: 'orders',
+        servers: ['nats://localhost:4222'],
+        events: { subjectPrefix: 'company.orders.' },
+      };
+
+      sut = new JetstreamClient(selfOptions, 'other-svc', connection, codec, eventBus);
+      await sut.connect();
+
+      // When: event emitted to foreign target
+      await firstValueFrom(sut.emit('x', {}));
+
+      // Then: uses convention subject for the foreign service
+      expect(mockJs.publish).toHaveBeenCalledWith(
+        'other-svc__microservice.ev.x',
+        expect.anything(),
+        expect.anything(),
+      );
+    });
+  });
 });

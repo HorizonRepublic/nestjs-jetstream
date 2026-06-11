@@ -10,6 +10,7 @@ import type { JetstreamModuleOptions } from '../../../interfaces';
 import { PatternRegistry } from '../../routing';
 
 import { ConsumerProvider } from '../consumer.provider';
+import { NameResolver } from '../name-resolver';
 import { StreamProvider } from '../stream.provider';
 
 describe(ConsumerProvider, () => {
@@ -59,7 +60,13 @@ describe(ConsumerProvider, () => {
     });
     patternRegistry = createMock<PatternRegistry>();
 
-    sut = new ConsumerProvider(options, connection, streamProvider, patternRegistry);
+    sut = new ConsumerProvider(
+      options,
+      connection,
+      streamProvider,
+      patternRegistry,
+      new NameResolver(options),
+    );
   });
 
   afterEach(vi.resetAllMocks);
@@ -370,6 +377,50 @@ describe(ConsumerProvider, () => {
         );
         expect(mockJsm.consumers.add).not.toHaveBeenCalled();
         expect(mockJsm.consumers.update).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('when events have a custom subjectPrefix', () => {
+      it('should use exact per-pattern filters instead of a wildcard', async () => {
+        // Given: custom prefix on events, one registered pattern
+        const customOptions: JetstreamModuleOptions = {
+          name: 'orders',
+          servers: ['nats://localhost:4222'],
+          events: {
+            consumer: { durable_name: 'company_worker' },
+            subjectPrefix: 'company.orders.',
+          },
+        };
+        const customNames = new NameResolver(customOptions);
+
+        sut = new ConsumerProvider(
+          customOptions,
+          connection,
+          streamProvider,
+          patternRegistry,
+          customNames,
+        );
+
+        patternRegistry.getEventPatterns.mockReturnValue(['order.created']);
+
+        mockJsm.consumers.info.mockResolvedValue(createMock<ConsumerInfo>());
+
+        const updated = createMock<ConsumerInfo>();
+
+        mockJsm.consumers.update.mockResolvedValue(updated);
+
+        // When: ensure event consumer
+        await sut.ensureConsumers([StreamKind.Event]);
+
+        // Then: consumer uses custom durable_name and exact filter_subject
+        expect(mockJsm.consumers.update).toHaveBeenCalledWith(
+          'test-stream',
+          'company_worker',
+          expect.objectContaining({
+            durable_name: 'company_worker',
+            filter_subject: 'company.orders.order.created',
+          }),
+        );
       });
     });
   });

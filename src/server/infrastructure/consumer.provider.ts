@@ -5,11 +5,9 @@ import { ConnectionProvider } from '../../connection';
 import { StreamKind } from '../../interfaces';
 import type { JetstreamModuleOptions } from '../../interfaces';
 import {
-  consumerName,
   DEFAULT_BROADCAST_CONSUMER_CONFIG,
   DEFAULT_COMMAND_CONSUMER_CONFIG,
   DEFAULT_EVENT_CONSUMER_CONFIG,
-  internalName,
 } from '../../jetstream.constants';
 import {
   deriveOtelAttrs,
@@ -21,6 +19,7 @@ import { PatternRegistry } from '../routing';
 
 import { mapProvisioningError, type ProvisioningErrorContext } from './provisioning-error';
 import { NatsErrorCode } from './nats-error-codes';
+import { NameResolver } from './name-resolver';
 import { MIGRATION_BACKUP_SUFFIX } from './stream-migration';
 import { StreamProvider } from './stream.provider';
 
@@ -42,6 +41,7 @@ export class ConsumerProvider {
     private readonly connection: ConnectionProvider,
     private readonly streamProvider: StreamProvider,
     private readonly patternRegistry: PatternRegistry,
+    private readonly names: NameResolver,
   ) {
     const derived = deriveOtelAttrs(options);
 
@@ -72,7 +72,7 @@ export class ConsumerProvider {
 
   /** Get the consumer name for a given kind. */
   public getConsumerName(kind: StreamKind): string {
-    return consumerName(this.options.name, kind);
+    return this.names.consumerName(kind);
   }
 
   /**
@@ -257,8 +257,7 @@ export class ConsumerProvider {
   /** Build consumer config by merging defaults with user overrides. */
   // eslint-disable-next-line @typescript-eslint/naming-convention -- NATS API uses snake_case
   private buildConfig(kind: StreamKind): Partial<ConsumerConfig> & { durable_name: string } {
-    const name = this.getConsumerName(kind);
-    const serviceName = internalName(this.options.name);
+    const durableName = this.getConsumerName(kind);
 
     const defaults = this.getDefaults(kind);
     const overrides = this.getOverrides(kind);
@@ -275,8 +274,8 @@ export class ConsumerProvider {
         return {
           ...defaults,
           ...overrides,
-          name,
-          durable_name: name,
+          name: durableName,
+          durable_name: durableName,
           filter_subject: broadcastPatterns[0],
         };
       }
@@ -284,8 +283,8 @@ export class ConsumerProvider {
       return {
         ...defaults,
         ...overrides,
-        name,
-        durable_name: name,
+        name: durableName,
+        durable_name: durableName,
         filter_subjects: broadcastPatterns,
       };
     }
@@ -294,14 +293,52 @@ export class ConsumerProvider {
       throw new Error(`Unexpected durable consumer kind: ${kind}`);
     }
 
-    const filter_subject = `${serviceName}.${kind}.>`;
+    if (this.names.hasCustomPrefix(kind)) {
+      return this.buildCustomPrefixConfig(kind, durableName, defaults, overrides);
+    }
+
+    const filter_subject = this.names.filterSubject(kind);
 
     return {
       ...defaults,
       ...overrides,
-      name,
-      durable_name: name,
+      name: durableName,
+      durable_name: durableName,
       filter_subject,
+    };
+    /* eslint-enable @typescript-eslint/naming-convention */
+  }
+
+  /* eslint-disable @typescript-eslint/naming-convention -- NATS API uses snake_case */
+  private buildCustomPrefixConfig(
+    kind: StreamKind,
+    durableName: string,
+    defaults: Partial<ConsumerConfig>,
+    overrides: Partial<ConsumerConfig>,
+  ): Partial<ConsumerConfig> & { durable_name: string } {
+    const patterns =
+      kind === StreamKind.Event
+        ? this.patternRegistry.getEventPatterns()
+        : this.patternRegistry.getCommandPatterns();
+
+    const subjects = patterns.map((p) => this.names.subject(kind, p));
+
+    if (subjects.length === 1) {
+      return {
+        ...defaults,
+        ...overrides,
+        name: durableName,
+        durable_name: durableName,
+        filter_subject: subjects[0],
+      };
+    }
+
+    return {
+      ...defaults,
+      ...overrides,
+      name: durableName,
+      durable_name: durableName,
+      filter_subjects: subjects,
     };
     /* eslint-enable @typescript-eslint/naming-convention */
   }

@@ -2,18 +2,9 @@ import { Logger } from '@nestjs/common';
 import { MessageHandler } from '@nestjs/microservices';
 
 import { MessageKind, StreamKind } from '../../interfaces';
-import type {
-  JetstreamModuleOptions,
-  PatternsByKind,
-  RegisteredHandler,
-  SubjectKind,
-} from '../../interfaces';
-import {
-  buildBroadcastSubject,
-  buildSubject,
-  internalName,
-  metadataKey,
-} from '../../jetstream.constants';
+import type { JetstreamModuleOptions, PatternsByKind, RegisteredHandler } from '../../interfaces';
+import { internalName, metadataKey } from '../../jetstream.constants';
+import { NameResolver } from '../infrastructure/name-resolver';
 
 /** Maps StreamKind to a human-readable label for logging. */
 const HANDLER_LABELS: Record<StreamKind, string> = {
@@ -43,7 +34,10 @@ export class PatternRegistry {
   private _hasOrdered = false;
   private _hasMetadata = false;
 
-  public constructor(private readonly options: JetstreamModuleOptions) {}
+  public constructor(
+    private readonly options: JetstreamModuleOptions,
+    private readonly names: NameResolver,
+  ) {}
 
   /**
    * Register all handlers from the NestJS strategy.
@@ -51,8 +45,6 @@ export class PatternRegistry {
    * @param handlers Map of pattern -> MessageHandler from `Server.getHandlers()`.
    */
   public registerHandlers(handlers: Map<string, MessageHandler>): void {
-    const serviceName = this.options.name;
-
     for (const [pattern, handler] of handlers) {
       const extras = handler.extras as Record<string, unknown> | undefined;
       const isEvent = handler.isEventHandler ?? false;
@@ -73,10 +65,7 @@ export class PatternRegistry {
       else if (isEvent) kind = StreamKind.Event;
       else kind = StreamKind.Command;
 
-      const fullSubject =
-        kind === StreamKind.Broadcast
-          ? buildBroadcastSubject(pattern)
-          : buildSubject(serviceName, kind as SubjectKind, pattern);
+      const fullSubject = this.names.subject(kind, pattern);
 
       this.registry.set(fullSubject, {
         handler,
@@ -121,7 +110,19 @@ export class PatternRegistry {
 
   /** Get all registered broadcast patterns (for consumer filter_subject setup). */
   public getBroadcastPatterns(): string[] {
-    return this.getPatternsByKind().broadcasts.map((p) => buildBroadcastSubject(p));
+    return this.getPatternsByKind().broadcasts.map((p) =>
+      this.names.subject(StreamKind.Broadcast, p),
+    );
+  }
+
+  /** Get registered event patterns as raw user-declared patterns. */
+  public getEventPatterns(): string[] {
+    return this.getPatternsByKind().events;
+  }
+
+  /** Get registered command patterns as raw user-declared patterns. */
+  public getCommandPatterns(): string[] {
+    return this.getPatternsByKind().commands;
   }
 
   public hasBroadcastHandlers(): boolean {
@@ -142,9 +143,7 @@ export class PatternRegistry {
 
   /** Get fully-qualified NATS subjects for ordered handlers. */
   public getOrderedSubjects(): string[] {
-    return this.getPatternsByKind().ordered.map((p) =>
-      buildSubject(this.options.name, StreamKind.Ordered, p),
-    );
+    return this.getPatternsByKind().ordered.map((p) => this.names.subject(StreamKind.Ordered, p));
   }
 
   /** Check if any registered handler has metadata. */

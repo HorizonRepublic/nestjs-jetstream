@@ -26,6 +26,7 @@ import {
 } from '../../utils';
 
 import { MessageProvider } from '../infrastructure';
+import { NameResolver } from '../infrastructure/name-resolver';
 import { PatternRegistry } from './pattern-registry';
 import {
   dlqStreamName,
@@ -90,6 +91,7 @@ export class EventRouter {
     private readonly ackWaitMap?: Map<StreamKind, number>,
     private readonly connection?: ConnectionProvider,
     private readonly options?: JetstreamModuleOptions,
+    private readonly names?: NameResolver,
   ) {
     if (options) {
       const derived = deriveOtelAttrs(options);
@@ -735,18 +737,13 @@ export class EventRouter {
       return;
     }
 
-    const destinationSubject = dlqStreamName(serviceName);
+    const dlqStreamOverride = this.options.dlq?.stream?.name;
+    const destinationSubject = this.names
+      ? this.names.dlqStreamName()
+      : (dlqStreamOverride ?? dlqStreamName(serviceName));
     const hdrs = this.buildDlqHeaders(msg);
 
-    let reason = String(error);
-
-    if (error instanceof Error) {
-      reason = error.message;
-    } else if (typeof error === 'object' && error !== null && 'message' in error) {
-      reason = String((error as Record<string, unknown>).message);
-    }
-
-    hdrs.set(JetstreamDlqHeader.DeadLetterReason, reason);
+    hdrs.set(JetstreamDlqHeader.DeadLetterReason, this.extractErrorReason(error));
     hdrs.set(JetstreamDlqHeader.OriginalSubject, msg.subject);
     hdrs.set(JetstreamDlqHeader.OriginalStream, msg.info.stream);
     hdrs.set(JetstreamDlqHeader.FailedAt, new Date().toISOString());
@@ -755,25 +752,40 @@ export class EventRouter {
     try {
       await this.publishToDlqWithRetry(this.connection, destinationSubject, msg.data, hdrs);
       this.logger.log(`Message sent to DLQ: ${msg.subject}`);
-
-      if (this.deadLetterConfig?.onDeadLetter) {
-        try {
-          await this.deadLetterConfig.onDeadLetter(info);
-        } catch (hookErr) {
-          this.logger.warn(
-            `onDeadLetter callback failed after successful DLQ publish for ${msg.subject}`,
-            hookErr,
-          );
-        }
-      }
-
-      settleQuietly(this.logger, `Failed to term ${msg.subject}:`, () => {
-        msg.term('Moved to DLQ stream');
-      });
+      await this.notifyDeadLetterCallback(info, msg);
     } catch (publishErr) {
       this.logger.error(`Failed to publish to DLQ for ${msg.subject}:`, publishErr);
       await this.fallbackToOnDeadLetterCallback(info, msg);
     }
+  }
+
+  private extractErrorReason(error: unknown): string {
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    if (typeof error === 'object' && error !== null && 'message' in error) {
+      return String((error as Record<string, unknown>).message);
+    }
+
+    return String(error);
+  }
+
+  private async notifyDeadLetterCallback(info: DeadLetterInfo, msg: JsMsg): Promise<void> {
+    if (this.deadLetterConfig?.onDeadLetter) {
+      try {
+        await this.deadLetterConfig.onDeadLetter(info);
+      } catch (hookErr) {
+        this.logger.warn(
+          `onDeadLetter callback failed after successful DLQ publish for ${msg.subject}`,
+          hookErr,
+        );
+      }
+    }
+
+    settleQuietly(this.logger, `Failed to term ${msg.subject}:`, () => {
+      msg.term('Moved to DLQ stream');
+    });
   }
 
   /**

@@ -262,44 +262,64 @@ export class JetstreamModule implements OnApplicationShutdown {
       // Consumer infrastructure — only created when consumer !== false.
       // Providers return null when consumer is disabled (publisher-only mode).
 
+      // NameResolver — single shared source of truth for stream/consumer/subject names
+      {
+        provide: NameResolver,
+        inject: [JETSTREAM_OPTIONS],
+        useFactory: (options: JetstreamModuleOptions): NameResolver => {
+          return new NameResolver(options);
+        },
+      },
+
       // PatternRegistry — subject-to-handler mapping
       {
         provide: PatternRegistry,
-        inject: [JETSTREAM_OPTIONS],
-        useFactory: (options: JetstreamModuleOptions): PatternRegistry | null => {
+        inject: [JETSTREAM_OPTIONS, NameResolver],
+        useFactory: (
+          options: JetstreamModuleOptions,
+          names: NameResolver,
+        ): PatternRegistry | null => {
           if (options.consumer === false) return null;
 
-          return new PatternRegistry(options);
+          return new PatternRegistry(options, names);
         },
       },
 
       // StreamProvider — JetStream stream lifecycle
       {
         provide: StreamProvider,
-        inject: [JETSTREAM_OPTIONS, JETSTREAM_CONNECTION],
+        inject: [JETSTREAM_OPTIONS, JETSTREAM_CONNECTION, NameResolver],
         useFactory: (
           options: JetstreamModuleOptions,
           connection: ConnectionProvider,
+          names: NameResolver,
         ): StreamProvider | null => {
           if (options.consumer === false) return null;
 
-          return new StreamProvider(options, connection, new NameResolver(options));
+          return new StreamProvider(options, connection, names);
         },
       },
 
       // ConsumerProvider — JetStream consumer lifecycle (receives PatternRegistry for broadcast filtering)
       {
         provide: ConsumerProvider,
-        inject: [JETSTREAM_OPTIONS, JETSTREAM_CONNECTION, StreamProvider, PatternRegistry],
+        inject: [
+          JETSTREAM_OPTIONS,
+          JETSTREAM_CONNECTION,
+          StreamProvider,
+          PatternRegistry,
+          NameResolver,
+        ],
         useFactory: (
           options: JetstreamModuleOptions,
           connection: ConnectionProvider,
           streamProvider: StreamProvider,
           patternRegistry: PatternRegistry,
+          names: NameResolver,
         ): ConsumerProvider | null => {
           if (options.consumer === false) return null;
 
-          return new ConsumerProvider(options, connection, streamProvider, patternRegistry);
+          return new ConsumerProvider(options, connection, streamProvider, patternRegistry, names);
         },
       },
 
@@ -377,6 +397,7 @@ export class JetstreamModule implements OnApplicationShutdown {
           JETSTREAM_EVENT_BUS,
           JETSTREAM_ACK_WAIT_MAP,
           JETSTREAM_CONNECTION,
+          NameResolver,
         ],
         useFactory: (
           options: JetstreamModuleOptions,
@@ -386,6 +407,7 @@ export class JetstreamModule implements OnApplicationShutdown {
           eventBus: EventBus,
           ackWaitMap: Map<StreamKind, number>,
           connection: ConnectionProvider,
+          names: NameResolver,
         ): EventRouter | null => {
           if (options.consumer === false) return null;
 
@@ -420,6 +442,7 @@ export class JetstreamModule implements OnApplicationShutdown {
             ackWaitMap,
             connection,
             options,
+            names,
           );
         },
       },
@@ -478,6 +501,7 @@ export class JetstreamModule implements OnApplicationShutdown {
           PatternRegistry,
           JETSTREAM_CODEC,
           JETSTREAM_EVENT_BUS,
+          NameResolver,
         ],
         useFactory: (
           options: JetstreamModuleOptions,
@@ -485,10 +509,11 @@ export class JetstreamModule implements OnApplicationShutdown {
           patternRegistry: PatternRegistry,
           codec: Codec,
           eventBus: EventBus,
+          names: NameResolver,
         ): CoreRpcServer | null => {
           if (options.consumer === false) return null;
 
-          return new CoreRpcServer(options, connection, patternRegistry, codec, eventBus);
+          return new CoreRpcServer(options, connection, patternRegistry, codec, eventBus, names);
         },
       },
 

@@ -27,6 +27,7 @@ import {
   JETSTREAM_OPTIONS,
   streamName,
 } from '../jetstream.constants';
+import { NameResolver } from '../server/infrastructure/name-resolver';
 import { PatternRegistry } from '../server/routing/pattern-registry';
 
 import { mapErrorContext } from './error-context-mapper';
@@ -72,6 +73,7 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
     @Optional()
     @Inject(JETSTREAM_CONNECTION)
     private readonly connection: ConnectionProvider | null = null,
+    @Optional() private readonly names: NameResolver | null = null,
   ) {}
 
   public async onApplicationBootstrap(): Promise<void> {
@@ -161,8 +163,8 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
     if (registry.hasEventHandlers()) {
       targets.push({
         kind: StreamKind.Event,
-        stream: streamName(this.options.name, StreamKind.Event),
-        consumer: consumerName(this.options.name, StreamKind.Event),
+        stream: this.resolveStreamName(StreamKind.Event),
+        consumer: this.resolveConsumerName(StreamKind.Event),
       });
     }
 
@@ -170,22 +172,30 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
     if (registry.hasRpcHandlers() && isJetStreamRpcMode(this.options.rpc)) {
       targets.push({
         kind: StreamKind.Command,
-        stream: streamName(this.options.name, StreamKind.Command),
-        consumer: consumerName(this.options.name, StreamKind.Command),
+        stream: this.resolveStreamName(StreamKind.Command),
+        consumer: this.resolveConsumerName(StreamKind.Command),
       });
     }
 
     if (registry.hasBroadcastHandlers()) {
       targets.push({
         kind: StreamKind.Broadcast,
-        stream: streamName(this.options.name, StreamKind.Broadcast),
-        consumer: consumerName(this.options.name, StreamKind.Broadcast),
+        stream: this.resolveStreamName(StreamKind.Broadcast),
+        consumer: this.resolveConsumerName(StreamKind.Broadcast),
       });
     }
 
     // Ordered consumers are ephemeral — no stable durable name to poll.
 
     return targets;
+  }
+
+  private resolveStreamName(kind: StreamKind): string {
+    return this.names ? this.names.streamName(kind) : streamName(this.options.name, kind);
+  }
+
+  private resolveConsumerName(kind: StreamKind): string {
+    return this.names ? this.names.consumerName(kind) : consumerName(this.options.name, kind);
   }
 
   private subscribeToEvents(): void {
@@ -245,7 +255,7 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
 
     this.metrics.messagesReceivedTotal
       .labels({
-        stream: streamName(this.options.name, declared.kind),
+        stream: this.resolveStreamName(declared.kind),
         subject: declared.pattern,
         kind: STREAM_KIND_LABEL[declared.kind],
       })
@@ -276,7 +286,7 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
   ): void => {
     if (!this.metrics) return;
 
-    const stream = streamName(this.options.name, kind);
+    const stream = this.resolveStreamName(kind);
     const kindLabel = STREAM_KIND_LABEL[kind];
     const labels = { stream, subject: pattern, kind: kindLabel, status };
 

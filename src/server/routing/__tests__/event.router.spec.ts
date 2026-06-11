@@ -1508,6 +1508,46 @@ describe(EventRouter, () => {
         });
       });
 
+      describe('when options.dlq has a custom stream name', () => {
+        it('should publish to the custom dlq stream name', async () => {
+          // Given: DLQ with custom stream name
+          const options: JetstreamModuleOptions = {
+            name: 'my-service',
+            servers: ['nats://localhost:4222'],
+            dlq: { stream: { name: 'my-custom-dlq' } },
+          };
+
+          sut = new EventRouter(
+            messageProvider,
+            patternRegistry,
+            codec,
+            eventBus,
+            deadLetterConfig,
+            undefined,
+            undefined,
+            connection,
+            options,
+          );
+          sut.start();
+
+          const handler = vi.fn().mockRejectedValue(new Error('handler error'));
+
+          patternRegistry.getHandler.mockReturnValue(handler);
+
+          const msg = createDeadLetterMsg();
+
+          events$.next(msg);
+          await new Promise(process.nextTick);
+
+          // Then: published to the CUSTOM DLQ name, not the convention name
+          expect(mockJs.publish).toHaveBeenCalled();
+
+          const publishCall = mockJs.publish.mock.calls[0]!;
+
+          expect(publishCall[0]).toBe('my-custom-dlq');
+        });
+      });
+
       describe('when connection or service name is missing', () => {
         it('should fall back to onDeadLetter when connection is absent', async () => {
           // Given: no ConnectionProvider (options.dlq is set but connection=undefined)
