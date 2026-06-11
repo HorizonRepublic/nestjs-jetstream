@@ -144,8 +144,7 @@ describe(StreamProvider, () => {
     });
 
     describe('when kind is Broadcast with allow_msg_schedules: true', () => {
-      it('should include broadcast._sch.>', () => {
-        // Given: scheduling enabled for broadcast
+      it('should NOT add a schedule subject — broadcast.> already covers it', () => {
         options.broadcast = { stream: { allow_msg_schedules: true } };
         sut = new StreamProvider(options, connection);
 
@@ -153,7 +152,7 @@ describe(StreamProvider, () => {
         const subjects = sut.getSubjects(StreamKind.Broadcast);
 
         // Then
-        expect(subjects).toEqual(['broadcast.>', 'broadcast._sch.>']);
+        expect(subjects).toEqual(['broadcast.>']);
       });
     });
 
@@ -210,11 +209,10 @@ describe(StreamProvider, () => {
     });
 
     it('should not strip subjects or rewrite the description set by other services', async () => {
-      // Given: another service enabled broadcast scheduling, so the shared
-      // stream carries an extra subject this service's config does not declare
+      // Given: the live stream has an extra subject broadcast.> does not cover
       mockStreamInfo(
         createMock<StreamInfo>({
-          config: sharedBroadcastConfig({ subjects: ['broadcast.>', 'broadcast._sch.>'] }),
+          config: sharedBroadcastConfig({ subjects: ['broadcast.>', 'announcements.>'] }),
         }),
       );
       mockJsm.streams.update.mockResolvedValue(createMock<StreamInfo>());
@@ -225,6 +223,26 @@ describe(StreamProvider, () => {
       // Then: no update — the local config must not clobber the shared stream
       expect(mockJsm.streams.update).not.toHaveBeenCalled();
       expect(mockJsm.streams.add).not.toHaveBeenCalled();
+    });
+
+    it('should collapse subjects covered by a broader one out of the shared-stream union', async () => {
+      // Given: the live stream still carries a legacy broadcast._sch.>
+      mockStreamInfo(
+        createMock<StreamInfo>({
+          config: sharedBroadcastConfig({ subjects: ['broadcast.>', 'broadcast._sch.>'] }),
+        }),
+      );
+      mockJsm.streams.update.mockResolvedValue(createMock<StreamInfo>());
+
+      // When
+      await sut.ensureStreams([StreamKind.Broadcast]);
+
+      // Then: the redundant subject is healed away
+      expect(mockJsm.streams.update).toHaveBeenCalledOnce();
+
+      const updateArg = mockJsm.streams.update.mock.calls[0]![1] as { subjects: string[] };
+
+      expect(updateArg.subjects).toEqual(['broadcast.>']);
     });
 
     it('should refuse destructive migration of the shared broadcast stream', async () => {
