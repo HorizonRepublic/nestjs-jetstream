@@ -153,9 +153,8 @@ describe(StreamMigration.name, () => {
     });
 
     it('should delete the backup before detaching the restore source', async () => {
-      // The surviving order is what makes interrupted-restore recovery safe:
-      // "backup present with no source attached" can only mean the restore
-      // never started.
+      // The order recovery relies on: "backup without an attached source"
+      // can only mean the restore never started.
       const sut = new StreamMigration();
       const jsm = buildMockJsm(100);
 

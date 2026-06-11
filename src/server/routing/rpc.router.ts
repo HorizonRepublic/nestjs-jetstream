@@ -48,10 +48,7 @@ interface ResolvedCommand {
   readonly correlationId: string;
 }
 
-/**
- * A delivered command parked in the concurrency backlog, together with the
- * ack-extension timer that keeps it alive while it waits for a slot.
- */
+/** A command parked in the concurrency backlog with its ack-extension timer. */
 interface QueuedCommand {
   readonly msg: JsMsg;
   readonly stopAckExtension: (() => void) | null;
@@ -325,8 +322,7 @@ export class RpcRouter {
         abortController.abort();
         // RpcTimeout hook is the canonical signal here — no separate log.
         emitRpcTimeout(subject, correlationId);
-        // This runs inside a bare timer callback — an unguarded term throw
-        // on a degraded connection would surface as an uncaught exception.
+        // Bare timer callback — an unguarded term throw would be an uncaught exception.
         settleQuietly(logger, `Failed to term ${subject}:`, () => {
           msg.term('Handler timeout');
         });
@@ -371,9 +367,7 @@ export class RpcRouter {
       drainBacklog();
     };
 
-    // handleSafe() is not expected to throw — settlement inside it is guarded
-    // — but a failure here must never leak the concurrency slot or escape
-    // into the RxJS observer and kill the subscription.
+    // A throw here must not leak the concurrency slot or kill the subscription.
     const routeSafely = (msg: JsMsg): Promise<void> | undefined => {
       try {
         return handleSafe(msg);
@@ -397,8 +391,6 @@ export class RpcRouter {
         const next = backlog.shift();
 
         if (next === undefined) return;
-        // The processing-phase timer is started inside handleSafe(); the
-        // waiting phase is over.
         next.stopAckExtension?.();
         active++;
         const result = routeSafely(next.msg);
@@ -416,9 +408,7 @@ export class RpcRouter {
     this.subscription = this.messageProvider.commands$.subscribe({
       next: (msg: JsMsg): void => {
         if (active >= maxActive) {
-          // A parked command was already delivered — its ack_wait clock is
-          // running on the server. Without extension a long wait ends in
-          // redelivery and a duplicate execution.
+          // A parked command's ack_wait clock is already running on the server.
           backlog.push({
             msg,
             stopAckExtension: hasAckExtension
@@ -450,8 +440,7 @@ export class RpcRouter {
       },
     });
 
-    // Backlogged commands keep extension timers alive — stop them when the
-    // router unsubscribes so a destroyed router leaves nothing ticking.
+    // Stop the parked timers on unsubscribe.
     this.subscription.add(() => {
       for (const queued of backlog) {
         queued.stopAckExtension?.();

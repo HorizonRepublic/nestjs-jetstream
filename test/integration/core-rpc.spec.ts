@@ -83,9 +83,8 @@ describe('Core RPC Round-Trip', () => {
   });
 
   it('should complete cleanly when the handler returns nothing', async () => {
-    // Given/When: calling a void handler. NestJS skips next() for undefined
-    // responses, so the observable completes empty — the call must not
-    // surface a decode error.
+    // NestJS skips next() for undefined replies — the observable completes
+    // empty, but must not surface a decode error.
     await expect(
       firstValueFrom(client.send('user.touch', { id: 42 }), { defaultValue: undefined }),
     ).resolves.toBeUndefined();
