@@ -14,6 +14,7 @@ import {
   internalName,
 } from '../../../jetstream.constants';
 
+import { NameResolver } from '../name-resolver';
 import { StreamProvider } from '../stream.provider';
 
 describe(StreamProvider, () => {
@@ -30,6 +31,9 @@ describe(StreamProvider, () => {
     getAccountInfo?: ReturnType<typeof vi.fn>;
   };
 
+  const makeSut = (): StreamProvider =>
+    new StreamProvider(options, connection, new NameResolver(options));
+
   beforeEach(() => {
     options = { name: faker.lorem.word(), servers: ['nats://localhost:4222'] };
 
@@ -45,7 +49,7 @@ describe(StreamProvider, () => {
       getJetStreamManager: vi.fn().mockResolvedValue(mockJsm),
     });
 
-    sut = new StreamProvider(options, connection);
+    sut = makeSut();
   });
 
   afterEach(vi.resetAllMocks);
@@ -106,7 +110,7 @@ describe(StreamProvider, () => {
       it('should include the _sch namespace', () => {
         // Given: scheduling enabled via stream override
         options.events = { stream: { allow_msg_schedules: true } };
-        sut = new StreamProvider(options, connection);
+        sut = makeSut();
         const name = internalName(options.name);
 
         // When
@@ -121,7 +125,7 @@ describe(StreamProvider, () => {
       it('should NOT include the _sch namespace', () => {
         // Given: scheduling explicitly disabled
         options.events = { stream: { allow_msg_schedules: false } };
-        sut = new StreamProvider(options, connection);
+        sut = makeSut();
         const name = internalName(options.name);
 
         // When
@@ -146,7 +150,7 @@ describe(StreamProvider, () => {
     describe('when kind is Broadcast with allow_msg_schedules: true', () => {
       it('should NOT add a schedule subject — broadcast.> already covers it', () => {
         options.broadcast = { stream: { allow_msg_schedules: true } };
-        sut = new StreamProvider(options, connection);
+        sut = makeSut();
 
         // When
         const subjects = sut.getSubjects(StreamKind.Broadcast);
@@ -184,7 +188,7 @@ describe(StreamProvider, () => {
       it('should never include _sch even when broadcast has allow_msg_schedules enabled', () => {
         // Given: broadcast scheduling is enabled but Ordered should be unaffected
         options.broadcast = { stream: { allow_msg_schedules: true } };
-        sut = new StreamProvider(options, connection);
+        sut = makeSut();
         const name = internalName(options.name);
 
         // When
@@ -264,7 +268,7 @@ describe(StreamProvider, () => {
     it('should refuse destructive migration of the shared broadcast stream', async () => {
       // Given: an immutable diff on the shared stream and the migration flag on
       options.allowDestructiveMigration = true;
-      sut = new StreamProvider(options, connection);
+      sut = makeSut();
 
       mockStreamInfo(
         createMock<StreamInfo>({
@@ -435,7 +439,7 @@ describe(StreamProvider, () => {
             stream: { retention: RetentionPolicy.Limits } as unknown as StreamConfigOverrides,
           },
         };
-        sut = new StreamProvider(options, connection);
+        sut = makeSut();
 
         const notFoundError = new JetStreamApiError({
           err_code: 10059,
@@ -481,7 +485,7 @@ describe(StreamProvider, () => {
         it('should create the DLQ stream', async () => {
           // Given: options with dlq enabled
           options = { ...options, dlq: {} };
-          sut = new StreamProvider(options, connection);
+          sut = makeSut();
 
           const notFoundError = new JetStreamApiError({
             err_code: 10059,
@@ -516,7 +520,7 @@ describe(StreamProvider, () => {
         it('should skip update for the DLQ stream', async () => {
           // Given: both regular stream and DLQ stream already exist with matching config
           options = { ...options, dlq: {} };
-          sut = new StreamProvider(options, connection);
+          sut = makeSut();
 
           // Event stream is absent (gets created); the DLQ stream exists
           const existingDlqInfo = createMock<StreamInfo>({
@@ -549,7 +553,7 @@ describe(StreamProvider, () => {
         it('should rethrow the error from ensureDlqStream', async () => {
           // Given: options with dlq, but DLQ stream.info throws auth error
           options = { ...options, dlq: {} };
-          sut = new StreamProvider(options, connection);
+          sut = makeSut();
 
           const notFoundError = new JetStreamApiError({
             err_code: 10059,
@@ -605,7 +609,7 @@ describe(StreamProvider, () => {
     it('should run the preflight check only when provisioning.preflightStorageCheck is set', async () => {
       // Given: existing stream with no diff, preflight enabled
       options.provisioning = { preflightStorageCheck: true };
-      sut = new StreamProvider(options, connection);
+      sut = makeSut();
 
       const getAccountInfo = vi.fn().mockResolvedValue({
         storage: 0,
@@ -631,6 +635,36 @@ describe(StreamProvider, () => {
     });
   });
 
+  describe('custom naming', () => {
+    it('should create the event stream under the custom name and prefix subjects', async () => {
+      options.events = {
+        stream: { name: 'company_orders_stream' },
+        subjectPrefix: 'company.orders.',
+      };
+      sut = makeSut();
+
+      mockJsm.streams.info.mockRejectedValue(streamNotFound());
+      mockJsm.streams.add.mockResolvedValue(createMock<StreamInfo>());
+
+      await sut.ensureStreams([StreamKind.Event]);
+
+      const added = mockJsm.streams.add.mock.calls[0]![0] as { name: string; subjects: string[] };
+
+      expect(added.name).toBe('company_orders_stream');
+      expect(added.subjects).toEqual(['company.orders.>']);
+    });
+
+    it('should not emit a separate schedule subject under a custom prefix', async () => {
+      options.events = {
+        stream: { allow_msg_schedules: true },
+        subjectPrefix: 'company.orders.',
+      };
+      sut = makeSut();
+
+      expect(sut.getSubjects(StreamKind.Event)).toEqual(['company.orders.>']);
+    });
+  });
+
   describe('getSubjects (via ensureStreams)', () => {
     describe('when kind is Command with rpc.mode=jetstream and stream overrides', () => {
       it('should use rpc.stream overrides for command stream', async () => {
@@ -639,7 +673,7 @@ describe(StreamProvider, () => {
           ...options,
           rpc: { mode: 'jetstream', stream: { max_age: 60_000 } },
         };
-        sut = new StreamProvider(options, connection);
+        sut = makeSut();
 
         const notFoundError = new JetStreamApiError({
           err_code: 10059,
@@ -667,7 +701,7 @@ describe(StreamProvider, () => {
           ...options,
           rpc: { mode: 'core', stream: { max_age: 99_999 } } as never,
         };
-        sut = new StreamProvider(options, connection);
+        sut = makeSut();
 
         const notFoundError = new JetStreamApiError({
           err_code: 10059,
@@ -696,7 +730,7 @@ describe(StreamProvider, () => {
           ...options,
           ordered: { stream: { max_age: 30_000 } },
         };
-        sut = new StreamProvider(options, connection);
+        sut = makeSut();
 
         const notFoundError = new JetStreamApiError({
           err_code: 10059,

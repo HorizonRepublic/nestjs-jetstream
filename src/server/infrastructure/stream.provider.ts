@@ -15,11 +15,9 @@ import {
   DEFAULT_COMMAND_STREAM_CONFIG,
   DEFAULT_EVENT_STREAM_CONFIG,
   DEFAULT_ORDERED_STREAM_CONFIG,
-  internalName,
-  streamName,
-  dlqStreamName,
   DEFAULT_DLQ_STREAM_CONFIG,
 } from '../../jetstream.constants';
+import { NameResolver } from './name-resolver';
 import {
   deriveOtelAttrs,
   withMigrationSpan,
@@ -59,6 +57,7 @@ export class StreamProvider {
   public constructor(
     private readonly options: JetstreamModuleOptions,
     private readonly connection: ConnectionProvider,
+    private readonly names: NameResolver,
   ) {
     const derived = deriveOtelAttrs(options);
 
@@ -97,35 +96,18 @@ export class StreamProvider {
 
   /** Get the stream name for a given kind. */
   public getStreamName(kind: StreamKind): string {
-    return streamName(this.options.name, kind);
+    return this.names.streamName(kind);
   }
 
   /** Get the subjects pattern for a given kind. */
   public getSubjects(kind: StreamKind): string[] {
-    const name = internalName(this.options.name);
+    const filter = this.names.filterSubject(kind);
+    const dedicatedSchedule =
+      kind === StreamKind.Event &&
+      this.isSchedulingEnabled(kind) &&
+      !this.names.hasCustomPrefix(kind);
 
-    switch (kind) {
-      case StreamKind.Event: {
-        const subjects = [`${name}.${StreamKind.Event}.>`];
-
-        // When scheduling is enabled, add a schedule-holder subject namespace
-        // so scheduled messages reside in the same stream but are NOT matched
-        // by the event consumer's filter (which only matches {svc}.ev.>).
-        if (this.isSchedulingEnabled(kind)) {
-          subjects.push(`${name}._sch.>`);
-        }
-
-        return subjects;
-      }
-
-      case StreamKind.Command:
-        return [`${name}.${StreamKind.Command}.>`];
-      case StreamKind.Broadcast:
-        return ['broadcast.>'];
-
-      case StreamKind.Ordered:
-        return [`${name}.${StreamKind.Ordered}.>`];
-    }
+    return dedicatedSchedule ? [filter, `${this.names.schedulePrefix(kind)}>`] : [filter];
   }
 
   /** Ensure a single stream exists, creating or updating as needed. */
@@ -427,7 +409,7 @@ export class StreamProvider {
    * Ensures transport-controlled settings like retention are safely decoupled.
    */
   private buildDlqConfig(): Partial<StreamConfig> & { name: string; subjects: string[] } {
-    const name = dlqStreamName(this.options.name);
+    const name = this.names.dlqStreamName();
     const subjects = [name];
     const description = `JetStream DLQ stream for ${this.options.name}`;
     const overrides = this.options.dlq?.stream ?? {};

@@ -47,6 +47,7 @@ import {
   StreamProvider,
   type ConsumerRecoveryFn,
 } from './server';
+import { NameResolver } from './server/infrastructure/name-resolver';
 import { ShutdownManager } from './shutdown';
 
 /** DI token for the shared ackWaitMap instance (populated at runtime by strategy). */
@@ -282,7 +283,7 @@ export class JetstreamModule implements OnApplicationShutdown {
         ): StreamProvider | null => {
           if (options.consumer === false) return null;
 
-          return new StreamProvider(options, connection);
+          return new StreamProvider(options, connection, new NameResolver(options));
         },
       },
 
