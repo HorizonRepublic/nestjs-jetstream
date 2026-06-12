@@ -306,6 +306,34 @@ export const buildBroadcastSubject = (pattern: string): string =>
   `${BROADCAST_SUBJECT_PREFIX}${pattern}`;
 
 /**
+ * Map a convention event subject to its schedule-holder base subject
+ * (without the per-message unique suffix), for foreign-target publishes
+ * where no NameResolver instance exists.
+ */
+export const conventionScheduleSubjectBase = (targetName: string, eventSubject: string): string => {
+  if (eventSubject.startsWith(BROADCAST_SUBJECT_PREFIX)) {
+    const bare = eventSubject.slice(BROADCAST_SUBJECT_PREFIX.length);
+
+    return `${BROADCAST_SUBJECT_PREFIX}${SCHEDULE_SEGMENT}${bare}`;
+  }
+
+  const targetPrefix = `${internalName(targetName)}.`;
+
+  if (!eventSubject.startsWith(targetPrefix)) {
+    throw new Error(`Unexpected event subject format: ${eventSubject}`);
+  }
+
+  const withoutPrefix = eventSubject.slice(targetPrefix.length);
+  const dotIndex = withoutPrefix.indexOf('.');
+
+  if (dotIndex === -1) {
+    throw new Error(`Event subject missing pattern segment: ${eventSubject}`);
+  }
+
+  return `${targetPrefix}${SCHEDULE_SEGMENT}${withoutPrefix.slice(dotIndex + 1)}`;
+};
+
+/**
  * Build the JetStream stream name for a given service and kind.
  *
  * @param serviceName - Service name from `forRoot({ name })`.

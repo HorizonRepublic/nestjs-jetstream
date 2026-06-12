@@ -3,13 +3,10 @@ import { ClientProxy, ReadPacket, WritePacket } from '@nestjs/microservices';
 import { context } from '@opentelemetry/api';
 import { nuid } from '@nats-io/nuid';
 import {
-  createInbox,
   headers as natsHeaders,
   TimeoutError,
-  type Msg,
   type MsgHdrs,
   type NatsConnection,
-  type Subscription,
 } from '@nats-io/transport-node';
 import { Subscription as RxSubscription } from 'rxjs';
 
@@ -27,6 +24,7 @@ import type {
 import { StreamKind } from '../interfaces';
 import {
   BROADCAST_SUBJECT_PREFIX,
+  conventionScheduleSubjectBase,
   DEFAULT_JETSTREAM_RPC_TIMEOUT,
   DEFAULT_RPC_TIMEOUT,
   isCoreRpcMode,
@@ -34,7 +32,6 @@ import {
   internalName,
   JetstreamHeader,
   PatternPrefix,
-  SCHEDULE_SEGMENT,
 } from '../jetstream.constants';
 import { NameResolver } from '../server/infrastructure/name-resolver';
 import {
@@ -48,7 +45,9 @@ import {
   type ServerEndpoint,
 } from '../otel';
 
+import type { PublishAckLike, RpcReplyCallback } from './client.types';
 import { JetstreamRecord } from './jetstream.record';
+import { RpcReplyInbox } from './rpc-reply-inbox';
 
 /** Narrow publish-kind tag emitted on the event path (no RPC request here). */
 type EventPublishKind = Exclude<PublishKind, PublishKind.RpcRequest>;
@@ -62,10 +61,9 @@ const detectEventKind = (pattern: string): EventPublishKind => {
 };
 
 /** Strip the broadcast/ordered prefix so metric labels match the handler-side declaration. */
-const declaredEventPattern = (pattern: string): string => {
-  if (pattern.startsWith(PatternPrefix.Broadcast))
-    return pattern.slice(PatternPrefix.Broadcast.length);
-  if (pattern.startsWith(PatternPrefix.Ordered)) return pattern.slice(PatternPrefix.Ordered.length);
+const declaredEventPattern = (pattern: string, kind: EventPublishKind): string => {
+  if (kind === PublishKind.Broadcast) return pattern.slice(PatternPrefix.Broadcast.length);
+  if (kind === PublishKind.Ordered) return pattern.slice(PatternPrefix.Ordered.length);
 
   return pattern;
 };
@@ -124,15 +122,8 @@ export class JetstreamClient extends ClientProxy {
   /** Server endpoint parts used for `server.address` / `server.port` span attributes. */
   private readonly serverEndpoint: ServerEndpoint | null;
 
-  /** Shared inbox for JetStream-mode RPC responses. */
-  private inbox: string | null = null;
-  private inboxSubscription: Subscription | null = null;
-
-  /** Pending JetStream-mode RPC callbacks, keyed by correlation ID. */
-  private readonly pendingMessages = new Map<string, (p: WritePacket) => void>();
-
-  /** Pending JetStream-mode RPC timeouts, keyed by correlation ID. */
-  private readonly pendingTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
+  /** Reply inbox and pending-request registry for JetStream-mode RPC. */
+  private readonly rpcInbox: RpcReplyInbox;
 
   /** Subscription to connection status events for disconnect handling. */
   private statusSubscription: RxSubscription | null = null;
@@ -170,6 +161,7 @@ export class JetstreamClient extends ClientProxy {
     this.commandSubjectPrefix = `${targetInternal}.${StreamKind.Command}.`;
     this.orderedSubjectPrefix = `${targetInternal}.${StreamKind.Ordered}.`;
 
+    this.rpcInbox = new RpcReplyInbox(codec, this.callerName);
     this.isCoreMode = isCoreRpcMode(this.rootOptions.rpc);
     this.defaultRpcTimeout = isJetStreamRpcMode(this.rootOptions.rpc)
       ? (this.rootOptions.rpc.timeout ?? DEFAULT_JETSTREAM_RPC_TIMEOUT)
@@ -192,8 +184,8 @@ export class JetstreamClient extends ClientProxy {
   public async connect(): Promise<NatsConnection> {
     const nc = await this.connection.getConnection();
 
-    if (!this.isCoreMode && !this.inboxSubscription) {
-      this.setupInbox(nc);
+    if (!this.isCoreMode && !this.rpcInbox.active) {
+      this.rpcInbox.setup(nc);
     }
 
     this.statusSubscription ??= this.connection.status$.subscribe((status) => {
@@ -212,7 +204,7 @@ export class JetstreamClient extends ClientProxy {
     this.statusSubscription?.unsubscribe();
     this.statusSubscription = null;
     this.readyForPublish = false;
-    this.rejectPendingRpcs(new Error('Client closed'));
+    this.rpcInbox.rejectAll(new Error('Client closed'));
   }
 
   /**
@@ -262,7 +254,7 @@ export class JetstreamClient extends ClientProxy {
     const record =
       packet.data instanceof JetstreamRecord ? packet.data : new JetstreamRecord(data, new Map());
 
-    const declaredPattern = declaredEventPattern(packet.pattern);
+    const declaredPattern = declaredEventPattern(packet.pattern, publishKind);
     const streamKind = eventStreamKind(publishKind);
     const startedAt = performance.now();
 
@@ -283,17 +275,6 @@ export class JetstreamClient extends ClientProxy {
         },
         this.otel,
         async () => {
-          const warnIfDuplicate = (
-            kindLabel: string,
-            ack: { readonly duplicate: boolean; readonly seq: number },
-          ): void => {
-            if (ack.duplicate) {
-              this.logger.warn(
-                `Duplicate ${kindLabel} publish detected: ${publishSubject} (seq: ${ack.seq})`,
-              );
-            }
-          };
-
           if (schedule) {
             // As a top-level option ttl would expire the schedule holder itself; it belongs to the delivered message.
             const ack = await this.connection
@@ -308,7 +289,7 @@ export class JetstreamClient extends ClientProxy {
                 },
               });
 
-            warnIfDuplicate('scheduled', ack);
+            this.warnIfDuplicate('scheduled', publishSubject, ack);
 
             return;
           }
@@ -319,7 +300,7 @@ export class JetstreamClient extends ClientProxy {
             ttl,
           });
 
-          warnIfDuplicate('event', ack);
+          this.warnIfDuplicate('event', publishSubject, ack);
         },
       );
       this.reportPublished(declaredPattern, streamKind, startedAt, 'success');
@@ -380,14 +361,7 @@ export class JetstreamClient extends ClientProxy {
     return () => {
       // Core mode cleanup is handled by NATS internally; only JetStream pending state needs it.
       if (jetStreamCorrelationId) {
-        const timeoutId = this.pendingTimeouts.get(jetStreamCorrelationId);
-
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-          this.pendingTimeouts.delete(jetStreamCorrelationId);
-        }
-
-        this.pendingMessages.delete(jetStreamCorrelationId);
+        this.rpcInbox.discard(jetStreamCorrelationId);
       }
     };
   }
@@ -487,7 +461,7 @@ export class JetstreamClient extends ClientProxy {
     const hdrs = this.buildHeaders(customHeaders, {
       subject,
       correlationId,
-      replyTo: this.inbox ?? '',
+      replyTo: this.rpcInbox.address ?? '',
     });
     const encoded = this.codec.encode(data);
     const spanHandle = beginRpcClientSpan(
@@ -505,7 +479,7 @@ export class JetstreamClient extends ClientProxy {
     );
     const startedAt = performance.now();
 
-    this.pendingMessages.set(correlationId, (packet: WritePacket) => {
+    const settleRoundTrip: RpcReplyCallback = (packet: WritePacket) => {
       // Translate the inbox-callback WritePacket into an RPC outcome. A native
       // `Error` instance reaches this path from `rejectPendingRpcs` (disconnect,
       // client close) or a decode failure in `routeInboxReply`; both are
@@ -525,37 +499,31 @@ export class JetstreamClient extends ClientProxy {
       }
 
       callback(packet);
-    });
+    };
+
+    this.rpcInbox.register(correlationId, settleRoundTrip);
 
     // Arm the deadline BEFORE awaiting connect() so a permanent NATS outage
     // (where `maxReconnectAttempts: -1` keeps connect() pending forever) still
     // settles the span, the pending-message entry, and the caller's
     // subscription instead of leaking them for the life of the process.
     // `effectiveTimeout` therefore bounds connect + RPC, not just RPC.
-    const timeoutId = setTimeout(() => {
-      if (!this.pendingMessages.has(correlationId)) return;
-
-      this.pendingTimeouts.delete(correlationId);
-      this.pendingMessages.delete(correlationId);
+    this.rpcInbox.armTimeout(correlationId, effectiveTimeout, () => {
       spanHandle.finish({ kind: RpcOutcomeKind.Timeout });
       // RpcTimeout hook + OTel CLIENT span are the canonical signals; no separate log.
       this.eventBus.emit(TransportEvent.RpcTimeout, subject, correlationId);
       this.reportRpcCompleted(declaredPattern, startedAt, 'timeout');
       callback({ err: new Error(RPC_TIMEOUT_MESSAGE), response: null, isDisposed: true });
-    }, effectiveTimeout);
-
-    this.pendingTimeouts.set(correlationId, timeoutId);
+    });
 
     try {
       if (!this.readyForPublish) await this.connect();
 
       // Bail out if cleaned up during connect (timeout fired, or consumer unsubscribed)
-      if (!this.pendingMessages.has(correlationId)) return;
+      if (!this.rpcInbox.has(correlationId)) return;
 
-      if (!this.inbox) {
-        clearTimeout(timeoutId);
-        this.pendingTimeouts.delete(correlationId);
-        this.pendingMessages.delete(correlationId);
+      if (!this.rpcInbox.address) {
+        this.rpcInbox.discard(correlationId);
         const inboxError = new Error('Inbox not initialized');
 
         spanHandle.finish({ kind: RpcOutcomeKind.Error, error: inboxError });
@@ -591,16 +559,8 @@ export class JetstreamClient extends ClientProxy {
       // the timeout branch once the round-trip settles.
       this.reportPublished(declaredPattern, StreamKind.Command, startedAt, 'success');
     } catch (err) {
-      const existingTimeout = this.pendingTimeouts.get(correlationId);
+      if (!this.rpcInbox.discard(correlationId)) return;
 
-      if (existingTimeout) {
-        clearTimeout(existingTimeout);
-        this.pendingTimeouts.delete(correlationId);
-      }
-
-      if (!this.pendingMessages.has(correlationId)) return;
-
-      this.pendingMessages.delete(correlationId);
       const error = err instanceof Error ? err : new Error('Unknown error');
 
       spanHandle.finish({ kind: RpcOutcomeKind.Error, error });
@@ -608,6 +568,12 @@ export class JetstreamClient extends ClientProxy {
       this.reportPublished(declaredPattern, StreamKind.Command, startedAt, 'error');
       this.reportRpcCompleted(declaredPattern, startedAt, 'error');
       callback({ err: error, response: null, isDisposed: true });
+    }
+  }
+
+  private warnIfDuplicate(kindLabel: string, subject: string, ack: PublishAckLike): void {
+    if (ack.duplicate) {
+      this.logger.warn(`Duplicate ${kindLabel} publish detected: ${subject} (seq: ${ack.seq})`);
     }
   }
 
@@ -645,103 +611,22 @@ export class JetstreamClient extends ClientProxy {
 
   /** Fail-fast all pending JetStream RPC callbacks on connection loss. */
   private handleDisconnect(): void {
-    this.rejectPendingRpcs(new Error('Connection lost'));
-
-    // Reset inbox; recreated on next connect()
-    this.inbox = null;
+    // The inbox is recreated on the next connect().
+    this.rpcInbox.rejectAll(new Error('Connection lost'));
     // Force the next publish to re-run the full connect setup.
     this.readyForPublish = false;
   }
 
-  /** Reject all pending RPC callbacks, clear timeouts, and tear down inbox. */
-  private rejectPendingRpcs(error: Error): void {
-    for (const callback of this.pendingMessages.values()) {
-      callback({ err: error, response: null, isDisposed: true });
-    }
-
-    for (const timeoutId of this.pendingTimeouts.values()) {
-      clearTimeout(timeoutId);
-    }
-
-    this.pendingMessages.clear();
-    this.pendingTimeouts.clear();
-    this.inboxSubscription?.unsubscribe();
-    this.inboxSubscription = null;
-    this.inbox = null;
-  }
-
-  /** Setup shared inbox subscription for JetStream RPC responses. */
-  private setupInbox(nc: NatsConnection): void {
-    this.inbox = createInbox(internalName(this.rootOptions.name));
-
-    this.inboxSubscription = nc.subscribe(this.inbox, {
-      callback: (err, msg) => {
-        if (err) {
-          this.logger.error('Inbox subscription error:', err);
-          return;
-        }
-
-        this.routeInboxReply(msg);
-      },
-    });
-
-    this.logger.debug(`Inbox subscription: ${this.inbox}`);
-  }
-
-  /** Route an inbox reply to the matching pending callback. */
-  private routeInboxReply(msg: Msg): void {
-    const correlationId = msg.headers?.get(JetstreamHeader.CorrelationId);
-
-    if (!correlationId) {
-      this.logger.warn('Inbox reply without correlation-id, ignoring');
-      return;
-    }
-
-    const callback = this.pendingMessages.get(correlationId);
-
-    if (!callback) {
-      this.logger.warn(`No pending handler for correlation-id: ${correlationId}`);
-      return;
-    }
-
-    const timeoutId = this.pendingTimeouts.get(correlationId);
-
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-      this.pendingTimeouts.delete(correlationId);
-    }
-
-    try {
-      const decoded = this.codec.decode(msg.data);
-
-      if (msg.headers?.get(JetstreamHeader.Error)) {
-        callback({ err: decoded, response: null, isDisposed: true });
-      } else {
-        callback({ err: null, response: decoded, isDisposed: true });
-      }
-    } catch (err) {
-      callback({
-        err: err instanceof Error ? err : new Error('Decode error'),
-        response: null,
-        isDisposed: true,
-      });
-    } finally {
-      this.pendingMessages.delete(correlationId);
-    }
-  }
-
   /**
    * Resolve a user pattern to a fully-qualified NATS subject. Self-targets go
-   * through the resolver so custom subjectPrefix options are honoured. The
-   * leading-char check short-circuits `startsWith` for the common case of
-   * patterns without a broadcast/ordered marker.
+   * through the resolver so custom subjectPrefix options are honoured.
    */
   private buildEventSubject(pattern: string): string {
-    if (pattern.charCodeAt(0) === 98 /* 'b' */ && pattern.startsWith(PatternPrefix.Broadcast)) {
+    if (pattern.startsWith(PatternPrefix.Broadcast)) {
       return this.broadcastPrefix + pattern.slice(PatternPrefix.Broadcast.length);
     }
 
-    if (pattern.charCodeAt(0) === 111 /* 'o' */ && pattern.startsWith(PatternPrefix.Ordered)) {
+    if (pattern.startsWith(PatternPrefix.Ordered)) {
       const bare = pattern.slice(PatternPrefix.Ordered.length);
 
       if (this.selfNames) return this.selfNames.subject(StreamKind.Ordered, bare);
@@ -810,62 +695,18 @@ export class JetstreamClient extends ClientProxy {
   /**
    * Build a schedule-holder subject for NATS message scheduling.
    *
-   * The schedule-holder subject resides in the same stream as the target but
-   * uses a separate `_sch` namespace that is NOT matched by any consumer filter.
-   * NATS holds the message and publishes it to the target subject after the delay.
-   *
-   * A unique per-message suffix is appended because the server stores schedules
-   * as rollup messages, one active schedule per subject (ADR-51). Without it,
-   * concurrent schedules of the same pattern would silently replace each other.
-   *
-   * Examples:
-   * - `{svc}__microservice.ev.order.reminder` → `{svc}__microservice._sch.order.reminder.<nuid>`
-   * - `broadcast.config.updated` → `broadcast._sch.config.updated.<nuid>`
+   * The holder lives in the same stream as the target but under the `_sch`
+   * namespace no consumer filter matches; the server publishes it to the
+   * target subject when the schedule fires. The unique per-message suffix
+   * exists because the server stores schedules as rollup messages, one
+   * active schedule per subject (ADR-51): without it, concurrent schedules
+   * of the same pattern would silently replace each other.
    */
   private buildScheduleSubject(eventSubject: string): string {
-    if (eventSubject.startsWith(this.broadcastPrefix)) {
-      const bare = eventSubject.slice(this.broadcastPrefix.length);
-      const schedulePrefix = this.selfNames
-        ? this.selfNames.schedulePrefix(StreamKind.Broadcast)
-        : `${this.broadcastPrefix}${SCHEDULE_SEGMENT}`;
+    const base = this.selfNames
+      ? this.selfNames.scheduleSubjectBase(eventSubject)
+      : conventionScheduleSubjectBase(this.targetName, eventSubject);
 
-      return `${schedulePrefix}${bare}.${nuid.next()}`;
-    }
-
-    if (this.selfNames) {
-      return this.buildSelfScheduleSubject(eventSubject, this.selfNames);
-    }
-
-    // Convention subjects: {svc}__microservice.{kind}.{pattern}
-    // Replace the kind segment with _sch: {svc}__microservice._sch.{pattern}
-    const targetPrefix = `${internalName(this.targetName)}.`;
-
-    if (!eventSubject.startsWith(targetPrefix)) {
-      throw new Error(`Unexpected event subject format: ${eventSubject}`);
-    }
-
-    const withoutPrefix = eventSubject.slice(targetPrefix.length);
-    // withoutPrefix is "{kind}.{pattern}": strip the kind segment
-    const dotIndex = withoutPrefix.indexOf('.');
-
-    if (dotIndex === -1) {
-      throw new Error(`Event subject missing pattern segment: ${eventSubject}`);
-    }
-
-    const pattern = withoutPrefix.slice(dotIndex + 1);
-
-    return `${targetPrefix}${SCHEDULE_SEGMENT}${pattern}.${nuid.next()}`;
-  }
-
-  private buildSelfScheduleSubject(eventSubject: string, names: NameResolver): string {
-    for (const kind of [StreamKind.Event, StreamKind.Ordered]) {
-      const prefix = names.subject(kind, '');
-
-      if (prefix && eventSubject.startsWith(prefix)) {
-        return `${names.schedulePrefix(kind)}${eventSubject.slice(prefix.length)}.${nuid.next()}`;
-      }
-    }
-
-    throw new Error(`Unexpected event subject format: ${eventSubject}`);
+    return `${base}.${nuid.next()}`;
   }
 }

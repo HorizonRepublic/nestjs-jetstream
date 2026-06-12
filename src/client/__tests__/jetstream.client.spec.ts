@@ -18,6 +18,7 @@ import {
 
 import { NameResolver } from '../../server/infrastructure/name-resolver';
 import { JetstreamClient } from '../jetstream.client';
+import { RpcReplyInbox } from '../rpc-reply-inbox';
 import { JetstreamRecordBuilder } from '../jetstream.record';
 
 describe(JetstreamClient, () => {
@@ -162,9 +163,9 @@ describe(JetstreamClient, () => {
         await sut.close();
 
         // Then: inbox is reset (symmetric with handleDisconnect)
-        // Access private field to verify internal state consistency
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        expect((sut as any).inbox).toBeNull();
+        const rpcInbox = Reflect.get(sut, 'rpcInbox') as RpcReplyInbox;
+
+        expect(rpcInbox.address).toBeNull();
       });
     });
   });
