@@ -17,7 +17,9 @@ import { PatternRegistry } from '../../server/routing/pattern-registry';
 import { NameResolver } from '../../server/infrastructure/name-resolver';
 import { DEFAULT_POLL_INTERVAL_MS, UNMATCHED_SUBJECT_LABEL } from '../metrics.constants';
 import { JetstreamMetricsService } from '../metrics.service';
-import type { PromClientRuntime } from '../metrics.types';
+import type { ConsumerPollTarget, PromClientRuntime } from '../metrics.types';
+import { ConnectionProvider } from '../../connection';
+import type { NatsConnection } from '@nats-io/transport-node';
 
 type Subscribers = Map<string, ((...args: unknown[]) => void)[]>;
 
@@ -659,6 +661,122 @@ describe(JetstreamMetricsService, () => {
 
       // Then
       await expect(sut.onApplicationBootstrap()).rejects.toThrow(/Registry/);
+    });
+  });
+
+  describe('poll targets', () => {
+    const buildTargets = (sut: JetstreamMetricsService): ConsumerPollTarget[] =>
+      (Reflect.get(sut, 'buildPollTargets') as () => ConsumerPollTarget[]).call(sut);
+
+    const makeRegistry = (kinds: {
+      events?: boolean;
+      rpc?: boolean;
+      broadcasts?: boolean;
+    }): PatternRegistry => {
+      const registry = createMock<PatternRegistry>();
+
+      registry.hasEventHandlers.mockReturnValue(kinds.events ?? false);
+      registry.hasRpcHandlers.mockReturnValue(kinds.rpc ?? false);
+      registry.hasBroadcastHandlers.mockReturnValue(kinds.broadcasts ?? false);
+
+      return registry;
+    };
+
+    it('should poll one target per active handler kind', async () => {
+      // Given: events + broadcast handlers, jetstream rpc mode
+      const sut = new JetstreamMetricsService(
+        eventBus,
+        { register, pollInterval: 0 },
+        promClient,
+        { ...options, rpc: { mode: 'jetstream' } },
+        makeRegistry({ events: true, rpc: true, broadcasts: true }),
+      );
+
+      await sut.onApplicationBootstrap();
+
+      // When
+      const targets = buildTargets(sut);
+
+      // Then: ordered kinds are ephemeral and never polled
+      expect(targets.map((t) => t.kind)).toEqual([
+        StreamKind.Event,
+        StreamKind.Command,
+        StreamKind.Broadcast,
+      ]);
+    });
+
+    it('should not poll commands in core rpc mode', async () => {
+      // Given: rpc handlers exist but core mode owns no JetStream consumer
+      const sut = new JetstreamMetricsService(
+        eventBus,
+        { register, pollInterval: 0 },
+        promClient,
+        { ...options, rpc: { mode: 'core' } },
+        makeRegistry({ rpc: true }),
+      );
+
+      await sut.onApplicationBootstrap();
+
+      // When / Then
+      expect(buildTargets(sut)).toEqual([]);
+    });
+
+    it('should resolve target names through the resolver when provided', async () => {
+      // Given: custom stream and durable names on events
+      const customOptions: JetstreamModuleOptions = {
+        name: 'orders',
+        servers: ['nats://localhost:4222'],
+        metrics: true,
+        events: {
+          stream: { name: 'ext-stream' },
+          consumer: { durable_name: 'ext-worker' },
+        },
+      };
+      const sut = new JetstreamMetricsService(
+        eventBus,
+        { register, pollInterval: 0 },
+        promClient,
+        customOptions,
+        makeRegistry({ events: true }),
+        null,
+        new NameResolver(customOptions),
+      );
+
+      await sut.onApplicationBootstrap();
+
+      // When
+      const targets = buildTargets(sut);
+
+      // Then
+      expect(targets).toEqual([
+        { kind: StreamKind.Event, stream: 'ext-stream', consumer: 'ext-worker' },
+      ]);
+    });
+  });
+
+  describe('initial connection state', () => {
+    it('should mark the current server up when a connection exists at bootstrap', async () => {
+      // Given: a live connection exposing its server address
+      const server = 'nats-1:4222';
+      const connection = createMock<ConnectionProvider>({
+        unwrap: createMock<NatsConnection>({ getServer: () => server }),
+      });
+
+      const sut = new JetstreamMetricsService(
+        eventBus,
+        { register, pollInterval: 0 },
+        promClient,
+        options,
+        null,
+        connection,
+      );
+
+      await sut.onApplicationBootstrap();
+
+      // Then
+      const text = await register.metrics();
+
+      expect(text).toContain(`jetstream_connection_up{server="${server}"} 1`);
     });
   });
 });

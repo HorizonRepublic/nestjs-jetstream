@@ -3,7 +3,7 @@ import { Controller, INestApplication } from '@nestjs/common';
 import { ClientProxy, EventPattern, Payload } from '@nestjs/microservices';
 import { TestingModule } from '@nestjs/testing';
 import type { NatsConnection } from '@nats-io/transport-node';
-import { DeliverPolicy } from '@nats-io/jetstream';
+import { DeliverPolicy, jetstreamManager } from '@nats-io/jetstream';
 import { firstValueFrom } from 'rxjs';
 import type { StartedTestContainer } from 'testcontainers';
 
@@ -395,14 +395,36 @@ describe('Ordered Event Delivery', () => {
       );
 
       const client = module.get<ClientProxy>(getClientToken(serviceName));
+      const jsm = await jetstreamManager(nc);
+      const orderedStream = `${serviceName}__microservice_ordered-stream`;
+      const orderedSubject = `${serviceName}__microservice.ordered.order.status`;
+
+      // Server-side timestamp of the latest message; the client clock may drift
+      // from the server clock, so opt_start_time must come from server time.
+      const lastServerTimeMs = async (): Promise<number> => {
+        const stored = await jsm.streams.getMessage(orderedStream, {
+          last_by_subj: orderedSubject,
+        });
+
+        return new Date((stored as unknown as { time: string | Date }).time).getTime();
+      };
 
       await firstValueFrom(client.emit('ordered:order.status', { status: 'before' }));
 
-      // Ensure NATS timestamps differ: sub-millisecond publishes can share the same timestamp
-      await new Promise((r) => setTimeout(r, 50));
-      const startTime = new Date().toISOString();
+      const startMs = (await lastServerTimeMs()) + 2;
+      const startTime = new Date(startMs).toISOString();
 
-      await firstValueFrom(client.emit('ordered:order.status', { status: 'after' }));
+      // Publish 'after' until its server timestamp lands past startTime
+      let afterMs = 0;
+
+      for (let attempt = 0; attempt < 10 && afterMs < startMs; attempt += 1) {
+        await new Promise((r) => setTimeout(r, 5));
+        await firstValueFrom(client.emit('ordered:order.status', { status: 'after' }));
+        afterMs = await lastServerTimeMs();
+      }
+
+      expect(afterMs).toBeGreaterThanOrEqual(startMs);
+
       await app.close();
 
       // Step 2: restart with StartTime, expecting 'before' skipped and 'after' delivered

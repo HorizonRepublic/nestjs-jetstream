@@ -2,9 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vi
 import { createMock } from '@golevelup/ts-vitest';
 import type { MessageHandler } from '@nestjs/microservices';
 import type { NatsConnection } from '@nats-io/transport-node';
+import type { ConsumerInfo } from '@nats-io/jetstream';
 
 import { ConnectionProvider } from '../../connection';
 import type { JetstreamModuleOptions } from '../../interfaces';
+import { StreamKind } from '../../interfaces';
 
 import { CoreRpcServer } from '../core-rpc.server';
 import {
@@ -37,6 +39,7 @@ describe(JetstreamStrategy, () => {
     connection = createMock<ConnectionProvider>();
     patternRegistry = createMock<PatternRegistry>({
       hasEventHandlers: vi.fn().mockReturnValue(false),
+      hasOrderedHandlers: vi.fn().mockReturnValue(false),
       hasBroadcastHandlers: vi.fn().mockReturnValue(false),
       hasRpcHandlers: vi.fn().mockReturnValue(false),
       hasMetadata: vi.fn().mockReturnValue(false),
@@ -147,6 +150,110 @@ describe(JetstreamStrategy, () => {
 
       // Then
       expect(metadataProvider.publish).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('consumer config propagation', () => {
+    const makeConsumerInfo = (
+      overrides: Partial<ConsumerInfo['config']>,
+      stream = 'st',
+    ): ConsumerInfo =>
+      createMock<ConsumerInfo>({
+        stream_name: stream,
+        config: overrides as ConsumerInfo['config'],
+      });
+
+    it('should propagate ack_wait and max_deliver from live consumer configs', async () => {
+      // Given: an event handler whose consumer reports real NATS settings
+      patternRegistry.hasEventHandlers.mockReturnValue(true);
+      consumerProvider.ensureConsumers.mockResolvedValue(
+        new Map([
+          [
+            StreamKind.Event,
+            makeConsumerInfo({ ack_wait: 30_000_000_000, max_deliver: 5 }, 'ev-stream'),
+          ],
+        ]),
+      );
+
+      const ackWaitMap = new Map<StreamKind, number>();
+
+      sut = new JetstreamStrategy(
+        options,
+        connection,
+        patternRegistry,
+        streamProvider,
+        consumerProvider,
+        messageProvider,
+        eventRouter,
+        rpcRouter,
+        coreRpcServer,
+        ackWaitMap,
+        metadataProvider,
+      );
+
+      // When
+      await sut.listen(() => {});
+
+      // Then
+      expect(ackWaitMap.get(StreamKind.Event)).toBe(30_000_000_000);
+
+      expect(eventRouter.updateMaxDeliverMap).toHaveBeenCalledWith(new Map([['ev-stream', 5]]));
+    });
+
+    it('should skip consumers without ack_wait or with unlimited max_deliver', async () => {
+      // Given: a consumer config carrying neither value worth propagating
+      patternRegistry.hasEventHandlers.mockReturnValue(true);
+      consumerProvider.ensureConsumers.mockResolvedValue(
+        new Map([[StreamKind.Event, makeConsumerInfo({ ack_wait: 0, max_deliver: 0 })]]),
+      );
+
+      const ackWaitMap = new Map<StreamKind, number>();
+
+      sut = new JetstreamStrategy(
+        options,
+        connection,
+        patternRegistry,
+        streamProvider,
+        consumerProvider,
+        messageProvider,
+        eventRouter,
+        rpcRouter,
+        coreRpcServer,
+        ackWaitMap,
+        metadataProvider,
+      );
+
+      // When
+      await sut.listen(() => {});
+
+      // Then
+      expect(ackWaitMap.size).toBe(0);
+
+      expect(eventRouter.updateMaxDeliverMap).toHaveBeenCalledWith(new Map());
+    });
+  });
+
+  describe('jetstream rpc kinds', () => {
+    it('should provision the command stream and start the rpc router', async () => {
+      // Given
+      options.rpc = { mode: 'jetstream' };
+      patternRegistry.hasRpcHandlers.mockReturnValue(true);
+
+      // When
+      await sut.listen(() => {});
+
+      // Then
+      expect(streamProvider.ensureStreams).toHaveBeenCalledWith([StreamKind.Command]);
+
+      expect(rpcRouter.start).toHaveBeenCalled();
+
+      expect(coreRpcServer.start).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getPatternRegistry()', () => {
+    it('should expose the registry for module introspection', () => {
+      expect(sut.getPatternRegistry()).toBe(patternRegistry);
     });
   });
 
