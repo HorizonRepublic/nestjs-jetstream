@@ -28,6 +28,7 @@ export default [
       '**/dist-example/**',
       '**/docs/**',
       '**/tmp/**',
+      'benchmarks/**',
       'website/**',
       'tsup.config.ts',
       'vitest.config.ts',

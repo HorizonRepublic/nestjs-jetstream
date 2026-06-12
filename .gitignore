@@ -155,7 +155,8 @@ CLAUDE.md
 GEMINI.md
 AGENTS.md
 
-# Benchmark results (dev-only, regenerated locally)
+# Benchmarks (dev-only, local harness and results)
+benchmarks/
 benchmarks/results/
 benchmarks/baseline.json
 benchmarks/baseline.md
