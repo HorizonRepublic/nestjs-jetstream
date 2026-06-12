@@ -25,7 +25,7 @@ export const JETSTREAM_CODEC = Symbol('JETSTREAM_CODEC');
  * Token for the EventBus instance.
  *
  * @internal Reserved for the library's own DI wiring. Not part of the
- * public API — user code should register hooks via `forRoot({ hooks })`
+ * public API; user code should register hooks via `forRoot({ hooks })`
  * instead of injecting the bus directly.
  */
 export const JETSTREAM_EVENT_BUS = Symbol('JETSTREAM_EVENT_BUS');
@@ -76,8 +76,6 @@ const NANOS_PER: Record<TimeUnit, number> = {
  * ```
  */
 export const toNanos = (value: number, unit: TimeUnit): number => value * NANOS_PER[unit];
-
-/* eslint-disable @typescript-eslint/naming-convention -- NATS API uses snake_case property names */
 
 /** Base stream config shared by all stream types. */
 const baseStreamConfig: Partial<StreamConfig> = {
@@ -187,8 +185,6 @@ export const DEFAULT_BROADCAST_CONSUMER_CONFIG: Partial<ConsumerConfig> = {
   replay_policy: ReplayPolicy.Instant,
 };
 
-/* eslint-enable @typescript-eslint/naming-convention */
-
 /** Default RPC timeout for Core mode (30 seconds). */
 export const DEFAULT_RPC_TIMEOUT = 30_000;
 
@@ -245,7 +241,7 @@ export enum JetstreamHeader {
 }
 
 export enum JetstreamDlqHeader {
-  /** Reason for the message being sent to the DLQ — the last handler error message. */
+  /** Reason the message was sent to the DLQ: the last handler error message. */
   DeadLetterReason = 'x-dead-letter-reason',
   /** Original NATS subject the message was originally published to */
   OriginalSubject = 'x-original-subject',
@@ -267,8 +263,8 @@ export const RESERVED_HEADERS = new Set<string>([
 /**
  * Lowercase prefix of NATS server control headers (Nats-Msg-Id, Nats-TTL,
  * Nats-Rollup, Nats-Schedule-*, Nats-Expected-*). These drive server-side
- * behavior — a stray Nats-Rollup purges every pending message on the
- * subject — so they are managed exclusively through builder APIs.
+ * behavior (a stray Nats-Rollup purges every pending message on the
+ * subject), so they are managed exclusively through builder APIs.
  */
 export const NATS_CONTROL_HEADER_PREFIX = 'nats-';
 

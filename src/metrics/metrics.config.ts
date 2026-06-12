@@ -34,7 +34,7 @@ export interface MetricsConfig {
   /**
    * Polling interval (ms) for gauge metrics that query `JetStreamManager`
    * (consumer pending, stream messages, etc.). Default `15_000`.
-   * Set to `0` to disable polling — counter/histogram metrics still update
+   * Set to `0` to disable polling; counter/histogram metrics still update
    * via the event bus.
    */
   pollInterval?: number;

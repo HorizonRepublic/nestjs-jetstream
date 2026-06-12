@@ -80,8 +80,7 @@ export class ConsumerProvider {
 
   /**
    * Ensure a single consumer exists with the desired config.
-   * Used at **startup** — creates or updates the consumer to match
-   * the current pod's configuration.
+   * Startup path: creates or updates the consumer to match the current pod's configuration.
    */
   public async ensureConsumer(
     jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
@@ -136,16 +135,11 @@ export class ConsumerProvider {
 
   /**
    * Recover a consumer that disappeared during runtime.
-   * Used by **self-healing** — creates if missing, but NEVER updates config.
    *
-   * If a migration backup stream exists, another pod is mid-migration — we
-   * throw so the self-healing retry loop waits with backoff until migration
-   * completes and the backup is cleaned up.
-   *
-   * This prevents old pods from:
-   * - Overwriting a newer pod's consumer config during rolling updates
-   * - Creating consumers during migration (which would consume and delete
-   *   workqueue messages while they're being restored)
+   * Self-healing path: creates if missing but never updates config, so an old pod
+   * cannot overwrite a newer pod's config during rolling updates. If a migration
+   * backup stream exists, throws so the retry loop backs off until migration completes;
+   * creating a consumer mid-migration would eat workqueue messages being restored.
    */
   public async recoverConsumer(
     jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
@@ -191,11 +185,11 @@ export class ConsumerProvider {
       async () => {
         this.logger.log(`Recovering consumer: ${name} on stream: ${stream}`);
 
-        // Check if another pod is mid-migration — backup stream acts as a lock
+        // The migration backup stream acts as a lock held by the migrating pod
         await this.assertNoMigrationInProgress(jsm, stream);
 
         try {
-          // Consumer already exists (another pod may have recreated it) — use as-is
+          // Another pod may have recreated the consumer; use it as-is
           return await jsm.consumers.info(stream, name);
         } catch (err) {
           if (
@@ -225,13 +219,12 @@ export class ConsumerProvider {
     try {
       await jsm.streams.info(backupName);
 
-      // Backup exists → migration in progress
       throw new Error(
         `Stream ${stream} is being migrated (backup ${backupName} exists). ` +
           `Waiting for migration to complete before recovering consumer.`,
       );
     } catch (err) {
-      // Backup doesn't exist → no migration in progress → proceed
+      // StreamNotFound means no backup, so no migration in progress
       if (
         err instanceof JetStreamApiError &&
         err.apiError().err_code === NatsErrorCode.StreamNotFound
@@ -239,20 +232,17 @@ export class ConsumerProvider {
         return;
       }
 
-      // Re-throw: either the "migration in progress" error or an unexpected error
+      // Re-throws our own "migration in progress" error as well as unexpected ones
       throw err;
     }
   }
 
-  /**
-   * Create a consumer, handling the race where another pod creates it first.
-   */
+  /** Create a consumer, handling the race where another pod creates it first. */
   private async createConsumer(
     jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
     stream: string,
     name: string,
     kind: StreamKind,
-    /* eslint-disable-next-line @typescript-eslint/naming-convention -- NATS API uses snake_case */
     config: Partial<ConsumerConfig> & { durable_name: string },
   ): Promise<ConsumerInfo> {
     this.logger.log(`Creating consumer: ${name}`);
@@ -292,14 +282,12 @@ export class ConsumerProvider {
   }
 
   /** Build consumer config by merging defaults with user overrides. */
-  // eslint-disable-next-line @typescript-eslint/naming-convention -- NATS API uses snake_case
   private buildConfig(kind: StreamKind): Partial<ConsumerConfig> & { durable_name: string } {
     const durableName = this.getConsumerName(kind);
 
     const defaults = this.getDefaults(kind);
     const overrides = this.getOverrides(kind);
 
-    /* eslint-disable @typescript-eslint/naming-convention -- NATS API uses snake_case */
     if (kind === StreamKind.Broadcast) {
       const broadcastPatterns = this.patternRegistry.getBroadcastPatterns();
 
@@ -343,10 +331,8 @@ export class ConsumerProvider {
       durable_name: durableName,
       filter_subject,
     };
-    /* eslint-enable @typescript-eslint/naming-convention */
   }
 
-  /* eslint-disable @typescript-eslint/naming-convention -- NATS API uses snake_case */
   private buildCustomPrefixConfig(
     kind: StreamKind,
     durableName: string,
@@ -377,7 +363,6 @@ export class ConsumerProvider {
       durable_name: durableName,
       filter_subjects: subjects,
     };
-    /* eslint-enable @typescript-eslint/naming-convention */
   }
 
   /** Get default config for a consumer kind. */

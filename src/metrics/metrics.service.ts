@@ -53,7 +53,7 @@ import type {
 /**
  * Built-in Prometheus metrics service. On bootstrap, instantiates the metric
  * set, subscribes to the EventBus, and starts the gauge polling loop.
- * Critical-path transport code never imports this module — metrics writes
+ * Critical-path transport code never imports this module; metrics writes
  * happen entirely off the hot path.
  */
 @Injectable()
@@ -79,7 +79,7 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
   public async onApplicationBootstrap(): Promise<void> {
     if (this.metrics !== null) return;
 
-    // Disabled — `metrics` was omitted/false. prom-client is never resolved
+    // Disabled: `metrics` was omitted/false. prom-client is never resolved
     // in this branch, so the service is a no-op for publisher-only or
     // metrics-off deployments.
     if (!this.options.metrics || !this.config || !this.promClient) return;
@@ -118,7 +118,7 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
 
   /**
    * NATS connects during early bootstrap, before this service subscribes to
-   * the EventBus — the initial `Connect` emission misses us. Mirror the
+   * the EventBus, so the initial `Connect` emission misses us. Mirror the
    * current state here so `connection_up` reflects reality the moment metrics
    * come online; later disconnects/reconnects update it normally.
    */
@@ -168,7 +168,7 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
       });
     }
 
-    // Core RPC mode owns no JetStream stream — only JetStream RPC mode does.
+    // Core RPC mode owns no JetStream stream; only JetStream RPC mode does.
     if (registry.hasRpcHandlers() && isJetStreamRpcMode(this.options.rpc)) {
       targets.push({
         kind: StreamKind.Command,
@@ -185,7 +185,7 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
       });
     }
 
-    // Ordered consumers are ephemeral — no stable durable name to poll.
+    // Ordered consumers are ephemeral; no stable durable name to poll.
 
     return targets;
   }
@@ -223,7 +223,7 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
   };
 
   private readonly onDisconnect = (): void => {
-    // Disconnect carries no server name — flip every observed server to 0;
+    // Disconnect carries no server name: flip every observed server to 0;
     // the next Connect/Reconnect re-flips the live one back to 1.
     for (const server of this.activeServers) {
       this.metrics?.connectionUp.labels({ server }).set(0);
@@ -241,7 +241,7 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
     this.metrics?.rpcTimeoutTotal.labels({ subject: subjectLabel }).inc();
   };
 
-  // `_kind` collapses broadcast/ordered into MessageKind.Event — we use
+  // `_kind` collapses broadcast/ordered into MessageKind.Event; we use
   // declared.kind from PatternRegistry for the precise label instead.
   private readonly onMessageRouted = (subject: string, _kind: MessageKind): void => {
     if (!this.metrics) return;

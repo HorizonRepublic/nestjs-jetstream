@@ -9,13 +9,13 @@ import type { HistogramBuckets } from './metrics.config';
  * (rather than statically imported) so nothing here triggers a load until
  * `JetstreamMetricsModule` resolves the peer dependency via dynamic import.
  */
-/* eslint-disable @typescript-eslint/naming-convention */
 export interface PromClientRuntime {
+  /* eslint-disable @typescript-eslint/naming-convention -- mirrors prom-client class names */
   Counter: typeof Counter;
   Histogram: typeof Histogram;
   Gauge: typeof Gauge;
+  /* eslint-enable @typescript-eslint/naming-convention */
 }
-/* eslint-enable @typescript-eslint/naming-convention */
 
 /** Resolved metric handles. Names are stable; emitters use them by property. */
 export interface JetstreamMetrics {
@@ -75,5 +75,5 @@ export interface ResolvedSubjectLabels {
   kind: StreamKind;
 }
 
-/** Label accepted by ConsumerRecovered — typically StreamKind, may be any string. */
+/** Label accepted by ConsumerRecovered: typically StreamKind, may be any string. */
 export type RecoveredKindLabel = StreamKind | string;

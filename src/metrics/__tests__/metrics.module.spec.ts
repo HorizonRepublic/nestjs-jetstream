@@ -156,8 +156,7 @@ describe(JetstreamMetricsModule, () => {
       // Given/When
       const moduleRef = await compile({ ...baseOptions, metrics: false }, eventBus);
 
-      // Then: providers exist (module is always imported) but resolve to null,
-      // so prom-client is never loaded and the service self-disables on bootstrap.
+      // Then: providers resolve to null, prom-client is never loaded, service self-disables
       expect(moduleRef.get(JETSTREAM_METRICS_CONFIG)).toBeNull();
       expect(moduleRef.get(JetstreamMetricsService)).toBeInstanceOf(JetstreamMetricsService);
     });

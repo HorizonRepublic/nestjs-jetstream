@@ -35,10 +35,8 @@ const resolveAckExtension = (
 ): AckExtensionConfig | undefined => kindOptionsBlock(options, kind)?.ackExtension;
 
 const filterCoversSubject = (
-  /* eslint-disable @typescript-eslint/naming-convention -- NATS API uses snake_case */
   filter_subject: string | undefined,
   filter_subjects: string[] | undefined,
-  /* eslint-enable @typescript-eslint/naming-convention */
   subject: string,
 ): boolean => {
   if (filter_subject !== undefined) {
@@ -158,10 +156,7 @@ export class InfrastructureBinder {
     const subjects = this.resolveHandlerSubjects(kind);
 
     if (subjects.length === 0) return;
-
-    /* eslint-disable @typescript-eslint/naming-convention -- NATS API uses snake_case */
     const { filter_subject, filter_subjects } = info.config;
-    /* eslint-enable @typescript-eslint/naming-convention */
 
     const uncovered = subjects.filter(
       (s) => !filterCoversSubject(filter_subject, filter_subjects, s),
@@ -206,10 +201,7 @@ export class InfrastructureBinder {
     if (!isSchedulingEnabled(this.options, kind)) return;
 
     const scheduleWildcard = `${this.names.schedulePrefix(kind)}>`;
-
-    /* eslint-disable @typescript-eslint/naming-convention -- NATS API uses snake_case */
     const { filter_subject, filter_subjects } = info.config;
-    /* eslint-enable @typescript-eslint/naming-convention */
     const filters = filter_subjects ?? (filter_subject !== undefined ? [filter_subject] : []);
     const swallowing =
       filters.length === 0

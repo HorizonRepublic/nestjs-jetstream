@@ -21,11 +21,7 @@ import type { PromClientRuntime } from '../metrics.types';
 
 type Subscribers = Map<string, ((...args: unknown[]) => void)[]>;
 
-/**
- * Capture every `subscribe()` call into a map keyed by event name so tests can
- * invoke the metrics service's handlers directly. Mirrors the real EventBus
- * dispatching contract closely enough for label/value assertions.
- */
+/** Captures `subscribe()` calls keyed by event name so tests can invoke handlers directly. */
 const captureSubscribers = (eventBus: Mocked<EventBus>): Subscribers => {
   const subs: Subscribers = new Map();
 
@@ -72,9 +68,7 @@ const histogramCount = async (
   const labelExpr = Object.entries(matchLabels)
     .map(([k, v]) => `${escapeRegex(k)}="${escapeRegex(v)}"`)
     .join(',');
-  // The `_count` suffix is appended by prom-client when rendering histograms;
-  // we parse it from the text exposition to avoid the typed-API churn around
-  // histogram bucket samples (rich metric object reshapes across versions).
+  // Parse the `_count` sample from text exposition; typed histogram shapes churn across versions.
   const re = new RegExp(
     `^${escapeRegex(metricName)}_count\\{[^}]*${labelExpr}[^}]*\\}\\s+(\\d+)`,
     'm',
@@ -308,7 +302,7 @@ describe(JetstreamMetricsService, () => {
       // When
       dispatch(subs, TransportEvent.RpcTimeout, 'unknown.subject', faker.string.uuid());
 
-      // Then: cardinality stays bounded — no raw wire subject leaks into the label
+      // Then: cardinality stays bounded, no raw wire subject leaks into the label
       expect(
         await sampleValue(register, 'jetstream_rpc_timeout_total', {
           subject: UNMATCHED_SUBJECT_LABEL,
@@ -660,7 +654,7 @@ describe(JetstreamMetricsService, () => {
     });
 
     it('should throw on bootstrap when registry is missing', async () => {
-      // Given: config without register — module factory normally guards this
+      // Given: config without register (module factory normally guards this)
       const sut = new JetstreamMetricsService(eventBus, {}, promClient, options, null);
 
       // Then

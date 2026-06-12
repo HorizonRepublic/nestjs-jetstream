@@ -7,19 +7,17 @@ const GIB = 1024 ** 3;
 
 const fmt = (bytes: number): string => `${(bytes / GIB).toFixed(2)} GiB`;
 
-/* eslint-disable @typescript-eslint/naming-convention */
 /** File-storage limits as exposed by account/tier info. */
 interface AccountStorageLimits {
   readonly max_storage?: number;
 }
 
-/** Defensive view of `getAccountInfo()` — fields may be absent on partial/unexpected shapes. */
+/** Defensive view of `getAccountInfo()`; fields may be absent on partial/unexpected shapes. */
 interface AccountInfoView {
   readonly limits?: AccountStorageLimits;
   readonly reserved_storage?: number;
   readonly tiers?: Record<string, AccountInfoView | undefined>;
 }
-/* eslint-enable @typescript-eslint/naming-convention */
 
 /** Resolved file-storage budget for one replica tier. */
 interface TierBudget {
@@ -57,7 +55,7 @@ const groupByReplicas = (reservations: StreamReservation[]): Map<number, number>
 
 /**
  * Opt-in, warn-only storage budget check. Never throws or blocks boot.
- * Heuristic only — server `max_file_store` isn't client-visible and account
+ * Heuristic only: server `max_file_store` isn't client-visible and account
  * info is an aggregate, so the wrapped provisioning error stays authoritative.
  *
  * Scoped to file-backed streams (memory streams don't count against file storage)
