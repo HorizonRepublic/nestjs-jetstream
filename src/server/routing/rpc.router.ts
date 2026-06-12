@@ -33,7 +33,9 @@ import {
 } from '../../utils';
 
 import { MessageProvider } from '../infrastructure';
+import { ConcurrencyGate } from './concurrency-gate';
 import { PatternRegistry } from './pattern-registry';
+import type { ParkTimerFn } from './routing.types';
 
 /**
  * Routing shape resolved for one incoming RPC command: the selected handler,
@@ -46,12 +48,6 @@ interface ResolvedCommand {
   readonly data: unknown;
   readonly replyTo: string;
   readonly correlationId: string;
-}
-
-/** A command parked in the concurrency backlog with its ack-extension timer. */
-interface QueuedCommand {
-  readonly msg: JsMsg;
-  readonly stopAckExtension: (() => void) | null;
 }
 
 /**
@@ -357,96 +353,22 @@ export class RpcRouter {
       );
     };
 
-    const backlogWarnThreshold = 1_000;
-    let active = 0;
-    let backlogWarned = false;
-    const backlog: QueuedCommand[] = [];
-
-    const onAsyncDone = (): void => {
-      active--;
-      drainBacklog();
-    };
-
-    // A throw here must not leak the concurrency slot or kill the subscription.
-    const routeSafely = (msg: JsMsg): Promise<void> | undefined => {
-      try {
-        return handleSafe(msg);
-      } catch (err) {
-        logger.error(`Unexpected routing failure for ${msg.subject}:`, err);
-
-        return undefined;
-      }
-    };
-
-    const trackAsync = (result: Promise<void>, msg: JsMsg): void => {
-      void result
-        .catch((err: unknown) => {
-          logger.error(`Unexpected routing failure for ${msg.subject}:`, err);
-        })
-        .finally(onAsyncDone);
-    };
-
-    const drainBacklog = (): void => {
-      while (active < maxActive) {
-        const next = backlog.shift();
-
-        if (next === undefined) return;
-        next.stopAckExtension?.();
-        active++;
-        const result = routeSafely(next.msg);
-
-        if (result !== undefined) {
-          trackAsync(result, next.msg);
-        } else {
-          active--;
-        }
-      }
-
-      if (backlog.length < backlogWarnThreshold) backlogWarned = false;
-    };
+    const parkTimer: ParkTimerFn | null = hasAckExtension
+      ? (msg): (() => void) | null => startAckExtensionTimer(msg, ackExtensionInterval)
+      : null;
+    const gate = new ConcurrencyGate(maxActive, handleSafe, parkTimer, logger, 'RPC');
 
     this.subscription = this.messageProvider.commands$.subscribe({
       next: (msg: JsMsg): void => {
-        if (active >= maxActive) {
-          // A parked command's ack_wait clock is already running on the server.
-          backlog.push({
-            msg,
-            stopAckExtension: hasAckExtension
-              ? startAckExtensionTimer(msg, ackExtensionInterval)
-              : null,
-          });
-          if (!backlogWarned && backlog.length >= backlogWarnThreshold) {
-            backlogWarned = true;
-            logger.warn(
-              `RPC backlog reached ${backlog.length} messages — consumer may be falling behind`,
-            );
-          }
-
-          return;
-        }
-
-        active++;
-        const result = routeSafely(msg);
-
-        if (result !== undefined) {
-          trackAsync(result, msg);
-        } else {
-          active--;
-          if (backlog.length > 0) drainBacklog();
-        }
+        gate.push(msg);
       },
       error: (err: unknown): void => {
         logger.error('Stream error in RPC router', err);
       },
     });
 
-    // Stop the parked timers on unsubscribe.
     this.subscription.add(() => {
-      for (const queued of backlog) {
-        queued.stopAckExtension?.();
-      }
-
-      backlog.length = 0;
+      gate.dispose();
     });
   }
 
