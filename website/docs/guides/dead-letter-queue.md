@@ -8,7 +8,7 @@ schema:
   headline: "How to configure a Dead Letter Queue"
   description: "Capture NestJS NATS JetStream messages that exhaust all delivery attempts via a DLQ stream or onDeadLetter callback."
   datePublished: "2026-03-21"
-  dateModified: "2026-06-10"
+  dateModified: "2026-06-12"
 ---
 
 import Since from '@site/src/components/Since';
@@ -84,6 +84,27 @@ JetstreamModule.forRoot({
 ```
 
 On startup, the library provisions a dedicated DLQ stream and, from that point on, every exhausted message is automatically republished to it with tracking headers. No callback needed for the happy path.
+
+### Externally managed DLQ stream
+
+If your DLQ stream is provisioned outside the application (Terraform, ArgoCD, etc.), set `dlq.management.stream: ManagementMode.Manual`. The library will bind to the existing stream without creating or updating it:
+
+```typescript
+import { ManagementMode } from '@horizon-republic/nestjs-jetstream';
+
+JetstreamModule.forRoot({
+  name: 'orders',
+  servers: ['nats://localhost:4222'],
+  dlq: {
+    stream: { name: 'ext_dlq' },
+    management: { stream: ManagementMode.Manual },
+  },
+})
+```
+
+**Subject contract for external DLQ streams:** the stream's `subjects` list must contain exactly the DLQ stream name (by default that name is `{service}__microservice_dlq-stream`; when you override `dlq.stream.name`, it is whatever custom name you chose). For example, a stream named `ext_dlq` must have `subjects: ["ext_dlq"]`. The library validates this at boot and throws if the subject is not covered.
+
+See [Bring Your Own Infrastructure](/docs/guides/external-infrastructure#external-dlq) for a complete provisioning example.
 
 ### What gets created
 

@@ -63,7 +63,12 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Operations',
       collapsed: false,
-      items: ['guides/lifecycle-hooks', 'guides/stream-migration', 'guides/performance'],
+      items: [
+        'guides/lifecycle-hooks',
+        'guides/stream-migration',
+        'guides/external-infrastructure',
+        'guides/performance',
+      ],
     },
     'guides/troubleshooting',
     {

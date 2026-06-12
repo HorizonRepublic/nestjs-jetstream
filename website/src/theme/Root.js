@@ -84,7 +84,15 @@ export default function Root({ children }) {
   "headline": "How to configure a Dead Letter Queue",
   "description": "Capture NestJS NATS JetStream messages that exhaust all delivery attempts via a DLQ stream or onDeadLetter callback.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-06-10"
+  "dateModified": "2026-06-12"
+},
+      
+    '/docs/guides/external-infrastructure/': {
+  "@type": "Article",
+  "headline": "Bring Your Own Infrastructure (bind-only mode)",
+  "description": "Bind NestJS JetStream to externally managed NATS streams and consumers provisioned by Terraform, ArgoCD, or a platform team.",
+  "datePublished": "2026-06-12",
+  "dateModified": "2026-06-12"
 },
       
     '/docs/guides/graceful-shutdown/': {
@@ -156,7 +164,7 @@ export default function Root({ children }) {
   "headline": "How to schedule delayed messages with NestJS JetStream",
   "description": "One-shot delayed message delivery via the Nats-Schedule header (NATS 2.12, ADR-51).",
   "datePublished": "2026-04-01",
-  "dateModified": "2026-06-10"
+  "dateModified": "2026-06-12"
 },
       
     '/docs/guides/storage-budgeting/': {
@@ -172,7 +180,7 @@ export default function Root({ children }) {
   "headline": "How to migrate immutable stream properties",
   "description": "Safely change immutable stream properties without losing messages via blue-green sourcing.",
   "datePublished": "2026-04-02",
-  "dateModified": "2026-06-10"
+  "dateModified": "2026-06-12"
 },
       
     '/docs/guides/troubleshooting/': {
@@ -284,7 +292,7 @@ export default function Root({ children }) {
   "headline": "Module Configuration Reference",
   "description": "Reference for forRoot(), forRootAsync(), and forFeature() registration methods with stream, consumer, and connection options.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-05-27"
+  "dateModified": "2026-06-12"
 },
       
     '/docs/reference/naming-conventions/': {

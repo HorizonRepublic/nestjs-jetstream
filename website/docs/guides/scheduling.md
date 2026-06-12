@@ -8,7 +8,7 @@ schema:
   headline: "How to schedule delayed messages with NestJS JetStream"
   description: "One-shot delayed message delivery via the Nats-Schedule header (NATS 2.12, ADR-51)."
   datePublished: "2026-04-01"
-  dateModified: "2026-06-10"
+  dateModified: "2026-06-12"
 ---
 
 import Since from '@site/src/components/Since';
@@ -107,6 +107,27 @@ events: {
 :::caution
 Setting `max_age: 0` disables automatic cleanup for **all** messages in the event stream, not just scheduled ones. Consider the storage implications for high-throughput streams.
 :::
+
+## Scheduling with a custom subject prefix
+
+When a custom `subjectPrefix` is configured for an event or broadcast kind, the schedule holders live under `{prefix}_sch.` instead of the default `{service}._sch.` prefix:
+
+| Prefix configuration | Schedule holder prefix |
+|---|---|
+| No custom prefix (default) | `{service}._sch.` |
+| `subjectPrefix: 'company.orders.'` | `company.orders._sch.` |
+
+If the stream is **externally managed** (`ManagementMode.Manual`), it must cover this prefix in its `subjects` list. Boot fails with an explicit error if the coverage is missing:
+
+```
+Stream "…" has scheduling enabled (allow_msg_schedules=true) but its subjects do not cover the schedule prefix "…". Add "…>" to the stream's subjects.
+```
+
+For example, a stream with `subjects: ["company.orders.>"]` already covers `company.orders._sch.>` because the wildcard `>` matches any suffix. No additional entry is needed.
+
+If you used a prefix like `company.orders.events.` (narrower wildcard), you must add `company.orders._sch.>` explicitly or widen the wildcard.
+
+See [Bring Your Own Infrastructure — Scheduling with a custom prefix](/docs/guides/external-infrastructure#scheduling-with-a-custom-prefix) for a full provisioning example.
 
 ## Limitations
 

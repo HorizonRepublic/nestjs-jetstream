@@ -8,7 +8,7 @@ schema:
   headline: "How to migrate immutable stream properties"
   description: "Safely change immutable stream properties without losing messages via blue-green sourcing."
   datePublished: "2026-04-02"
-  dateModified: "2026-06-10"
+  dateModified: "2026-06-12"
 ---
 
 import Since from '@site/src/components/Since';
@@ -119,12 +119,27 @@ Expect migration time to scale roughly linearly with message count. For small st
 - **Process killed mid-migration.** Detected on the next startup: a stranded backup is restored into the stream (recreating it first if the crash happened between delete and create), then cleaned up.
 - **Two instances migrating concurrently (rolling deploy).** Backups carry a freshness stamp. An instance that finds another instance's live backup waits for that migration to finish instead of interfering; only stale leftovers are recovered.
 
+## Manual streams are never migrated
+
+Streams managed in `ManagementMode.Manual` (externally provisioned) are never created, updated, or migrated by the library — regardless of `allowDestructiveMigration`. The library only binds to them and validates their configuration at boot.
+
+Setting `allowDestructiveMigration: true` together with a global `provisioning.management: ManagementMode.Manual` is therefore a no-op for all streams. The library logs a warning at boot when this combination is detected:
+
+```
+allowDestructiveMigration has no effect under provisioning.management: Manual — the library never migrates externally managed streams.
+```
+
+If you use **mixed ownership** (some streams Auto, some Manual), `allowDestructiveMigration` applies only to the Auto-managed streams.
+
+See [Bring Your Own Infrastructure](/docs/guides/external-infrastructure) for the full bind-only mode guide.
+
 ## Limitations
 
 - **`retention` is not migratable.** It is controlled by the transport (`Workqueue` for events/commands, `Limits` for broadcast/ordered). A mismatch always throws an error on startup.
 - **The publisher gap is inherent.** NATS does not support atomic stream rename or swap. The millisecond window between delete and create cannot be eliminated.
 - **`allowDestructiveMigration` applies to all service-owned streams.** It's a single flag at the module level — if any of them has an immutable conflict, it will be migrated.
 - **The shared broadcast stream is never destructively migrated.** `broadcast-stream` is shared by every service in the cluster; recreating it would delete other services' durable consumers and replay retained history to them. An immutable conflict on it throws an error instead — coordinate that change manually.
+- **Manual streams are never migrated.** See the section above.
 
 ## Example: switching to in-memory streams
 
