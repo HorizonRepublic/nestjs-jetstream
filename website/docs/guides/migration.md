@@ -8,7 +8,7 @@ schema:
   headline: "How to migrate from @nestjs/microservices NATS to JetStream"
   description: "Step-by-step migration from the built-in NestJS NATS transport to durable JetStream-backed delivery."
   datePublished: "2026-03-26"
-  dateModified: "2026-05-27"
+  dateModified: "2026-06-12"
 ---
 
 # How to migrate from `@nestjs/microservices` NATS to JetStream
@@ -147,6 +147,21 @@ After migration, you get these capabilities for free:
 - Ordered sequential delivery mode — see [Ordered Events](/docs/patterns/ordered-events).
 - W3C trace context end-to-end — see [Distributed Tracing](/docs/observability/tracing).
 - Prometheus metrics out of the box — see [Prometheus Metrics](/docs/observability/metrics).
+
+## Upgrading between versions
+
+### v2.12 → v2.13
+
+**Behavior change: `stream.name` and `consumer.durable_name` overrides are now honored.**
+
+In previous releases, setting `stream.name` or `consumer.durable_name` inside a stream's `overrides` block was silently accepted but had no effect — the transport continued to derive names from its [naming conventions](/docs/reference/naming-conventions). Starting with v2.13, these fields are read and applied, so the library will use or create entities under the names you supply.
+
+**What this means for you:**
+
+- If you intentionally set custom names to bind the library to externally provisioned infrastructure, this is the release that makes it work. Combined with the new `ManagementMode.Manual` / `provisioning.management` options, you can now run in full bind-only mode — see [Bring Your Own Infrastructure](/docs/guides/external-infrastructure).
+- If you had `stream.name` or `consumer.durable_name` set by accident (copy-pasted config, leftover experiments), the library will now attempt to use or create streams and consumers under those names instead of the convention-derived ones. **Review your `overrides` blocks before upgrading** — remove any unintentional name fields to keep the previous behavior.
+
+No other breaking changes. Applications that do not set `stream.name` or `consumer.durable_name` are unaffected.
 
 ## See also
 

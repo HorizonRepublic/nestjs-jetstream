@@ -132,7 +132,7 @@ export default function Root({ children }) {
   "headline": "How to migrate from @nestjs/microservices NATS to JetStream",
   "description": "Step-by-step migration from the built-in NestJS NATS transport to durable JetStream-backed delivery.",
   "datePublished": "2026-03-26",
-  "dateModified": "2026-05-27"
+  "dateModified": "2026-06-12"
 },
       
     '/docs/guides/per-message-ttl/': {
