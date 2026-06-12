@@ -291,13 +291,20 @@ export const internalName = (name: string): string => `${name}__microservice`;
 export const buildSubject = (serviceName: string, kind: SubjectKind, pattern: string): string =>
   `${internalName(serviceName)}.${kind}.${pattern}`;
 
+/** Broadcast subjects are not scoped to a service and always share this prefix. */
+export const BROADCAST_SUBJECT_PREFIX = 'broadcast.';
+
+/** Subject segment that namespaces schedule-holder messages away from consumer filters. */
+export const SCHEDULE_SEGMENT = '_sch.';
+
 /**
  * Build a broadcast subject.
  *
  * @param pattern - The message pattern (e.g. `'config.updated'`).
  * @returns `broadcast.{pattern}`
  */
-export const buildBroadcastSubject = (pattern: string): string => `broadcast.${pattern}`;
+export const buildBroadcastSubject = (pattern: string): string =>
+  `${BROADCAST_SUBJECT_PREFIX}${pattern}`;
 
 /**
  * Build the JetStream stream name for a given service and kind.

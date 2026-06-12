@@ -54,6 +54,9 @@ import { ShutdownManager } from './shutdown';
 /** DI token for the shared ackWaitMap instance (populated at runtime by strategy). */
 const JETSTREAM_ACK_WAIT_MAP = Symbol('JETSTREAM_ACK_WAIT_MAP');
 
+export const DESTRUCTIVE_MIGRATION_MANUAL_WARNING =
+  'allowDestructiveMigration has no effect under provisioning.management: Manual — the library never migrates externally managed streams.';
+
 export const warnIfManualWithDestructive = (
   options: JetstreamModuleOptions,
   logger: Logger,
@@ -62,9 +65,7 @@ export const warnIfManualWithDestructive = (
     options.allowDestructiveMigration &&
     options.provisioning?.management === ManagementMode.Manual
   ) {
-    logger.warn(
-      'allowDestructiveMigration has no effect under provisioning.management: Manual — the library never migrates externally managed streams.',
-    );
+    logger.warn(DESTRUCTIVE_MIGRATION_MANUAL_WARNING);
   }
 };
 

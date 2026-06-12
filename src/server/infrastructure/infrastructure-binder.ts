@@ -4,6 +4,7 @@ import type { ConsumerInfo, StreamInfo } from '@nats-io/jetstream';
 
 import { StreamKind } from '../../interfaces';
 import type { JetstreamModuleOptions } from '../../interfaces';
+import type { ProvisioningEntity } from '../../otel';
 import { resolveAckExtensionInterval } from '../../utils/ack-extension';
 import { PatternRegistry } from '../routing';
 
@@ -19,6 +20,9 @@ interface BinderJsm {
 }
 
 const WORKQUEUE_KINDS = new Set<StreamKind>([StreamKind.Event, StreamKind.Command]);
+
+const manualRemediation = (entity: ProvisioningEntity): string =>
+  `Management mode is Manual — the ${entity} must be provisioned externally before boot.`;
 
 /** Reads scheduling override from the options block for a given kind. */
 const isSchedulingEnabled = (options: JetstreamModuleOptions, kind: StreamKind): boolean => {
@@ -149,8 +153,7 @@ export class InfrastructureBinder {
           kind: String(kind),
           errCode: api.err_code,
           errDescription: api.description,
-          remediation:
-            'Management mode is Manual — the stream must be provisioned externally before boot.',
+          remediation: manualRemediation('stream'),
           cause: err,
         });
       }
@@ -178,8 +181,7 @@ export class InfrastructureBinder {
           kind: String(kind),
           errCode: api.err_code,
           errDescription: api.description,
-          remediation:
-            'Management mode is Manual — the consumer must be provisioned externally before boot.',
+          remediation: manualRemediation('consumer'),
           cause: err,
         });
       }

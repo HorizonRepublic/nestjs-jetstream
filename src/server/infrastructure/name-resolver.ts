@@ -6,12 +6,14 @@ import type {
 } from '../../interfaces';
 import type { ConsumerConfig } from '@nats-io/jetstream';
 import {
+  BROADCAST_SUBJECT_PREFIX,
   buildBroadcastSubject,
   buildSubject,
   consumerName,
   dlqStreamName,
   internalName,
   isJetStreamRpcMode,
+  SCHEDULE_SEGMENT,
   streamName,
 } from '../../jetstream.constants';
 
@@ -141,14 +143,14 @@ export class NameResolver {
   }
 
   private conventionPrefix(name: string, kind: StreamKind): string {
-    if (kind === StreamKind.Broadcast) return 'broadcast.';
+    if (kind === StreamKind.Broadcast) return BROADCAST_SUBJECT_PREFIX;
 
     return `${internalName(name)}.${kind}.`;
   }
 
   private conventionSchedulePrefix(name: string, kind: StreamKind): string {
-    if (kind === StreamKind.Broadcast) return 'broadcast._sch.';
+    if (kind === StreamKind.Broadcast) return `${BROADCAST_SUBJECT_PREFIX}${SCHEDULE_SEGMENT}`;
 
-    return `${internalName(name)}._sch.`;
+    return `${internalName(name)}.${SCHEDULE_SEGMENT}`;
   }
 }

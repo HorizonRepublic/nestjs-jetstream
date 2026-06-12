@@ -6,7 +6,11 @@ import { Test } from '@nestjs/testing';
 import { ManagementMode } from '../interfaces';
 import type { JetstreamModuleOptions } from '../interfaces';
 import { JETSTREAM_OPTIONS } from '../jetstream.constants';
-import { JetstreamModule, warnIfManualWithDestructive } from '../jetstream.module';
+import {
+  DESTRUCTIVE_MIGRATION_MANUAL_WARNING,
+  JetstreamModule,
+  warnIfManualWithDestructive,
+} from '../jetstream.module';
 import { NameResolver } from '../server/infrastructure/name-resolver';
 
 type ModuleFactoryProvider = Extract<Provider, { provide: unknown; useFactory: unknown }>;
@@ -32,9 +36,7 @@ describe('warnIfManualWithDestructive', () => {
     warnIfManualWithDestructive(options, logger);
 
     // Then
-    expect(logger.warn).toHaveBeenCalledWith(
-      'allowDestructiveMigration has no effect under provisioning.management: Manual — the library never migrates externally managed streams.',
-    );
+    expect(logger.warn).toHaveBeenCalledWith(DESTRUCTIVE_MIGRATION_MANUAL_WARNING);
   });
 
   it('should NOT warn when allowDestructiveMigration is true and management is Auto', () => {
@@ -94,8 +96,6 @@ describe('NameResolver factory wiring', () => {
     }).compile();
 
     // Then — the factory ran and issued the warn through a real Logger instance
-    expect(warnSpy).toHaveBeenCalledWith(
-      'allowDestructiveMigration has no effect under provisioning.management: Manual — the library never migrates externally managed streams.',
-    );
+    expect(warnSpy).toHaveBeenCalledWith(DESTRUCTIVE_MIGRATION_MANUAL_WARNING);
   });
 });

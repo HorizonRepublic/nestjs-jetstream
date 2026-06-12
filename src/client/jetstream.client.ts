@@ -26,6 +26,7 @@ import type {
 } from '../interfaces';
 import { StreamKind } from '../interfaces';
 import {
+  BROADCAST_SUBJECT_PREFIX,
   DEFAULT_JETSTREAM_RPC_TIMEOUT,
   DEFAULT_RPC_TIMEOUT,
   isCoreRpcMode,
@@ -33,6 +34,7 @@ import {
   internalName,
   JetstreamHeader,
   PatternPrefix,
+  SCHEDULE_SEGMENT,
 } from '../jetstream.constants';
 import { NameResolver } from '../server/infrastructure/name-resolver';
 import {
@@ -47,9 +49,6 @@ import {
 } from '../otel';
 
 import { JetstreamRecord } from './jetstream.record';
-
-/** Broadcast subjects are not scoped to a service and always share this prefix. */
-const BROADCAST_SUBJECT_PREFIX = 'broadcast.';
 
 /** Narrow publish-kind tag emitted on the event path (no RPC request here). */
 type EventPublishKind = Exclude<PublishKind, PublishKind.RpcRequest>;
@@ -836,7 +835,7 @@ export class JetstreamClient extends ClientProxy {
       const bare = eventSubject.slice(this.broadcastPrefix.length);
       const schedulePrefix = this.selfNames
         ? this.selfNames.schedulePrefix(StreamKind.Broadcast)
-        : `${this.broadcastPrefix.replace(/\.$/, '')}._sch.`;
+        : `${this.broadcastPrefix}${SCHEDULE_SEGMENT}`;
 
       return `${schedulePrefix}${bare}.${nuid.next()}`;
     }
@@ -863,7 +862,7 @@ export class JetstreamClient extends ClientProxy {
 
     const pattern = withoutPrefix.slice(dotIndex + 1);
 
-    return `${targetPrefix}_sch.${pattern}.${nuid.next()}`;
+    return `${targetPrefix}${SCHEDULE_SEGMENT}${pattern}.${nuid.next()}`;
   }
 
   private buildSelfScheduleSubject(eventSubject: string, names: NameResolver): string {
