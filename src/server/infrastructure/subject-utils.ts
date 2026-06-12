@@ -13,3 +13,7 @@ export const subjectCovers = (broad: string, narrow: string): boolean => {
 
   return broadTokens.length === narrowTokens.length;
 };
+
+/** True when `broad` equals `subject` or wildcard-covers it. */
+export const coversOrEquals = (broad: string, subject: string): boolean =>
+  broad === subject || subjectCovers(broad, subject);

@@ -1,27 +1,15 @@
 import { StreamKind } from '../../interfaces';
-import type {
-  JetstreamModuleOptions,
-  OrderedEventOverrides,
-  StreamConfigOverrides,
-} from '../../interfaces';
-import type { ConsumerConfig } from '@nats-io/jetstream';
+import type { JetstreamModuleOptions } from '../../interfaces';
 import {
   BROADCAST_SUBJECT_PREFIX,
-  buildBroadcastSubject,
-  buildSubject,
   consumerName,
   dlqStreamName,
   internalName,
-  isJetStreamRpcMode,
   SCHEDULE_SEGMENT,
   streamName,
 } from '../../jetstream.constants';
 
-interface KindOptionBlock {
-  stream?: StreamConfigOverrides;
-  consumer?: Partial<ConsumerConfig>;
-  subjectPrefix?: string;
-}
+import { kindOptionsBlock } from './management';
 
 interface KindNames {
   stream: string;
@@ -54,13 +42,7 @@ export class NameResolver {
   }
 
   public subject(kind: StreamKind, pattern: string): string {
-    const { prefix, custom } = this.get(kind);
-
-    if (custom) return `${prefix}${pattern}`;
-
-    if (kind === StreamKind.Broadcast) return buildBroadcastSubject(pattern);
-
-    return buildSubject(this.options.name, kind, pattern);
+    return `${this.get(kind).prefix}${pattern}`;
   }
 
   public filterSubject(kind: StreamKind): string {
@@ -88,7 +70,7 @@ export class NameResolver {
     const { name } = this.options;
 
     for (const kind of Object.values(StreamKind)) {
-      const block = this.kindBlock(kind);
+      const block = kindOptionsBlock(this.options, kind);
       const customPrefix = block?.subjectPrefix;
       const custom = customPrefix !== undefined;
       const prefix = custom
@@ -99,7 +81,9 @@ export class NameResolver {
         stream: block?.stream?.name ?? streamName(name, kind),
         consumer: block?.consumer?.durable_name ?? consumerName(name, kind),
         prefix,
-        schedulePrefix: custom ? `${prefix}_sch.` : this.conventionSchedulePrefix(name, kind),
+        schedulePrefix: custom
+          ? `${prefix}${SCHEDULE_SEGMENT}`
+          : this.conventionSchedulePrefix(name, kind),
         custom,
       });
     }
@@ -107,39 +91,21 @@ export class NameResolver {
     return map;
   }
 
-  private kindBlock(kind: StreamKind): KindOptionBlock | undefined {
-    switch (kind) {
-      case StreamKind.Event:
-        return this.options.events;
-      case StreamKind.Broadcast:
-        return this.options.broadcast;
-      case StreamKind.Ordered:
-        return this.orderedBlock();
-      case StreamKind.Command:
-        return this.commandBlock();
-      default: {
-        /* v8 ignore next 5 -- exhaustive switch guard, unreachable */
-        const _exhaustive: never = kind;
-
-        throw new Error(`Unhandled StreamKind: ${String(_exhaustive)}`);
-      }
-    }
-  }
-
-  private orderedBlock(): OrderedEventOverrides | undefined {
-    return this.options.ordered;
-  }
-
-  private commandBlock(): KindOptionBlock | undefined {
-    const { rpc } = this.options;
-
-    if (!isJetStreamRpcMode(rpc)) return undefined;
-
-    return rpc;
-  }
-
   private normalizePrefix(raw: string): string {
-    return `${raw.replace(/\.$/, '')}.`;
+    let end = raw.length;
+
+    while (end > 0 && raw[end - 1] === '.') end -= 1;
+
+    const trimmed = raw.slice(0, end);
+    const tokens = trimmed.split('.');
+
+    if (trimmed.length === 0 || tokens.some((t) => t.length === 0 || t === '>')) {
+      throw new Error(
+        `Invalid subjectPrefix "${raw}": expected non-empty dot-separated tokens without ">".`,
+      );
+    }
+
+    return `${trimmed}.`;
   }
 
   private conventionPrefix(name: string, kind: StreamKind): string {

@@ -108,5 +108,20 @@ describe(NameResolver, () => {
         withoutDot.subject(StreamKind.Event, 'foo'),
       );
     });
+
+    it('collapses multiple trailing dots into a single separator', () => {
+      const sut = new NameResolver({ ...base, events: { subjectPrefix: 'company.orders..' } });
+
+      expect(sut.subject(StreamKind.Event, 'foo')).toBe('company.orders.foo');
+    });
+
+    it.each(['', '.', 'company..orders', 'company.>.orders'])(
+      'rejects invalid subjectPrefix %j at construction',
+      (subjectPrefix) => {
+        expect(() => new NameResolver({ ...base, events: { subjectPrefix } })).toThrow(
+          /Invalid subjectPrefix/,
+        );
+      },
+    );
   });
 });

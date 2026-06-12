@@ -34,7 +34,7 @@ import {
   type ReservationKind,
   type StreamReservation,
 } from './provisioning-summary';
-import { resolveManagementMode } from './management';
+import { kindOptionsBlock, resolveManagementMode } from './management';
 import { InfrastructureBinder } from './infrastructure-binder';
 import { compareStreamConfig, type StreamConfigDiffResult } from './stream-config-diff';
 import { StreamMigration } from './stream-migration';
@@ -531,24 +531,7 @@ export class StreamProvider {
 
   /** Get user-provided overrides for a stream kind, stripping transport-controlled properties. */
   private getOverrides(kind: StreamKind): Partial<StreamConfig> {
-    let overrides: Partial<StreamConfig>;
-
-    switch (kind) {
-      case StreamKind.Event:
-        overrides = this.options.events?.stream ?? {};
-        break;
-      case StreamKind.Command:
-        overrides = this.options.rpc?.mode === 'jetstream' ? (this.options.rpc.stream ?? {}) : {};
-        break;
-      case StreamKind.Broadcast:
-        overrides = this.options.broadcast?.stream ?? {};
-        break;
-      case StreamKind.Ordered:
-        overrides = this.options.ordered?.stream ?? {};
-        break;
-    }
-
-    return this.stripTransportControlled(overrides);
+    return this.stripTransportControlled(kindOptionsBlock(this.options, kind)?.stream ?? {});
   }
 
   /**

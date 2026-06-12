@@ -16,10 +16,12 @@ export type { JetstreamHealthStatus } from './health.interface';
 export { ManagementMode } from './options.interface';
 
 export type {
+  AckExtensionConfig,
   EntityManagement,
   JetstreamFeatureOptions,
   JetstreamModuleAsyncOptions,
   JetstreamModuleOptions,
+  JetStreamRpcConfig,
   MetadataRegistryOptions,
   OrderedEventOverrides,
   ProvisioningOptions,

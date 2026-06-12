@@ -33,6 +33,14 @@ export interface EntityManagement {
 export type StreamConfigOverrides = Partial<Omit<StreamConfig, 'retention'>>;
 
 /**
+ * Ack-deadline auto-extension setting.
+ *
+ * `false` disables extension, `true` extends at half of `ack_wait`,
+ * and a number sets an explicit extension interval in milliseconds.
+ */
+export type AckExtensionConfig = boolean | number;
+
+/**
  * RPC transport configuration.
  *
  * Discriminated union on `mode`:
@@ -67,7 +75,7 @@ export type RpcConfig =
        * Auto-extend ack deadline via `msg.working()` during RPC handler execution.
        * The RPC handler timeout (`setTimeout` + `msg.term()`) still acts as the hard cap.
        */
-      ackExtension?: boolean | number;
+      ackExtension?: AckExtensionConfig;
 
       /** Provisioning control for RPC stream/consumer. Falls back to provisioning.management. */
       management?: EntityManagement;
@@ -75,6 +83,9 @@ export type RpcConfig =
       /** Custom subject prefix (trailing dot normalized), e.g. 'company.orders.'. */
       subjectPrefix?: string;
     };
+
+/** The JetStream variant of {@link RpcConfig}. */
+export type JetStreamRpcConfig = Extract<RpcConfig, { mode: 'jetstream' }>;
 
 /** Overrides for JetStream stream and consumer configuration. */
 export interface StreamConsumerOverrides {
@@ -112,7 +123,7 @@ export interface StreamConsumerOverrides {
    * - `true`: auto-extend at `ack_wait / 2` interval (calculated from consumer config).
    * - `number`: explicit extension interval in milliseconds.
    */
-  ackExtension?: boolean | number;
+  ackExtension?: AckExtensionConfig;
 
   /** Provisioning control for this kind's stream/consumer. Falls back to provisioning.management. */
   management?: EntityManagement;

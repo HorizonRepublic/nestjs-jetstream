@@ -1,9 +1,9 @@
 import { type RetentionPolicy, StorageType } from '@nats-io/jetstream';
 
-import { StreamKind } from '../../interfaces';
+import type { ManagedKind } from './management';
 
 /** A `StreamKind` or the `'dlq'` label, used for reservation/error provenance. */
-export type ReservationKind = StreamKind | 'dlq';
+export type ReservationKind = ManagedKind;
 
 /** One stream's provisioning footprint, used to build the boot summary. */
 export interface StreamReservation {

@@ -3,15 +3,16 @@ import { JetStreamApiError, RetentionPolicy } from '@nats-io/jetstream';
 import type { ConsumerInfo, StreamInfo } from '@nats-io/jetstream';
 
 import { StreamKind } from '../../interfaces';
-import type { JetstreamModuleOptions } from '../../interfaces';
+import type { AckExtensionConfig, JetstreamModuleOptions } from '../../interfaces';
 import type { ProvisioningEntity } from '../../otel';
 import { resolveAckExtensionInterval } from '../../utils/ack-extension';
 import { PatternRegistry } from '../routing';
 
 import { JetstreamProvisioningError } from './provisioning-error';
+import { kindOptionsBlock } from './management';
 import { NameResolver } from './name-resolver';
 import { NatsErrorCode } from './nats-error-codes';
-import { subjectCovers } from './subject-utils';
+import { coversOrEquals } from './subject-utils';
 
 /** Minimal JetStreamManager surface used by the binder. */
 interface BinderJsm {
@@ -24,49 +25,13 @@ const WORKQUEUE_KINDS = new Set<StreamKind>([StreamKind.Event, StreamKind.Comman
 const manualRemediation = (entity: ProvisioningEntity): string =>
   `Management mode is Manual — the ${entity} must be provisioned externally before boot.`;
 
-/** Reads scheduling override from the options block for a given kind. */
-const isSchedulingEnabled = (options: JetstreamModuleOptions, kind: StreamKind): boolean => {
-  switch (kind) {
-    case StreamKind.Event:
-      return options.events?.stream?.allow_msg_schedules === true;
-    case StreamKind.Command:
-      return options.rpc?.mode === 'jetstream'
-        ? options.rpc.stream?.allow_msg_schedules === true
-        : false;
-    case StreamKind.Broadcast:
-      return options.broadcast?.stream?.allow_msg_schedules === true;
-    case StreamKind.Ordered:
-      return options.ordered?.stream?.allow_msg_schedules === true;
-    /* v8 ignore next 5 -- exhaustive switch guard, unreachable */
-    default: {
-      const _exhaustive: never = kind;
-
-      throw new Error(`Unhandled StreamKind: ${String(_exhaustive)}`);
-    }
-  }
-};
+const isSchedulingEnabled = (options: JetstreamModuleOptions, kind: StreamKind): boolean =>
+  kindOptionsBlock(options, kind)?.stream?.allow_msg_schedules === true;
 
 const resolveAckExtension = (
   options: JetstreamModuleOptions,
   kind: StreamKind,
-): boolean | number | undefined => {
-  switch (kind) {
-    case StreamKind.Event:
-      return options.events?.ackExtension;
-    case StreamKind.Command:
-      return options.rpc?.mode === 'jetstream' ? options.rpc.ackExtension : undefined;
-    case StreamKind.Broadcast:
-      return options.broadcast?.ackExtension;
-    case StreamKind.Ordered:
-      return undefined;
-    /* v8 ignore next 5 -- exhaustive switch guard, unreachable */
-    default: {
-      const _exhaustive: never = kind;
-
-      throw new Error(`Unhandled StreamKind: ${String(_exhaustive)}`);
-    }
-  }
-};
+): AckExtensionConfig | undefined => kindOptionsBlock(options, kind)?.ackExtension;
 
 const filterCoversSubject = (
   /* eslint-disable @typescript-eslint/naming-convention -- NATS API uses snake_case */
@@ -76,11 +41,11 @@ const filterCoversSubject = (
   subject: string,
 ): boolean => {
   if (filter_subject !== undefined) {
-    return filter_subject === subject || subjectCovers(filter_subject, subject);
+    return coversOrEquals(filter_subject, subject);
   }
 
   if (filter_subjects !== undefined) {
-    return filter_subjects.some((f) => f === subject || subjectCovers(f, subject));
+    return filter_subjects.some((f) => coversOrEquals(f, subject));
   }
 
   return false;
@@ -128,10 +93,6 @@ export class InfrastructureBinder {
 
     return info;
   }
-
-  // ---------------------------------------------------------------------------
-  // Fetch helpers
-  // ---------------------------------------------------------------------------
 
   private async fetchStream(
     jsm: BinderJsm,
@@ -190,10 +151,6 @@ export class InfrastructureBinder {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Validation — throws
-  // ---------------------------------------------------------------------------
-
   private assertHandlersCovered(info: ConsumerInfo, kind: StreamKind): void {
     const subjects = this.resolveHandlerSubjects(kind);
 
@@ -218,23 +175,20 @@ export class InfrastructureBinder {
 
   private assertDlqSubjectCoverage(info: StreamInfo): void {
     const dlqSubject = this.names.dlqStreamName();
-    const subjects = info.config.subjects;
-    const covered = subjects.some((s) => s === dlqSubject || subjectCovers(s, dlqSubject));
+    const covered = info.config.subjects.some((s) => coversOrEquals(s, dlqSubject));
 
     if (!covered) {
       throw new Error(
-        `DLQ stream "${this.names.dlqStreamName()}" subjects do not cover the resolved DLQ subject "${dlqSubject}". ` +
-          `Add "${dlqSubject}" to the stream's subjects list.`,
+        `DLQ stream "${dlqSubject}" subjects do not cover "${dlqSubject}" ` +
+          `(dead letters publish to a subject equal to the stream name). ` +
+          `Add it to the stream's subjects list.`,
       );
     }
   }
 
   private assertScheduleCoverage(info: StreamInfo, kind: StreamKind): void {
     const scheduleWildcard = `${this.names.schedulePrefix(kind)}>`;
-    const subjects = info.config.subjects;
-    const covered = subjects.some(
-      (s) => s === scheduleWildcard || subjectCovers(s, scheduleWildcard),
-    );
+    const covered = info.config.subjects.some((s) => coversOrEquals(s, scheduleWildcard));
 
     if (!covered) {
       throw new Error(
@@ -244,10 +198,6 @@ export class InfrastructureBinder {
       );
     }
   }
-
-  // ---------------------------------------------------------------------------
-  // Validation — warns
-  // ---------------------------------------------------------------------------
 
   private warnOnRetention(info: StreamInfo, kind: StreamKind): void {
     if (info.config.retention !== RetentionPolicy.Workqueue) {
@@ -293,10 +243,6 @@ export class InfrastructureBinder {
       );
     }
   }
-
-  // ---------------------------------------------------------------------------
-  // Subject resolution
-  // ---------------------------------------------------------------------------
 
   private resolveHandlerSubjects(kind: StreamKind): string[] {
     const patterns = this.registry.getPatternsByKind();

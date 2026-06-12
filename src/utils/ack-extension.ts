@@ -1,3 +1,5 @@
+import type { AckExtensionConfig } from '../interfaces';
+
 /** Default ack extension interval fallback when ack_wait is unknown (ms). */
 const DEFAULT_ACK_EXTENSION_INTERVAL = 5_000;
 
@@ -12,7 +14,7 @@ const MIN_ACK_EXTENSION_INTERVAL = 500;
  * @returns Interval in ms, or `null` if disabled.
  */
 export const resolveAckExtensionInterval = (
-  config: boolean | number | undefined,
+  config: AckExtensionConfig | undefined,
   ackWaitNanos: number | undefined,
 ): number | null => {
   if (config === false || config === undefined) return null;

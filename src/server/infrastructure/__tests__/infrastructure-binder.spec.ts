@@ -157,7 +157,7 @@ describe(InfrastructureBinder.name, () => {
           (err: unknown) =>
             err instanceof JetstreamProvisioningError &&
             err.message.includes(names.streamName(StreamKind.Event)) &&
-            err.message.includes('Manual'),
+            err.message.includes('the stream must be provisioned externally before boot'),
         );
       });
     });
@@ -200,7 +200,7 @@ describe(InfrastructureBinder.name, () => {
           (err: unknown) =>
             err instanceof JetstreamProvisioningError &&
             err.message.includes(names.consumerName(StreamKind.Event)) &&
-            err.message.includes('Manual'),
+            err.message.includes('the consumer must be provisioned externally before boot'),
         );
       });
     });
@@ -253,7 +253,9 @@ describe(InfrastructureBinder.name, () => {
         const sut = makeSut();
 
         // When / Then
-        await expect(sut.bindDlqStream(jsm)).rejects.toThrow(names.dlqStreamName());
+        await expect(sut.bindDlqStream(jsm)).rejects.toThrow(
+          `DLQ stream "${names.dlqStreamName()}" subjects do not cover`,
+        );
       });
     });
   });
@@ -306,6 +308,9 @@ describe(InfrastructureBinder.name, () => {
         expect(result).toBe(info);
 
         expect(warnSpy).toHaveBeenCalledOnce();
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('expected "workqueue" for reliable at-least-once delivery'),
+        );
       });
     });
   });
@@ -338,6 +343,9 @@ describe(InfrastructureBinder.name, () => {
         expect(result).toBe(info);
 
         expect(warnSpy).toHaveBeenCalledOnce();
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('messages will never be dead-lettered'),
+        );
       });
     });
   });
@@ -373,6 +381,9 @@ describe(InfrastructureBinder.name, () => {
         expect(result).toBe(info);
 
         expect(warnSpy).toHaveBeenCalledOnce();
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('shorter than the ackExtension interval'),
+        );
       });
     });
   });
