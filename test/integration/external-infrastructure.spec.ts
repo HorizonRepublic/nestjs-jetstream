@@ -21,6 +21,7 @@ import {
   cleanupStreams,
   createNatsConnection,
   createTestApp,
+  deleteStreamIfExists,
   uniqueServiceName,
   waitForCondition,
 } from './helpers';
@@ -63,16 +64,6 @@ const provisionExternal = async (jsm: JetStreamManager, names: ExternalNames): P
     max_deliver: 3,
     deliver_policy: DeliverPolicy.All,
   });
-};
-
-const deleteStreamIfExists = async (jsm: JetStreamManager, name: string): Promise<void> => {
-  try {
-    await jsm.streams.delete(name);
-  } catch (err: unknown) {
-    const isNotFound = err instanceof Error && err.message.includes('stream not found');
-
-    if (!isNotFound) throw err;
-  }
 };
 
 @Controller()
@@ -150,8 +141,8 @@ describe('External Infrastructure (bind-only mode)', () => {
     });
 
     afterEach(async () => {
-      await app.close();
-      await cleanupStreams(nc, serviceName);
+      await app.close().catch(() => {});
+      await cleanupStreams(nc, serviceName).catch(() => {});
       await deleteStreamIfExists(jsm, names.stream);
     });
 
@@ -273,8 +264,8 @@ describe('External Infrastructure (bind-only mode)', () => {
     });
 
     afterEach(async () => {
-      await app.close();
-      await cleanupStreams(nc, serviceName);
+      await app.close().catch(() => {});
+      await cleanupStreams(nc, serviceName).catch(() => {});
       await deleteStreamIfExists(jsm, names.stream);
     });
 
@@ -377,7 +368,9 @@ describe('External Infrastructure (bind-only mode)', () => {
         // Then: self-healing rebinds and delivers the pending message
         await waitForCondition(() => controller.received.length >= 2, 20_000);
 
-        expect(controller.received.some((m) => (m as Record<string, number>).seq === 2)).toBe(true);
+        expect(controller.received.some((m) => (m as Record<string, unknown>).seq === 2)).toBe(
+          true,
+        );
       },
     );
   });
@@ -491,8 +484,8 @@ describe('External Infrastructure (bind-only mode)', () => {
     });
 
     afterEach(async () => {
-      await app.close();
-      await cleanupStreams(nc, serviceName);
+      await app.close().catch(() => {});
+      await cleanupStreams(nc, serviceName).catch(() => {});
       await deleteStreamIfExists(jsm, names.stream);
       await deleteStreamIfExists(jsm, dlqStreamName);
     });
