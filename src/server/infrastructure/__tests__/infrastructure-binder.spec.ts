@@ -288,6 +288,104 @@ describe(InfrastructureBinder.name, () => {
     });
   });
 
+  describe('bindConsumer() — filter swallows schedule holders', () => {
+    const scheduleOptions: JetstreamModuleOptions = {
+      ...baseOptions,
+      events: { subjectPrefix: 'company.orders.', stream: { allow_msg_schedules: true } },
+    };
+
+    const orderPatterns = {
+      events: ['order.created'],
+      commands: [],
+      broadcasts: [],
+      ordered: [],
+    };
+
+    describe('when scheduling is enabled and the filter covers the schedule namespace', () => {
+      it('should throw instructing to use exact filters', async () => {
+        // Given: catch-all filter that also matches the _sch holder namespace
+        const sut = makeSut(scheduleOptions);
+
+        registry.getPatternsByKind.mockReturnValue(orderPatterns);
+
+        const info = makeConsumerInfo({ filter_subject: 'company.orders.>' });
+        const jsm = makeJsm({ consumerInfo: vi.fn().mockResolvedValue(info) });
+
+        // When / Then
+        await expect(sut.bindConsumer(jsm, StreamKind.Event)).rejects.toThrow(
+          names.schedulePrefix(StreamKind.Event),
+        );
+      });
+    });
+
+    describe('when scheduling is enabled and the filters are exact', () => {
+      it('should bind successfully', async () => {
+        // Given: exact filter on the registered handler subject only
+        const sut = makeSut(scheduleOptions);
+
+        registry.getPatternsByKind.mockReturnValue(orderPatterns);
+
+        const info = makeConsumerInfo({ filter_subject: 'company.orders.order.created' });
+        const jsm = makeJsm({ consumerInfo: vi.fn().mockResolvedValue(info) });
+
+        // When
+        const result = await sut.bindConsumer(jsm, StreamKind.Event);
+
+        // Then
+        expect(result).toBe(info);
+      });
+    });
+  });
+
+  describe('bindStream() — scheduling enabled but stream forbids schedules', () => {
+    describe('when allow_msg_schedules is not set on the external stream', () => {
+      it('should log a warning and still return stream info', async () => {
+        // Given: scheduling intent in options, external stream without allow_msg_schedules
+        const options: JetstreamModuleOptions = {
+          ...baseOptions,
+          events: { subjectPrefix: 'company.orders.', stream: { allow_msg_schedules: true } },
+        };
+
+        const sut = makeSut(options);
+        const warnSpy = vi.spyOn(Logger.prototype, 'warn');
+        const info = makeStreamInfo({ subjects: ['company.orders.>'] });
+        const jsm = makeJsm({ streamInfo: vi.fn().mockResolvedValue(info) });
+
+        // When
+        const result = await sut.bindStream(jsm, StreamKind.Event);
+
+        // Then
+        expect(result).toBe(info);
+
+        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('allow_msg_schedules'));
+      });
+    });
+
+    describe('when allow_msg_schedules is set on the external stream', () => {
+      it('should not warn', async () => {
+        // Given: external stream config allows schedules
+        const options: JetstreamModuleOptions = {
+          ...baseOptions,
+          events: { subjectPrefix: 'company.orders.', stream: { allow_msg_schedules: true } },
+        };
+
+        const sut = makeSut(options);
+        const warnSpy = vi.spyOn(Logger.prototype, 'warn');
+        const info = makeStreamInfo({
+          subjects: ['company.orders.>'],
+          allow_msg_schedules: true,
+        } as Partial<StreamConfig>);
+        const jsm = makeJsm({ streamInfo: vi.fn().mockResolvedValue(info) });
+
+        // When
+        await sut.bindStream(jsm, StreamKind.Event);
+
+        // Then
+        expect(warnSpy).not.toHaveBeenCalled();
+      });
+    });
+  });
+
   // -------------------------------------------------------------------------
   // Retention mismatch — warn
   // -------------------------------------------------------------------------

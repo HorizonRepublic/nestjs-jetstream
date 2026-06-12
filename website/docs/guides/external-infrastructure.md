@@ -243,12 +243,14 @@ At startup the binder performs the following checks. Failures are thrown as `Jet
 | Consumer filter does not cover one or more registered handler subjects | `Consumer "…" does not cover the following registered handler subjects: …. Update the consumer's filter_subject / filter_subjects to include them.` |
 | DLQ stream subjects do not contain the DLQ subject | `DLQ stream "…" subjects do not cover "…" (dead letters publish to a subject equal to the stream name). Add it to the stream's subjects list.` |
 | Scheduling is enabled (`allow_msg_schedules: true`) but stream subjects do not cover the schedule wildcard | `Stream "…" has scheduling enabled but its subjects do not cover the schedule prefix "…". Add "…>" to the stream's subjects.` |
+| Scheduling is enabled and a consumer filter also matches the schedule namespace | `Consumer "…" filter … also matches the schedule namespace "…". Consuming schedule holders removes pending schedules from the stream. Use exact filter_subjects for the registered handler subjects instead.` |
 
 ### Warns (advisory)
 
 | Condition | Warning message summary |
 |---|---|
 | Event or command stream retention is not `workqueue` | `Stream "…" retention is "…" — expected "workqueue" for reliable at-least-once delivery.` |
+| Scheduling is enabled but the external stream does not report `allow_msg_schedules: true` | `Stream "…" does not report allow_msg_schedules=true, but scheduling is enabled in the application options. Scheduled publishes will be rejected by the server until the stream allows message schedules.` |
 | Consumer has unlimited `max_deliver` but `dlq` is enabled | `Consumer "…" has unlimited max_deliver but options.dlq is enabled — messages will never be dead-lettered. Set max_deliver > 0 on the consumer.` |
 | Consumer `ack_wait` is shorter than the computed `ackExtension` interval | `Consumer "…" ack_wait (…ms) is shorter than the ackExtension interval (…ms). Messages may redeliver before the handler finishes. Increase ack_wait.` |
 

@@ -9,7 +9,7 @@ import { resolveAckExtensionInterval } from '../../utils/ack-extension';
 import { PatternRegistry } from '../routing';
 
 import { JetstreamProvisioningError } from './provisioning-error';
-import { kindOptionsBlock } from './management';
+import { kindOptionsBlock, type ManagedKind } from './management';
 import { NameResolver } from './name-resolver';
 import { NatsErrorCode } from './nats-error-codes';
 import { coversOrEquals } from './subject-utils';
@@ -66,6 +66,7 @@ export class InfrastructureBinder {
 
     if (isSchedulingEnabled(this.options, kind)) {
       this.assertScheduleCoverage(info, kind);
+      this.warnOnSchedulesDisabled(info, kind);
     }
 
     if (WORKQUEUE_KINDS.has(kind)) {
@@ -88,17 +89,14 @@ export class InfrastructureBinder {
     const info = await this.fetchConsumer(jsm, kind);
 
     this.assertHandlersCovered(info, kind);
+    this.assertScheduleHoldersNotConsumed(info, kind);
     this.warnOnUnlimitedDelivery(info, kind);
     this.warnOnShortAckWait(info, kind);
 
     return info;
   }
 
-  private async fetchStream(
-    jsm: BinderJsm,
-    name: string,
-    kind: StreamKind | 'dlq',
-  ): Promise<StreamInfo> {
+  private async fetchStream(jsm: BinderJsm, name: string, kind: ManagedKind): Promise<StreamInfo> {
     try {
       return await jsm.streams.info(name);
     } catch (err) {
@@ -197,6 +195,37 @@ export class InfrastructureBinder {
           `"${this.names.schedulePrefix(kind)}". Add "${scheduleWildcard}" to the stream's subjects.`,
       );
     }
+  }
+
+  private assertScheduleHoldersNotConsumed(info: ConsumerInfo, kind: StreamKind): void {
+    if (!isSchedulingEnabled(this.options, kind)) return;
+
+    const scheduleWildcard = `${this.names.schedulePrefix(kind)}>`;
+
+    /* eslint-disable @typescript-eslint/naming-convention -- NATS API uses snake_case */
+    const { filter_subject, filter_subjects } = info.config;
+    /* eslint-enable @typescript-eslint/naming-convention */
+    const filters = filter_subjects ?? (filter_subject !== undefined ? [filter_subject] : []);
+    const swallowing = filters.filter((f) => coversOrEquals(f, scheduleWildcard));
+
+    if (swallowing.length > 0) {
+      throw new Error(
+        `Consumer "${this.names.consumerName(kind)}" (kind=${String(kind)}) filter ` +
+          `${swallowing.join(', ')} also matches the schedule namespace "${this.names.schedulePrefix(kind)}". ` +
+          `Consuming schedule holders removes pending schedules from the stream. ` +
+          `Use exact filter_subjects for the registered handler subjects instead.`,
+      );
+    }
+  }
+
+  private warnOnSchedulesDisabled(info: StreamInfo, kind: StreamKind): void {
+    if (info.config.allow_msg_schedules === true) return;
+
+    this.logger.warn(
+      `Stream "${this.names.streamName(kind)}" (kind=${String(kind)}) does not report ` +
+        `allow_msg_schedules=true, but scheduling is enabled in the application options. ` +
+        `Scheduled publishes will be rejected by the server until the stream allows message schedules.`,
+    );
   }
 
   private warnOnRetention(info: StreamInfo, kind: StreamKind): void {
