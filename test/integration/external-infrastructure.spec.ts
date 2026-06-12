@@ -15,7 +15,13 @@ import {
 import { firstValueFrom } from 'rxjs';
 import type { StartedTestContainer } from 'testcontainers';
 
-import { getClientToken, JetstreamProvisioningError, ManagementMode, toNanos } from '../../src';
+import {
+  getClientToken,
+  JetstreamProvisioningError,
+  JetstreamRecordBuilder,
+  ManagementMode,
+  toNanos,
+} from '../../src';
 
 import {
   cleanupStreams,
@@ -430,6 +436,119 @@ describe('External Infrastructure (bind-only mode)', () => {
         ),
       ).rejects.toThrow(resolvedSubject);
     });
+  });
+
+  describe('scheduling on external infrastructure', () => {
+    let app: INestApplication | undefined;
+    let module: TestingModule;
+    let serviceName: string;
+    let jsm: JetStreamManager;
+    let names: ExternalNames;
+
+    beforeEach(() => {
+      serviceName = uniqueServiceName();
+      names = makeExternalNames(serviceName);
+    });
+
+    afterEach(async () => {
+      await app?.close().catch(() => {});
+      app = undefined;
+      await cleanupStreams(nc, serviceName).catch(() => {});
+      await deleteStreamIfExists(jsm, names.stream);
+    });
+
+    it('should reject boot when the external consumer filter would swallow schedule holders', async () => {
+      // Given: schedule-capable stream but a catch-all consumer filter
+      jsm = await jetstreamManager(nc);
+
+      await jsm.streams.add({
+        name: names.stream,
+        subjects: [names.subjectWildcard],
+        retention: RetentionPolicy.Workqueue,
+        storage: StorageType.File,
+        num_replicas: 1,
+        allow_msg_schedules: true,
+      });
+
+      await jsm.consumers.add(names.stream, {
+        durable_name: names.consumer,
+        ack_policy: AckPolicy.Explicit,
+        filter_subject: names.subjectWildcard,
+        max_deliver: 3,
+        deliver_policy: DeliverPolicy.All,
+      });
+
+      // When / Then: boot rejects naming the schedule namespace
+      await expect(
+        createTestApp(
+          {
+            name: serviceName,
+            port,
+            provisioning: { management: ManagementMode.Manual },
+            events: {
+              stream: { name: names.stream, allow_msg_schedules: true },
+              consumer: { durable_name: names.consumer },
+              subjectPrefix: names.subjectPrefix,
+            },
+          },
+          [OrderCreatedController],
+        ),
+      ).rejects.toThrow(`${names.subjectPrefix}_sch.`);
+    });
+
+    it('should deliver a scheduled event through externally managed infrastructure', async () => {
+      // Given: schedule-capable stream and an exact-filter consumer
+      jsm = await jetstreamManager(nc);
+
+      await jsm.streams.add({
+        name: names.stream,
+        subjects: [names.subjectWildcard],
+        retention: RetentionPolicy.Workqueue,
+        storage: StorageType.File,
+        num_replicas: 1,
+        allow_msg_schedules: true,
+      });
+
+      await jsm.consumers.add(names.stream, {
+        durable_name: names.consumer,
+        ack_policy: AckPolicy.Explicit,
+        filter_subject: names.subject,
+        max_deliver: 3,
+        deliver_policy: DeliverPolicy.All,
+      });
+
+      ({ app, module } = await createTestApp(
+        {
+          name: serviceName,
+          port,
+          provisioning: { management: ManagementMode.Manual },
+          events: {
+            stream: { name: names.stream, allow_msg_schedules: true },
+            consumer: { durable_name: names.consumer },
+            subjectPrefix: names.subjectPrefix,
+          },
+        },
+        [OrderCreatedController],
+        [serviceName],
+      ));
+
+      const controller = module.get(OrderCreatedController);
+      const client = module.get<ClientProxy>(getClientToken(serviceName));
+
+      // When: schedule a one-shot delivery 2 seconds out
+      const record = new JetstreamRecordBuilder({ orderId: 'sched-ext-1' })
+        .scheduleAt(new Date(Date.now() + 2_000))
+        .build();
+
+      await firstValueFrom(client.emit('order.created', record));
+
+      // Then: nothing is delivered before the schedule fires, then the handler receives it
+      expect(controller.received).toHaveLength(0);
+
+      await waitForCondition(() => controller.received.length >= 1, 15_000);
+
+      expect(controller.received[0]).toEqual({ orderId: 'sched-ext-1' });
+    }, 30_000);
   });
 
   describe('external DLQ stream', () => {

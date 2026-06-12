@@ -359,6 +359,46 @@ describe(JetstreamClient, () => {
         );
       });
 
+      it('should resolve the schedule subject through the resolver for a self target with a custom prefix', async () => {
+        // Given: self-targeted client with a custom event subjectPrefix
+        const selfOptions: JetstreamModuleOptions = {
+          ...options,
+          events: { subjectPrefix: 'company.orders.' },
+        };
+        const names = new NameResolver(selfOptions);
+        const selfSut = new JetstreamClient(
+          selfOptions,
+          selfOptions.name,
+          connection,
+          codec,
+          eventBus,
+          names,
+        );
+
+        const data = { orderId: faker.number.int() };
+        const futureDate = new Date(Date.now() + 60_000);
+        const record = new JetstreamRecordBuilder(data).scheduleAt(futureDate).build();
+
+        // When: event emitted with schedule
+        await firstValueFrom(selfSut.emit('order.reminder', record));
+
+        // Then: holder lives under the custom prefix _sch namespace, target is the resolved subject
+        const expectedScheduleSubject = /^company\.orders\._sch\.order\.reminder\.[A-Za-z0-9]+$/;
+
+        expect(mockJs.publish).toHaveBeenCalledWith(
+          expect.stringMatching(expectedScheduleSubject),
+          codec.encode(data),
+          expect.objectContaining({
+            schedule: {
+              specification: futureDate,
+              target: 'company.orders.order.reminder',
+            },
+          }),
+        );
+
+        await selfSut.close();
+      });
+
       it('should reject scheduleAt for ordered patterns', async () => {
         // Given: ordered event with schedule — the schedule holder would land
         // in the event stream while the target lives in the ordered stream,

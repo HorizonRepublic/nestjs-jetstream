@@ -20,7 +20,7 @@ import { PatternRegistry } from '../routing';
 import { mapProvisioningError, type ProvisioningErrorContext } from './provisioning-error';
 import { NatsErrorCode } from './nats-error-codes';
 import { NameResolver } from './name-resolver';
-import { resolveManagementMode } from './management';
+import { kindOptionsBlock, resolveManagementMode } from './management';
 import { InfrastructureBinder } from './infrastructure-binder';
 import { MIGRATION_BACKUP_SUFFIX } from './stream-migration';
 import { StreamProvider } from './stream.provider';
@@ -402,21 +402,6 @@ export class ConsumerProvider {
 
   /** Get user-provided overrides for a consumer kind. */
   private getOverrides(kind: StreamKind): Partial<ConsumerConfig> {
-    switch (kind) {
-      case StreamKind.Event:
-        return this.options.events?.consumer ?? {};
-      case StreamKind.Command:
-        return this.options.rpc?.mode === 'jetstream' ? (this.options.rpc.consumer ?? {}) : {};
-      case StreamKind.Broadcast:
-        return this.options.broadcast?.consumer ?? {};
-      case StreamKind.Ordered:
-        throw new Error('Ordered consumers are ephemeral and should not use durable config');
-      /* v8 ignore next 5 -- exhaustive switch guard, unreachable */
-      default: {
-        const _exhaustive: never = kind;
-
-        throw new Error(`Unexpected StreamKind: ${_exhaustive}`);
-      }
-    }
+    return kindOptionsBlock(this.options, kind)?.consumer ?? {};
   }
 }

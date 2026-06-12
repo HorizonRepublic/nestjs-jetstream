@@ -329,6 +329,145 @@ describe(InfrastructureBinder.name, () => {
     });
   });
 
+  describe('bindStream() — unexpected lookup errors', () => {
+    it('should rethrow non-NATS errors untouched', async () => {
+      // Given: streams.info fails with an infrastructure error, not a 404
+      const boom = new Error('connection reset');
+      const jsm = makeJsm({ streamInfo: vi.fn().mockRejectedValue(boom) });
+      const sut = makeSut();
+
+      // When / Then
+      await expect(sut.bindStream(jsm, StreamKind.Event)).rejects.toBe(boom);
+    });
+  });
+
+  describe('bindConsumer() — unexpected lookup errors', () => {
+    it('should rethrow non-NATS errors untouched', async () => {
+      // Given: consumers.info fails with an infrastructure error, not a 404
+      const boom = new Error('connection reset');
+      const jsm = makeJsm({ consumerInfo: vi.fn().mockRejectedValue(boom) });
+      const sut = makeSut();
+
+      // When / Then
+      await expect(sut.bindConsumer(jsm, StreamKind.Event)).rejects.toBe(boom);
+    });
+  });
+
+  describe('bindConsumer() — multi-subject filters', () => {
+    it('should accept filter_subjects covering every handler subject', async () => {
+      // Given: two handlers, consumer filters list both subjects exactly
+      const sut = makeSut();
+
+      registry.getPatternsByKind.mockReturnValue({
+        events: ['order.created', 'order.cancelled'],
+        commands: [],
+        broadcasts: [],
+        ordered: [],
+      });
+
+      const info = makeConsumerInfo({
+        filter_subject: undefined,
+        filter_subjects: [
+          names.subject(StreamKind.Event, 'order.created'),
+          names.subject(StreamKind.Event, 'order.cancelled'),
+        ],
+      });
+      const jsm = makeJsm({ consumerInfo: vi.fn().mockResolvedValue(info) });
+
+      // When
+      const result = await sut.bindConsumer(jsm, StreamKind.Event);
+
+      // Then
+      expect(result).toBe(info);
+    });
+
+    it('should throw when filter_subjects miss one of the handler subjects', async () => {
+      // Given: second handler subject absent from the filter list
+      const sut = makeSut();
+
+      registry.getPatternsByKind.mockReturnValue({
+        events: ['order.created', 'order.cancelled'],
+        commands: [],
+        broadcasts: [],
+        ordered: [],
+      });
+
+      const info = makeConsumerInfo({
+        filter_subject: undefined,
+        filter_subjects: [names.subject(StreamKind.Event, 'order.created')],
+      });
+      const jsm = makeJsm({ consumerInfo: vi.fn().mockResolvedValue(info) });
+
+      // When / Then
+      await expect(sut.bindConsumer(jsm, StreamKind.Event)).rejects.toThrow(
+        names.subject(StreamKind.Event, 'order.cancelled'),
+      );
+    });
+  });
+
+  describe('bindConsumer() — broadcast kind', () => {
+    it('should validate coverage against broadcast handler subjects', async () => {
+      // Given: one broadcast handler, consumer filter misses its subject
+      const sut = makeSut();
+      const broadcastSubject = 'broadcast.config.updated';
+
+      registry.getBroadcastPatterns.mockReturnValue([broadcastSubject]);
+
+      const info = makeConsumerInfo({ filter_subject: 'broadcast.other.>' });
+      const jsm = makeJsm({ consumerInfo: vi.fn().mockResolvedValue(info) });
+
+      // When / Then
+      await expect(sut.bindConsumer(jsm, StreamKind.Broadcast)).rejects.toThrow(broadcastSubject);
+    });
+  });
+
+  describe('bindConsumer() — unfiltered consumer', () => {
+    const handlerPatterns = {
+      events: ['order.created'],
+      commands: [],
+      broadcasts: [],
+      ordered: [],
+    };
+
+    describe('when the consumer has no filter at all', () => {
+      it('should treat handler subjects as covered', async () => {
+        // Given: external consumer without filter_subject or filter_subjects
+        const sut = makeSut();
+
+        registry.getPatternsByKind.mockReturnValue(handlerPatterns);
+
+        const info = createMock<ConsumerInfo>({ config: {} as ConsumerConfig });
+        const jsm = makeJsm({ consumerInfo: vi.fn().mockResolvedValue(info) });
+
+        // When
+        const result = await sut.bindConsumer(jsm, StreamKind.Event);
+
+        // Then
+        expect(result).toBe(info);
+      });
+    });
+
+    describe('when the consumer has no filter and scheduling is enabled', () => {
+      it('should throw because the consumer would swallow schedule holders', async () => {
+        // Given: scheduling intent + unfiltered consumer receiving the whole stream
+        const sut = makeSut({
+          ...baseOptions,
+          events: { subjectPrefix: 'company.orders.', stream: { allow_msg_schedules: true } },
+        });
+
+        registry.getPatternsByKind.mockReturnValue(handlerPatterns);
+
+        const info = createMock<ConsumerInfo>({ config: {} as ConsumerConfig });
+        const jsm = makeJsm({ consumerInfo: vi.fn().mockResolvedValue(info) });
+
+        // When / Then
+        await expect(sut.bindConsumer(jsm, StreamKind.Event)).rejects.toThrow(
+          names.schedulePrefix(StreamKind.Event),
+        );
+      });
+    });
+  });
+
   describe('bindConsumer() — filter swallows schedule holders', () => {
     const scheduleOptions: JetstreamModuleOptions = {
       ...baseOptions,

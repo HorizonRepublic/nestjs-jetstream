@@ -435,15 +435,51 @@ describe(ConsumerProvider, () => {
         // Given
         options.events = { management: { consumer: ManagementMode.Manual } };
         sut = makeSut();
-        mockJsm.consumers.info.mockResolvedValue(createMock<ConsumerInfo>());
+
+        const liveInfo = createMock<ConsumerInfo>();
+
+        mockJsm.consumers.info.mockResolvedValue(liveInfo);
 
         const jsm = await connection.getJetStreamManager();
 
         // When
-        await sut.recoverConsumer(jsm as never, StreamKind.Event);
+        const result = await sut.recoverConsumer(jsm as never, StreamKind.Event);
 
         // Then
+        expect(result).toBe(liveInfo);
+
+        expect(mockJsm.consumers.info).toHaveBeenCalled();
+
         expect(mockJsm.streams.info).not.toHaveBeenCalled();
+      });
+
+      it('recoverConsumer should rethrow unexpected lookup errors for Manual consumers', async () => {
+        // Given: a non-404 infrastructure failure during rebind
+        options.events = { management: { consumer: ManagementMode.Manual } };
+        sut = makeSut();
+
+        const boom = new Error('connection reset');
+
+        mockJsm.consumers.info.mockRejectedValue(boom);
+
+        const jsm = await connection.getJetStreamManager();
+
+        // When/Then
+        await expect(sut.recoverConsumer(jsm as never, StreamKind.Event)).rejects.toBe(boom);
+
+        expect(mockJsm.consumers.add).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('ordered kind misuse', () => {
+      it('should reject durable config for ordered consumers', async () => {
+        // Given
+        sut = makeSut();
+
+        // When/Then
+        await expect(sut.ensureConsumers([StreamKind.Ordered])).rejects.toThrow(/ephemeral/i);
+
+        expect(mockJsm.consumers.add).not.toHaveBeenCalled();
       });
     });
 
@@ -487,6 +523,46 @@ describe(ConsumerProvider, () => {
           expect.objectContaining({
             durable_name: 'company_worker',
             filter_subject: 'company.orders.order.created',
+          }),
+        );
+      });
+
+      it('should switch to filter_subjects when several patterns are registered', async () => {
+        // Given: custom prefix on events, two registered patterns
+        const customOptions: JetstreamModuleOptions = {
+          name: 'orders',
+          servers: ['nats://localhost:4222'],
+          events: {
+            consumer: { durable_name: 'company_worker' },
+            subjectPrefix: 'company.orders.',
+          },
+        };
+        const customNames = new NameResolver(customOptions);
+
+        sut = new ConsumerProvider(
+          customOptions,
+          connection,
+          streamProvider,
+          patternRegistry,
+          customNames,
+          mockBinder,
+        );
+
+        patternRegistry.getEventPatterns.mockReturnValue(['order.created', 'order.cancelled']);
+
+        mockJsm.consumers.info.mockResolvedValue(createMock<ConsumerInfo>());
+        mockJsm.consumers.update.mockResolvedValue(createMock<ConsumerInfo>());
+
+        // When: ensure event consumer
+        await sut.ensureConsumers([StreamKind.Event]);
+
+        // Then: exact per-pattern filter list, no wildcard
+        expect(mockJsm.consumers.update).toHaveBeenCalledWith(
+          'test-stream',
+          'company_worker',
+          expect.objectContaining({
+            durable_name: 'company_worker',
+            filter_subjects: ['company.orders.order.created', 'company.orders.order.cancelled'],
           }),
         );
       });

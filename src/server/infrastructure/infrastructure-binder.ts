@@ -49,7 +49,7 @@ const filterCoversSubject = (
     return filter_subjects.some((f) => coversOrEquals(f, subject));
   }
 
-  return false;
+  return true;
 };
 
 /** Bind-only provisioning path: info()-only lookups and validation. */
@@ -211,7 +211,10 @@ export class InfrastructureBinder {
     const { filter_subject, filter_subjects } = info.config;
     /* eslint-enable @typescript-eslint/naming-convention */
     const filters = filter_subjects ?? (filter_subject !== undefined ? [filter_subject] : []);
-    const swallowing = filters.filter((f) => coversOrEquals(f, scheduleWildcard));
+    const swallowing =
+      filters.length === 0
+        ? ['<no filter, consumes the whole stream>']
+        : filters.filter((f) => coversOrEquals(f, scheduleWildcard));
 
     if (swallowing.length > 0) {
       throw new Error(
