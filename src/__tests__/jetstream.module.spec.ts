@@ -89,9 +89,14 @@ describe('NameResolver factory wiring', () => {
       (p): p is ModuleFactoryProvider => 'provide' in p && p.provide === NameResolver,
     );
 
+    expect(nameResolverProvider).toBeDefined();
+
     // When: compile a minimal module with the options value and the real NameResolver factory
     await Test.createTestingModule({
-      providers: [{ provide: JETSTREAM_OPTIONS, useValue: options }, nameResolverProvider!],
+      providers: [
+        { provide: JETSTREAM_OPTIONS, useValue: options },
+        nameResolverProvider as Provider,
+      ],
     }).compile();
 
     // Then: the factory ran and issued the warn through a real Logger instance

@@ -68,6 +68,10 @@ export class RpcReplyInbox {
    * pending, both registry entries are removed before `onExpired` runs.
    */
   public armTimeout(correlationId: string, ms: number, onExpired: () => void): void {
+    const existing = this.timeouts.get(correlationId);
+
+    if (existing !== undefined) clearTimeout(existing);
+
     const timeoutId = setTimeout(() => {
       if (!this.pending.has(correlationId)) return;
 
