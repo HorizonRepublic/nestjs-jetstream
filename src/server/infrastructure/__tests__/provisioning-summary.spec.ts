@@ -145,7 +145,7 @@ describe('formatProvisioningSummary', () => {
       // When: 0 auto + 2 external
       const result = formatProvisioningSummary('acme', [], external);
 
-      // Then: header says 2 stream(s) — the externals count as streams for operator visibility
+      // Then: header says 2 stream(s); the externals count as streams for operator visibility
       expect(result).toContain('2 stream(s)');
     });
 
@@ -153,7 +153,7 @@ describe('formatProvisioningSummary', () => {
       // When: no third argument
       const result = formatProvisioningSummary('svc', reservations);
 
-      // Then: existing tests remain valid — no crash, no "external" text
+      // Then: existing tests remain valid, no crash, no "external" text
       expect(result).not.toContain('external');
     });
   });

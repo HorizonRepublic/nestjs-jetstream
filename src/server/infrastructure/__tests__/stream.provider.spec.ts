@@ -232,7 +232,7 @@ describe(StreamProvider, () => {
       // When
       await sut.ensureStreams([StreamKind.Broadcast]);
 
-      // Then: no update — the local config must not clobber the shared stream
+      // Then: no update, the local config must not clobber the shared stream
       expect(mockJsm.streams.update).not.toHaveBeenCalled();
       expect(mockJsm.streams.add).not.toHaveBeenCalled();
     });
@@ -285,7 +285,7 @@ describe(StreamProvider, () => {
       );
 
       // When/Then: recreating broadcast-stream would delete every other
-      // service's durable consumers — fail loudly instead
+      // service's durable consumers, so fail loudly instead
       await expect(sut.ensureStreams([StreamKind.Broadcast])).rejects.toThrow(
         /broadcast-stream.*shared|shared.*broadcast-stream/i,
       );
@@ -339,7 +339,7 @@ describe(StreamProvider, () => {
         // When
         await sut.ensureStreams([StreamKind.Event]);
 
-        // Then: no changes detected — neither update nor add should be called
+        // Then: no changes detected, neither update nor add should be called
         expect(mockJsm.streams.update).not.toHaveBeenCalled();
         expect(mockJsm.streams.add).not.toHaveBeenCalled();
       });
@@ -526,11 +526,11 @@ describe(StreamProvider, () => {
 
       describe('when the DLQ stream already exists with no config changes', () => {
         it('should skip update for the DLQ stream', async () => {
-          // Given: both regular stream and DLQ stream already exist with matching config
+          // Given: the event stream is absent (gets created); the DLQ stream
+          // already exists with matching config
           options = { ...options, dlq: {} };
           sut = makeSut();
 
-          // Event stream is absent (gets created); the DLQ stream exists
           const existingDlqInfo = createMock<StreamInfo>({
             config: {
               ...DEFAULT_DLQ_STREAM_CONFIG,
@@ -833,7 +833,7 @@ describe(StreamProvider, () => {
       // When
       await sut.ensureStreams([StreamKind.Event]);
 
-      // Then: DLQ bound via info only — no add/update for the dlq stream
+      // Then: DLQ bound via info only, no add/update for the dlq stream
       expect(mockJsm.streams.info).toHaveBeenCalledWith(dlqName);
       expect(mockJsm.streams.add).not.toHaveBeenCalledWith(
         expect.objectContaining({ name: dlqName }),
@@ -868,7 +868,7 @@ describe(StreamProvider, () => {
       // When
       await sut.ensureStreams([StreamKind.Broadcast]);
 
-      // Then: only info was called — no provisioning for the external broadcast stream
+      // Then: only info was called, no provisioning for the external broadcast stream
       expect(mockJsm.streams.info).toHaveBeenCalledWith(broadcastStreamName);
       expect(mockJsm.streams.add).not.toHaveBeenCalled();
       expect(mockJsm.streams.update).not.toHaveBeenCalled();

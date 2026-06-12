@@ -248,7 +248,6 @@ describe(JetstreamClient, () => {
           expect.objectContaining({ headers: expect.anything() }),
         );
 
-        // Verify custom header was set
         const publishedHeaders: MsgHdrs = mockJs.publish.mock.calls[0]![2]!.headers!;
 
         expect(publishedHeaders.get('x-trace-id')).toBe(traceId);
@@ -316,7 +315,7 @@ describe(JetstreamClient, () => {
         await firstValueFrom(sut.emit('order.reminder', record));
 
         // Then: published to _sch namespace (not matched by consumer) with a
-        // per-message unique suffix — ADR-51 allows one active schedule per subject
+        // per-message unique suffix; ADR-51 allows one active schedule per subject
         const expectedScheduleSubject = new RegExp(
           `^${targetName}__microservice\\._sch\\.order\\.reminder\\.[A-Za-z0-9]+$`,
         );
@@ -400,7 +399,7 @@ describe(JetstreamClient, () => {
       });
 
       it('should reject scheduleAt for ordered patterns', async () => {
-        // Given: ordered event with schedule — the schedule holder would land
+        // Given: ordered event with schedule; the schedule holder would land
         // in the event stream while the target lives in the ordered stream,
         // which the server rejects (schedule target must share the stream)
         const data = { status: faker.lorem.word() };
@@ -427,7 +426,7 @@ describe(JetstreamClient, () => {
         // When: event emitted with schedule + ttl
         await firstValueFrom(sut.emit('order.reminder', record));
 
-        // Then: ttl rides on the schedule (Nats-Schedule-TTL) — a top-level ttl
+        // Then: ttl rides on the schedule (Nats-Schedule-TTL); a top-level ttl
         // would become Nats-TTL on the holder and cancel the schedule on expiry
         const publishOpts = mockJs.publish.mock.calls[0]![2]!;
 
@@ -697,7 +696,6 @@ describe(JetstreamClient, () => {
       options.rpc = { mode: 'jetstream' };
       sut = new JetstreamClient(options, targetName, connection, codec, eventBus);
 
-      // Connect to set up inbox
       await sut.connect();
 
       // Capture inbox subscription callback
@@ -722,11 +720,9 @@ describe(JetstreamClient, () => {
         // Allow publish to complete
         await vi.advanceTimersByTimeAsync(0);
 
-        // Extract correlation ID from published headers
         const publishedHeaders: MsgHdrs = mockJs.publish.mock.calls[0]![2]!.headers!;
         const correlationId = publishedHeaders.get(JetstreamHeader.CorrelationId);
 
-        // Simulate inbox reply
         const replyHeaders = natsHeaders();
 
         replyHeaders.set(JetstreamHeader.CorrelationId, correlationId);
@@ -783,7 +779,6 @@ describe(JetstreamClient, () => {
 
         await vi.advanceTimersByTimeAsync(0);
 
-        // Simulate error reply
         const publishedHeaders: MsgHdrs = mockJs.publish.mock.calls[0]![2]!.headers!;
         const correlationId = publishedHeaders.get(JetstreamHeader.CorrelationId);
         const replyHeaders = natsHeaders();
@@ -811,7 +806,6 @@ describe(JetstreamClient, () => {
 
         await vi.advanceTimersByTimeAsync(0);
 
-        // Advance past the timeout
         vi.advanceTimersByTime(DEFAULT_JETSTREAM_RPC_TIMEOUT);
 
         // Then: timeout error surfaces the unified `rpc.timeout` label
@@ -839,7 +833,6 @@ describe(JetstreamClient, () => {
         // (timeout was cleared by teardown)
         vi.advanceTimersByTime(DEFAULT_JETSTREAM_RPC_TIMEOUT);
 
-        // No timeout event should have been emitted
         expect(eventBus.emit).not.toHaveBeenCalledWith(
           TransportEvent.RpcTimeout,
           expect.anything(),
@@ -850,7 +843,7 @@ describe(JetstreamClient, () => {
 
     describe('inbox edge cases', () => {
       it('should ignore inbox reply without correlation-id', async () => {
-        // When/Then: inbox reply arrives without correlation-id — no crash
+        // When/Then: inbox reply arrives without correlation-id, no crash
         expect(() => {
           inboxCallback(
             null,
@@ -893,7 +886,6 @@ describe(JetstreamClient, () => {
 
         await vi.advanceTimersByTimeAsync(0);
 
-        // Get correlationId from published message
         const publishedHeaders: MsgHdrs = mockJs.publish.mock.calls[0]![2]!.headers!;
         const correlationId = publishedHeaders.get(JetstreamHeader.CorrelationId);
 
@@ -971,7 +963,7 @@ describe(JetstreamClient, () => {
 
       await vi.advanceTimersByTimeAsync(0);
 
-      // Advance to just before timeout — should NOT have fired yet
+      // Advance to just before the timeout: should NOT have fired yet
       vi.advanceTimersByTime(DEFAULT_JETSTREAM_RPC_TIMEOUT - 1);
       expect(eventBus.emit).not.toHaveBeenCalledWith(
         TransportEvent.RpcTimeout,
@@ -979,7 +971,7 @@ describe(JetstreamClient, () => {
         expect.anything(),
       );
 
-      // Advance past timeout — should fire
+      // Advance past the timeout: should fire
       vi.advanceTimersByTime(1);
       expect(eventBus.emit).toHaveBeenCalledWith(
         TransportEvent.RpcTimeout,
@@ -1011,7 +1003,7 @@ describe(JetstreamClient, () => {
     });
 
     it('should fail fast when the command publish is deduplicated by the stream', async () => {
-      // Given: the stream reports the publish as a duplicate — the original
+      // Given: the stream reports the publish as a duplicate; the original
       // command owns the reply, this correlation id will never receive one
       mockJs.publish.mockResolvedValue(createMock<PubAck>({ duplicate: true, seq: 5 }));
 
@@ -1107,7 +1099,7 @@ describe(JetstreamClient, () => {
 
       await coreClient.connect();
 
-      // When/Then: disconnect fires — no crash
+      // When/Then: disconnect fires, no crash
       expect(() => {
         statusSubject.next({ type: 'disconnect', server: '' });
       }).not.toThrow();

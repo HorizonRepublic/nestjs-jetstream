@@ -156,7 +156,7 @@ export const beginConnectionLifecycleSpan = (
   return {
     recordEvent: (name: string, attributes?: SpanEventAttributes): void => {
       if (finalized) {
-        // A hook after `finish()` is a misuse — quiet debug log so libraries
+        // An event after `finish()` is a misuse; quiet debug log so libraries
         // that forward NestJS `debug` to APM can catch it in development.
         logger.debug(`recordEvent('${name}') called after connection span finished`);
 

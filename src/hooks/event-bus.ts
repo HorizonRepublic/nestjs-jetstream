@@ -10,8 +10,8 @@ type AnyTransportListener = (...args: unknown[]) => unknown;
  * Central event bus for transport lifecycle notifications.
  *
  * Two emission paths:
- *  - User hooks registered via `forRoot({ hooks })` — at most one per event.
- *  - Internal subscribers added via `subscribe()` — many per event, used by
+ *  - User hooks registered via `forRoot({ hooks })`: at most one per event.
+ *  - Internal subscribers added via `subscribe()`: many per event, used by
  *    metrics and other built-in observers.
  *
  * Both fire on every `emit()` call. Subscriber failures are isolated and

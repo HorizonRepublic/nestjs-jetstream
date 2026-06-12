@@ -38,18 +38,18 @@ describe('resolveAckExtensionInterval', () => {
   });
 
   it('should compute half the ackWait when config is true and ackWait is set', () => {
-    // Given — ackWait of 30s reported in nanoseconds
+    // Given: ackWait of 30s reported in nanoseconds
     const ackWaitNanos = 30 * 1_000 * 1_000_000;
 
-    // When + Then — 30s / 2 = 15_000ms (well above the floor)
+    // When + Then: 30s / 2 = 15_000ms (well above the floor)
     expect(resolveAckExtensionInterval(true, ackWaitNanos)).toBe(15_000);
   });
 
   it('should clamp the auto interval to the 500ms minimum', () => {
-    // Given — ackWait of 100ms (well under the floor when halved)
+    // Given: ackWait of 100ms (well under the floor when halved)
     const ackWaitNanos = 100 * 1_000_000;
 
-    // When + Then — half is 50ms, clamped up to 500
+    // When + Then: half is 50ms, clamped up to 500
     expect(resolveAckExtensionInterval(true, ackWaitNanos)).toBe(500);
   });
 });
@@ -81,14 +81,13 @@ describe('startAckExtensionTimer', () => {
 
     expect(cancel).toBeDefined();
 
-    // When — advance two intervals
+    // When: advance two intervals
     vi.advanceTimersByTime(1_000);
     vi.advanceTimersByTime(1_000);
 
-    // Then — `working()` fires once per interval
+    // Then: `working()` fires once per interval
     expect(msg.working).toHaveBeenCalledTimes(2);
 
-    // Cleanup
     cancel?.();
   });
 
@@ -104,7 +103,7 @@ describe('startAckExtensionTimer', () => {
     cancel();
     vi.advanceTimersByTime(5_000);
 
-    // Then — no further calls
+    // Then: no further calls
     expect(msg.working).toHaveBeenCalledTimes(1);
   });
 
@@ -113,7 +112,7 @@ describe('startAckExtensionTimer', () => {
     const msg = { working: vi.fn() };
     const cancel = startAckExtensionTimer(msg, 1_000)!;
 
-    // When + Then — second cancel must not throw or affect state
+    // When + Then: second cancel must not throw or affect state
     expect(() => {
       cancel();
       cancel();
@@ -132,20 +131,19 @@ describe('startAckExtensionTimer', () => {
     const cancelFailing = startAckExtensionTimer(failing, 1_000)!;
     const cancelHealthy = startAckExtensionTimer(healthy, 1_000)!;
 
-    // When — fire the shared timer
+    // When: fire the shared timer
     vi.advanceTimersByTime(1_000);
 
-    // Then — failing entry doesn't poison the healthy one
+    // Then: failing entry doesn't poison the healthy one
     expect(failing.working).toHaveBeenCalled();
     expect(healthy.working).toHaveBeenCalled();
 
-    // Cleanup
     cancelFailing();
     cancelHealthy();
   });
 
   it('should drive multiple registered messages from a single shared timer', () => {
-    // Given — two messages with the same interval
+    // Given: two messages with the same interval
     const msgA = { working: vi.fn() };
     const msgB = { working: vi.fn() };
     const cancelA = startAckExtensionTimer(msgA, 1_000)!;
@@ -154,7 +152,7 @@ describe('startAckExtensionTimer', () => {
     // When
     vi.advanceTimersByTime(1_000);
 
-    // Then — both fired in the same tick
+    // Then: both fired in the same tick
     expect(msgA.working).toHaveBeenCalledTimes(1);
     expect(msgB.working).toHaveBeenCalledTimes(1);
 
@@ -163,7 +161,7 @@ describe('startAckExtensionTimer', () => {
   });
 
   it('should re-schedule for the earlier deadline when a tighter entry is added', () => {
-    // Given — an existing entry with a 5s interval, then a 1s entry
+    // Given: an existing entry with a 5s interval, then a 1s entry
     // joining mid-flight. The 1s entry must fire before the 5s one.
     const longInterval = { working: vi.fn() };
     const shortInterval = { working: vi.fn() };
@@ -174,7 +172,7 @@ describe('startAckExtensionTimer', () => {
 
     const cancelShort = startAckExtensionTimer(shortInterval, 1_000)!;
 
-    // When — advance past the short interval but before the long one
+    // When: advance past the short interval but before the long one
     vi.advanceTimersByTime(1_000);
 
     // Then
@@ -193,7 +191,7 @@ describe('startAckExtensionTimer', () => {
     // When
     cancel();
 
-    // Then — pool internal state observable via the test export
+    // Then: pool internal state observable via the test export
     expect(_ackExtensionPoolForTest).toBeDefined();
     // Subsequent timer advance must not fire any callbacks because the
     // entry has been removed and the timer cleared.

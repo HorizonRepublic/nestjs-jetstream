@@ -25,7 +25,7 @@ import { PatternRegistry } from './routing/pattern-registry';
  * Subscribes to `{service}.cmd.>` with a queue group for load balancing.
  * Each request is processed and replied to directly via `msg.respond()`.
  *
- * This is the default RPC mode — lowest latency, no persistence overhead.
+ * This is the default RPC mode: lowest latency, no persistence overhead.
  */
 export class CoreRpcServer {
   private readonly logger = new Logger('Jetstream:CoreRpc');

@@ -112,9 +112,9 @@ describe(JetstreamStrategy, () => {
       // When: transport starts
       await sut.listen(vi.fn());
 
-      // Then: the router observes the message subjects before the consumer
-      // begins delivering — consumers flush pending backlog immediately, and
-      // a Subject with no observers drops messages silently
+      // Then: the router observes the message subjects before the consumer begins
+      // delivering; consumers flush pending backlog immediately, and a Subject with
+      // no observers drops messages silently
       expect(eventRouter.start).toHaveBeenCalled();
       expect(messageProvider.start).toHaveBeenCalled();
       expect(eventRouter.start.mock.invocationCallOrder[0]!).toBeLessThan(

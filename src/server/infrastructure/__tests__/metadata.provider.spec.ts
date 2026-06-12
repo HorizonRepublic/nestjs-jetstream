@@ -239,7 +239,7 @@ describe(MetadataProvider, () => {
       await vi.advanceTimersByTimeAsync(DEFAULT_METADATA_TTL / 2);
       await vi.advanceTimersByTimeAsync(DEFAULT_METADATA_TTL / 2);
 
-      // Then: KV handle was reused — no additional openBucket calls
+      // Then: KV handle was reused, no additional openBucket calls
       expect(mockCreate).not.toHaveBeenCalled();
 
       // Then: entries were still refreshed via the cached handle

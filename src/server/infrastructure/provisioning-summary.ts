@@ -43,7 +43,7 @@ const formatAge = (nanos: number): string => {
   return `${(nanos / NANOS_PER_SECOND).toFixed(0)}s`;
 };
 
-/** Operator-facing summary of each stream's storage reservation. Pure — caller logs it. */
+/** Operator-facing summary of each stream's storage reservation. Pure; the caller logs it. */
 export const formatProvisioningSummary = (
   serviceName: string,
   reservations: StreamReservation[],

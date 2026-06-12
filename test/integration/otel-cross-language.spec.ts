@@ -106,9 +106,8 @@ describe('OTel cross-language interop integration', () => {
     });
 
     it('should adopt the traceparent from a raw JetStream publish as the CONSUMER span parent', async () => {
-      // Given — simulate a Go / Python publisher that injected a W3C trace
-      // header by hand and then called js.publish() directly. The transport
-      // must extract the parent and link our CONSUMER span to it.
+      // Given: raw js.publish() simulating a foreign-language publisher that set
+      // traceparent by hand
       const traceId = '4bf92f3577b34da6a3ce929d0e0e4736';
       const parentSpanId = '00f067aa0ba902b7';
       const traceparent = buildTraceparent(traceId, parentSpanId);
@@ -127,7 +126,7 @@ describe('OTel cross-language interop integration', () => {
       await waitForCondition(() => controller.received.length === 1, 10_000);
       await provider.forceFlush();
 
-      // Then — exactly one CONSUMER span, parented under the external trace.
+      // Then: CONSUMER span parented under the external trace
       const consume = exporter.getFinishedSpans().find((s) => s.kind === SpanKind.CONSUMER);
 
       expect(consume).toBeDefined();
@@ -136,9 +135,7 @@ describe('OTel cross-language interop integration', () => {
     });
 
     it('should preserve baggage forwarded from a raw publisher', async () => {
-      // Given — a publisher attaches W3C Baggage. We don't decode it (that's
-      // the host SDK's job), but the propagator must extract it so any host
-      // app code running inside the consume span sees the baggage entries.
+      // Given: raw publisher attaches W3C baggage alongside traceparent
       const traceparent = buildTraceparent('0123456789abcdef0123456789abcdef', 'fedcba9876543210');
       const subject = `${internalName(serviceName)}.${StreamKind.Event}.orders.created`;
       const hdrs = natsHeaders();
@@ -155,10 +152,8 @@ describe('OTel cross-language interop integration', () => {
       await waitForCondition(() => controller.received.length === 1, 10_000);
       await provider.forceFlush();
 
-      // Then — span linked to the inbound traceparent. Baggage decoding is
-      // out of scope for this test (host SDK + W3C baggage propagator), but
-      // verifying the parent chain is intact rules out header-strip
-      // regressions.
+      // Then: baggage decoding is the host SDK's job; an intact parent chain rules out
+      // header-strip regressions
       const consume = exporter.getFinishedSpans().find((s) => s.kind === SpanKind.CONSUMER)!;
 
       expect(consume.spanContext().traceId).toBe('0123456789abcdef0123456789abcdef');
@@ -180,9 +175,7 @@ describe('OTel cross-language interop integration', () => {
     });
 
     it('should inject a parseable W3C traceparent into the outgoing JetStream message', async () => {
-      // Given — subscribe a raw NATS consumer to the underlying subject so
-      // we can inspect the wire header that the transport emits, exactly as
-      // a Go / Python downstream consumer would see it.
+      // Given: a raw NATS subscriber inspects the wire header a foreign consumer would see
       const subject = `${internalName(serviceName)}.${StreamKind.Event}.orders.created`;
       const sub = nc.subscribe(subject, { max: 1 });
 
@@ -194,8 +187,7 @@ describe('OTel cross-language interop integration', () => {
         return undefined;
       })();
 
-      // When — emit an event from a freshly-created Nest app context. We
-      // bootstrap a publisher-side app to drive `JetstreamClient.emit`.
+      // When: emit through a publisher-side app
       const publisherSvc = uniqueServiceName();
       const { app: publisher, module: publisherModule } = await createTestApp(
         { name: publisherSvc, port, consumer: false },
@@ -208,7 +200,7 @@ describe('OTel cross-language interop integration', () => {
 
         await firstValueFrom(client.emit('orders.created', { id: 'wire-1' }));
 
-        // Then — wire-level header is a parseable W3C traceparent.
+        // Then: wire-level header is a parseable W3C traceparent
         const traceparent = await inbound;
 
         expect(traceparent).toBeDefined();

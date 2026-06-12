@@ -241,7 +241,6 @@ describe(compareStreamConfig.name, () => {
         first_seq: 42,
       } as Partial<StreamConfig>;
 
-      // desired only has user-managed fields
       const desired: Partial<StreamConfig> = { storage: StorageType.File, max_age: 100 };
 
       // When

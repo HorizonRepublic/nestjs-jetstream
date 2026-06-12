@@ -95,8 +95,7 @@ describe('OTel header / body capture integration', () => {
 
   describe('header capture', () => {
     it('should expose allowlisted headers as messaging.header.<name> attributes on both spans', async () => {
-      // Given — explicit allowlist with a wildcard so user-defined `x-*`
-      // headers flow through, plus an exact entry.
+      // Given: explicit allowlist with a wildcard entry plus an exact entry
       const { app, client, controller, serviceName } = await bootstrap({
         captureHeaders: ['x-tenant-id', 'x-trace-*'],
       });
@@ -128,15 +127,15 @@ describe('OTel header / body capture integration', () => {
     });
 
     it('should never emit propagator-owned or library-internal headers as messaging.header.* even with captureHeaders=true', async () => {
-      // Given — `true` matches every header, so the only thing that can
-      // suppress a key is the explicit denylist inside `captureMatchingHeaders`.
+      // Given: captureHeaders=true matches everything, so only the built-in denylist
+      // can suppress a key
       const { app, client, controller, serviceName } = await bootstrap({
         captureHeaders: true,
       });
 
       try {
         const record = new JetstreamRecordBuilder({ id: 'h2' })
-          .setHeader('x-tenant-id', 'acme') // legit user header — should appear
+          .setHeader('x-tenant-id', 'acme')
           .build();
 
         // When
@@ -144,7 +143,7 @@ describe('OTel header / body capture integration', () => {
         await waitForCondition(() => controller.received.length === 1, 5_000);
         await provider.forceFlush();
 
-        // Then — privacy-sensitive headers must not leak.
+        // Then: privacy-sensitive headers must not leak
         const spans = exporter.getFinishedSpans();
 
         for (const span of spans) {
@@ -163,7 +162,6 @@ describe('OTel header / body capture integration', () => {
           }
         }
 
-        // Sanity — legit user header still surfaces.
         const consume = spans.find((s) => s.kind === SpanKind.CONSUMER)!;
 
         expect(consume.attributes['messaging.header.x-tenant-id']).toBe('acme');
@@ -174,13 +172,13 @@ describe('OTel header / body capture integration', () => {
     });
 
     it('should default to capturing only x-request-id when captureHeaders is omitted', async () => {
-      // Given — no captureHeaders override → default `['x-request-id']`.
+      // Given: captureHeaders omitted, defaults to ['x-request-id']
       const { app, client, controller, serviceName } = await bootstrap({});
 
       try {
         const record = new JetstreamRecordBuilder({ id: 'h3' })
           .setHeader('x-request-id', 'req-123')
-          .setHeader('x-tenant-id', 'acme') // present on wire but not allowlisted
+          .setHeader('x-tenant-id', 'acme') // on the wire but not allowlisted
           .build();
 
         // When
@@ -215,7 +213,7 @@ describe('OTel header / body capture integration', () => {
         await waitForCondition(() => controller.received.length === 1, 5_000);
         await provider.forceFlush();
 
-        // Then — both publish and consume capture the same payload.
+        // Then: both publish and consume capture the same payload
         const spans = exporter.getFinishedSpans();
         const publish = spans.find((s) => s.kind === SpanKind.PRODUCER)!;
         const consume = spans.find((s) => s.kind === SpanKind.CONSUMER)!;
@@ -231,7 +229,7 @@ describe('OTel header / body capture integration', () => {
     });
 
     it('should truncate payloads exceeding maxBytes and flag body.truncated=true', async () => {
-      // Given — small maxBytes so any normal payload overflows.
+      // Given: maxBytes small enough that any normal payload overflows
       const { app, client, controller, serviceName } = await bootstrap({
         captureBody: { maxBytes: 32 },
       });
@@ -258,8 +256,7 @@ describe('OTel header / body capture integration', () => {
     });
 
     it('should respect subjectAllowlist — body captured only for matching subjects', async () => {
-      // Given — allowlist excludes `orders.*` so this publish must NOT
-      // produce a body attribute.
+      // Given: allowlist excludes orders.*, so this publish must not produce a body attribute
       const { app, client, controller, serviceName } = await bootstrap({
         captureBody: { maxBytes: 4096, subjectAllowlist: ['payments.*'] },
       });

@@ -85,7 +85,7 @@ describe(EventRouter, () => {
   describe('routing resilience', () => {
     it('should release the slot when a post-settlement hook throws on the sync path', async () => {
       // Given: concurrency 1; HandlerCompleted reporting is enabled and the
-      // hook throws — the failure escapes settlement and hits the limiter
+      // hook throws, so the failure escapes settlement and hits the limiter
       const processingConfig: EventProcessingConfig = { events: { concurrency: 1 } };
 
       eventBus.hasHook.mockReturnValue(true);
@@ -207,7 +207,7 @@ describe(EventRouter, () => {
 
     it('should keep routing after ack throws on the sync path with bounded concurrency', async () => {
       // Given: concurrency 1 and a sync handler; the first message's ack
-      // throws (settlement is a publish — it fails when the connection drops)
+      // throws (settlement is a publish; it fails when the connection drops)
       const processingConfig: EventProcessingConfig = { events: { concurrency: 1 } };
 
       sut = new EventRouter(
@@ -501,7 +501,7 @@ describe(EventRouter, () => {
         // Given: handler that calls retry then terminate (terminate throws)
         const handler = vi.fn().mockImplementation((_data: unknown, ctx: RpcContext) => {
           ctx.retry();
-          ctx.terminate(); // throws — becomes handler error → nak
+          ctx.terminate(); // throws: becomes handler error, then nak
         });
 
         patternRegistry.getHandler.mockReturnValue(handler);
@@ -516,7 +516,7 @@ describe(EventRouter, () => {
         events$.next(msg);
         await new Promise(process.nextTick);
 
-        // Then: treated as handler error — nak'd for retry
+        // Then: treated as handler error, nak'd for retry
         expect(msg.nak).toHaveBeenCalled();
         expect(msg.ack).not.toHaveBeenCalled();
       });
@@ -526,7 +526,7 @@ describe(EventRouter, () => {
   describe('HandlerCompleted emission', () => {
     beforeEach(() => {
       // Snapshot hooks are read at subscribeToStream() time, so configure the
-      // mock and (re)start sut here — the outer beforeEach already started one
+      // mock and (re)start sut here; the outer beforeEach already started one
       // pass without HandlerCompleted enabled.
       sut.destroy();
       eventBus.hasHook.mockImplementation(
@@ -728,7 +728,7 @@ describe(EventRouter, () => {
         ordered$.next(msg);
         await new Promise(process.nextTick);
 
-        // Then: no ack/nak/term — ordered consumers skip retry semantics
+        // Then: no ack/nak/term, ordered consumers skip retry semantics
         expect(msg.ack).not.toHaveBeenCalled();
         expect(msg.nak).not.toHaveBeenCalled();
         expect(msg.term).not.toHaveBeenCalled();
@@ -804,7 +804,7 @@ describe(EventRouter, () => {
         ordered$.next(msg);
         await new Promise(process.nextTick);
 
-        // Then: no nak/term — retry() is ignored for ordered consumers
+        // Then: no nak/term, retry() is ignored for ordered consumers
         expect(msg.nak).not.toHaveBeenCalled();
         expect(msg.term).not.toHaveBeenCalled();
         expect(msg.ack).not.toHaveBeenCalled();
@@ -830,7 +830,7 @@ describe(EventRouter, () => {
         ordered$.next(msg);
         await new Promise(process.nextTick);
 
-        // Then: no term/nak — terminate() is ignored for ordered consumers
+        // Then: no term/nak, terminate() is ignored for ordered consumers
         expect(msg.term).not.toHaveBeenCalled();
         expect(msg.nak).not.toHaveBeenCalled();
         expect(msg.ack).not.toHaveBeenCalled();
@@ -1118,7 +1118,6 @@ describe(EventRouter, () => {
 
           patternRegistry.getHandler.mockReturnValue(handler);
 
-          // Create a msg with mock headers
           const mockHeaders = new Map([['X-Trace-Id', ['abc123']]]);
           const msg = createMock<JsMsg>({
             subject: 'test.subject',
@@ -1426,7 +1425,7 @@ describe(EventRouter, () => {
           events$.next(msg);
           await new Promise(process.nextTick);
 
-          // Then: second attempt landed the message in the DLQ — no fallback path
+          // Then: second attempt landed the message in the DLQ, no fallback path
           expect(mockJs.publish).toHaveBeenCalledTimes(2);
           expect(msg.term).toHaveBeenCalledWith('Moved to DLQ stream');
           expect(msg.nak).not.toHaveBeenCalled();
@@ -1464,7 +1463,7 @@ describe(EventRouter, () => {
           events$.next(msg);
           await new Promise(process.nextTick);
 
-          // Then: falls back — onDeadLetter was called, message term'd via fallback
+          // Then: falls back; onDeadLetter was called, message term'd via fallback
           expect(onDeadLetter).toHaveBeenCalled();
           expect(msg.term).toHaveBeenCalledWith('Dead letter processed via fallback callback');
           expect(msg.nak).not.toHaveBeenCalled();
@@ -1886,7 +1885,7 @@ describe(EventRouter, () => {
     });
 
     it('should extend ack for backlogged messages while they wait for a slot', async () => {
-      // Given: concurrency 1, the first handler hangs — the second message
+      // Given: concurrency 1, the first handler hangs; the second message
       // parks in the backlog with its ack_wait clock running
       sut = new EventRouter(messageProvider, patternRegistry, codec, eventBus, undefined, {
         events: { concurrency: 1, ackExtension: 30 },
@@ -1944,8 +1943,8 @@ describe(EventRouter, () => {
     });
 
     it('should auto-calculate interval from ackWaitMap when ackExtension is true', async () => {
-      // Given: sut with ackExtension = true and ackWaitMap with 200ms (in nanos) ack_wait
-      const ackWaitNanos = 1_000 * 1_000_000; // 1000ms in nanoseconds
+      // Given: sut with ackExtension = true and ackWaitMap with 1000ms (in nanos) ack_wait
+      const ackWaitNanos = 1_000 * 1_000_000;
       const ackWaitMap = new Map<StreamKind, number>([[StreamKind.Event, ackWaitNanos]]);
 
       sut = new EventRouter(
@@ -2007,7 +2006,6 @@ describe(EventRouter, () => {
       await new Promise((r) => setTimeout(r, 50));
 
       // Then: no working() calls (5s interval > 50ms wait)
-      // The fallback 5s interval means no call within the short window
       expect(msg.working).not.toHaveBeenCalled();
     });
   });

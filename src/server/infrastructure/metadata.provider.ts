@@ -15,13 +15,9 @@ import {
 /**
  * Publishes handler metadata to a NATS KV bucket for external service discovery.
  *
- * Uses TTL + heartbeat to manage entry lifecycle:
- * - Entries are written on startup and refreshed every `ttl / 2`
- * - When the pod stops (graceful or crash), heartbeat stops → entries expire via TTL
- * - No explicit delete needed — NATS handles expiry automatically
- *
- * This provider is fully decoupled from stream/consumer infrastructure —
- * it only depends on the NATS connection and module options.
+ * Entries are written on startup and refreshed every `ttl / 2`. When the pod stops
+ * (graceful or crash), the heartbeat stops and entries expire via TTL, so no
+ * explicit delete is needed.
  */
 export class MetadataProvider {
   private readonly logger = new Logger('Jetstream:Metadata');
@@ -42,16 +38,12 @@ export class MetadataProvider {
   }
 
   /**
-   * Write handler metadata entries to the KV bucket and start heartbeat.
+   * Write handler metadata entries to the KV bucket and start the heartbeat.
    *
-   * Creates the bucket if it doesn't exist (idempotent).
-   * Skips silently when entries map is empty.
-   * Starts a heartbeat interval that refreshes entries every `ttl / 2`
-   * to prevent TTL expiry while the pod is alive.
+   * Creates the bucket if missing; skips silently when the map is empty.
+   * Non-critical: errors are logged but do not prevent transport startup.
    *
-   * Non-critical — errors are logged but do not prevent transport startup.
-   *
-   * @param entries Map of KV key → metadata object.
+   * @param entries Map of KV key to metadata object.
    */
   public async publish(entries: Map<string, Record<string, unknown>>): Promise<void> {
     if (entries.size === 0) return;

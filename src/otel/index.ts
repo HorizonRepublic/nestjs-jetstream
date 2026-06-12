@@ -1,10 +1,8 @@
-// Public surface — re-exported from `src/index.ts` for library consumers.
+// Public surface, re-exported from `src/index.ts` for library consumers.
 export { TRACER_NAME } from './constants';
 
-// Internal sharing — only the attribute / event identifiers that are
-// referenced from non-`src/otel/` modules cross this barrel. Everything
-// else stays scoped to `./attribute-keys` so a new identifier doesn't
-// silently leak through the OTel boundary.
+// Only the attribute / event identifiers referenced from non-`src/otel/`
+// modules cross this barrel; the rest stays scoped to `./attribute-keys`.
 export {
   ATTR_NATS_CONNECTION_SERVER,
   EVENT_CONNECTION_DISCONNECTED,
@@ -27,7 +25,7 @@ export type {
   ServerEndpoint,
 } from './config';
 
-// Internal surface — consumed by other `src/` modules, not re-exported from the root.
+// Internal surface, consumed by other `src/` modules, not re-exported from the root.
 export { resolveOtelOptions } from './config';
 
 export type { HeaderMatcher, ResolvedOtelOptions } from './config';

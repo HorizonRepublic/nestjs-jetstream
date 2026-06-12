@@ -84,8 +84,7 @@ describe('OTel infrastructure spans integration — provisioning, shutdown, self
     });
 
     it('should emit jetstream.provisioning.stream + jetstream.provisioning.consumer spans on app startup', async () => {
-      // Given — Provisioning is OFF by default; we have to opt in alongside
-      // the default messaging traces so the app still produces normal spans.
+      // Given: Provisioning is off by default, so opt in alongside the default messaging traces
       serviceName = uniqueServiceName();
       ({ app } = await createTestApp(
         {
@@ -107,8 +106,7 @@ describe('OTel infrastructure spans integration — provisioning, shutdown, self
 
       await provider.forceFlush();
 
-      // Then — at least one stream-provisioning span and one
-      // consumer-provisioning span have closed by now.
+      // Then: stream and consumer provisioning spans have closed by now
       const spans = exporter.getFinishedSpans();
       const streamSpan = spans.find(
         (s) =>
@@ -134,7 +132,7 @@ describe('OTel infrastructure spans integration — provisioning, shutdown, self
     });
 
     it('should not emit provisioning spans by default (opt-in trace kind)', async () => {
-      // Given — default trace set excludes Provisioning.
+      // Given: default trace set excludes Provisioning
       serviceName = uniqueServiceName();
       ({ app } = await createTestApp({ name: serviceName, port }, [InfraController], []));
 
@@ -202,7 +200,7 @@ describe('OTel infrastructure spans integration — provisioning, shutdown, self
       );
 
       try {
-        // The connection span finalizes when shutdown closes the connection.
+        // When: closing the app finalizes the connection span
         await app.close();
         await provider.forceFlush();
 
@@ -249,13 +247,12 @@ describe('OTel infrastructure spans integration — provisioning, shutdown, self
     });
 
     it('should emit jetstream.self_healing when an externally-deleted consumer is recovered', async () => {
-      // Given — first message gets consumed normally, proving the consumer is up.
+      // Given: first message consumed normally, proving the consumer is up
       await firstValueFrom(client.emit('orders.created', { phase: 'baseline' }));
       await waitForCondition(() => controller.received.length >= 1, 10_000);
 
-      // When — delete the consumer out from under the running app, then
-      // publish another message. Self-healing detects the missing consumer
-      // and recreates it; the span helper wraps that recovery operation.
+      // When: delete the consumer out from under the running app, then publish again;
+      // self-healing recreates the consumer and the span wraps that recovery
       const evStream = streamName(serviceName, StreamKind.Event);
       const evConsumer = consumerName(serviceName, StreamKind.Event);
 

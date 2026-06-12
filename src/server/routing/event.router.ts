@@ -50,10 +50,10 @@ type EventConsumeKind = Exclude<ConsumeKind, ConsumeKind.Rpc>;
 const DLQ_PUBLISH_ATTEMPTS = 3;
 
 /**
- * Resolved routing shape for one incoming event/broadcast/ordered message —
- * the handler selected for dispatch and the decoded payload. `null` is
- * returned by {@link EventRouter} resolution helpers when the message cannot
- * be routed (no handler, decode error, or pre-dispatch failure).
+ * Routing shape resolved for one incoming event/broadcast/ordered message:
+ * the selected handler and the decoded payload. {@link EventRouter} resolution
+ * helpers return `null` when the message cannot be routed (no handler, decode
+ * error, or pre-dispatch failure).
  */
 interface ResolvedEvent {
   readonly handler: MessageHandler;
@@ -100,7 +100,7 @@ export class EventRouter {
       this.serviceName = derived.serviceName;
       this.serverEndpoint = derived.serverEndpoint;
     } else {
-      // Unit-test instantiation without options — disable OTel entirely
+      // Unit-test instantiation without options: disable OTel entirely
       // so span helpers short-circuit on the first line (`config.enabled`)
       // and never read the placeholder values below.
       this.otel = resolveOtelOptions({ enabled: false });
@@ -156,7 +156,7 @@ export class EventRouter {
       : resolveAckExtensionInterval(this.getAckExtensionConfig(kind), this.ackWaitMap?.get(kind));
     const hasAckExtension = ackExtensionInterval !== null && ackExtensionInterval > 0;
     const concurrency = this.getConcurrency(kind);
-    // Snapshot the config object, not the Map — updateMaxDeliverMap() can
+    // Snapshot the config object, not the Map; updateMaxDeliverMap() can
     // replace maxDeliverByStream wholesale after consumers are ensured.
     const hasDlqCheck = deadLetterConfig !== undefined;
 
@@ -178,7 +178,7 @@ export class EventRouter {
       if (!hasDlqCheck) return false;
       // updateMaxDeliverMap() populates maxDeliverByStream after consumers are
       // ensured. Optional chaining guards the brief startup window before it
-      // is assigned — the interface types it as always-present but the runtime
+      // is assigned; the interface types it as always-present but the runtime
       // lifecycle allows a brief undefined state.
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- runtime lifecycle guard
       const maxDeliver = deadLetterConfig.maxDeliverByStream?.get(msg.info.stream);
@@ -194,7 +194,7 @@ export class EventRouter {
       : null;
 
     // Returns a Promise only when retry() on the final delivery escalates to
-    // dead-letter handling — a nak there would strand the message.
+    // dead-letter handling; a nak there would strand the message.
     const settleSuccess = (
       msg: JsMsg,
       ctx: RpcContext,
@@ -243,7 +243,7 @@ export class EventRouter {
       });
     };
 
-    // Unroutable messages can't be fixed by redelivery — capture them
+    // Unroutable messages can't be fixed by redelivery, so capture them
     // immediately; term() on a workqueue stream would delete the payload.
     const captureUnroutable = (
       capture: NonNullable<typeof handleDeadLetter>,
@@ -314,7 +314,7 @@ export class EventRouter {
         logger.error(`Unexpected error in ${kind} event router`, err);
         // Terminate the message so NATS does not redeliver into the same
         // synchronous failure forever. term() itself may throw when the
-        // connection is degraded — swallow that to keep the subscription alive.
+        // connection is degraded; swallow that to keep the subscription alive.
         try {
           msg.term('Unexpected router error');
         } catch (termErr) {
@@ -381,8 +381,8 @@ export class EventRouter {
 
         reportHandlerCompleted(msg, startedAt, 'error');
 
-        // Keep ack extension alive across settleFailure() — it may route
-        // through handleDeadLetter → publishToDlq whose JetStream publish
+        // Keep ack extension alive across settleFailure(): it may route
+        // through handleDeadLetter -> publishToDlq whose JetStream publish
         // can take longer than the consumer's `ack_wait`. Stopping the
         // extension early would let NATS redeliver the message mid-DLQ
         // publish and double-fire onDeadLetter. Mirrors the async branch
@@ -403,7 +403,7 @@ export class EventRouter {
           return undefined;
         }
 
-        // The dead-letter publish may outlast ack_wait — keep the extension alive.
+        // The dead-letter publish may outlast ack_wait; keep the extension alive.
         return settled.finally(() => {
           if (stopAckExtension !== null) stopAckExtension();
         });
@@ -633,13 +633,13 @@ export class EventRouter {
 
   /**
    * Last resort: invoke onDeadLetter, then term on success. On failure the
-   * message is nak'd — never redelivered past max_deliver, but preserved.
+   * message is nak'd: never redelivered past max_deliver, but preserved.
    */
   private async fallbackToOnDeadLetterCallback(info: DeadLetterInfo, msg: JsMsg): Promise<void> {
     const onDeadLetter = this.deadLetterConfig?.onDeadLetter;
 
     if (!onDeadLetter) {
-      // dlq-only mode with a failed DLQ publish — keep the message in the stream.
+      // dlq-only mode with a failed DLQ publish; keep the message in the stream.
       this.logger.error(
         `Dead letter for ${msg.subject} could not be captured (DLQ publish failed, no onDeadLetter callback) — leaving the message in the stream`,
       );
@@ -667,7 +667,7 @@ export class EventRouter {
   }
 
   /**
-   * Copy headers for the DLQ republish, dropping NATS control headers — a
+   * Copy headers for the DLQ republish, dropping NATS control headers: a
    * copied Nats-TTL would expire the DLQ entry, Nats-Msg-Id trips dedup.
    */
   private buildDlqHeaders(msg: JsMsg): MsgHdrs {
@@ -688,7 +688,7 @@ export class EventRouter {
 
   /**
    * Past max_deliver the server never redelivers, so these in-process attempts
-   * are the only second chance a dead letter gets. No artificial delay — an
+   * are the only second chance a dead letter gets. No artificial delay: an
    * unreachable broker already spaces attempts via its own request timeout.
    */
   private async publishToDlqWithRetry(

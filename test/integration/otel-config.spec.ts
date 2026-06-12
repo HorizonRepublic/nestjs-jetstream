@@ -57,11 +57,7 @@ interface PublisherSetup {
 }
 
 /**
- * Bootstrap two separate apps: a "server-side" one that owns the JetStream
- * streams + consumers (so publishes from the publisher side actually have
- * somewhere to land) and a "client-side" one that is publisher-only and
- * carries the OTel config under test. Returns both so each test can drive
- * the publisher and inspect the consumer outcome.
+ * Boots a stream-owning server app plus a publisher-only app carrying the OTel config under test.
  */
 const bootstrapPair = async (
   port: number,
@@ -152,7 +148,7 @@ describe('OTel config integration — kill switch, propagation-only, hooks', () 
 
   describe('kill switch — otel.enabled: false', () => {
     it('should produce zero spans across the full publish + consume + RPC flow', async () => {
-      // Given — both sides disabled.
+      // Given: OTel disabled on both sides
       const setup = await bootstrapPair(port, { enabled: false }, { enabled: false }, 'core');
 
       try {
@@ -162,7 +158,7 @@ describe('OTel config integration — kill switch, propagation-only, hooks', () 
         await waitForCondition(() => setup.serverController.received.length === 1, 5_000);
         await provider.forceFlush();
 
-        // Then — exporter saw nothing from the library.
+        // Then: exporter saw nothing from the library
         expect(exporter.getFinishedSpans()).toHaveLength(0);
       } finally {
         await setup.publisher.app.close();
@@ -172,8 +168,7 @@ describe('OTel config integration — kill switch, propagation-only, hooks', () 
     });
 
     it('should not inject traceparent into outgoing headers when disabled', async () => {
-      // Given — server-side has OTel ON so it can read the inbound headers
-      // via its consume span, but the publisher has OTel OFF.
+      // Given: publisher OTel off, server OTel on so inbound headers surface on its consume span
       const setup = await bootstrapPair(port, { enabled: false }, { captureHeaders: true });
 
       try {
@@ -182,13 +177,11 @@ describe('OTel config integration — kill switch, propagation-only, hooks', () 
         await waitForCondition(() => setup.serverController.received.length === 1, 5_000);
         await provider.forceFlush();
 
-        // Then — the consume span does not surface a `traceparent` because
-        // the publisher never injected one.
+        // Then: no traceparent attribute because the publisher never injected one
         const consume = exporter.getFinishedSpans().find((s) => s.kind === SpanKind.CONSUMER)!;
 
         expect(consume.attributes['messaging.header.traceparent']).toBeUndefined();
 
-        // The CONSUMER span is also a root span (no parent) for the same reason.
         expect(consume.parentSpanContext).toBeUndefined();
       } finally {
         await setup.publisher.app.close();
@@ -200,7 +193,7 @@ describe('OTel config integration — kill switch, propagation-only, hooks', () 
 
   describe('propagation-only mode — traces: "none"', () => {
     it('should suppress library spans on the publisher but still inject traceparent', async () => {
-      // Given — publisher-side spans are off, but propagation is alive.
+      // Given: publisher-side spans off, propagation still active
       const setup = await bootstrapPair(port, { traces: 'none' });
 
       try {
@@ -217,7 +210,7 @@ describe('OTel config integration — kill switch, propagation-only, hooks', () 
         await waitForCondition(() => setup.serverController.received.length === 1, 5_000);
         await provider.forceFlush();
 
-        // Then — no PRODUCER span on the publisher side.
+        // Then: no PRODUCER span on the publisher side
         const finished = exporter.getFinishedSpans();
         const publisherSpans = finished.filter(
           (s) =>
@@ -227,8 +220,7 @@ describe('OTel config integration — kill switch, propagation-only, hooks', () 
 
         expect(publisherSpans).toHaveLength(0);
 
-        // …but the server-side CONSUMER span is parented under the host
-        // trace, proving traceparent flowed across the wire.
+        // The server-side CONSUMER span joins the host trace: traceparent crossed the wire.
         const consume = finished.find((s) => s.kind === SpanKind.CONSUMER)!;
 
         expect(consume.spanContext().traceId).toBe(ambientTraceId);
@@ -267,13 +259,12 @@ describe('OTel config integration — kill switch, propagation-only, hooks', () 
         await waitForCondition(() => setup.serverController.received.length === 1, 5_000);
         await provider.forceFlush();
 
-        // Then — publishHook saw producer span as active.
+        // Then: publishHook saw the producer span as active
         expect(publishHook).toHaveBeenCalled();
         const publishCall = publishHook.mock.calls[0]![0];
 
         expect(publishCall.activeSpanId).toBe(publishCall.spanId);
 
-        // responseHook fires once for the publisher PRODUCER span.
         expect(responseHook).toHaveBeenCalled();
         const publisherResponse = responseHook.mock.calls[0]![0];
 
@@ -287,7 +278,7 @@ describe('OTel config integration — kill switch, propagation-only, hooks', () 
     });
 
     it('should fire consumeHook on the server side with the consume span as active', async () => {
-      // Given — hook lives on the server-side OTel config.
+      // Given: hook on the server-side OTel config
       const consumeHook = vi.fn();
       const setup = await bootstrapPair(
         port,
@@ -324,9 +315,8 @@ describe('OTel config integration — kill switch, propagation-only, hooks', () 
     });
 
     it('should pass the thrown error to responseHook on a failed RPC consume', async () => {
-      // Given — Core RPC where the handler throws an RpcException; the
-      // default classifier marks it `expected`, so the consume span stays OK
-      // but the responseHook still receives `error`.
+      // Given: Core RPC handler throws RpcException; the default classifier marks it
+      // expected, so the consume span stays OK but responseHook still receives the error
       const responseHook = vi.fn();
       const setup = await bootstrapPair(
         port,
@@ -363,8 +353,7 @@ describe('OTel config integration — kill switch, propagation-only, hooks', () 
 
   describe('shouldTrace* predicates', () => {
     it('should skip publisher span creation but keep traceparent injection', async () => {
-      // Given — publisher predicate suppresses span; server side stays on
-      // and surfaces the traceparent via its CONSUMER span parent linkage.
+      // Given: publisher predicate suppresses the span; server side stays on
       const setup = await bootstrapPair(port, { shouldTracePublish: () => false });
 
       try {
@@ -381,7 +370,7 @@ describe('OTel config integration — kill switch, propagation-only, hooks', () 
         await waitForCondition(() => setup.serverController.received.length === 1, 5_000);
         await provider.forceFlush();
 
-        // Then — no PRODUCER span for the publisher's emit.
+        // Then: no PRODUCER span for the publisher's emit
         const publisherSubject = `publish ${internalName(setup.serverServiceName)}.${StreamKind.Event}.orders.created`;
 
         expect(
@@ -390,7 +379,7 @@ describe('OTel config integration — kill switch, propagation-only, hooks', () 
             .filter((s) => s.kind === SpanKind.PRODUCER && s.name === publisherSubject),
         ).toHaveLength(0);
 
-        // …but the server-side CONSUMER span still has the host trace as parent.
+        // The server-side CONSUMER span joins the host trace: traceparent crossed the wire.
         const consume = exporter.getFinishedSpans().find((s) => s.kind === SpanKind.CONSUMER)!;
 
         expect(consume.spanContext().traceId).toBe(ambientTraceId);
@@ -404,7 +393,7 @@ describe('OTel config integration — kill switch, propagation-only, hooks', () 
 
   describe('custom errorClassifier', () => {
     it('should override the default classification — every error treated as expected', async () => {
-      // Given — server-side classifier marks every error as expected.
+      // Given: server-side classifier marks every error as expected
       const setup = await bootstrapPair(port, {}, { errorClassifier: () => 'expected' }, 'core');
 
       try {
@@ -414,7 +403,7 @@ describe('OTel config integration — kill switch, propagation-only, hooks', () 
         ).rejects.toBeDefined();
         await provider.forceFlush();
 
-        // Then — consume span has OK + business-error attribute.
+        // Then: consume span has OK status plus the business-error attribute
         const consume = exporter.getFinishedSpans().find((s) => s.kind === SpanKind.CONSUMER)!;
 
         expect(consume.status.code).toBe(SpanStatusCode.OK);

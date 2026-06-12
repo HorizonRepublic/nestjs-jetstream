@@ -44,8 +44,8 @@ export type AckExtensionConfig = boolean | number;
  * RPC transport configuration.
  *
  * Discriminated union on `mode`:
- * - `'core'`      — NATS native request/reply. Lowest latency.
- * - `'jetstream'`  — Commands persisted in JetStream. Responses via Core NATS inbox.
+ * - `'core'`: NATS native request/reply. Lowest latency.
+ * - `'jetstream'`: Commands persisted in JetStream. Responses via Core NATS inbox.
  *
  * When `mode` is `'core'`, only `timeout` is available.
  * When `mode` is `'jetstream'`, additional stream/consumer overrides are exposed.
@@ -97,17 +97,17 @@ export interface StreamConsumerOverrides {
    * Controls prefetch buffer size, idle heartbeat interval, and auto-refill thresholds.
    *
    * nats.js supports two consumption modes (message-based and byte-based).
-   * Do not mix `max_bytes`/`threshold_bytes` with `threshold_messages` —
+   * Do not mix `max_bytes`/`threshold_bytes` with `threshold_messages`;
    * use one mode or the other.
    *
-   * @see https://github.com/nats-io/nats.js — ConsumeOptions
+   * @see https://github.com/nats-io/nats.js ConsumeOptions
    */
   consume?: Partial<ConsumeOptions>;
 
   /**
    * Maximum number of concurrent handler executions (RxJS `mergeMap` limit).
    *
-   * Default: `undefined` (unlimited — naturally bounded by `max_ack_pending`).
+   * Default: `undefined` (unlimited, naturally bounded by `max_ack_pending`).
    * Set this to protect downstream systems from overload.
    *
    * **Important:** if `concurrency < max_ack_pending`, messages buffer in RxJS
@@ -119,7 +119,7 @@ export interface StreamConsumerOverrides {
   /**
    * Auto-extend the NATS ack deadline via `msg.working()` during handler execution.
    *
-   * - `false` (default): disabled — NATS redelivers after `ack_wait` if not acked.
+   * - `false` (default): disabled; NATS redelivers after `ack_wait` if not acked.
    * - `true`: auto-extend at `ack_wait / 2` interval (calculated from consumer config).
    * - `number`: explicit extension interval in milliseconds.
    */
@@ -138,7 +138,7 @@ export interface StreamConsumerOverrides {
  * Ordered consumers use Limits retention and deliver messages in strict
  * sequential order with at-most-once delivery. No ack/nak/DLQ.
  *
- * Only a subset of consumer options applies — ordered consumers are
+ * Only a subset of consumer options applies; ordered consumers are
  * ephemeral and auto-managed by nats.js.
  */
 export interface OrderedEventOverrides {
@@ -181,7 +181,7 @@ export interface OrderedEventOverrides {
  * entries to a NATS KV bucket at startup. External services (API gateways,
  * dashboards) can watch the bucket for service discovery.
  *
- * All fields are optional — sensible defaults are applied.
+ * All fields are optional; sensible defaults are applied.
  */
 export interface MetadataRegistryOptions {
   /**
@@ -271,7 +271,7 @@ export interface JetstreamModuleOptions {
 
   /**
    * Transport lifecycle hook handlers.
-   * Unset hooks are silently ignored — no default logging.
+   * Unset hooks are silently ignored; no default logging.
    */
   hooks?: Partial<TransportHooks>;
 
@@ -335,7 +335,7 @@ export interface JetstreamModuleOptions {
    * if immutable properties like `storage` differ from the running stream.
    * Messages are preserved during migration.
    *
-   * `retention` is NOT migratable — it is controlled by the transport
+   * `retention` is NOT migratable: it is controlled by the transport
    * (Workqueue for events, Limits for broadcast/ordered) and a mismatch
    * is always treated as an error regardless of this flag.
    *
@@ -364,7 +364,7 @@ export interface JetstreamModuleOptions {
   /**
    * Raw NATS ConnectionOptions pass-through for advanced connection config.
    * Allows setting tls, auth, reconnect behavior, maxReconnectAttempts, etc.
-   * Merged with `name` and `servers` — those take precedence.
+   * Merged with `name` and `servers`; those take precedence.
    */
   connectionOptions?: Partial<ConnectionOptions>;
 
@@ -374,7 +374,7 @@ export interface JetstreamModuleOptions {
    * Pass `true` to enable with defaults, or a {@link MetricsConfig} object for
    * full control (custom registry, prefix, labels, polling, buckets).
    * When omitted or `false`, the metrics module is not registered and
-   * `prom-client` is not imported — zero overhead.
+   * `prom-client` is not imported, so there is zero overhead.
    *
    * Requires `prom-client` peer dependency to be installed when enabled.
    * The service writes to `prom-client`'s global `register` by default,
@@ -397,7 +397,7 @@ export interface JetstreamModuleOptions {
    * OpenTelemetry integration. When omitted, sensible defaults are applied:
    * tracing is enabled, default trace kinds are emitted, only standard
    * correlation headers are captured. If no OTel SDK is registered in the
-   * consuming application, all tracer calls are no-ops — there is no
+   * consuming application, all tracer calls are no-ops with no
    * runtime cost.
    *
    * Accepts a full {@link OtelOptions} object, or the boolean shorthand
@@ -429,7 +429,7 @@ export interface JetstreamFeatureOptions {
  * Supports three patterns: `useFactory`, `useExisting`, `useClass`.
  */
 export type JetstreamModuleAsyncOptions = {
-  /** Service name — required upfront for DI token generation. */
+  /** Service name, required upfront for DI token generation. */
   name: string;
 
   /** Additional module imports (e.g., ConfigModule). */

@@ -239,7 +239,6 @@ describe(ConsumerProvider, () => {
 
         mockJsm.streams.info.mockResolvedValue(backupInfo);
 
-        // Consumer not found
         const notFoundError = new JetStreamApiError({
           err_code: 10014,
           code: 404,

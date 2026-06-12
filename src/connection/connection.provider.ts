@@ -37,9 +37,9 @@ const DEFAULT_OPTIONS: Partial<ConnectionOptions> = {
  * Manages the lifecycle of a single NATS connection shared across the application.
  *
  * Provides both Promise-based and Observable-based access to the connection:
- * - `connect()` / `getConnection()` — async/await for one-time setup
- * - `nc$` — cached observable (shareReplay) for reactive consumers
- * - `status$` — live connection status event stream
+ * - `connect()` / `getConnection()`: async/await for one-time setup
+ * - `nc$`: cached observable (shareReplay) for reactive consumers
+ * - `status$`: live connection status event stream
  *
  * One instance per application, created by `JetstreamModule.forRoot()`.
  */
@@ -72,7 +72,7 @@ export class ConnectionProvider {
     this.otel = derived.otel;
     this.otelServiceName = derived.serviceName;
     this.otelEndpoint = derived.serverEndpoint;
-    // Lazy observable — connects on first subscription, caches for all future subscribers
+    // Lazy observable: connects on first subscription, caches for all future subscribers
     this.nc$ = defer(() => this.getConnection()).pipe(
       shareReplay({ bufferSize: 1, refCount: false }),
     );
@@ -84,7 +84,7 @@ export class ConnectionProvider {
   }
 
   /**
-   * Establish NATS connection. Idempotent — returns cached connection on subsequent calls.
+   * Establish NATS connection. Idempotent: returns cached connection on subsequent calls.
    *
    * @throws Error if connection is refused (fail fast).
    */
@@ -153,7 +153,7 @@ export class ConnectionProvider {
       try {
         await this.connectionPromise;
       } catch {
-        // Connection failed — nothing to shut down
+        // Connection failed; nothing to shut down
       }
     }
 
@@ -171,7 +171,7 @@ export class ConnectionProvider {
             try {
               await this.connection?.close();
             } catch {
-              // Best-effort — connection may already be gone
+              // Best-effort; connection may already be gone
             }
           }
         },
@@ -271,7 +271,7 @@ export class ConnectionProvider {
       case 'close':
         break;
       default: {
-        // Exhaustiveness guard — new `Status.type` values added by
+        // Exhaustiveness guard: new `Status.type` values added by
         // `@nats-io/transport-node` upgrades surface as TS errors here
         // instead of being silently ignored. Runtime still logs the
         // unknown tag for operator visibility.
@@ -291,7 +291,7 @@ export class ConnectionProvider {
           this.handleStatusEvent(status, nc);
         }
       } finally {
-        // Iterator exited — connection is terminally closed (shutdown,
+        // Iterator exited: connection is terminally closed (shutdown,
         // server-initiated close, reconnect budget exhausted). Finalize the
         // lifecycle span here so it does not linger as an open parent for the
         // remaining process uptime. `shutdown()` races with this but both

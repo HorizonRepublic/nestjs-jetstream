@@ -178,8 +178,7 @@ describe('Workqueue Event Delivery', () => {
     it('should redeliver on handler error (nak) and succeed on retry', async () => {
       await firstValueFrom(client.emit('order.retry', { orderId: 42 }));
 
-      // Wait for the successful delivery (second attempt).
-      // Timeout must exceed ack_wait (10s default) to allow redelivery.
+      // Timeout must exceed ack_wait (10s default) to allow redelivery
       await waitForCondition(() => controller.received.length > 0, 15_000);
 
       expect(controller.attempts).toBeGreaterThanOrEqual(2);

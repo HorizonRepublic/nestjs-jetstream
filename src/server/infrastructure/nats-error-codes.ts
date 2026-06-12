@@ -14,7 +14,7 @@ export enum NatsErrorCode {
   /** Stream does not exist. */
   StreamNotFound = 10059,
 
-  /** Storage resources exceeded — reservation exceeds server `max_file_store`. */
+  /** Storage resources exceeded: reservation exceeds server `max_file_store`. */
   StorageResourcesExceeded = 10047,
 
   /**

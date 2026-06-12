@@ -69,7 +69,7 @@ describe('withPublishSpan', () => {
     });
 
     it('should inject ambient context but skip span creation when traces excludes Publish', async () => {
-      // Given — register a tracer-provider-emitted active span so injection has something to write
+      // Given: an active ambient span so injection has something to write
       const config = resolveOtelOptions({ traces: [JetstreamTrace.Consume] });
       const tracer = trace.getTracer('test');
       const ambient = tracer.startSpan('ambient');
@@ -95,7 +95,7 @@ describe('withPublishSpan', () => {
         },
       });
 
-      // When + Then — publish path must not propagate the predicate failure.
+      // When + Then
       await expect(withPublishSpan(baseCtx(), config, async () => 'ok')).resolves.toBe('ok');
 
       const spans = exporter.getFinishedSpans().filter((s) => s.name.startsWith('publish '));
@@ -143,7 +143,7 @@ describe('withPublishSpan', () => {
     });
 
     it('should wrap non-Error throws into an Error before recording the exception', async () => {
-      // Given — handlers occasionally `throw` primitives or plain objects.
+      // Given
       const config = resolveOtelOptions();
 
       // When
@@ -198,9 +198,7 @@ describe('withPublishSpan', () => {
     });
 
     it('should swallow async hook rejections without leaking unhandled rejections', async () => {
-      // Given — `publishHook` is typed as `void`-returning, but TypeScript
-      // assigns `Promise<void>` to `void`, so an `async` user hook compiles
-      // cleanly. `safelyInvokeHook` must catch its rejection.
+      // Given: TS assigns Promise<void> to void, so an async user hook compiles cleanly
       const asyncHook = async (): Promise<void> => {
         throw new Error('bad hook');
       };

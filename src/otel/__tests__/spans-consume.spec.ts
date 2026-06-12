@@ -100,7 +100,7 @@ describe('withConsumeSpan', () => {
       // When
       const result = withConsumeSpan(baseCtx(), config, fn);
 
-      // Then — sync return preserved
+      // Then: sync return preserved (no promise wrapping)
       expect(result).toBe('sync');
 
       const span = exporter.getFinishedSpans()[0]!;
@@ -162,9 +162,7 @@ describe('withConsumeSpan', () => {
     });
 
     it('should default to "unexpected" when the user errorClassifier itself throws', async () => {
-      // Given — a buggy classifier that crashes on inspection. The span
-      // helper must absorb that and still finalize cleanly with an ERROR
-      // status, otherwise the span would leak un-`end`ed.
+      // Given
       const config = resolveOtelOptions({
         errorClassifier: () => {
           throw new Error('classifier crash');
@@ -179,8 +177,7 @@ describe('withConsumeSpan', () => {
         }),
       ).rejects.toBe(handlerError);
 
-      // Then — span ended (exporter saw it) and reflects the original error,
-      // not the classifier failure.
+      // Then: span reflects the original error, not the classifier failure
       const span = exporter.getFinishedSpans()[0]!;
 
       expect(span.status.code).toBe(SpanStatusCode.ERROR);
@@ -215,8 +212,7 @@ describe('withConsumeSpan', () => {
 
       controller.abort();
 
-      // When — `fn` still runs per the documented contract; span is already
-      // closed by the time the handler returns and any settlement is a no-op.
+      // When: fn still runs per the documented contract; later settlement is a no-op
       await withConsumeSpan(baseCtx(), config, async () => 'late', {
         signal: controller.signal,
         timeoutLabel: 'rpc.handler.timeout',
@@ -230,9 +226,7 @@ describe('withConsumeSpan', () => {
     });
 
     it('should detach the abort listener once the handler resolves', async () => {
-      // Given — long-lived signal that never aborts; we just verify the
-      // listener was removed so a many-consume process doesn't accumulate
-      // closures.
+      // Given
       const config = resolveOtelOptions();
       const controller = new AbortController();
       const removeSpy = vi.spyOn(controller.signal, 'removeEventListener');
@@ -255,8 +249,7 @@ describe('withConsumeSpan', () => {
         resolveFn = resolve;
       });
 
-      // When — abort fires before the handler settles; later resolution
-      // must not flip the span back to OK.
+      // When: abort fires before the handler settles
       const consumePromise = withConsumeSpan(baseCtx(), config, () => handlerSettled, {
         signal: controller.signal,
         timeoutLabel: 'rpc.handler.timeout',
@@ -266,7 +259,7 @@ describe('withConsumeSpan', () => {
       resolveFn('late');
       await consumePromise;
 
-      // Then — only the abort path produced a finished span.
+      // Then: only the abort path produced a finished span
       const finished = exporter.getFinishedSpans();
 
       expect(finished).toHaveLength(1);
@@ -282,8 +275,7 @@ describe('withConsumeSpan', () => {
         rejectFn = reject;
       });
 
-      // When — abort wins, late rejection must not flip status or fire a
-      // second responseHook (covers `finishError`'s `finalized` guard).
+      // When: abort wins; covers `finishError`'s `finalized` guard
       const consumePromise = withConsumeSpan(baseCtx(), config, () => handlerSettled, {
         signal: controller.signal,
         timeoutLabel: 'rpc.handler.timeout',
@@ -293,7 +285,7 @@ describe('withConsumeSpan', () => {
       rejectFn(new Error('late failure'));
       await expect(consumePromise).rejects.toThrow('late failure');
 
-      // Then — single span recorded by the abort path.
+      // Then: single span recorded by the abort path
       const finished = exporter.getFinishedSpans();
 
       expect(finished).toHaveLength(1);
@@ -321,9 +313,7 @@ describe('withConsumeSpan', () => {
     });
 
     it('should swallow async hook rejections without leaking unhandled rejections', async () => {
-      // Given — `consumeHook` is typed as `void`-returning, but TypeScript
-      // assigns `Promise<void>` to `void`, so an `async` user hook compiles
-      // cleanly. `safelyInvokeHook` must catch its rejection.
+      // Given: TS assigns Promise<void> to void, so an async user hook compiles cleanly
       const asyncHook = async (): Promise<void> => {
         throw new Error('bad hook');
       };
@@ -332,7 +322,7 @@ describe('withConsumeSpan', () => {
         consumeHook: asyncHook as unknown as OtelOptions['consumeHook'],
       });
 
-      // When + Then — must not throw, span still finalizes.
+      // When + Then
       await expect(withConsumeSpan(baseCtx(), config, async () => 'ok')).resolves.toBe('ok');
     });
   });

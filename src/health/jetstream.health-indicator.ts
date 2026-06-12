@@ -7,7 +7,7 @@ import type { JetstreamHealthStatus } from '../interfaces';
  * Health indicator result compatible with @nestjs/terminus.
  *
  * Follows the Terminus convention: returns status object on success,
- * throws on failure. Works with Terminus out of the box — no wrapper needed:
+ * throws on failure. Works with Terminus out of the box, no wrapper needed:
  *
  * @example
  * ```typescript
@@ -59,7 +59,7 @@ export class JetstreamHealthIndicator {
    * Returns `{ [key]: { status: 'up', ... } }` on success.
    * Throws an error with `{ [key]: { status: 'down', ... } }` on failure.
    *
-   * The thrown error sets `isHealthCheckError: true` and `causes` — the
+   * The thrown error sets `isHealthCheckError: true` and `causes`, the
    * duck-type contract that Terminus `HealthCheckExecutor` uses to distinguish
    * health failures from unexpected exceptions. Works with both Terminus v10
    * (`instanceof HealthCheckError`) and v11+ (`error?.isHealthCheckError`).

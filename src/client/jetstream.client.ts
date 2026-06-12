@@ -88,7 +88,7 @@ const eventStreamKind = (kind: EventPublishKind): StreamKind => {
  * Events always go through JetStream publish for guaranteed delivery.
  * The mode only affects RPC (request/reply) behavior.
  *
- * Clients are lightweight — they share the NATS connection from `forRoot()`.
+ * Clients are lightweight: they share the NATS connection from `forRoot()`.
  */
 export class JetstreamClient extends ClientProxy {
   private readonly logger = new Logger('Jetstream:Client');
@@ -245,7 +245,7 @@ export class JetstreamClient extends ClientProxy {
     const publishKind = detectEventKind(packet.pattern);
 
     if (schedule && publishKind === PublishKind.Ordered) {
-      // ADR-51: the schedule target must live in the same stream as the holder — impossible for ordered patterns.
+      // ADR-51: the schedule target must live in the same stream as the holder, impossible for ordered patterns.
       throw new Error(
         `scheduleAt() is not supported for ordered events (pattern: ${packet.pattern}). ` +
           'Scheduled delivery is available for workqueue events and broadcasts.',
@@ -360,7 +360,6 @@ export class JetstreamClient extends ClientProxy {
       callback({ err: new Error('Internal transport error'), response: null, isDisposed: true });
     };
 
-    // Track correlation ID for cleanup in JetStream mode
     let jetStreamCorrelationId: string | null = null;
 
     if (this.isCoreMode) {
@@ -379,8 +378,7 @@ export class JetstreamClient extends ClientProxy {
     }
 
     return () => {
-      // Cleanup for JetStream mode pending messages
-      // Core mode cleanup is handled by NATS internally
+      // Core mode cleanup is handled by NATS internally; only JetStream pending state needs it.
       if (jetStreamCorrelationId) {
         const timeoutId = this.pendingTimeouts.get(jetStreamCorrelationId);
 
@@ -436,7 +434,7 @@ export class JetstreamClient extends ClientProxy {
 
       const decoded = this.codec.decode(response.data);
 
-      // In Core RPC the publish leg is implicit inside nc.request() — any
+      // In Core RPC the publish leg is implicit inside nc.request(): any
       // response (or pre-response transport error) means the publish ran, so
       // Published always carries success here. RpcCompleted captures the
       // round-trip outcome separately.
@@ -461,7 +459,7 @@ export class JetstreamClient extends ClientProxy {
         this.reportRpcCompleted(declaredPattern, startedAt, 'timeout');
       } else {
         spanHandle.finish({ kind: RpcOutcomeKind.Error, error });
-        // Error hook + OTel CLIENT span are the canonical signals — no separate log.
+        // Error hook + OTel CLIENT span are the canonical signals; no separate log.
         this.eventBus.emit(TransportEvent.Error, error, 'client-rpc');
         this.reportPublished(declaredPattern, StreamKind.Command, startedAt, 'error');
         this.reportRpcCompleted(declaredPattern, startedAt, 'error');
@@ -510,7 +508,7 @@ export class JetstreamClient extends ClientProxy {
     this.pendingMessages.set(correlationId, (packet: WritePacket) => {
       // Translate the inbox-callback WritePacket into an RPC outcome. A native
       // `Error` instance reaches this path from `rejectPendingRpcs` (disconnect,
-      // client close) or a decode failure in `routeInboxReply` — both are
+      // client close) or a decode failure in `routeInboxReply`; both are
       // transport-level failures. Any other non-empty `err` is a decoded
       // business error envelope returned by the server.
       if (packet.err) {
@@ -540,7 +538,7 @@ export class JetstreamClient extends ClientProxy {
       this.pendingTimeouts.delete(correlationId);
       this.pendingMessages.delete(correlationId);
       spanHandle.finish({ kind: RpcOutcomeKind.Timeout });
-      // RpcTimeout hook + OTel CLIENT span are the canonical signals — no separate log.
+      // RpcTimeout hook + OTel CLIENT span are the canonical signals; no separate log.
       this.eventBus.emit(TransportEvent.RpcTimeout, subject, correlationId);
       this.reportRpcCompleted(declaredPattern, startedAt, 'timeout');
       callback({ err: new Error(RPC_TIMEOUT_MESSAGE), response: null, isDisposed: true });
@@ -582,7 +580,7 @@ export class JetstreamClient extends ClientProxy {
       );
 
       if (ack.duplicate) {
-        // The reply belongs to the original (deduped) request — fail fast instead of waiting out the timeout.
+        // The reply belongs to the original (deduped) request; fail fast instead of waiting out the timeout.
         throw new Error(
           `Duplicate RPC publish for ${subject}: the messageId was already used within the ` +
             'stream dedup window, so the reply belongs to the original request',
@@ -649,7 +647,7 @@ export class JetstreamClient extends ClientProxy {
   private handleDisconnect(): void {
     this.rejectPendingRpcs(new Error('Connection lost'));
 
-    // Reset inbox — will be recreated on next connect()
+    // Reset inbox; recreated on next connect()
     this.inbox = null;
     // Force the next publish to re-run the full connect setup.
     this.readyForPublish = false;
@@ -733,15 +731,10 @@ export class JetstreamClient extends ClientProxy {
   }
 
   /**
-   * Resolve a user pattern to a fully-qualified NATS subject, dispatching
-   * between the event, broadcast, and ordered prefixes.
-   *
-   * For self-targets the resolver drives subject construction so custom
-   * subjectPrefix options are honoured.
-   *
-   * The leading-char check short-circuits the `startsWith` comparisons for
-   * patterns that cannot possibly carry a broadcast/ordered marker, which is
-   * the overwhelmingly common case.
+   * Resolve a user pattern to a fully-qualified NATS subject. Self-targets go
+   * through the resolver so custom subjectPrefix options are honoured. The
+   * leading-char check short-circuits `startsWith` for the common case of
+   * patterns without a broadcast/ordered marker.
    */
   private buildEventSubject(pattern: string): string {
     if (pattern.charCodeAt(0) === 98 /* 'b' */ && pattern.startsWith(PatternPrefix.Broadcast)) {
@@ -768,7 +761,6 @@ export class JetstreamClient extends ClientProxy {
   ): MsgHdrs {
     const hdrs = natsHeaders();
 
-    // Set transport headers
     hdrs.set(JetstreamHeader.Subject, transport.subject);
     hdrs.set(JetstreamHeader.CallerName, this.callerName);
 
@@ -780,7 +772,7 @@ export class JetstreamClient extends ClientProxy {
       hdrs.set(JetstreamHeader.ReplyTo, transport.replyTo);
     }
 
-    // Merge user headers (reserved headers already validated by JetstreamRecordBuilder)
+    // Reserved headers were already validated by JetstreamRecordBuilder.
     if (customHeaders) {
       for (const [key, value] of customHeaders) {
         hdrs.set(key, value);
@@ -823,7 +815,7 @@ export class JetstreamClient extends ClientProxy {
    * NATS holds the message and publishes it to the target subject after the delay.
    *
    * A unique per-message suffix is appended because the server stores schedules
-   * as rollup messages — one active schedule per subject (ADR-51). Without it,
+   * as rollup messages, one active schedule per subject (ADR-51). Without it,
    * concurrent schedules of the same pattern would silently replace each other.
    *
    * Examples:
@@ -853,7 +845,7 @@ export class JetstreamClient extends ClientProxy {
     }
 
     const withoutPrefix = eventSubject.slice(targetPrefix.length);
-    // withoutPrefix is "{kind}.{pattern}" — strip the kind segment
+    // withoutPrefix is "{kind}.{pattern}": strip the kind segment
     const dotIndex = withoutPrefix.indexOf('.');
 
     if (dotIndex === -1) {

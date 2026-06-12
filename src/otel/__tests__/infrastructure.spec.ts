@@ -49,7 +49,7 @@ describe('infrastructure span helpers', () => {
 
   describe('toggle gating', () => {
     it('should run op without creating a span when the trace kind is off', async () => {
-      // Given — default config has SelfHealing OFF
+      // Given: default config has SelfHealing OFF
       const config = resolveOtelOptions();
       const op = vi.fn().mockResolvedValue('result');
 
@@ -112,7 +112,7 @@ describe('infrastructure span helpers', () => {
       // When
       const handle = beginConnectionLifecycleSpan(config, baseCtx());
 
-      // Then — methods exist and do not throw
+      // Then
       expect(() => {
         handle.recordEvent('test');
         handle.finish();
@@ -152,7 +152,7 @@ describe('infrastructure span helpers', () => {
       handle.recordEvent('connection.disconnected');
       await provider.forceFlush();
 
-      // Then — span ended cleanly without the post-finish event
+      // Then
       const spans = exporter.getFinishedSpans();
 
       expect(spans).toHaveLength(1);
@@ -181,7 +181,7 @@ describe('infrastructure span helpers', () => {
       const config = resolveOtelOptions({ traces: [JetstreamTrace.ConnectionLifecycle] });
       const handle = beginConnectionLifecycleSpan(config, baseCtx());
 
-      // When — second call must be a no-op, not throw or double-end
+      // When
       handle.finish();
 
       // Then

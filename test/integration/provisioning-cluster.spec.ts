@@ -17,7 +17,7 @@ describe('Provisioning error on a clustered NATS', () => {
   let cluster: NatsClusterResult | undefined;
 
   beforeAll(async () => {
-    // 3 nodes, each capped to 1 MiB file store — no peer can hold the default
+    // 3 nodes, each capped to 1 MiB file store: no peer can hold the default
     // 5 GiB event stream with num_replicas: 3 → "no suitable peers for placement".
     cluster = await startNatsCluster({ nodes: 3, maxFileStoreBytes: 1024 * 1024 });
   }, 180_000);

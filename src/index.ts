@@ -36,7 +36,7 @@ export { RpcContext } from './context';
 // Health
 export { JetstreamHealthIndicator } from './health';
 
-// Constants (selective — only what users need)
+// Constants (selective: only what users need)
 export {
   streamName,
   buildSubject,
@@ -56,7 +56,7 @@ export {
   toNanos,
   metadataKey,
   RESERVED_HEADERS,
-  // Default configs — composable building blocks for custom overrides
+  // Default configs: composable building blocks for custom overrides
   DEFAULT_EVENT_STREAM_CONFIG,
   DEFAULT_COMMAND_STREAM_CONFIG,
   DEFAULT_BROADCAST_STREAM_CONFIG,

@@ -366,7 +366,7 @@ describe('Message Scheduling (Delayed Jobs)', () => {
     });
 
     it('should deliver every pending schedule of the same pattern instead of replacing it', async () => {
-      // Given: three schedules on the SAME pattern — per ADR-51 a shared
+      // Given: three schedules on the SAME pattern; per ADR-51 a shared
       // schedule subject would keep only the last one.
       const now = Date.now();
 
@@ -501,7 +501,7 @@ describe('Message Scheduling (Delayed Jobs)', () => {
     });
 
     it('should deliver a scheduled message whose ttl is shorter than the schedule delay', async () => {
-      // Given: ttl 1s, delivery scheduled 3s out — the ttl belongs to the
+      // Given: ttl 1s, delivery scheduled 3s out; the ttl belongs to the
       // delivered message, so it must not expire the pending schedule
       const payload = { orderId: 7, reminder: true };
 

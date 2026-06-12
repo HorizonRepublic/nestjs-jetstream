@@ -81,11 +81,7 @@ export const ATTR_NATS_CONNECTION_SERVER = 'nats.connection.server' as const;
 /** Canonical MIME form of the NATS dedup header (`Nats-Msg-Id`). */
 export const NATS_MSG_ID_HEADER = 'Nats-Msg-Id' as const;
 
-/**
- * Hook identifier tokens passed to `safelyInvokeHook` so a failing hook's
- * debug log identifies which hook misbehaved without hard-coding strings
- * at call sites.
- */
+/** Hook identifier tokens passed to `safelyInvokeHook` for failure logs. */
 export const HOOK_PUBLISH = 'publishHook' as const;
 
 export const HOOK_CONSUME = 'consumeHook' as const;
@@ -101,7 +97,7 @@ export const SPAN_NAME_SEND = 'send' as const;
 
 export const SPAN_NAME_DEAD_LETTER = 'dead_letter' as const;
 
-/** Infrastructure span names — resource identity lives in attributes, not the name. */
+/** Infrastructure span names; resource identity lives in attributes, not the name. */
 export const SPAN_NAME_NATS_CONNECTION = 'nats.connection' as const;
 
 export const SPAN_NAME_JETSTREAM_SHUTDOWN = 'jetstream.shutdown' as const;
@@ -117,10 +113,6 @@ export const EVENT_CONNECTION_DISCONNECTED = 'connection.disconnected' as const;
 
 export const EVENT_CONNECTION_RECONNECTED = 'connection.reconnected' as const;
 
-/**
- * Build a `messaging.header.<lowercase-name>` attribute key.
- * Wrapper so call sites don't duplicate the prefix and we keep the
- * convention in one place.
- */
+/** Build a `messaging.header.<lowercase-name>` attribute key. */
 export const messagingHeaderAttr = (headerName: string): string =>
   `${ATTR_MESSAGING_HEADER_PREFIX}${headerName.toLowerCase()}`;

@@ -22,7 +22,7 @@ const logger = new Logger('Jetstream:Otel');
 
 /**
  * Evaluate `shouldTracePublish` defensively. A throwing user predicate
- * should never derail a publish — fail-open (assume "trace it") so a buggy
+ * must not derail a publish: fail open (assume "trace it") so a buggy
  * filter doesn't black-hole spans, and surface the failure at debug.
  */
 const shouldTracePublishSafe = (
@@ -125,9 +125,8 @@ export const withPublishSpan = async <T>(
 
   const start = Date.now();
   const invokeResponseHook = (error?: Error): void => {
-    // Run inside the span's active context so hooks that create child
-    // spans see this PRODUCER span as the parent — symmetric with
-    // `publishHook` below.
+    // Run inside the span's context so hooks that create child spans
+    // parent under this PRODUCER span; symmetric with `publishHook` below.
     context.with(ctxWithSpan, () => {
       safelyInvokeHook(HOOK_RESPONSE, config.responseHook, span, {
         subject: ctx.subject,
@@ -139,9 +138,8 @@ export const withPublishSpan = async <T>(
 
   try {
     const result = await context.with(ctxWithSpan, async () => {
-      // Fire publishHook inside the span's active context so any nested
-      // OTel calls (`tracer.startSpan`, `trace.getActiveSpan`) parent under
-      // this PRODUCER span instead of the ambient one.
+      // publishHook fires inside the span's context so nested OTel calls
+      // parent under this PRODUCER span instead of the ambient one.
       safelyInvokeHook(HOOK_PUBLISH, config.publishHook, span, {
         subject: ctx.subject,
         record: ctx.record,

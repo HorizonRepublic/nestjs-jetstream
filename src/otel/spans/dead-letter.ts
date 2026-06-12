@@ -24,7 +24,7 @@ export interface DeadLetterSpanContext {
  * the original publish via the message's traceparent, so it sits as a
  * sibling of the failed Consume spans and the whole failure chain is
  * visible in one APM waterfall. Span duration captures the real fallback
- * cost — `onDeadLetter` callback, DLQ republish, event bus emit.
+ * cost: `onDeadLetter` callback, DLQ republish, event bus emit.
  */
 export const withDeadLetterSpan = async <T>(
   ctx: DeadLetterSpanContext,

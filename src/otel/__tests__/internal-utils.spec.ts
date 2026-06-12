@@ -5,7 +5,7 @@ import { parseServerAddress, safelyInvokeHook } from '../internal-utils';
 
 describe('safelyInvokeHook', () => {
   it('should be a no-op when hook is undefined', () => {
-    // When + Then — no throw
+    // When + Then
     expect(() => {
       safelyInvokeHook('publishHook', undefined);
     }).not.toThrow();
@@ -30,14 +30,14 @@ describe('safelyInvokeHook', () => {
       throw new Error('hook boom');
     });
 
-    // When + Then — must not propagate
+    // When + Then
     expect(() => {
       safelyInvokeHook('publishHook', hook, 'arg');
     }).not.toThrow();
   });
 
   it('should swallow non-Error throws from the hook', () => {
-    // Given — a hook that throws a primitive forces the `String(err)` branch
+    // Given: a primitive throw forces the `String(err)` branch
     const hook = vi.fn().mockImplementation(() => {
       throw 'string failure';
     });
@@ -49,8 +49,7 @@ describe('safelyInvokeHook', () => {
   });
 
   it('should forward async hook rejections to the debug logger without leaking', async () => {
-    // Given — `(...args) => void` widens to allow Promise<void>; the
-    // dispatcher must still catch the eventual rejection.
+    // Given: `(...args) => void` widens to allow Promise<void>
     const hook = vi.fn().mockImplementation(() => Promise.reject(new Error('async boom')));
     const unhandled = vi.fn();
 
@@ -60,7 +59,7 @@ describe('safelyInvokeHook', () => {
       safelyInvokeHook('publishHook', hook as () => void);
       await new Promise((resolve) => setImmediate(resolve));
 
-      // Then — no unhandledRejection observed.
+      // Then
       expect(unhandled).not.toHaveBeenCalled();
     } finally {
       process.off('unhandledRejection', unhandled);
@@ -68,8 +67,7 @@ describe('safelyInvokeHook', () => {
   });
 
   it('should ignore objects whose `then` is not a function (not actually thenable)', () => {
-    // Given — `'then' in result` is true, but typeof check rules out the
-    // value-as-string footgun before we touch a non-callable property.
+    // Given: `'then' in result` is true but `then` is not callable
     const hook = vi.fn().mockReturnValue({ then: 'not a function' });
 
     // When + Then
@@ -96,7 +94,6 @@ describe('parseServerAddress', () => {
   });
 
   it('should omit the port attribute when the URL has no explicit port', () => {
-    // User wrote `nats://nats.local` — no invented port.
     expect(parseServerAddress(['nats://nats.local'])).toEqual({ host: 'nats.local' });
   });
 
@@ -124,7 +121,6 @@ describe('parseServerAddress', () => {
   });
 
   it('should parse a scheme-qualified IPv6 URL and strip brackets from the hostname', () => {
-    // Documentation-space address (RFC 3849) rather than a real link-local literal.
     expect(parseServerAddress(['nats://[2001:db8::1]:4222'])).toEqual({
       host: '2001:db8::1',
       port: 4222,
@@ -132,20 +128,16 @@ describe('parseServerAddress', () => {
   });
 
   it('should omit the port when the parsed value is not a valid integer', () => {
-    // We don't validate the TCP range — that's NATS's job when it tries to
-    // connect. We just refuse to emit a nonsense integer as `server.port`.
+    // TCP range is not validated here; that is NATS's job at connect time.
     expect(parseServerAddress(['nats.local:not-a-number'])).toEqual({ host: 'nats.local' });
   });
 
   it('should return null when the bare authority has no host before the port', () => {
-    // `:4222` — port without host. The split yields an empty host string,
-    // and we'd rather drop the attribute than report a blank server.address.
     expect(parseServerAddress([':4222'])).toBeNull();
   });
 
   it('should return null for a scheme-qualified URL whose hostname empties out', () => {
-    // `nats://:4222` — WHATWG URL accepts this but `hostname` is empty,
-    // which is uninformative for APM dashboards.
+    // WHATWG URL accepts `nats://:4222` without throwing, but `hostname` parses empty.
     expect(parseServerAddress(['nats://:4222'])).toBeNull();
   });
 

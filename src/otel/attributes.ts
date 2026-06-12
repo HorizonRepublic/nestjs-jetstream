@@ -41,7 +41,7 @@ export interface MessagingBaseContext {
   readonly subject: string;
   readonly pattern?: string;
   readonly serviceName: string;
-  /** Omitted when the NATS URL couldn't be parsed — we'd rather not emit than invent. */
+  /** Omitted when the NATS URL couldn't be parsed; we'd rather not emit than invent. */
   readonly serverAddress?: string;
   /** Omitted when the user-supplied NATS URL had no explicit port. */
   readonly serverPort?: number;
@@ -122,7 +122,7 @@ export const buildConsumeAttributes = (ctx: ConsumeAttributeContext): Attributes
 };
 
 export interface RpcClientAttributeContext extends MessagingBaseContext {
-  /** Absent on Core RPC — NATS request/reply uses an internal muxer instead. */
+  /** Absent on Core RPC; NATS request/reply uses an internal muxer instead. */
   readonly correlationId?: string;
   readonly payloadBytes: number;
   readonly messageId?: string;
@@ -162,15 +162,9 @@ export const buildDeadLetterAttributes = (ctx: DeadLetterAttributeContext): Attr
 };
 
 /**
- * Pull a structured code off an error that's been classified as expected.
- * Tries sources in order and falls through to the next when a source
- * yields nothing:
- *   1. `RpcException.getError()` payload → `codeFromPayload`
- *   2. `HttpException.getStatus()` → `HTTP_<status>`
- *   3. `err.code` / `err.errorCode` if they look like stable codes
- *
- * Returns `undefined` if nothing matches; `jetstream.rpc.reply.has_error`
- * is still set by the caller so the outcome remains visible in APM.
+ * Code extraction order for expected errors: `RpcException.getError()`
+ * payload, then `HttpException.getStatus()` as `HTTP_<status>`, then
+ * `err.code` / `err.errorCode` when they look like stable codes.
  */
 const extractFromRpcException = (record: Record<string, unknown>): string | undefined => {
   const getError = record.getError;
@@ -228,11 +222,8 @@ const hasAncestorNamed = (err: unknown, name: string): boolean => {
 };
 
 /**
- * Match shape only for strings that look like a stable error code
- * (`UPPER_SNAKE_CASE` or `A-Z0-9_`). Free-form messages like
- * `"User 42 is not authorised"` would otherwise land on
- * `jetstream.rpc.reply.error.code` — producing high-cardinality APM
- * series and leaking PII through span exports.
+ * Only `UPPER_SNAKE_CASE` strings count as stable error codes. Free-form
+ * messages would create high-cardinality APM series and leak PII.
  */
 const STABLE_ERROR_CODE_RE = /^[A-Z][A-Z0-9_]*$/u;
 
@@ -253,7 +244,7 @@ const codeFromPayload = (payload: unknown): string | undefined => {
 /**
  * Attributes for a span whose handler threw an error classified as
  * `expected`. Span stays OK, attributes surface the business outcome.
- * The error message is intentionally not captured (PII risk — add it via
+ * The error message is intentionally not captured (PII risk; add it via
  * `responseHook` if you want it).
  */
 export const buildExpectedErrorAttributes = (err: unknown): Attributes => {
@@ -267,7 +258,7 @@ export const buildExpectedErrorAttributes = (err: unknown): Attributes => {
   return attrs;
 };
 
-/** Apply the expected-error attributes to an already-started span — shared by the consume and RPC-client paths. */
+/** Apply expected-error attributes to an already-started span (consume and RPC-client paths). */
 export const applyExpectedErrorAttributes = (span: Span, err: unknown): void => {
   span.setAttributes(buildExpectedErrorAttributes(err));
 };

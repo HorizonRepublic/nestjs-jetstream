@@ -47,7 +47,7 @@ class UsersController {
 class SlowController {
   @MessagePattern('users.slow')
   async slow(): Promise<{ readonly ok: true }> {
-    // Never resolves — the RPC router deadline should abort the span.
+    // Never resolves; the RPC router deadline should abort the span.
     await new Promise<void>(() => {});
     return { ok: true };
   }
@@ -184,20 +184,19 @@ describe('OTel RPC integration', () => {
     });
 
     it('should close the CONSUMER span early when the handler exceeds the RPC deadline', async () => {
-      // When — client times out while handler is still pending (never resolves).
+      // When: client times out while the handler is still pending
       await expect(firstValueFrom(client.send('users.slow', {}))).rejects.toBeDefined();
 
-      // Poll until the server-side timeout path has fired `abort()` and the
-      // CONSUMER span has reached the exporter — avoids a fixed sleep.
+      // Poll until the abort path fired and the CONSUMER span reached the exporter
+      // (avoids a fixed sleep).
       await waitForCondition(async () => {
         await provider.forceFlush();
 
         return exporter.getFinishedSpans().some((s) => s.kind === SpanKind.CONSUMER);
       }, 5_000);
 
-      // Then — the CONSUMER span was ended by the abort branch with an
-      // `rpc.timeout` / `rpc.handler.timeout` event (not left open until
-      // the handler eventually resolves).
+      // Then: the abort branch ended the span with an rpc.handler.timeout event
+      // instead of leaving it open
       const consume = exporter.getFinishedSpans().find((s) => s.kind === SpanKind.CONSUMER);
 
       expect(consume).toBeDefined();

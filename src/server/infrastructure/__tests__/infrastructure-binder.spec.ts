@@ -21,10 +21,6 @@ import { JetstreamProvisioningError } from '../provisioning-error';
 import { NameResolver } from '../name-resolver';
 import { MIGRATION_BACKUP_SUFFIX } from '../stream-migration';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 const streamNotFound = (): JetStreamApiError =>
   new JetStreamApiError({ err_code: 10059, code: 404, description: 'stream not found' });
 
@@ -74,10 +70,6 @@ const makeConsumerInfo = (config: Partial<ConsumerConfig> = {}): ConsumerInfo =>
     } as ConsumerConfig,
   });
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 describe(InfrastructureBinder.name, () => {
   afterEach(vi.resetAllMocks);
 
@@ -97,17 +89,12 @@ describe(InfrastructureBinder.name, () => {
   const makeSut = (options: JetstreamModuleOptions = baseOptions): InfrastructureBinder => {
     names = new NameResolver(options);
     registry = createMock<PatternRegistry>();
-    // Default: no registered patterns
     registry.getPatternsByKind.mockReturnValue(emptyPatterns);
     registry.getBroadcastPatterns.mockReturnValue([]);
     registry.getOrderedSubjects.mockReturnValue([]);
 
     return new InfrastructureBinder(options, names, registry);
   };
-
-  // -------------------------------------------------------------------------
-  // Happy paths
-  // -------------------------------------------------------------------------
 
   describe('bindStream()', () => {
     describe('when stream exists', () => {
@@ -182,10 +169,6 @@ describe(InfrastructureBinder.name, () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // bindStream — entity-missing throw
-  // -------------------------------------------------------------------------
-
   describe('bindStream() — missing stream', () => {
     describe('when stream does not exist', () => {
       it('should throw a JetstreamProvisioningError naming the stream and instructing to provision it', async () => {
@@ -204,10 +187,6 @@ describe(InfrastructureBinder.name, () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // bindDlqStream — entity-missing throw
-  // -------------------------------------------------------------------------
-
   describe('bindDlqStream() — missing DLQ stream', () => {
     describe('when DLQ stream does not exist', () => {
       it('should throw a JetstreamProvisioningError naming the DLQ stream', async () => {
@@ -224,10 +203,6 @@ describe(InfrastructureBinder.name, () => {
       });
     });
   });
-
-  // -------------------------------------------------------------------------
-  // bindConsumer — entity-missing throw
-  // -------------------------------------------------------------------------
 
   describe('bindConsumer() — missing consumer', () => {
     describe('when consumer does not exist', () => {
@@ -247,10 +222,6 @@ describe(InfrastructureBinder.name, () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Handler subject coverage — throw
-  // -------------------------------------------------------------------------
-
   describe('bindConsumer() — uncovered handler subjects', () => {
     describe('when consumer filter does not cover a registered handler subject', () => {
       it('should throw listing the uncovered subjects', async () => {
@@ -266,7 +237,6 @@ describe(InfrastructureBinder.name, () => {
         });
 
         const uncoveredSubject = names.subject(StreamKind.Event, pattern);
-        // Consumer only filters a completely different subject
         const info = makeConsumerInfo({ filter_subject: 'other.service.ev.>' });
         const jsm = makeJsm({ consumerInfo: vi.fn().mockResolvedValue(info) });
 
@@ -275,10 +245,6 @@ describe(InfrastructureBinder.name, () => {
       });
     });
   });
-
-  // -------------------------------------------------------------------------
-  // DLQ stream subjects coverage — throw
-  // -------------------------------------------------------------------------
 
   describe('bindDlqStream() — DLQ subject not in stream subjects', () => {
     describe('when DLQ stream subjects do not include the DLQ subject', () => {
@@ -301,10 +267,6 @@ describe(InfrastructureBinder.name, () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Schedule coverage — throw
-  // -------------------------------------------------------------------------
-
   describe('bindStream() — scheduling enabled but schedule prefix not covered', () => {
     describe('when allow_msg_schedules is set and stream subjects miss the schedule prefix', () => {
       it('should throw naming the missing schedule prefix', async () => {
@@ -316,7 +278,6 @@ describe(InfrastructureBinder.name, () => {
 
         const sut = makeSut(options);
 
-        // Stream subjects cover the event subject but NOT the schedule prefix
         const eventFilter = names.filterSubject(StreamKind.Event);
         const info = makeStreamInfo({ subjects: [eventFilter] });
         const jsm = makeJsm({ streamInfo: vi.fn().mockResolvedValue(info) });
@@ -566,10 +527,6 @@ describe(InfrastructureBinder.name, () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Retention mismatch — warn
-  // -------------------------------------------------------------------------
-
   describe('bindStream() — retention mismatch', () => {
     describe('when Event stream has non-workqueue retention', () => {
       it('should log a warning and still return stream info', async () => {
@@ -592,10 +549,6 @@ describe(InfrastructureBinder.name, () => {
       });
     });
   });
-
-  // -------------------------------------------------------------------------
-  // DLQ enabled but unlimited max_deliver — warn
-  // -------------------------------------------------------------------------
 
   describe('bindConsumer() — dlq enabled with unlimited max_deliver', () => {
     describe('when options.dlq is set and consumer max_deliver is 0 (unlimited)', () => {
@@ -628,16 +581,12 @@ describe(InfrastructureBinder.name, () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // ackExtension — ack_wait too short — warn
-  // -------------------------------------------------------------------------
-
   describe('bindConsumer() — ack_wait shorter than ackExtension interval', () => {
     describe('when ackExtension is configured and consumer ack_wait is shorter than the interval', () => {
       it('should log a warning and still return consumer info', async () => {
         // Given: ackExtension = 10_000 ms, ack_wait = 5_000_000_000 ns (= 5s < 10s)
         const ackExtensionMs = 10_000;
-        const ackWaitNanos = 5_000_000_000; // 5s in ns
+        const ackWaitNanos = 5_000_000_000;
 
         const options: JetstreamModuleOptions = {
           ...baseOptions,

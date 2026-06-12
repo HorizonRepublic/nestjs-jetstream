@@ -27,15 +27,11 @@ export interface RpcClientSpanContext {
   readonly endpoint: ServerEndpoint | null;
 }
 
-/**
- * Discriminant for {@link RpcOutcome} variants. Constants instead of string
- * literals so call sites reference a named member and renames surface as
- * compile errors.
- */
+/** Discriminant for {@link RpcOutcome} variants. */
 export enum RpcOutcomeKind {
-  /** Reply received with no error flag — plain success. */
+  /** Reply received with no error flag; plain success. */
   Ok = 'ok',
-  /** Reply received with `x-error: true` — structured business error, span stays OK. */
+  /** Reply received with `x-error: true`; structured business error, span stays OK. */
   ReplyError = 'reply-error',
   /** Round-trip exceeded the configured timeout. Span status ERROR, `rpc.timeout` message. */
   Timeout = 'timeout',
@@ -62,7 +58,7 @@ export type RpcOutcome =
  * wraps the request/await in `context.with(activeContext, fn)` so any
  * spans the host app creates during the round-trip nest under this span.
  * When the trace kind is disabled or OTel is off, `activeContext` is the
- * currently-active context — `context.with` is safe to call regardless.
+ * currently-active context; `context.with` is safe to call regardless.
  */
 export interface RpcClientSpanHandle {
   readonly activeContext: Context;
@@ -71,8 +67,8 @@ export interface RpcClientSpanHandle {
 
 /**
  * Wrap an RPC round-trip (`client.send`) in a CLIENT span. Returns a
- * `finish(outcome)` handle the caller invokes once — on reply, timeout, or
- * transport failure — and that's when the span ends.
+ * `finish(outcome)` handle the caller invokes once (on reply, timeout, or
+ * transport failure), which is when the span ends.
  *
  * `x-error: true` replies are expected business outcomes (span OK +
  * `jetstream.rpc.reply.*`). Real transport failures (timeout, connection
@@ -87,7 +83,7 @@ export const beginRpcClientSpan = (
   ctx: RpcClientSpanContext,
   config: ResolvedOtelOptions,
 ): RpcClientSpanHandle => {
-  // Kill switch — `otel.enabled: false` opts out of propagation too.
+  // Kill switch: `otel.enabled: false` opts out of propagation too.
   if (!config.enabled) {
     return {
       activeContext: context.active(),
@@ -127,7 +123,7 @@ export const beginRpcClientSpan = (
   const ctxWithSpan = trace.setSpan(context.active(), span);
 
   injectContext(ctxWithSpan, ctx.headers, hdrsSetter);
-  // publishHook deliberately skipped — this is a CLIENT round-trip span, not a PRODUCER span.
+  // publishHook deliberately skipped; this is a CLIENT round-trip span, not a PRODUCER span.
   const start = Date.now();
   let finalized = false;
 
@@ -159,9 +155,8 @@ export const beginRpcClientSpan = (
         span.setStatus({ code: SpanStatusCode.ERROR, message: outcome.error.message });
         break;
       default: {
-        // Should be unreachable given the `RpcOutcome` union — log instead
-        // of throwing so a stray outcome from a future variant doesn't tear
-        // down the caller's RPC pipeline. The span still ends below.
+        // Unreachable given the `RpcOutcome` union; log instead of throwing
+        // so a stray future variant doesn't tear down the RPC pipeline.
         const unknownOutcome = outcome as { readonly kind?: unknown };
 
         logger.error(`Unhandled RPC outcome: ${String(unknownOutcome.kind)}`);
@@ -169,9 +164,8 @@ export const beginRpcClientSpan = (
       }
     }
 
-    // Run inside the span's active context so hooks that create child
-    // spans see this CLIENT span as the parent — symmetric with
-    // `withPublishSpan` / `withConsumeSpan`.
+    // Run inside the span's context so hooks that create child spans
+    // parent under this CLIENT span; symmetric with the other span helpers.
     context.with(ctxWithSpan, () => {
       safelyInvokeHook(HOOK_RESPONSE, config.responseHook, span, {
         subject: ctx.subject,

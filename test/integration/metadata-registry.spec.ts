@@ -22,7 +22,7 @@ const EVENT_META = { http: { method: 'POST', path: '/orders' } };
 const RPC_META = { http: { method: 'GET', path: '/orders/:id' }, auth: 'bearer' };
 const BROADCAST_META = { scope: 'global' };
 
-/** Short TTL for tests — must be >= MIN_METADATA_TTL (5s). */
+/** Short TTL for tests; must be >= MIN_METADATA_TTL (5s). */
 const TEST_TTL = 5_000;
 
 @Controller()
@@ -82,7 +82,7 @@ describe('Handler Metadata Registry', { timeout: 60_000 }, () => {
     try {
       await jsm.streams.delete(KV_STREAM_NAME);
     } catch {
-      /* stream doesn't exist — nothing to destroy */
+      /* stream doesn't exist; nothing to destroy */
     }
   };
 
@@ -211,7 +211,7 @@ describe('Handler Metadata Registry', { timeout: 60_000 }, () => {
     });
 
     it('should expire entries after shutdown when heartbeat stops', async () => {
-      // Given: app with short TTL (3s)
+      // Given: app with short metadata TTL
       serviceName = uniqueServiceName();
       ({ app } = await createTestApp(
         { name: serviceName, port, metadata: { ttl: TEST_TTL } },
@@ -222,7 +222,6 @@ describe('Handler Metadata Registry', { timeout: 60_000 }, () => {
       const kv = await openKv();
       const eventKey = metadataKey(serviceName, StreamKind.Event, 'order.created');
 
-      // Verify entry exists
       const entryBefore = await kv.get(eventKey);
 
       expect(entryBefore).not.toBeNull();
@@ -244,7 +243,7 @@ describe('Handler Metadata Registry', { timeout: 60_000 }, () => {
     });
 
     it('should keep entries alive while app is running via heartbeat', async () => {
-      // Given: app with short TTL (3s), heartbeat refreshes every 1.5s
+      // Given: app with short metadata TTL kept alive by the heartbeat
       serviceName = uniqueServiceName();
       ({ app } = await createTestApp(
         { name: serviceName, port, metadata: { ttl: TEST_TTL } },

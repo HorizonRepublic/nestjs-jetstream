@@ -149,7 +149,7 @@ export class RpcContext extends BaseRpcContext<[NatsMessage]> {
     return this.isJetStream() ? (this.args[0] as JsMsg) : null;
   }
 
-  /** Ensure the message is JetStream — settlement actions are not available for Core NATS. */
+  /** Ensure the message is JetStream; settlement actions are not available for Core NATS. */
   private assertJetStream(method: string): void {
     if (!this.isJetStream()) {
       throw new Error(`${method}() is only available for JetStream messages`);

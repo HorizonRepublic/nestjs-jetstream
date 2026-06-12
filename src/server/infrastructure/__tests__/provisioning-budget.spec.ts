@@ -153,7 +153,7 @@ describe('assertStorageBudget', () => {
     });
     const logger = createMock<Logger>();
 
-    // When: 100 GiB memory stream — must not count against file storage
+    // When: 100 GiB memory stream, must not count against file storage
     await assertStorageBudget(
       jsm as never,
       'svc',
@@ -172,7 +172,7 @@ describe('assertStorageBudget', () => {
     });
     const logger = createMock<Logger>();
 
-    // When / Then: never-throws guard — resolves undefined, treats missing limit as unset
+    // When / Then: never-throws guard; resolves undefined, treats missing limit as unset
     await expect(
       assertStorageBudget(jsm as never, 'svc', [reservation(1, 5 * GIB)], logger),
     ).resolves.toBeUndefined();

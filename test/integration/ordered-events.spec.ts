@@ -253,7 +253,7 @@ describe('Ordered Event Delivery', () => {
 
     it('should only deliver messages published after consumer started', async () => {
       // Given: consumer already running with DeliverPolicy.New
-      // (no delay needed — startOrdered awaits consumer readiness)
+      // (no delay needed: startOrdered awaits consumer readiness)
 
       // When: publish after consumer started
       await firstValueFrom(client.emit('ordered:order.status', { status: 'new-only' }));
@@ -283,7 +283,7 @@ describe('Ordered Event Delivery', () => {
       await firstValueFrom(client.emit('ordered:order.status', { status: 'third' }));
       await app.close();
 
-      // Step 2: restart with DeliverPolicy.Last — should get only the last message
+      // Step 2: restart with DeliverPolicy.Last, expecting only the last message
       ({ app, module } = await createTestApp(
         { name: serviceName, port, ordered: { deliverPolicy: DeliverPolicy.Last } },
         [OrderedController],
@@ -334,7 +334,7 @@ describe('Ordered Event Delivery', () => {
         5_000,
       );
 
-      // Then: last message per subject — not all messages
+      // Then: last message per subject, not all messages
       expect(controller.statusReceived).toEqual([{ status: 'latest-status' }]);
       expect(controller.auditReceived).toEqual([{ action: 'latest-audit' }]);
 
@@ -398,14 +398,14 @@ describe('Ordered Event Delivery', () => {
 
       await firstValueFrom(client.emit('ordered:order.status', { status: 'before' }));
 
-      // Ensure NATS timestamps differ — sub-millisecond publishes can share the same timestamp
+      // Ensure NATS timestamps differ: sub-millisecond publishes can share the same timestamp
       await new Promise((r) => setTimeout(r, 50));
       const startTime = new Date().toISOString();
 
       await firstValueFrom(client.emit('ordered:order.status', { status: 'after' }));
       await app.close();
 
-      // Step 2: restart with StartTime — should skip 'before', get 'after'
+      // Step 2: restart with StartTime, expecting 'before' skipped and 'after' delivered
       ({ app, module } = await createTestApp(
         {
           name: serviceName,
@@ -460,7 +460,6 @@ describe('Ordered Event Delivery', () => {
       // Wait a bit to ensure no redelivery
       await new Promise((r) => setTimeout(r, 2_000));
 
-      // Ordered consumer: handler called once, no retry
       expect(controller.callCount).toBe(1);
     });
   });

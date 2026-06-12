@@ -102,7 +102,7 @@ describe('Self-Healing Consumer Flow', () => {
 
         await jsm.consumers.delete(stream, consumer);
 
-        // Re-create immediately — self-healing retry will find it after backoff
+        // Re-create immediately; the self-healing retry will find it after backoff
         await jsm.consumers.add(stream, info.config);
 
         // Then: self-healing retry finds the re-created consumer and resumes consumption
@@ -240,7 +240,7 @@ describe('Self-Healing Consumer Flow', () => {
       const evConsumer = consumerName(serviceName, StreamKind.Event);
       const backupName = `${evStream}__migration_backup`;
 
-      // When: simulate migration — create backup stream, then delete consumer
+      // When: simulate migration (create backup stream, then delete consumer)
 
       await jsm.streams.add({
         name: backupName,
@@ -250,26 +250,24 @@ describe('Self-Healing Consumer Flow', () => {
 
       await jsm.consumers.delete(evStream, evConsumer);
 
-      // Publish a message while backup exists
       await firstValueFrom(client.emit('healing.check', { phase: 'during-migration' }));
 
       // Wait enough for self-healing to attempt recovery (several retry cycles)
       await new Promise((r) => setTimeout(r, 3_000));
 
-      // Then: consumer should NOT be recreated — backup blocks recovery
+      // Then: consumer must not be recreated, backup blocks recovery
       await expect(jsm.consumers.info(evStream, evConsumer)).rejects.toThrow();
 
-      // Only the first message was consumed
       expect(controller.received).toHaveLength(1);
 
-      // When: "migration completes" — delete backup stream
+      // When: "migration completes", delete backup stream
       await jsm.streams.delete(backupName);
 
       // Then: self-healing recovers, consumer recreated, pending message delivered
       await waitForCondition(() => controller.received.length >= 2, 30_000);
 
-      // At least both phases arrived — redelivery after consumer recreation
-      // may add duplicates, which is correct at-least-once behaviour.
+      // Both phases arrived; redelivery after consumer recreation may add
+      // duplicates, which is correct at-least-once behaviour.
       expect(controller.received.length).toBeGreaterThanOrEqual(2);
       const phases = controller.received.map((m) => (m as Record<string, unknown>).phase);
 
@@ -296,7 +294,7 @@ describe('Self-Healing Consumer Flow', () => {
 
       // Then: self-healing recreates consumer and message is delivered.
       // Redelivery of "before-delete" may occur since consumer was deleted
-      // before the ack was persisted — this is correct at-least-once behaviour.
+      // before the ack was persisted, which is correct at-least-once behaviour.
       const getPhases = (): string[] =>
         controller.received.map((m) => (m as Record<string, unknown>).phase as string);
 

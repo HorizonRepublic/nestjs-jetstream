@@ -49,7 +49,7 @@ interface AckEntry {
  * has passed, and re-schedules for the new earliest.
  *
  * The timer is marked `.unref()` so the pool cannot keep the event loop
- * alive on its own — lifecycle management is the caller's responsibility
+ * alive on its own; lifecycle management is the caller's responsibility
  * (every `schedule()` must be paired with a `cancel()`).
  */
 class AckExtensionPool {
@@ -150,7 +150,7 @@ export const startAckExtensionTimer = (
 };
 
 /**
- * Internal — exposed for tests only.
+ * Internal, exposed for tests only.
  * @internal
  */
 export const _ackExtensionPoolForTest = pool;

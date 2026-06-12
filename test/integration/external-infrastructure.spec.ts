@@ -188,7 +188,7 @@ describe('External Infrastructure (bind-only mode)', () => {
     });
 
     it('should reject boot with the external stream name in the error message', async () => {
-      // Given: no out-of-band provisioning — stream does not exist
+      // Given: no out-of-band provisioning, stream does not exist
 
       // When: attempt to boot with Manual mode
       await expect(
@@ -276,7 +276,7 @@ describe('External Infrastructure (bind-only mode)', () => {
     });
 
     it('should create the consumer on the external stream and deliver messages', async () => {
-      // Given: library booted — consumer should now exist
+      // Given: library booted, consumer should now exist
       const consumerInfo = await jsm.consumers.info(names.stream, names.consumer);
 
       expect(consumerInfo).toBeDefined();
@@ -354,7 +354,7 @@ describe('External Infrastructure (bind-only mode)', () => {
 
         await js.publish(names.subject, new TextEncoder().encode(JSON.stringify({ seq: 2 })));
 
-        // Then: consumer was NOT recreated — poll for ~5s asserting library never recreates it
+        // Then: consumer was NOT recreated; poll for ~5s asserting library never recreates it
         const pollEnd = Date.now() + 5_000;
 
         while (Date.now() < pollEnd) {

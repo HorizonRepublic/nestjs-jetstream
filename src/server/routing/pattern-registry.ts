@@ -26,7 +26,7 @@ export class PatternRegistry {
   private readonly logger = new Logger('Jetstream:PatternRegistry');
   private readonly registry = new Map<string, RegisteredHandler>();
 
-  // Cached after registerHandlers() — the registry is immutable from that point
+  // Cached after registerHandlers(); the registry is immutable from that point
   private cachedPatterns: PatternsByKind | null = null;
   private _hasEvents = false;
   private _hasCommands = false;
@@ -97,7 +97,7 @@ export class PatternRegistry {
    * Resolve the declared pattern and {@link StreamKind} for a full NATS subject.
    *
    * Returns `null` when the subject is not registered. The declared pattern is
-   * the value the user passed to `@EventPattern`/`@MessagePattern` — stable and
+   * the value the user passed to `@EventPattern`/`@MessagePattern`: stable and
    * bounded, suitable for use as a Prometheus label without cardinality risk.
    */
   public resolveDeclared(subject: string): { pattern: string; kind: StreamKind } | null {

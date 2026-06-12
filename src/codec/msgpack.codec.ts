@@ -15,7 +15,7 @@ export interface PackrLike {
  * MessagePack codec backed by a caller-provided `msgpackr` `Packr` instance.
  *
  * Use this codec when publishing structured payloads larger than roughly
- * 1–2 KB — below that size the default {@link JsonCodec} wins on per-call
+ * 1–2 KB; below that size the default {@link JsonCodec} wins on per-call
  * constant overhead. Above it, MessagePack encodes and decodes several times
  * faster and produces smaller wire frames. The format is cross-language, so
  * Node producers and non-Node consumers (Python, Go, Java, Rust, ...) stay

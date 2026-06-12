@@ -44,9 +44,9 @@ import { subjectCovers } from './subject-utils';
  * Manages JetStream stream lifecycle: creation, updates, and idempotent ensures.
  *
  * Creates up to three stream types depending on configuration:
- * - **Event stream** — workqueue events (always, when consumer enabled)
- * - **Command stream** — RPC commands (only in jetstream RPC mode)
- * - **Broadcast stream** — fan-out events (only if broadcast handlers exist)
+ * - **Event stream**: workqueue events (always, when consumer enabled)
+ * - **Command stream**: RPC commands (only in jetstream RPC mode)
+ * - **Broadcast stream**: fan-out events (only if broadcast handlers exist)
  *
  * All operations are idempotent: safe to call on every startup and reconnection.
  */
@@ -267,20 +267,19 @@ export class StreamProvider {
     }
 
     if (!diff.hasImmutableChanges) {
-      // Mutable-only or enable-only — normal update
+      // Mutable-only or enable-only changes: normal update
       this.logger.debug(`Stream exists, updating: ${config.name}`);
 
       return await this.runStreamOp(ctx, () => jsm.streams.update(config.name, config));
     }
 
-    // Immutable changes detected
     if (!this.options.allowDestructiveMigration) {
       this.logger.warn(
         `Stream ${config.name} has immutable config conflicts. ` +
           `Enable allowDestructiveMigration to recreate the stream.`,
       );
 
-      // Apply mutable-only changes by building config without immutable overrides
+      // Still apply the mutable subset of the changes
       if (diff.hasMutableChanges) {
         const mutableConfig = this.buildMutableOnlyConfig(config, currentInfo.config, diff);
 
@@ -298,7 +297,6 @@ export class StreamProvider {
       );
     }
 
-    // Destructive migration
     await withMigrationSpan(
       this.otel,
       {
@@ -457,7 +455,7 @@ export class StreamProvider {
     );
   }
 
-  /** The broadcast stream is global — every service in the cluster shares it. */
+  /** The broadcast stream is global; every service in the cluster shares it. */
   private isSharedStream(name: string): boolean {
     return name === this.getStreamName(StreamKind.Broadcast);
   }
@@ -487,10 +485,8 @@ export class StreamProvider {
   }
 
   /**
-   * Build the stream configuration for the Dead-Letter Queue (DLQ).
-   *
-   * Merges the library default DLQ config with user-provided overrides.
-   * Ensures transport-controlled settings like retention are safely decoupled.
+   * Build the DLQ stream config: library defaults merged with user overrides,
+   * with transport-controlled settings like retention stripped.
    */
   private buildDlqConfig(): Partial<StreamConfig> & { name: string; subjects: string[] } {
     const name = this.names.dlqStreamName();

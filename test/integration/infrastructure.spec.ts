@@ -235,14 +235,12 @@ describe('Stream & Consumer Lifecycle', () => {
     it('should be idempotent — re-listen does not duplicate', async () => {
       const serviceName = uniqueServiceName();
 
-      // First bootstrap
       const { app: app1 } = await createTestApp({ name: serviceName, port }, [
         InfraEventController,
       ]);
 
       await app1.close();
 
-      // Second bootstrap — same service name
       const { app: app2 } = await createTestApp({ name: serviceName, port }, [
         InfraEventController,
       ]);
@@ -251,7 +249,6 @@ describe('Stream & Consumer Lifecycle', () => {
         const jsm = await jetstreamManager(nc);
         const internalName = `${serviceName}__microservice`;
 
-        // Stream and consumer should still exist (no error)
         const streamInfo = await jsm.streams.info(`${internalName}_ev-stream`);
 
         expect(streamInfo).toBeDefined();
@@ -279,7 +276,6 @@ describe('Stream & Consumer Lifecycle', () => {
 
       await app1.close();
 
-      // Explicitly delete the stream — proving re-bootstrap recreates it
       const jsm = await jetstreamManager(nc);
       const internal = `${serviceName}__microservice`;
 
