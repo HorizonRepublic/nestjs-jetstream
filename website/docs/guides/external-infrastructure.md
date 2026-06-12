@@ -183,7 +183,7 @@ When a custom `subjectPrefix` is set:
 
 - Published subjects use `{prefix}{pattern}` instead of the default convention (e.g., `company.orders.order.created`).
 - The consumer receives exact `filter_subjects` entries for each registered handler instead of a single wildcard filter.
-- Scheduling subjects live under `{prefix}_sch.` instead of the default `{service}._sch.` prefix (see [Scheduling with a custom prefix](#scheduling-with-a-custom-prefix) below).
+- Scheduling subjects live under `{prefix}_sch.` instead of the default `{service}__microservice._sch.` prefix (see [Scheduling with a custom prefix](#scheduling-with-a-custom-prefix) below).
 
 ## Subject contract per kind
 
@@ -215,7 +215,7 @@ Setting broadcast to Manual means the shared cluster-wide `broadcast-stream` is 
 
 | Requirement | What to configure externally |
 |---|---|
-| Stream subjects must cover all ordered-event subjects registered by this service | Subjects use the `{service}__microservice.ord.{pattern}` convention unless a custom prefix is set |
+| Stream subjects must cover all ordered-event subjects registered by this service | Subjects use the `{service}__microservice.ordered.{pattern}` convention unless a custom prefix is set |
 | Consumer filter (ordered consumers are recreated automatically by the client) | No filter configuration needed — ordered consumers are ephemeral |
 
 ### DLQ stream
@@ -254,8 +254,8 @@ The startup log will list externally bound streams as `external (bound)` rows al
 
 ```
 Provisioning 3 stream(s) for "orders":
-  • ext_orders_stream [Event] external (bound)
-  • orders__microservice_broadcast-stream [Broadcast] storage=file replicas=1 …
+  • ext_orders_stream [ev] external (bound)
+  • broadcast-stream [broadcast] storage=file replicas=1 …
   • ext_dlq [dlq] external (bound)
   Σ per-node file-backed footprint ≈ 5.00 GiB …
 ```
@@ -311,7 +311,7 @@ The `dlq.management` field accepts only a `stream` override — there is no cons
 
 ## Scheduling with a custom prefix
 
-When `allow_msg_schedules: true` is set and a custom `subjectPrefix` is configured, schedule holders live under `{prefix}_sch.` rather than the default `{service}._sch.` prefix. The external stream **must** cover this prefix, otherwise boot fails:
+When `allow_msg_schedules: true` is set and a custom `subjectPrefix` is configured, schedule holders live under `{prefix}_sch.` rather than the default `{service}__microservice._sch.` prefix. The external stream **must** cover this prefix, otherwise boot fails:
 
 ```bash
 # Stream must include the schedule wildcard alongside the regular subjects
@@ -327,7 +327,7 @@ Or in a single wildcard that already covers both:
 # "ext.orders.>" already covers "ext.orders._sch.>" — no extra entry needed
 ```
 
-If the default naming convention is used (no `subjectPrefix`), the schedule wildcard is `{service}._sch.>` and must appear in the external stream's subjects.
+If the default naming convention is used (no `subjectPrefix`), the schedule wildcard is `{service}__microservice._sch.>` and must appear in the external stream's subjects.
 
 ## Interaction with allowDestructiveMigration
 

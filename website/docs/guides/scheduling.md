@@ -78,8 +78,8 @@ handleReminder(@Payload() data: OrderReminder) {
 ```mermaid
 flowchart LR
     subgraph stream["Event stream"]
-        sch["{svc}._sch.order.reminder.&lt;id&gt;"]
-        ev["{svc}.ev.order.reminder"]
+        sch["{svc}__microservice._sch.order.reminder.&lt;id&gt;"]
+        ev["{svc}__microservice.ev.order.reminder"]
     end
 
     sch -- "at scheduled time" --> ev
@@ -110,11 +110,11 @@ Setting `max_age: 0` disables automatic cleanup for **all** messages in the even
 
 ## Scheduling with a custom subject prefix
 
-When a custom `subjectPrefix` is configured for an event or broadcast kind, the schedule holders live under `{prefix}_sch.` instead of the default `{service}._sch.` prefix:
+When a custom `subjectPrefix` is configured for an event or broadcast kind, the schedule holders live under `{prefix}_sch.` instead of the default `{service}__microservice._sch.` prefix:
 
 | Prefix configuration | Schedule holder prefix |
 |---|---|
-| No custom prefix (default) | `{service}._sch.` |
+| No custom prefix (default) | `{service}__microservice._sch.` |
 | `subjectPrefix: 'company.orders.'` | `company.orders._sch.` |
 
 If the stream is **externally managed** (`ManagementMode.Manual`), it must cover this prefix in its `subjects` list. Boot fails with an explicit error if the coverage is missing:
