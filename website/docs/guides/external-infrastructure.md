@@ -241,7 +241,7 @@ At startup the binder performs the following checks. Failures are thrown as `Jet
 | Stream not found in NATS | `Management mode is Manual — the stream must be provisioned externally before boot.` |
 | Consumer not found in NATS | `Management mode is Manual — the consumer must be provisioned externally before boot.` |
 | Consumer filter does not cover one or more registered handler subjects | `Consumer "…" does not cover the following registered handler subjects: …. Update the consumer's filter_subject / filter_subjects to include them.` |
-| DLQ stream subjects do not contain the DLQ subject | `DLQ stream "…" subjects do not cover the resolved DLQ subject "…". Add "…" to the stream's subjects list.` |
+| DLQ stream subjects do not contain the DLQ subject | `DLQ stream "…" subjects do not cover "…" (dead letters publish to a subject equal to the stream name). Add it to the stream's subjects list.` |
 | Scheduling is enabled (`allow_msg_schedules: true`) but stream subjects do not cover the schedule wildcard | `Stream "…" has scheduling enabled but its subjects do not cover the schedule prefix "…". Add "…>" to the stream's subjects.` |
 
 ### Warns (advisory)

@@ -288,8 +288,11 @@ export const internalName = (name: string): string => `${name}__microservice`;
  * @param pattern - The message pattern (e.g. `'user.created'`).
  * @returns `{serviceName}__microservice.{kind}.{pattern}`
  */
+export const subjectPrefix = (serviceName: string, kind: SubjectKind): string =>
+  `${internalName(serviceName)}.${kind}.`;
+
 export const buildSubject = (serviceName: string, kind: SubjectKind, pattern: string): string =>
-  `${internalName(serviceName)}.${kind}.${pattern}`;
+  `${subjectPrefix(serviceName, kind)}${pattern}`;
 
 /** Broadcast subjects are not scoped to a service and always share this prefix. */
 export const BROADCAST_SUBJECT_PREFIX = 'broadcast.';

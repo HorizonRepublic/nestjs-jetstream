@@ -7,6 +7,7 @@ import {
   internalName,
   SCHEDULE_SEGMENT,
   streamName,
+  subjectPrefix,
 } from '../../jetstream.constants';
 
 import { kindOptionsBlock } from './management';
@@ -111,7 +112,7 @@ export class NameResolver {
   private conventionPrefix(name: string, kind: StreamKind): string {
     if (kind === StreamKind.Broadcast) return BROADCAST_SUBJECT_PREFIX;
 
-    return `${internalName(name)}.${kind}.`;
+    return subjectPrefix(name, kind);
   }
 
   private conventionSchedulePrefix(name: string, kind: StreamKind): string {
