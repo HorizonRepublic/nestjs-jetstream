@@ -19,6 +19,7 @@ import { PatternRegistry } from '../../routing';
 import { InfrastructureBinder } from '../infrastructure-binder';
 import { JetstreamProvisioningError } from '../provisioning-error';
 import { NameResolver } from '../name-resolver';
+import { MIGRATION_BACKUP_SUFFIX } from '../stream-migration';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -33,13 +34,28 @@ const consumerNotFound = (): JetStreamApiError =>
 interface JsmOpts {
   streamInfo?: ReturnType<typeof vi.fn>;
   consumerInfo?: ReturnType<typeof vi.fn>;
+  backupInfo?: StreamInfo;
 }
 
-const makeJsm = (opts: JsmOpts = {}): JetStreamManager =>
-  createMock<JetStreamManager>({
-    streams: { info: opts.streamInfo ?? vi.fn() },
+type StreamInfoFn = (name: string) => Promise<StreamInfo>;
+
+const makeJsm = (opts: JsmOpts = {}): JetStreamManager => {
+  const streamInfo = (opts.streamInfo ?? vi.fn()) as StreamInfoFn;
+  const dispatch = vi.fn((name: string) => {
+    if (name.endsWith(MIGRATION_BACKUP_SUFFIX)) {
+      return opts.backupInfo !== undefined
+        ? Promise.resolve(opts.backupInfo)
+        : Promise.reject(streamNotFound());
+    }
+
+    return streamInfo(name);
+  });
+
+  return createMock<JetStreamManager>({
+    streams: { info: dispatch },
     consumers: { info: opts.consumerInfo ?? vi.fn() },
   });
+};
 
 const makeStreamInfo = (config: Partial<StreamConfig> = {}): StreamInfo =>
   createMock<StreamInfo>({
@@ -106,6 +122,31 @@ describe(InfrastructureBinder.name, () => {
 
         // Then
         expect(result).toBe(info);
+      });
+    });
+
+    describe('when an interrupted migration backup exists for the stream', () => {
+      it('should warn naming the orphaned backup', async () => {
+        // Given: the bound stream has a leftover __migration_backup sibling
+        const warnSpy = vi.spyOn(Logger.prototype, 'warn');
+        const info = makeStreamInfo();
+        const jsm = makeJsm({
+          streamInfo: vi.fn().mockResolvedValue(info),
+          backupInfo: makeStreamInfo(),
+        });
+        const sut = makeSut();
+
+        // When
+        const result = await sut.bindStream(jsm, StreamKind.Event);
+
+        // Then
+        expect(result).toBe(info);
+
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining(
+            `${names.streamName(StreamKind.Event)}${MIGRATION_BACKUP_SUFFIX}`,
+          ),
+        );
       });
     });
   });

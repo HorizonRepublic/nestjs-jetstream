@@ -724,12 +724,10 @@ describe(StreamProvider, () => {
       // When
       await sut.ensureStreams([StreamKind.Event]);
 
-      // Then: streams.info was never called for a migration_backup name
-      const infoCallNames = mockJsm.streams.info.mock.calls.map((args: unknown[]) =>
-        String(args[0]),
-      );
+      // Then: nothing was mutated, so no migration recovery could have run
+      expect(mockJsm.streams.add).not.toHaveBeenCalled();
 
-      expect(infoCallNames.every((n: string) => !n.includes('__migration_backup'))).toBe(true);
+      expect(mockJsm.streams.update).not.toHaveBeenCalled();
     });
 
     it('should exclude Manual streams from storage reservations and show them as external', async () => {

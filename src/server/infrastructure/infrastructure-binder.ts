@@ -13,6 +13,7 @@ import { kindOptionsBlock, type ManagedKind } from './management';
 import { NameResolver } from './name-resolver';
 import { NatsErrorCode } from './nats-error-codes';
 import { coversOrEquals } from './subject-utils';
+import { MIGRATION_BACKUP_SUFFIX } from './stream-migration';
 
 /** Minimal JetStreamManager surface used by the binder. */
 interface BinderJsm {
@@ -62,7 +63,10 @@ export class InfrastructureBinder {
   ) {}
 
   public async bindStream(jsm: BinderJsm, kind: StreamKind): Promise<StreamInfo> {
-    const info = await this.fetchStream(jsm, this.names.streamName(kind), kind);
+    const name = this.names.streamName(kind);
+    const info = await this.fetchStream(jsm, name, kind);
+
+    await this.warnOnOrphanedMigrationBackup(jsm, name);
 
     if (isSchedulingEnabled(this.options, kind)) {
       this.assertScheduleCoverage(info, kind);
@@ -80,6 +84,7 @@ export class InfrastructureBinder {
     const dlqName = this.names.dlqStreamName();
     const info = await this.fetchStream(jsm, dlqName, 'dlq');
 
+    await this.warnOnOrphanedMigrationBackup(jsm, dlqName);
     this.assertDlqSubjectCoverage(info);
 
     return info;
@@ -216,6 +221,23 @@ export class InfrastructureBinder {
           `Use exact filter_subjects for the registered handler subjects instead.`,
       );
     }
+  }
+
+  private async warnOnOrphanedMigrationBackup(jsm: BinderJsm, streamName: string): Promise<void> {
+    const backupName = `${streamName}${MIGRATION_BACKUP_SUFFIX}`;
+
+    try {
+      await jsm.streams.info(backupName);
+    } catch {
+      return;
+    }
+
+    this.logger.warn(
+      `Found migration backup "${backupName}" for the externally managed stream "${streamName}". ` +
+        `A previous Auto-managed migration was interrupted and undelivered messages may still ` +
+        `reside in the backup. Recover them by sourcing the backup back, or re-enable Auto ` +
+        `management for one boot to let the library finish the recovery.`,
+    );
   }
 
   private warnOnSchedulesDisabled(info: StreamInfo, kind: StreamKind): void {
