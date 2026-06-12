@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { Controller, INestApplication } from '@nestjs/common';
-import { EventPattern, Payload } from '@nestjs/microservices';
+import { ClientProxy, EventPattern, Payload } from '@nestjs/microservices';
 import { TestingModule } from '@nestjs/testing';
 import type { NatsConnection } from '@nats-io/transport-node';
 import {
@@ -12,9 +12,10 @@ import {
   RetentionPolicy,
   StorageType,
 } from '@nats-io/jetstream';
+import { firstValueFrom } from 'rxjs';
 import type { StartedTestContainer } from 'testcontainers';
 
-import { JetstreamProvisioningError, ManagementMode, toNanos } from '../../src';
+import { getClientToken, JetstreamProvisioningError, ManagementMode, toNanos } from '../../src';
 
 import {
   cleanupStreams,
@@ -24,10 +25,6 @@ import {
   waitForCondition,
 } from './helpers';
 import { startNatsContainer } from './nats-container';
-
-// ---------------------------------------------------------------------------
-// External provisioning helper
-// ---------------------------------------------------------------------------
 
 interface ExternalNames {
   stream: string;
@@ -78,10 +75,6 @@ const deleteStreamIfExists = async (jsm: JetStreamManager, name: string): Promis
   }
 };
 
-// ---------------------------------------------------------------------------
-// Controllers
-// ---------------------------------------------------------------------------
-
 @Controller()
 class OrderCreatedController {
   public readonly received: unknown[] = [];
@@ -103,10 +96,6 @@ class AlwaysFailingExternalController {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Suite
-// ---------------------------------------------------------------------------
-
 describe('External Infrastructure (bind-only mode)', () => {
   let container: StartedTestContainer;
   let port: number;
@@ -125,14 +114,11 @@ describe('External Infrastructure (bind-only mode)', () => {
     }
   });
 
-  // -------------------------------------------------------------------------
-  // Test 1: Full-manual round-trip without mutation
-  // -------------------------------------------------------------------------
-
   describe('full-manual round-trip without mutation', () => {
     let app: INestApplication;
     let module: TestingModule;
     let serviceName: string;
+    let client: ClientProxy;
     let controller: OrderCreatedController;
     let jsm: JetStreamManager;
     let names: ExternalNames;
@@ -160,6 +146,7 @@ describe('External Infrastructure (bind-only mode)', () => {
       ));
 
       controller = module.get(OrderCreatedController);
+      client = module.get<ClientProxy>(getClientToken(serviceName));
     });
 
     afterEach(async () => {
@@ -174,12 +161,7 @@ describe('External Infrastructure (bind-only mode)', () => {
       const consumerBefore = await jsm.consumers.info(names.stream, names.consumer);
 
       // When: emit via library client
-      const js = jetstream(nc);
-
-      await js.publish(
-        names.subject,
-        new TextEncoder().encode(JSON.stringify({ orderId: 'ext-1' })),
-      );
+      await firstValueFrom(client.emit('order.created', { orderId: 'ext-1' }));
 
       await waitForCondition(() => controller.received.length >= 1, 10_000);
 
@@ -194,10 +176,6 @@ describe('External Infrastructure (bind-only mode)', () => {
       expect(consumerAfter.config).toEqual(consumerBefore.config);
     });
   });
-
-  // -------------------------------------------------------------------------
-  // Test 2: Missing entity → actionable boot failure
-  // -------------------------------------------------------------------------
 
   describe('missing external entity → boot failure', () => {
     let serviceName: string;
@@ -255,10 +233,6 @@ describe('External Infrastructure (bind-only mode)', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Test 3: Mixed ownership — stream Manual, consumer Auto
-  // -------------------------------------------------------------------------
-
   describe('mixed ownership: stream Manual, consumer Auto', () => {
     let app: INestApplication;
     let module: TestingModule;
@@ -272,7 +246,6 @@ describe('External Infrastructure (bind-only mode)', () => {
       jsm = await jetstreamManager(nc);
       names = makeExternalNames(serviceName);
 
-      // Provision ONLY the stream — consumer is left for Auto provisioning
       await jsm.streams.add({
         name: names.stream,
         subjects: [names.subjectWildcard],
@@ -327,10 +300,6 @@ describe('External Infrastructure (bind-only mode)', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Test 4: Self-healing rebind — NEVER recreate
-  // -------------------------------------------------------------------------
-
   describe('self-healing rebind: never recreate', () => {
     let app: INestApplication;
     let module: TestingModule;
@@ -383,17 +352,18 @@ describe('External Infrastructure (bind-only mode)', () => {
 
         expect(controller.received[0]).toEqual({ seq: 1 });
 
-        // When: delete the external consumer — simulates external ops removing it
+        // When: delete the external consumer
         await jsm.consumers.delete(names.stream, names.consumer);
 
-        // Publish a message while consumer is absent
         await js.publish(names.subject, new TextEncoder().encode(JSON.stringify({ seq: 2 })));
 
-        // Wait enough for self-healing to attempt rebind (backoff base is 100ms, several cycles)
-        await new Promise((r) => setTimeout(r, 3_000));
+        // Then: consumer was NOT recreated — poll for ~5s asserting library never recreates it
+        const pollEnd = Date.now() + 5_000;
 
-        // Then: consumer was NOT recreated — Manual mode forbids creation
-        await expect(jsm.consumers.info(names.stream, names.consumer)).rejects.toThrow();
+        while (Date.now() < pollEnd) {
+          await expect(jsm.consumers.info(names.stream, names.consumer)).rejects.toThrow();
+          await new Promise((r) => setTimeout(r, 200));
+        }
 
         // When: restore the consumer out-of-band with the same filter
         await jsm.consumers.add(names.stream, {
@@ -411,10 +381,6 @@ describe('External Infrastructure (bind-only mode)', () => {
       },
     );
   });
-
-  // -------------------------------------------------------------------------
-  // Test 5: Uncovered handler → boot throw
-  // -------------------------------------------------------------------------
 
   describe('uncovered handler pattern → boot throw', () => {
     let serviceName: string;
@@ -453,6 +419,8 @@ describe('External Infrastructure (bind-only mode)', () => {
       });
 
       // When / Then: boot should fail because handler 'order.created' is not covered
+      const resolvedSubject = `${names.subjectPrefix}order.created`;
+
       await expect(
         createTestApp(
           {
@@ -467,13 +435,9 @@ describe('External Infrastructure (bind-only mode)', () => {
           },
           [OrderCreatedController],
         ),
-      ).rejects.toThrow(/order\.created/);
+      ).rejects.toThrow(resolvedSubject);
     });
   });
-
-  // -------------------------------------------------------------------------
-  // Test 6: External DLQ
-  // -------------------------------------------------------------------------
 
   describe('external DLQ stream', () => {
     let app: INestApplication;
@@ -490,11 +454,8 @@ describe('External Infrastructure (bind-only mode)', () => {
       names = makeExternalNames(serviceName);
       dlqStreamName = `ext_dlq_${serviceName}`;
 
-      // Provision external event stream + consumer
       await provisionExternal(jsm, names);
 
-      // Provision external DLQ stream
-      // The DLQ subject must be the DLQ stream name itself (matches buildDlqConfig convention)
       await jsm.streams.add({
         name: dlqStreamName,
         subjects: [dlqStreamName],
