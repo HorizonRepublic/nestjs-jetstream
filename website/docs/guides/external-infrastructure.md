@@ -17,7 +17,7 @@ import Since from '@site/src/components/Since';
 
 <Since version="2.10.0" />
 
-By default, the transport provisions and updates every JetStream stream and consumer it needs. If your organisation owns the infrastructure layer — Terraform, ArgoCD, Helm, or a dedicated platform team — you can opt out of that auto-management and instead tell the library to bind to resources that already exist.
+By default, the transport provisions and updates every JetStream stream and consumer it needs. If your organization owns the infrastructure layer — Terraform, ArgoCD, Helm, or a dedicated platform team — you can opt out of that auto-management and instead tell the library to bind to resources that already exist.
 
 In **Manual** mode the library never creates, updates, or migrates an entity. At startup it reads the live state from the NATS server, validates that it is suitable for the application's handlers, and fails fast with a detailed error when it is not.
 
@@ -28,7 +28,9 @@ In **Manual** mode the library never creates, updates, or migrates an entity. At
 - You run multiple services sharing the same stream and do not want any single service to modify the stream config.
 - You want audit-trail guarantees: stream configuration changes must go through version control, not happen silently at service startup.
 
+:::tip
 If none of the above apply, the default `Auto` mode is simpler — the transport provisions everything and keeps it up to date without any extra configuration.
+:::
 
 ## Quick start
 
@@ -119,7 +121,7 @@ export class OrdersController {
 
 `ManagementMode` is an enum with two values:
 
-| Value | Behaviour |
+| Value | Behavior |
 |---|---|
 | `ManagementMode.Auto` | The library creates the entity if it doesn't exist and updates its config on every startup. **Default.** |
 | `ManagementMode.Manual` | The library reads the entity's live state but never creates, updates, or migrates it. Fails at boot if the entity is absent. |
@@ -171,7 +173,7 @@ events: {
 
 ### Subject prefix
 
-The `subjectPrefix` field changes the subject pattern used to build and match subjects for a given kind. The trailing dot is normalised automatically.
+The `subjectPrefix` field changes the subject pattern used to build and match subjects for a given kind. The trailing dot is normalized automatically.
 
 ```typescript
 events: {
@@ -209,7 +211,9 @@ Same requirements as the event stream. Only applies when `rpc: { mode: 'jetstrea
 | Stream subjects must cover all broadcast subjects registered by this service | Each broadcast subject follows the `broadcast.{pattern}` convention unless a custom prefix is set |
 | Consumer filter must cover all broadcast handler subjects | Set `filter_subject` or `filter_subjects` |
 
+:::warning
 Setting broadcast to Manual means the shared cluster-wide `broadcast-stream` is externally owned. Every service in the cluster that uses broadcast events will consume from that same stream.
+:::
 
 ### Ordered stream
 
@@ -252,19 +256,19 @@ At startup the binder performs the following checks. Failures are thrown as `Jet
 
 The startup log will list externally bound streams as `external (bound)` rows alongside the auto-provisioned ones, so you can confirm which entities the library touched:
 
-```
+```text
 Provisioning 3 stream(s) for "orders":
   • ext_orders_stream [ev] external (bound)
-  • broadcast-stream [broadcast] storage=file replicas=1 …
+  • broadcast-stream [broadcast] storage=file replicas=1
   • ext_dlq [dlq] external (bound)
-  Σ per-node file-backed footprint ≈ 5.00 GiB …
+  Σ per-node file-backed footprint ≈ 5.00 GiB
 ```
 
 ## Self-healing for Manual consumers
 
 When the transport loses a consumer iterator (NATS reconnect, server restart, or external deletion), the self-healing loop tries to rebind. For a Manual consumer it **never recreates** it — if the consumer is absent it logs a recoverable error and keeps retrying on the same backoff schedule:
 
-```
+```text
 Consumer ext_orders_worker on ext_orders_stream is externally managed and currently absent — waiting for it to be restored.
 ```
 
@@ -317,13 +321,21 @@ When `allow_msg_schedules: true` is set and a custom `subjectPrefix` is configur
 # Stream must include the schedule wildcard alongside the regular subjects
 nats stream add ext_orders_stream \
   --subjects "ext.orders.>,ext.orders._sch.>" \
-  …
+  --retention workqueue \
+  --storage file \
+  --replicas 1 \
+  --defaults
 ```
 
-Or in a single wildcard that already covers both:
+Or with a single wildcard that already covers both:
 
 ```bash
---subjects "ext.orders.>"
+nats stream add ext_orders_stream \
+  --subjects "ext.orders.>" \
+  --retention workqueue \
+  --storage file \
+  --replicas 1 \
+  --defaults
 # "ext.orders.>" already covers "ext.orders._sch.>" — no extra entry needed
 ```
 
@@ -331,11 +343,13 @@ If the default naming convention is used (no `subjectPrefix`), the schedule wild
 
 ## Interaction with allowDestructiveMigration
 
+:::warning
 Setting `allowDestructiveMigration: true` at the same time as a global `provisioning.management: Manual` is contradictory — Manual streams are never migrated regardless of the flag. The library logs a warning at boot:
 
-```
+```text
 allowDestructiveMigration has no effect under provisioning.management: Manual — the library never migrates externally managed streams.
 ```
+:::
 
 The `allowDestructiveMigration` flag only applies to `Auto`-managed streams. See [Stream Migration](/docs/guides/stream-migration#manual-streams-are-never-migrated) for details.
 

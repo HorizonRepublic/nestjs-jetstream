@@ -263,7 +263,7 @@ Default: none. Built-in Dead Letter Queue stream. When set, exhausted messages a
 
 #### `provisioning` &mdash; `ProvisioningOptions`
 
-Default: `{ management: ManagementMode.Auto }`. Controls global provisioning behaviour. <Since version="2.10.0" />
+Default: `{ management: ManagementMode.Auto }`. Controls global provisioning behavior. <Since version="2.10.0" />
 
 The most important field is `management`:
 
@@ -279,9 +279,9 @@ JetstreamModule.forRoot({
 })
 ```
 
-| `management` value      | Behaviour                                                            |
-|-------------------------|----------------------------------------------------------------------|
-| `ManagementMode.Auto`   | Library creates and updates every entity. **Default.**               |
+| `management` value | Behavior |
+|---|---|
+| `ManagementMode.Auto` | Library creates and updates every entity. **Default.** |
 | `ManagementMode.Manual` | Library binds to existing entities; fails at boot if any are absent. |
 
 The global value can be overridden per entity via `events.management`, `broadcast.management`, etc. Resolution order: per-entity → global → `Auto`. See [Bring Your Own Infrastructure](/docs/guides/external-infrastructure) for a complete guide.
@@ -409,7 +409,7 @@ events: {
 
 #### `subjectPrefix` &mdash; `string`
 
-Default: library convention (e.g., `orders__microservice.ev.`). Override the subject prefix for all subjects in this kind. The trailing dot is normalised automatically. When a custom prefix is set, subjects become `{prefix}{pattern}` and consumers use exact `filter_subjects` entries instead of a single wildcard filter. <Since version="2.10.0" />
+Default: library convention (e.g., `orders__microservice.ev.`). Override the subject prefix for all subjects in this kind. The trailing dot is normalized automatically. When a custom prefix is set, subjects become `{prefix}{pattern}` and consumers use exact `filter_subjects` entries instead of a single wildcard filter. <Since version="2.10.0" />
 
 ```typescript
 events: {
