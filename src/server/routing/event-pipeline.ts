@@ -283,7 +283,7 @@ export const createOrderedPipeline = (
     const warnIfSettlementAttempted = (): void => {
       if (ctx.shouldRetry || ctx.shouldTerminate) {
         logger.warn(
-          `retry()/terminate() ignored for ordered message ${subject} — ordered consumers auto-acknowledge`,
+          `retry()/terminate() ignored for ordered message ${subject}; ordered consumers auto-acknowledge`,
         );
       }
     };

@@ -154,7 +154,7 @@ describe('Handler Metadata Registry', { timeout: 60_000 }, () => {
       await expect(jsm.streams.info(KV_STREAM_NAME)).rejects.toThrow();
     });
 
-    it('should be idempotent — same service writes same keys', async () => {
+    it('should be idempotent; same service writes same keys', async () => {
       // Given: first app writes metadata
       serviceName = uniqueServiceName();
       const { app: firstApp } = await createTestApp(

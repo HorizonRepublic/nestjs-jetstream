@@ -131,7 +131,7 @@ describe(RpcContext, () => {
       });
 
       it('should return timestamp as Date', () => {
-        // Nanos exceed Number.MAX_SAFE_INTEGER, so division to ms may lose ±1ms precision.
+        // Nanos exceed Number.MAX_SAFE_INTEGER, so division to ms may lose +/-1ms precision.
         const nowMs = Date.now();
         const timestampNanos = nowMs * 1_000_000;
         const sut = createJsContext({
@@ -257,7 +257,7 @@ describe(RpcContext, () => {
 
         expect(() => {
           sut.terminate();
-        }).toThrow('Cannot terminate — retry() was already called');
+        }).toThrow('Cannot terminate; retry() was already called');
       });
 
       it('should throw when retry() is called after terminate()', () => {
@@ -267,7 +267,7 @@ describe(RpcContext, () => {
 
         expect(() => {
           sut.retry();
-        }).toThrow('Cannot retry — terminate() was already called');
+        }).toThrow('Cannot retry; terminate() was already called');
       });
     });
   });

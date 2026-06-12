@@ -255,7 +255,7 @@ describe('OTel header / body capture integration', () => {
       }
     });
 
-    it('should respect subjectAllowlist — body captured only for matching subjects', async () => {
+    it('should respect subjectAllowlist; body captured only for matching subjects', async () => {
       // Given: allowlist excludes orders.*, so this publish must not produce a body attribute
       const { app, client, controller, serviceName } = await bootstrap({
         captureBody: { maxBytes: 4096, subjectAllowlist: ['payments.*'] },

@@ -110,7 +110,7 @@ const bootstrapPair = async (
   };
 };
 
-describe('OTel config integration — kill switch, propagation-only, hooks', () => {
+describe('OTel config integration; kill switch, propagation-only, hooks', () => {
   let nc: NatsConnection;
   let container: StartedTestContainer;
   let port: number;
@@ -146,7 +146,7 @@ describe('OTel config integration — kill switch, propagation-only, hooks', () 
     exporter.reset();
   });
 
-  describe('kill switch — otel.enabled: false', () => {
+  describe('kill switch; otel.enabled: false', () => {
     it('should produce zero spans across the full publish + consume + RPC flow', async () => {
       // Given: OTel disabled on both sides
       const setup = await bootstrapPair(port, { enabled: false }, { enabled: false }, 'core');
@@ -191,7 +191,7 @@ describe('OTel config integration — kill switch, propagation-only, hooks', () 
     });
   });
 
-  describe('propagation-only mode — traces: "none"', () => {
+  describe('propagation-only mode; traces: "none"', () => {
     it('should suppress library spans on the publisher but still inject traceparent', async () => {
       // Given: publisher-side spans off, propagation still active
       const setup = await bootstrapPair(port, { traces: 'none' });
@@ -392,7 +392,7 @@ describe('OTel config integration — kill switch, propagation-only, hooks', () 
   });
 
   describe('custom errorClassifier', () => {
-    it('should override the default classification — every error treated as expected', async () => {
+    it('should override the default classification; every error treated as expected', async () => {
       // Given: server-side classifier marks every error as expected
       const setup = await bootstrapPair(port, {}, { errorClassifier: () => 'expected' }, 'core');
 

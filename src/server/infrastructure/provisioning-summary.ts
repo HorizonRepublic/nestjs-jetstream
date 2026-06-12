@@ -60,18 +60,18 @@ export const formatProvisioningSummary = (
     const clusterReservation = r.maxBytes * r.numReplicas;
 
     lines.push(
-      `  • ${r.name} [${r.kind}] storage=${r.storage} replicas=${r.numReplicas} ` +
+      `  - ${r.name} [${r.kind}] storage=${r.storage} replicas=${r.numReplicas} ` +
         `max_bytes=${formatBytes(r.maxBytes)} max_age=${formatAge(r.maxAge)} retention=${r.retention} ` +
-        `→ cluster reservation ${formatBytes(clusterReservation)}`,
+        `-> cluster reservation ${formatBytes(clusterReservation)}`,
     );
   }
 
   for (const e of external) {
-    lines.push(`  • ${e.name} [${e.kind}] external (bound)`);
+    lines.push(`  - ${e.name} [${e.kind}] external (bound)`);
   }
 
   lines.push(
-    `  Σ per-node file-backed footprint ≈ ${formatBytes(totalFileMaxBytes)} ` +
+    `  Total per-node file-backed footprint ~ ${formatBytes(totalFileMaxBytes)} ` +
       `(sum of max_bytes; worst case replicas = nodes). ` +
       `Ensure the NATS server max_file_store accommodates the sum across ALL services.`,
   );

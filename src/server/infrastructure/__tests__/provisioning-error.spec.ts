@@ -35,7 +35,7 @@ describe('mapProvisioningError', () => {
     expect(result.entity).toBe('stream');
     expect(result.target).toBe('svc__microservice_ev-stream');
     expect(result.errCode).toBe(NatsErrorCode.StorageResourcesExceeded);
-    expect(result.reservation).toBe(15 * GIB); // 5 × 3
+    expect(result.reservation).toBe(15 * GIB); // 5 x 3
     expect(result.message).toContain('max_file_store');
     expect(result.message).toContain('insufficient storage resources available');
     expect(result.cause).toBe(apiErr);

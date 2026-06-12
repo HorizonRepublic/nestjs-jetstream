@@ -166,7 +166,7 @@ export class ConsumerProvider {
             err.apiError().err_code === NatsErrorCode.ConsumerNotFound
           ) {
             throw new Error(
-              `Consumer ${name} on ${stream} is externally managed and currently absent — ` +
+              `Consumer ${name} on ${stream} is externally managed and currently absent; ` +
                 `waiting for it to be restored.`,
             );
           }

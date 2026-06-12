@@ -84,7 +84,7 @@ describe('OTel cross-language interop integration', () => {
     exporter.reset();
   });
 
-  describe('inbound — raw publisher with manual traceparent', () => {
+  describe('inbound; raw publisher with manual traceparent', () => {
     let app: INestApplication;
     let module: TestingModule;
     let serviceName: string;
@@ -160,7 +160,7 @@ describe('OTel cross-language interop integration', () => {
     });
   });
 
-  describe('outbound — every published message carries a valid traceparent', () => {
+  describe('outbound; every published message carries a valid traceparent', () => {
     let app: INestApplication;
     let serviceName: string;
 

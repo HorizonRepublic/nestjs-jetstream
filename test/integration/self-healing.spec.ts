@@ -94,7 +94,7 @@ describe('Self-Healing Consumer Flow', () => {
         expect(controller.received[0]).toEqual({ seq: 1 });
 
         // When: delete the consumer via JetStream Management API
-        // This breaks the consumer iterator → self-healing catchError → repeat with backoff
+        // This breaks the consumer iterator -> self-healing catchError -> repeat with backoff
         const jsm = await jetstreamManager(nc);
         const stream = streamName(serviceName, StreamKind.Event);
         const consumer = consumerName(serviceName, StreamKind.Event);

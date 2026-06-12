@@ -238,8 +238,8 @@ At startup the binder performs the following checks. Failures are thrown as `Jet
 
 | Condition | Error message summary |
 |---|---|
-| Stream not found in NATS | `Management mode is Manual — the stream must be provisioned externally before boot.` |
-| Consumer not found in NATS | `Management mode is Manual — the consumer must be provisioned externally before boot.` |
+| Stream not found in NATS | `Management mode is Manual; the stream must be provisioned externally before boot.` |
+| Consumer not found in NATS | `Management mode is Manual; the consumer must be provisioned externally before boot.` |
 | Consumer filter does not cover one or more registered handler subjects | `Consumer "…" does not cover the following registered handler subjects: …. Update the consumer's filter_subject / filter_subjects to include them.` |
 | DLQ stream subjects do not contain the DLQ subject | `DLQ stream "…" subjects do not cover "…" (dead letters publish to a subject equal to the stream name). Add it to the stream's subjects list.` |
 | Scheduling is enabled (`allow_msg_schedules: true`) but stream subjects do not cover the schedule wildcard | `Stream "…" has scheduling enabled but its subjects do not cover the schedule prefix "…". Add "…>" to the stream's subjects.` |
@@ -249,9 +249,9 @@ At startup the binder performs the following checks. Failures are thrown as `Jet
 
 | Condition | Warning message summary |
 |---|---|
-| Event or command stream retention is not `workqueue` | `Stream "…" retention is "…" — expected "workqueue" for reliable at-least-once delivery.` |
+| Event or command stream retention is not `workqueue` | `Stream "…" retention is "…"; expected "workqueue" for reliable at-least-once delivery.` |
 | Scheduling is enabled but the external stream does not report `allow_msg_schedules: true` | `Stream "…" does not report allow_msg_schedules=true, but scheduling is enabled in the application options. Scheduled publishes will be rejected by the server until the stream allows message schedules.` |
-| Consumer has unlimited `max_deliver` but `dlq` is enabled | `Consumer "…" has unlimited max_deliver but options.dlq is enabled — messages will never be dead-lettered. Set max_deliver > 0 on the consumer.` |
+| Consumer has unlimited `max_deliver` but `dlq` is enabled | `Consumer "…" has unlimited max_deliver but options.dlq is enabled; messages will never be dead-lettered. Set max_deliver > 0 on the consumer.` |
 | Consumer `ack_wait` is shorter than the computed `ackExtension` interval | `Consumer "…" ack_wait (…ms) is shorter than the ackExtension interval (…ms). Messages may redeliver before the handler finishes. Increase ack_wait.` |
 
 ### Boot summary
@@ -260,10 +260,10 @@ The startup log will list externally bound streams as `external (bound)` rows al
 
 ```text
 Provisioning 3 stream(s) for "orders":
-  • ext_orders_stream [ev] external (bound)
-  • broadcast-stream [broadcast] storage=file replicas=1
-  • ext_dlq [dlq] external (bound)
-  Σ per-node file-backed footprint ≈ 5.00 GiB
+  - ext_orders_stream [ev] external (bound)
+  - broadcast-stream [broadcast] storage=file replicas=1
+  - ext_dlq [dlq] external (bound)
+  Total per-node file-backed footprint ~ 5.00 GiB
 ```
 
 ## Self-healing for Manual consumers
@@ -271,7 +271,7 @@ Provisioning 3 stream(s) for "orders":
 When the transport loses a consumer iterator (NATS reconnect, server restart, or external deletion), the self-healing loop tries to rebind. For a Manual consumer it **never recreates** it — if the consumer is absent it logs a recoverable error and keeps retrying on the same backoff schedule:
 
 ```text
-Consumer ext_orders_worker on ext_orders_stream is externally managed and currently absent — waiting for it to be restored.
+Consumer ext_orders_worker on ext_orders_stream is externally managed and currently absent; waiting for it to be restored.
 ```
 
 Once your platform team (or Terraform) restores the consumer, the next retry succeeds and processing resumes automatically. No application restart is needed.
@@ -349,7 +349,7 @@ If the default naming convention is used (no `subjectPrefix`), the schedule wild
 Setting `allowDestructiveMigration: true` at the same time as a global `provisioning.management: Manual` is contradictory — Manual streams are never migrated regardless of the flag. The library logs a warning at boot:
 
 ```text
-allowDestructiveMigration has no effect under provisioning.management: Manual — the library never migrates externally managed streams.
+allowDestructiveMigration has no effect under provisioning.management: Manual; the library never migrates externally managed streams.
 ```
 :::
 

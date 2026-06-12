@@ -45,7 +45,7 @@ const IMMUTABLE_PROPERTIES: ReadonlySet<keyof StreamConfig> = new Set([
 ] as const satisfies (keyof StreamConfig)[]);
 
 /**
- * NATS stream properties that can be enabled (false→true) but never disabled (true→false).
+ * NATS stream properties that can be enabled (false->true) but never disabled (true->false).
  * Disabling is classified as `immutable`.
  *
  * Ref: https://docs.nats.io/nats-concepts/jetstream/streams

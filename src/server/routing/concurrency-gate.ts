@@ -42,7 +42,7 @@ export class ConcurrencyGate {
       if (!this.backlogWarned && this.backlog.length >= BACKLOG_WARN_THRESHOLD) {
         this.backlogWarned = true;
         this.logger.warn(
-          `${this.label} backlog reached ${this.backlog.length} messages — consumer may be falling behind`,
+          `${this.label} backlog reached ${this.backlog.length} messages; consumer may be falling behind`,
         );
       }
 

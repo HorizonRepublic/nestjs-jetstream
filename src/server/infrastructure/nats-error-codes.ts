@@ -2,7 +2,7 @@
  * NATS JetStream API error codes used by the transport.
  *
  * Ref: https://github.com/nats-io/nats-server (server error definitions)
- * Codes verified across NATS 2.12.6–2.14.1 via integration tests (original codes: 2026-04-02).
+ * Codes verified across NATS 2.12.6-2.14.1 via integration tests (original codes: 2026-04-02).
  */
 export enum NatsErrorCode {
   /** Consumer does not exist on the specified stream. */

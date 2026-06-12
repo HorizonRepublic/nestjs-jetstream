@@ -193,7 +193,7 @@ describe(JetstreamMetricsService, () => {
     });
   });
 
-  describe('Connect/Disconnect/Reconnect → connection_up gauge', () => {
+  describe('Connect/Disconnect/Reconnect -> connection_up gauge', () => {
     it('should flip connection_up to 1 on Connect for the given server', async () => {
       // Given
       const { subs } = await setup({ options, register, promClient, eventBus });
@@ -239,7 +239,7 @@ describe(JetstreamMetricsService, () => {
     });
   });
 
-  describe('Error → errors_total counter', () => {
+  describe('Error -> errors_total counter', () => {
     it('should map a known context to its bounded enum value', async () => {
       // Given
       const { subs } = await setup({ options, register, promClient, eventBus });
@@ -263,7 +263,7 @@ describe(JetstreamMetricsService, () => {
     });
   });
 
-  describe('RpcTimeout → rpc_timeout_total counter', () => {
+  describe('RpcTimeout -> rpc_timeout_total counter', () => {
     it('should increment using the declared pattern when available', async () => {
       // Given
       const patternRegistry = createMock<PatternRegistry>();
@@ -311,7 +311,7 @@ describe(JetstreamMetricsService, () => {
     });
   });
 
-  describe('MessageRouted → messages_received_total / messages_unhandled_total', () => {
+  describe('MessageRouted -> messages_received_total / messages_unhandled_total', () => {
     it('should increment messages_received_total with declared labels for known subjects', async () => {
       // Given
       const patternRegistry = createMock<PatternRegistry>();
@@ -357,7 +357,7 @@ describe(JetstreamMetricsService, () => {
     });
   });
 
-  describe('DeadLetter → messages_dead_letter_total counter', () => {
+  describe('DeadLetter -> messages_dead_letter_total counter', () => {
     it('should increment with the declared pattern and stream from the info payload', async () => {
       // Given
       const patternRegistry = createMock<PatternRegistry>();
@@ -392,7 +392,7 @@ describe(JetstreamMetricsService, () => {
     });
   });
 
-  describe('ConsumerRecovered → consumer_recovered_total counter', () => {
+  describe('ConsumerRecovered -> consumer_recovered_total counter', () => {
     it('should increment with the recovery label as kind', async () => {
       // Given
       const { subs } = await setup({ options, register, promClient, eventBus });
@@ -407,7 +407,7 @@ describe(JetstreamMetricsService, () => {
     });
   });
 
-  describe('HandlerCompleted → processed_total + handler_duration_seconds', () => {
+  describe('HandlerCompleted -> processed_total + handler_duration_seconds', () => {
     it('should increment processed counter and observe duration when handler succeeds', async () => {
       // Given
       const { subs } = await setup({ options, register, promClient, eventBus });
@@ -478,7 +478,7 @@ describe(JetstreamMetricsService, () => {
     });
   });
 
-  describe('Published → publish_total + publish_duration_seconds', () => {
+  describe('Published -> publish_total + publish_duration_seconds', () => {
     it('should increment publish_total and observe duration for a successful event publish', async () => {
       // Given
       const { subs } = await setup({ options, register, promClient, eventBus });
@@ -551,7 +551,7 @@ describe(JetstreamMetricsService, () => {
     });
   });
 
-  describe('RpcCompleted → rpc_duration_seconds', () => {
+  describe('RpcCompleted -> rpc_duration_seconds', () => {
     it('should observe duration with status=success on a successful RPC round-trip', async () => {
       // Given
       const { subs } = await setup({ options, register, promClient, eventBus });

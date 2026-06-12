@@ -78,7 +78,7 @@ describe('safelyInvokeHook', () => {
 });
 
 describe('parseServerAddress', () => {
-  it('should return null when the servers list is empty — caller skips server.* attributes', () => {
+  it('should return null when the servers list is empty; caller skips server.* attributes', () => {
     expect(parseServerAddress([])).toBeNull();
   });
 
@@ -97,7 +97,7 @@ describe('parseServerAddress', () => {
     expect(parseServerAddress(['nats://nats.local'])).toEqual({ host: 'nats.local' });
   });
 
-  it('should return null for a malformed URL — caller drops server.* silently', () => {
+  it('should return null for a malformed URL; caller drops server.* silently', () => {
     expect(parseServerAddress([':invalid:'])).toBeNull();
   });
 

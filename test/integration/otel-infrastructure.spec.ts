@@ -36,7 +36,7 @@ class InfraController {
   }
 }
 
-describe('OTel infrastructure spans integration — provisioning, shutdown, self-healing', () => {
+describe('OTel infrastructure spans integration; provisioning, shutdown, self-healing', () => {
   let nc: NatsConnection;
   let jsm: JetStreamManager;
   let container: StartedTestContainer;

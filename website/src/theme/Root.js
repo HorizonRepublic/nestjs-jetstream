@@ -44,7 +44,7 @@ export default function Root({ children }) {
   "headline": "Testing",
   "description": "Running unit and integration tests with Vitest and Testcontainers.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-04-11"
+  "dateModified": "2026-06-12"
 },
       
     '/docs/getting-started/installation/': {
@@ -60,7 +60,7 @@ export default function Root({ children }) {
   "headline": "Quick Start",
   "description": "Complete working example in four steps: register the module, connect the transport, define handlers, and send messages.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-04-11"
+  "dateModified": "2026-06-12"
 },
       
     '/docs/getting-started/why-jetstream/': {
@@ -76,7 +76,7 @@ export default function Root({ children }) {
   "headline": "How to use a custom codec with NestJS JetStream",
   "description": "Replace JSON with MessagePack, Protobuf, or a custom binary codec for NATS message serialization.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-05-27"
+  "dateModified": "2026-06-12"
 },
       
     '/docs/guides/dead-letter-queue/': {
@@ -100,7 +100,7 @@ export default function Root({ children }) {
   "headline": "Graceful Shutdown",
   "description": "Automatic shutdown handling with in-flight message completion and NATS connection drain.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-04-11"
+  "dateModified": "2026-06-12"
 },
       
     '/docs/guides/handler-context/': {
@@ -108,7 +108,7 @@ export default function Root({ children }) {
   "headline": "RpcContext — Handler Context & Message Settlement",
   "description": "Access JetStream metadata and control ack, retry, and terminate actions in NestJS message handlers via RpcContext.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-06-10"
+  "dateModified": "2026-06-12"
 },
       
     '/docs/guides/health-checks/': {
@@ -116,7 +116,7 @@ export default function Root({ children }) {
   "headline": "How to expose health checks for NATS JetStream",
   "description": "Expose NATS connection status and RTT latency as a Kubernetes readiness/liveness probe using JetstreamHealthIndicator.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-05-27"
+  "dateModified": "2026-06-12"
 },
       
     '/docs/guides/lifecycle-hooks/': {
@@ -124,7 +124,7 @@ export default function Root({ children }) {
   "headline": "How to register lifecycle hooks for NestJS JetStream",
   "description": "Subscribe to transport events for monitoring, alerting, and logging integration.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-05-27"
+  "dateModified": "2026-06-12"
 },
       
     '/docs/guides/migration/': {
@@ -148,7 +148,7 @@ export default function Root({ children }) {
   "headline": "Performance Tuning",
   "description": "Tune ackWait, maxAckPending, batch sizes, and ack extension for high-throughput workloads.",
   "datePublished": "2026-03-26",
-  "dateModified": "2026-04-11"
+  "dateModified": "2026-06-12"
 },
       
     '/docs/guides/record-builder/': {
@@ -156,7 +156,7 @@ export default function Root({ children }) {
   "headline": "JetstreamRecordBuilder — Headers, Message IDs & Deduplication",
   "description": "Build NestJS NATS messages with custom headers, deterministic message IDs for publish-side deduplication, and per-request RPC timeouts.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-04-11"
+  "dateModified": "2026-06-12"
 },
       
     '/docs/guides/scheduling/': {
@@ -172,7 +172,7 @@ export default function Root({ children }) {
   "headline": "Storage budgeting & provisioning",
   "description": "How JetStream stream reservations relate to the server max_file_store, and how to read the boot-time provisioning summary.",
   "datePublished": "2026-06-02",
-  "dateModified": "2026-06-03"
+  "dateModified": "2026-06-12"
 },
       
     '/docs/guides/stream-migration/': {
@@ -204,7 +204,7 @@ export default function Root({ children }) {
   "headline": "Observability — NestJS JetStream Transport",
   "description": "Distributed tracing and Prometheus metrics built into the transport. Zero-config integration with OpenTelemetry SDKs and prom-client-based exporters.",
   "datePublished": "2026-05-27",
-  "dateModified": "2026-05-27"
+  "dateModified": "2026-06-12"
 },
       
     '/docs/observability/metrics/': {
@@ -212,7 +212,7 @@ export default function Root({ children }) {
   "headline": "Prometheus Metrics — NestJS JetStream Transport",
   "description": "Production-ready Prometheus metrics for NATS JetStream transport: throughput, handler latency, consumer lag, dead letters, and publish errors.",
   "datePublished": "2026-05-27",
-  "dateModified": "2026-05-27"
+  "dateModified": "2026-06-12"
 },
       
     '/docs/observability/tracing/': {
@@ -220,7 +220,7 @@ export default function Root({ children }) {
   "headline": "Distributed Tracing — NestJS JetStream Transport",
   "description": "Built-in W3C Trace Context propagation and OpenTelemetry spans for every publish, consume, and RPC round-trip.",
   "datePublished": "2026-04-24",
-  "dateModified": "2026-05-27"
+  "dateModified": "2026-06-12"
 },
       
     '/docs/patterns/broadcast/': {
@@ -236,7 +236,7 @@ export default function Root({ children }) {
   "headline": "Workqueue Events — NestJS JetStream At-Least-Once Delivery",
   "description": "NestJS NATS JetStream workqueue events with at-least-once delivery, automatic retry, publish-side deduplication, and dead letter handling.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-04-27"
+  "dateModified": "2026-06-12"
 },
       
     '/docs/patterns/handler-metadata/': {
@@ -244,7 +244,7 @@ export default function Root({ children }) {
   "headline": "Handler Metadata Registry — NATS KV Service Discovery for NestJS",
   "description": "Publish NestJS handler metadata to a NATS KV bucket for dynamic service discovery, API gateway routing, and automatic catalog generation.",
   "datePublished": "2026-04-02",
-  "dateModified": "2026-04-11"
+  "dateModified": "2026-06-12"
 },
       
     '/docs/patterns/ordered-events/': {
@@ -252,7 +252,7 @@ export default function Root({ children }) {
   "headline": "Ordered Events — Strict Sequential Delivery in NATS JetStream",
   "description": "Strict sequential NestJS NATS JetStream event delivery with ephemeral ordered consumers, deliver policies, and CQRS replay patterns.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-04-11"
+  "dateModified": "2026-06-12"
 },
       
     '/docs/patterns/rpc/': {
@@ -268,7 +268,7 @@ export default function Root({ children }) {
   "headline": "Default Stream & Consumer Configs for NATS JetStream",
   "description": "Production-ready default stream, consumer, and connection settings for every NestJS JetStream StreamKind (event, broadcast, ordered, command, DLQ).",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-04-11"
+  "dateModified": "2026-06-12"
 },
       
     '/docs/reference/edge-cases/': {
@@ -276,7 +276,7 @@ export default function Root({ children }) {
   "headline": "Edge Cases & FAQ — NestJS JetStream Transport",
   "description": "NestJS JetStream transport FAQ: publisher-only mode, consumer self-healing, NATS header limits, fire-and-forget messaging, and DeliverPolicy edge cases.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-04-11"
+  "dateModified": "2026-06-12"
 },
       
     '/docs/reference/header-contract/': {
@@ -284,7 +284,7 @@ export default function Root({ children }) {
   "headline": "Header Contract — NATS Message Headers Used by the Transport",
   "description": "Stable contract for NATS message headers the transport reads and writes.",
   "datePublished": "2026-04-24",
-  "dateModified": "2026-04-27"
+  "dateModified": "2026-06-12"
 },
       
     '/docs/reference/module-configuration/': {
@@ -308,7 +308,7 @@ export default function Root({ children }) {
   "headline": "Release Notes — NestJS JetStream Transport",
   "description": "Version-by-version changelog covering new features, behavior changes, and breaking changes.",
   "datePublished": "2026-03-26",
-  "dateModified": "2026-05-27"
+  "dateModified": "2026-06-12"
 },
       
 

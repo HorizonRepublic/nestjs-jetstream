@@ -55,7 +55,7 @@ import { ShutdownManager } from './shutdown';
 const JETSTREAM_ACK_WAIT_MAP = Symbol('JETSTREAM_ACK_WAIT_MAP');
 
 export const DESTRUCTIVE_MIGRATION_MANUAL_WARNING =
-  'allowDestructiveMigration has no effect under provisioning.management: Manual — the library never migrates externally managed streams.';
+  'allowDestructiveMigration has no effect under provisioning.management: Manual; the library never migrates externally managed streams.';
 
 export const warnIfManualWithDestructive = (
   options: JetstreamModuleOptions,

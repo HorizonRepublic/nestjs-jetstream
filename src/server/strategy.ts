@@ -87,7 +87,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     if (this.messageHandlers.has(normalizedPattern)) {
       throw new Error(
         `Duplicate handler registered for pattern "${normalizedPattern}". ` +
-          `Each @EventPattern() / @MessagePattern() value must be unique within a microservice — ` +
+          `Each @EventPattern() / @MessagePattern() value must be unique within a microservice; ` +
           `find and remove the second declaration.`,
       );
     }
@@ -113,7 +113,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     const nc = this.connection.unwrap;
 
     if (!nc) {
-      throw new Error('Not connected — transport has not started');
+      throw new Error('Not connected; transport has not started');
     }
 
     return nc as T;
@@ -126,7 +126,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
 
   private async doListen(callback: (...args: unknown[]) => void): Promise<void> {
     if (this.started) {
-      this.logger.warn('listen() called more than once — ignoring');
+      this.logger.warn('listen() called more than once; ignoring');
 
       return;
     }

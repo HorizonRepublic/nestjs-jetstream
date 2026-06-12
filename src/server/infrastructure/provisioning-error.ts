@@ -55,7 +55,7 @@ export class JetstreamProvisioningError extends Error {
   public constructor(fields: ProvisioningErrorFields) {
     const reservationNote =
       fields.reservation !== undefined
-        ? ` reservation=${fields.reservation}B (max_bytes=${fields.maxBytes}B × replicas=${fields.numReplicas}).`
+        ? ` reservation=${fields.reservation}B (max_bytes=${fields.maxBytes}B x replicas=${fields.numReplicas}).`
         : '';
 
     super(

@@ -470,7 +470,7 @@ describe(JetstreamClient, () => {
     });
   });
 
-  describe('send() / publish() — core RPC mode', () => {
+  describe('send() / publish(); core RPC mode', () => {
     describe('happy path', () => {
       it('should send request via nc.request() and return decoded response', async () => {
         // Given: server responds successfully
@@ -688,7 +688,7 @@ describe(JetstreamClient, () => {
     });
   });
 
-  describe('send() / publish() — jetstream RPC mode', () => {
+  describe('send() / publish(); jetstream RPC mode', () => {
     let inboxCallback: (err: Error | null, msg: Msg) => void;
 
     beforeEach(async () => {
@@ -1135,7 +1135,7 @@ describe(JetstreamClient, () => {
       it.each([
         ['broadcast:config.updated', 'config.updated', 'broadcast'],
         ['ordered:order.status', 'order.status', 'ordered'],
-      ])('should strip the prefix from %s → %s (kind=%s)', async (pattern, declared, kind) => {
+      ])('should strip the prefix from %s -> %s (kind=%s)', async (pattern, declared, kind) => {
         // Given/When
         await firstValueFrom(sut.emit(pattern, {}));
 

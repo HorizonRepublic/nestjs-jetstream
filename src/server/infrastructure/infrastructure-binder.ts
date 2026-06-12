@@ -24,7 +24,7 @@ interface BinderJsm {
 const WORKQUEUE_KINDS = new Set<StreamKind>([StreamKind.Event, StreamKind.Command]);
 
 const manualRemediation = (entity: ProvisioningEntity): string =>
-  `Management mode is Manual — the ${entity} must be provisioned externally before boot.`;
+  `Management mode is Manual; the ${entity} must be provisioned externally before boot.`;
 
 const isSchedulingEnabled = (options: JetstreamModuleOptions, kind: StreamKind): boolean =>
   kindOptionsBlock(options, kind)?.stream?.allow_msg_schedules === true;
@@ -249,7 +249,7 @@ export class InfrastructureBinder {
     if (info.config.retention !== RetentionPolicy.Workqueue) {
       this.logger.warn(
         `Stream "${this.names.streamName(kind)}" (kind=${String(kind)}) retention is ` +
-          `"${String(info.config.retention)}" — expected "workqueue" for reliable at-least-once delivery.`,
+          `"${String(info.config.retention)}"; expected "workqueue" for reliable at-least-once delivery.`,
       );
     }
   }
@@ -262,7 +262,7 @@ export class InfrastructureBinder {
     if (maxDeliver === undefined || maxDeliver <= 0) {
       this.logger.warn(
         `Consumer "${this.names.consumerName(kind)}" (kind=${String(kind)}) has unlimited ` +
-          `max_deliver but options.dlq is enabled — messages will never be dead-lettered. ` +
+          `max_deliver but options.dlq is enabled; messages will never be dead-lettered. ` +
           `Set max_deliver > 0 on the consumer.`,
       );
     }

@@ -127,7 +127,7 @@ export interface CaptureBodyOptions {
 }
 
 /**
- * OpenTelemetry configuration for `JetstreamModule.forRoot({ otel: … })`.
+ * OpenTelemetry configuration for `JetstreamModule.forRoot({ otel: ... })`.
  * All fields are optional; when the host app has not registered an OTel
  * SDK, every call made by the library is a no-op regardless of config.
  */
@@ -166,7 +166,7 @@ export interface OtelOptions {
    *
    * Transport-internal headers (`x-correlation-id`, `x-reply-to`, `x-error`,
    * `x-subject`, `x-caller-name`) and propagator-owned headers
-   * (`traceparent`, `tracestate`, `baggage`, `sentry-trace`, `b3`, …) are
+   * (`traceparent`, `tracestate`, `baggage`, `sentry-trace`, `b3`, ...) are
    * always suppressed regardless of the allowlist.
    *
    * @default ['x-request-id']
@@ -234,9 +234,9 @@ export interface OtelOptions {
    * RPC contract) or `'unexpected'` (infrastructure failure or bug). Drives
    * OpenTelemetry span status and attributes only.
    *
-   * - `'expected'` → span status `OK` with `jetstream.rpc.reply.has_error`
+   * - `'expected'` -> span status `OK` with `jetstream.rpc.reply.has_error`
    *   and `jetstream.rpc.reply.error.code` attributes
-   * - `'unexpected'` → span status `ERROR` with `span.recordException(err)`
+   * - `'unexpected'` -> span status `ERROR` with `span.recordException(err)`
    *
    * Reply envelopes delivered to RPC clients are identical in both cases.
    * This classification affects only the observability artifact.

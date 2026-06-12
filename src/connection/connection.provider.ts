@@ -130,7 +130,7 @@ export class ConnectionProvider {
    */
   public getJetStreamClient(): JetStreamClient {
     if (!this.connection || this.connection.isClosed()) {
-      throw new Error('Not connected — call getConnection() before getJetStreamClient()');
+      throw new Error('Not connected; call getConnection() before getJetStreamClient()');
     }
 
     this.jsClient ??= jetstream(this.connection);
@@ -145,7 +145,7 @@ export class ConnectionProvider {
   /**
    * Gracefully shut down the connection.
    *
-   * Sequence: drain → wait for close. Falls back to force-close on error.
+   * Sequence: drain -> wait for close. Falls back to force-close on error.
    */
   public async shutdown(): Promise<void> {
     // Wait for in-flight connection to settle so it doesn't escape shutdown

@@ -27,8 +27,8 @@ Migration is only needed for **immutable** properties that NATS locks after stre
 
 | Property | Example change | Requires migration |
 |----------|---------------|-------------------|
-| `storage` | `File` → `Memory` | **Yes** |
-| `retention` | `Workqueue` → `Limits` | **Not allowed** — controlled by the transport |
+| `storage` | `File` -> `Memory` | **Yes** |
+| `retention` | `Workqueue` -> `Limits` | **Not allowed** — controlled by the transport |
 | `max_age`, `num_replicas`, etc. | Any value | No — mutable, updated automatically |
 
 ## How to enable
@@ -64,7 +64,7 @@ Phase 2/4  Create backup stream ← sourcing ← original
 Phase 3/4  Delete original, create it again with the new config
 
 Phase 4/4  Original ← sourcing ← backup
-           → drain → delete backup → detach source
+           -> drain -> delete backup -> detach source
 ```
 
 The stream keeps its original name. Consumers are recreated automatically after migration by each pod's startup sequence or self-healing.
@@ -121,7 +121,7 @@ Expect migration time to scale roughly linearly with message count. For small st
 
 ## Manual streams are never migrated
 
-Streams managed in `ManagementMode.Manual` (externally provisioned) are never created, updated, or migrated by the library — regardless of `allowDestructiveMigration`. The library only binds to them and validates their configuration at boot.
+Streams managed in `ManagementMode.Manual` (externally provisioned) are never created, updated, or migrated by the library; regardless of `allowDestructiveMigration`. The library only binds to them and validates their configuration at boot.
 
 Setting `allowDestructiveMigration: true` together with a global `provisioning.management: ManagementMode.Manual` is therefore a no-op for all streams. The library logs a warning at boot when this combination is detected:
 

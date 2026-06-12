@@ -89,7 +89,7 @@ class AlwaysFailingExternalController {
   @EventPattern('order.created')
   handleOrderCreated(@Payload() _data: unknown): never {
     this.attempts++;
-    throw new Error('Permanent failure — external DLQ test');
+    throw new Error('Permanent failure; external DLQ test');
   }
 }
 
@@ -174,7 +174,7 @@ describe('External Infrastructure (bind-only mode)', () => {
     });
   });
 
-  describe('missing external entity → boot failure', () => {
+  describe('missing external entity -> boot failure', () => {
     let serviceName: string;
     let names: ExternalNames;
 
@@ -381,7 +381,7 @@ describe('External Infrastructure (bind-only mode)', () => {
     );
   });
 
-  describe('uncovered handler pattern → boot throw', () => {
+  describe('uncovered handler pattern -> boot throw', () => {
     let serviceName: string;
     let jsm: JetStreamManager;
     let names: ExternalNames;

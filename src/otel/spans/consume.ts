@@ -80,14 +80,14 @@ const applyUnexpectedError = (span: Span, err: unknown): void => {
  * shape: sync handlers return sync, async handlers return a Promise.
  *
  * Fast paths:
- * - `otel.enabled: false` → run `fn` directly, no span, no context extract
+ * - `otel.enabled: false` -> run `fn` directly, no span, no context extract
  *   (full kill switch).
- * - `traces` excludes `Consume` or `shouldTraceConsume` returns false →
+ * - `traces` excludes `Consume` or `shouldTraceConsume` returns false ->
  *   still extract the parent from headers and run `fn` under that context
  *   so the host app's tracer sees the right parent, but no span is created.
  *
- * Thrown errors go through `config.errorClassifier`: expected → status OK
- * with `jetstream.rpc.reply.*` attrs; unexpected → status ERROR with
+ * Thrown errors go through `config.errorClassifier`: expected -> status OK
+ * with `jetstream.rpc.reply.*` attrs; unexpected -> status ERROR with
  * `recordException`. The error rethrows, so the caller's settlement logic
  * (nak / term / DLQ) runs unchanged.
  */

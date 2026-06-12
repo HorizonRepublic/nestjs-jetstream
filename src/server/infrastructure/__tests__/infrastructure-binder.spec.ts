@@ -169,7 +169,7 @@ describe(InfrastructureBinder.name, () => {
     });
   });
 
-  describe('bindStream() — missing stream', () => {
+  describe('bindStream(); missing stream', () => {
     describe('when stream does not exist', () => {
       it('should throw a JetstreamProvisioningError naming the stream and instructing to provision it', async () => {
         // Given: jsm.streams.info throws StreamNotFound
@@ -187,7 +187,7 @@ describe(InfrastructureBinder.name, () => {
     });
   });
 
-  describe('bindDlqStream() — missing DLQ stream', () => {
+  describe('bindDlqStream(); missing DLQ stream', () => {
     describe('when DLQ stream does not exist', () => {
       it('should throw a JetstreamProvisioningError naming the DLQ stream', async () => {
         // Given: jsm.streams.info throws StreamNotFound
@@ -204,7 +204,7 @@ describe(InfrastructureBinder.name, () => {
     });
   });
 
-  describe('bindConsumer() — missing consumer', () => {
+  describe('bindConsumer(); missing consumer', () => {
     describe('when consumer does not exist', () => {
       it('should throw a JetstreamProvisioningError naming the consumer and instructing to provision it', async () => {
         // Given: jsm.consumers.info throws ConsumerNotFound
@@ -222,7 +222,7 @@ describe(InfrastructureBinder.name, () => {
     });
   });
 
-  describe('bindConsumer() — uncovered handler subjects', () => {
+  describe('bindConsumer(); uncovered handler subjects', () => {
     describe('when consumer filter does not cover a registered handler subject', () => {
       it('should throw listing the uncovered subjects', async () => {
         // Given: a registered event handler whose subject is NOT covered by the consumer filter
@@ -246,7 +246,7 @@ describe(InfrastructureBinder.name, () => {
     });
   });
 
-  describe('bindDlqStream() — DLQ subject not in stream subjects', () => {
+  describe('bindDlqStream(); DLQ subject not in stream subjects', () => {
     describe('when DLQ stream subjects do not include the DLQ subject', () => {
       it('should throw naming the missing DLQ subject', async () => {
         // Given: DLQ stream exists but its subjects list does not cover the DLQ subject
@@ -267,7 +267,7 @@ describe(InfrastructureBinder.name, () => {
     });
   });
 
-  describe('bindStream() — scheduling enabled but schedule prefix not covered', () => {
+  describe('bindStream(); scheduling enabled but schedule prefix not covered', () => {
     describe('when allow_msg_schedules is set and stream subjects miss the schedule prefix', () => {
       it('should throw naming the missing schedule prefix', async () => {
         // Given: options have allow_msg_schedules = true for events
@@ -290,7 +290,7 @@ describe(InfrastructureBinder.name, () => {
     });
   });
 
-  describe('bindStream() — unexpected lookup errors', () => {
+  describe('bindStream(); unexpected lookup errors', () => {
     it('should rethrow non-NATS errors untouched', async () => {
       // Given: streams.info fails with an infrastructure error, not a 404
       const boom = new Error('connection reset');
@@ -302,7 +302,7 @@ describe(InfrastructureBinder.name, () => {
     });
   });
 
-  describe('bindConsumer() — unexpected lookup errors', () => {
+  describe('bindConsumer(); unexpected lookup errors', () => {
     it('should rethrow non-NATS errors untouched', async () => {
       // Given: consumers.info fails with an infrastructure error, not a 404
       const boom = new Error('connection reset');
@@ -314,7 +314,7 @@ describe(InfrastructureBinder.name, () => {
     });
   });
 
-  describe('bindConsumer() — multi-subject filters', () => {
+  describe('bindConsumer(); multi-subject filters', () => {
     it('should accept filter_subjects covering every handler subject', async () => {
       // Given: two handlers, consumer filters list both subjects exactly
       const sut = makeSut();
@@ -366,7 +366,7 @@ describe(InfrastructureBinder.name, () => {
     });
   });
 
-  describe('bindConsumer() — broadcast kind', () => {
+  describe('bindConsumer(); broadcast kind', () => {
     it('should validate coverage against broadcast handler subjects', async () => {
       // Given: one broadcast handler, consumer filter misses its subject
       const sut = makeSut();
@@ -382,7 +382,7 @@ describe(InfrastructureBinder.name, () => {
     });
   });
 
-  describe('bindConsumer() — unfiltered consumer', () => {
+  describe('bindConsumer(); unfiltered consumer', () => {
     const handlerPatterns = {
       events: ['order.created'],
       commands: [],
@@ -429,7 +429,7 @@ describe(InfrastructureBinder.name, () => {
     });
   });
 
-  describe('bindConsumer() — filter swallows schedule holders', () => {
+  describe('bindConsumer(); filter swallows schedule holders', () => {
     const scheduleOptions: JetstreamModuleOptions = {
       ...baseOptions,
       events: { subjectPrefix: 'company.orders.', stream: { allow_msg_schedules: true } },
@@ -478,7 +478,7 @@ describe(InfrastructureBinder.name, () => {
     });
   });
 
-  describe('bindStream() — scheduling enabled but stream forbids schedules', () => {
+  describe('bindStream(); scheduling enabled but stream forbids schedules', () => {
     describe('when allow_msg_schedules is not set on the external stream', () => {
       it('should log a warning and still return stream info', async () => {
         // Given: scheduling intent in options, external stream without allow_msg_schedules
@@ -527,7 +527,7 @@ describe(InfrastructureBinder.name, () => {
     });
   });
 
-  describe('bindStream() — retention mismatch', () => {
+  describe('bindStream(); retention mismatch', () => {
     describe('when Event stream has non-workqueue retention', () => {
       it('should log a warning and still return stream info', async () => {
         // Given: stream has Limits retention (wrong for events/commands)
@@ -550,7 +550,7 @@ describe(InfrastructureBinder.name, () => {
     });
   });
 
-  describe('bindConsumer() — dlq enabled with unlimited max_deliver', () => {
+  describe('bindConsumer(); dlq enabled with unlimited max_deliver', () => {
     describe('when options.dlq is set and consumer max_deliver is 0 (unlimited)', () => {
       it('should log a warning and still return consumer info', async () => {
         // Given: dlq enabled, consumer max_deliver = 0
@@ -581,7 +581,7 @@ describe(InfrastructureBinder.name, () => {
     });
   });
 
-  describe('bindConsumer() — ack_wait shorter than ackExtension interval', () => {
+  describe('bindConsumer(); ack_wait shorter than ackExtension interval', () => {
     describe('when ackExtension is configured and consumer ack_wait is shorter than the interval', () => {
       it('should log a warning and still return consumer info', async () => {
         // Given: ackExtension = 10_000 ms, ack_wait = 5_000_000_000 ns (= 5s < 10s)

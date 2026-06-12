@@ -101,7 +101,7 @@ describe(ConsumerProvider, () => {
 
     describe('when consumer add() hits race condition (another pod created it)', () => {
       it('should fall back to info() on CONSUMER_ALREADY_EXISTS (10148)', async () => {
-        // Given: info → not found, add → already exists (race)
+        // Given: info -> not found, add -> already exists (race)
         const notFoundError = new JetStreamApiError({
           err_code: 10014,
           code: 404,
@@ -114,7 +114,7 @@ describe(ConsumerProvider, () => {
         });
         const existingInfo = createMock<ConsumerInfo>();
 
-        // First info → not found, second info (after race) → found
+        // First info -> not found, second info (after race) -> found
         mockJsm.consumers.info
           .mockRejectedValueOnce(notFoundError)
           .mockResolvedValueOnce(existingInfo);
@@ -130,7 +130,7 @@ describe(ConsumerProvider, () => {
       });
 
       it('should wrap non-race add() failures into JetstreamProvisioningError', async () => {
-        // Given: info → not found, add → resource limit (not a race)
+        // Given: info -> not found, add -> resource limit (not a race)
         const notFoundError = new JetStreamApiError({
           err_code: 10014,
           code: 404,
@@ -179,7 +179,7 @@ describe(ConsumerProvider, () => {
 
     describe('when consumer does not exist', () => {
       it('should create it without updating', async () => {
-        // Given: consumer not found → create succeeds
+        // Given: consumer not found -> create succeeds
         const notFoundError = new JetStreamApiError({
           err_code: 10014,
           code: 404,
@@ -204,7 +204,7 @@ describe(ConsumerProvider, () => {
 
     describe('when consumer created by another pod during recovery', () => {
       it('should fall back to info without updating', async () => {
-        // Given: info → not found, add → already exists, second info → found
+        // Given: info -> not found, add -> already exists, second info -> found
         const notFoundError = new JetStreamApiError({
           err_code: 10014,
           code: 404,

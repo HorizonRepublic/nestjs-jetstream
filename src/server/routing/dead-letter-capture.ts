@@ -207,7 +207,7 @@ export class DeadLetterCapture {
     if (!onDeadLetter) {
       // dlq-only mode with a failed DLQ publish; keep the message in the stream.
       this.logger.error(
-        `Dead letter for ${msg.subject} could not be captured (DLQ publish failed, no onDeadLetter callback) — leaving the message in the stream`,
+        `Dead letter for ${msg.subject} could not be captured (DLQ publish failed, no onDeadLetter callback); leaving the message in the stream`,
       );
       settleQuietly(this.logger, `Failed to nak ${msg.subject}:`, () => {
         msg.nak();
@@ -223,7 +223,7 @@ export class DeadLetterCapture {
       });
     } catch (hookErr) {
       this.logger.error(
-        `Fallback onDeadLetter callback failed for ${msg.subject} — the message stays in the stream and will not be redelivered (max_deliver exhausted); recover it manually:`,
+        `Fallback onDeadLetter callback failed for ${msg.subject}; the message stays in the stream and will not be redelivered (max_deliver exhausted); recover it manually:`,
         hookErr,
       );
       settleQuietly(this.logger, `Failed to nak ${msg.subject}:`, () => {

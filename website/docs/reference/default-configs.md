@@ -8,7 +8,7 @@ schema:
   headline: "Default Stream & Consumer Configs for NATS JetStream"
   description: "Production-ready default stream, consumer, and connection settings for every NestJS JetStream StreamKind (event, broadcast, ordered, command, DLQ)."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-11"
+  dateModified: "2026-06-12"
 ---
 
 # Default Configs
@@ -258,7 +258,7 @@ These properties can be **enabled** on an existing stream via a normal update, b
 | `deny_purge` | `false` | Prevent stream purging via API |
 
 :::tip Enabling scheduling on existing streams
-You can safely add `allow_msg_schedules: true` to an existing stream config — NATS applies this as a regular update. No downtime, no message loss, no stream recreation. Just update `forRoot()` and restart.
+You can safely add `allow_msg_schedules: true` to an existing stream config; NATS applies this as a regular update. No downtime, no message loss, no stream recreation. Just update `forRoot()` and restart.
 :::
 
 ### Immutable (locked after creation)
@@ -344,7 +344,7 @@ Every default above is exposed as a typed constant from the package, so you can 
 
 **Other:**
 
-- `RESERVED_HEADERS` — the `Set<string>` of header names blocked by `JetstreamRecordBuilder.setHeader()`. See [Record Builder](/docs/guides/record-builder#reserved-headers).
+- `RESERVED_HEADERS`; the `Set<string>` of header names blocked by `JetstreamRecordBuilder.setHeader()`. See [Record Builder](/docs/guides/record-builder#reserved-headers).
 
 ```typescript
 import { DEFAULT_EVENT_STREAM_CONFIG, toNanos } from '@horizon-republic/nestjs-jetstream';

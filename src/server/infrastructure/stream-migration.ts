@@ -79,7 +79,7 @@ export class StreamMigration {
 
       if (drainedCount > 0) {
         // Phase 2: Backup via sourcing
-        this.logger.log(`  Phase 2/4: Backing up ${drainedCount} messages → ${backupName}`);
+        this.logger.log(`  Phase 2/4: Backing up ${drainedCount} messages -> ${backupName}`);
         await jsm.streams.add({
           ...currentInfo.config,
           name: backupName,
@@ -107,7 +107,7 @@ export class StreamMigration {
         // The backup is the only copy now; recovery resumes on the next startup.
         this.logger.error(
           `Migration of ${streamName} failed after the original was deleted. ` +
-            `Backup ${backupName} preserved — restoration resumes on the next startup.`,
+            `Backup ${backupName} preserved; restoration resumes on the next startup.`,
         );
       } else {
         await this.rollbackBeforeDelete(jsm, streamName, currentInfo, backupName);
@@ -254,7 +254,7 @@ export class StreamMigration {
     if ((await this.tryInfo(jsm, backupName)) === null) return false;
 
     this.logger.warn(
-      `Migration backup ${backupName} exists — another instance appears to be migrating; waiting`,
+      `Migration backup ${backupName} exists; another instance appears to be migrating; waiting`,
     );
 
     const deadline = Date.now() + this.peerWaitMs;
@@ -288,7 +288,7 @@ export class StreamMigration {
       }
     } catch (rollbackErr) {
       this.logger.error(
-        `Rollback of ${streamName} after a failed migration also failed — the stream may be left quiesced:`,
+        `Rollback of ${streamName} after a failed migration also failed; the stream may be left quiesced:`,
         rollbackErr,
       );
     }

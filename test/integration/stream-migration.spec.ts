@@ -104,7 +104,7 @@ describe('Stream sourcing behavior (NATS verification)', () => {
     expect(infoB.state.messages).toBe(10);
   });
 
-  it('should allow sourcing into a stream with different storage type (File → Memory)', async () => {
+  it('should allow sourcing into a stream with different storage type (File -> Memory)', async () => {
     // Given: File stream with messages
     const nameFile = `storage-file-${Date.now()}`;
     const nameMem = `storage-mem-${Date.now()}`;
@@ -227,7 +227,7 @@ describe('Stream sourcing behavior (NATS verification)', () => {
       });
     });
 
-    describe('reverse migration (Memory → File)', () => {
+    describe('reverse migration (Memory -> File)', () => {
       it('should migrate Memory back to File and preserve messages', async () => {
         const serviceName = uniqueServiceName();
 
@@ -259,7 +259,7 @@ describe('Stream sourcing behavior (NATS verification)', () => {
         expect(infoBefore.config.storage).toBe(StorageType.Memory);
         expect(infoBefore.state.messages).toBe(5);
 
-        // When: migrate Memory → File
+        // When: migrate Memory -> File
         const { app: app2, module: module2 } = await createTestApp(
           {
             name: serviceName,
@@ -384,7 +384,7 @@ describe('Stream sourcing behavior (NATS verification)', () => {
     });
 
     describe('randomized bulk migration', () => {
-      it('should preserve and deliver 20–50 random events through File→Memory migration', async () => {
+      it('should preserve and deliver 20-50 random events through File->Memory migration', async () => {
         const messageCount = faker.number.int({ min: 20, max: 50 });
         const serviceName = uniqueServiceName();
 
@@ -413,7 +413,7 @@ describe('Stream sourcing behavior (NATS verification)', () => {
 
         expect(infoBefore.state.messages).toBe(messageCount);
 
-        // When: migrate File → Memory
+        // When: migrate File -> Memory
         const migrationStart = Date.now();
 
         const { app: app2, module: module2 } = await createTestApp(

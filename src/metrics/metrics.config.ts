@@ -52,7 +52,7 @@ export type MetricsOption = boolean | MetricsConfig;
 /**
  * Bounded enum used to label `jetstream_errors_total{context}`. Free-form
  * context strings emitted by transport are mapped to one of these values
- * by the metrics service (unknown → `other`).
+ * by the metrics service (unknown -> `other`).
  */
 export type ErrorContext =
   | 'connection'

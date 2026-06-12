@@ -156,7 +156,7 @@ describe(StreamProvider, () => {
     });
 
     describe('when kind is Broadcast with allow_msg_schedules: true', () => {
-      it('should NOT add a schedule subject — broadcast.> already covers it', () => {
+      it('should NOT add a schedule subject; broadcast.> already covers it', () => {
         options.broadcast = { stream: { allow_msg_schedules: true } };
         sut = makeSut();
 
@@ -575,8 +575,8 @@ describe(StreamProvider, () => {
           });
 
           mockJsm.streams.info
-            .mockRejectedValueOnce(notFoundError) // event stream → create
-            .mockRejectedValueOnce(authError); // DLQ stream → rethrow
+            .mockRejectedValueOnce(notFoundError) // event stream -> create
+            .mockRejectedValueOnce(authError); // DLQ stream -> rethrow
 
           mockJsm.streams.add.mockResolvedValue(createMock<StreamInfo>());
 
@@ -804,7 +804,7 @@ describe(StreamProvider, () => {
     });
 
     it('should bind the DLQ stream externally when dlq management is Manual', async () => {
-      // Given: DLQ Manual; Event Auto (does not exist → created)
+      // Given: DLQ Manual; Event Auto (does not exist -> created)
       options.dlq = { management: { stream: ManagementMode.Manual } };
       sut = makeSut();
 

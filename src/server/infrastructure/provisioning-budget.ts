@@ -117,6 +117,6 @@ export const assertStorageBudget = async (
       );
     }
   } catch (err) {
-    logger.debug(`Storage preflight skipped — account info unavailable: ${String(err)}`);
+    logger.debug(`Storage preflight skipped; account info unavailable: ${String(err)}`);
   }
 };

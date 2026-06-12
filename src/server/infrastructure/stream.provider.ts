@@ -257,7 +257,7 @@ export class StreamProvider {
     if (diff.hasTransportControlledConflicts) {
       const conflicts = diff.changes
         .filter((c) => c.mutability === 'transport-controlled')
-        .map((c) => `${c.property}: ${JSON.stringify(c.current)} → ${JSON.stringify(c.desired)}`)
+        .map((c) => `${c.property}: ${JSON.stringify(c.current)} -> ${JSON.stringify(c.desired)}`)
         .join(', ');
 
       throw new Error(
@@ -344,14 +344,14 @@ export class StreamProvider {
     migrationEnabled: boolean,
   ): void {
     for (const c of diff.changes) {
-      const detail = `${c.property}: ${JSON.stringify(c.current)} → ${JSON.stringify(c.desired)}`;
+      const detail = `${c.property}: ${JSON.stringify(c.current)} -> ${JSON.stringify(c.desired)}`;
 
       if (c.mutability === 'transport-controlled') {
         this.logger.error(
-          `Stream ${streamName}: ${detail} — transport-controlled, cannot be changed`,
+          `Stream ${streamName}: ${detail}; transport-controlled, cannot be changed`,
         );
       } else if (c.mutability === 'immutable' && !migrationEnabled) {
-        this.logger.warn(`Stream ${streamName}: ${detail} — requires allowDestructiveMigration`);
+        this.logger.warn(`Stream ${streamName}: ${detail}; requires allowDestructiveMigration`);
       } else {
         this.logger.log(`Stream ${streamName}: ${detail}`);
       }
@@ -539,7 +539,7 @@ export class StreamProvider {
     if (!('retention' in overrides)) return overrides;
 
     this.logger.debug(
-      'Stripping user-provided retention override — retention is managed by the transport',
+      'Stripping user-provided retention override; retention is managed by the transport',
     );
 
     const cleaned = { ...overrides };

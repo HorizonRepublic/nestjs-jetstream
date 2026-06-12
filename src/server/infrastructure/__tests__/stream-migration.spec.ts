@@ -139,7 +139,7 @@ describe(StreamMigration.name, () => {
       // When
       await sut.migrate(jsm, testStreamName, newConfig);
 
-      // Then: updates ordered quiesce → clear backup sources → attach restore
+      // Then: updates ordered quiesce -> clear backup sources -> attach restore
       const updateCalls = vi.mocked(jsm.streams.update).mock.calls;
 
       expect(updateCalls[0]![0]).toBe(testStreamName);

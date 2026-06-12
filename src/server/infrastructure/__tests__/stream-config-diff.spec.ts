@@ -111,7 +111,7 @@ describe(compareStreamConfig.name, () => {
       'deny_purge',
     ];
 
-    it.each(enableOnlyProperties)('should classify %s false→true as enable-only', (property) => {
+    it.each(enableOnlyProperties)('should classify %s false->true as enable-only', (property) => {
       // Given
       const current: Partial<StreamConfig> = { [property]: false };
       const desired: Partial<StreamConfig> = { [property]: true };
@@ -125,7 +125,7 @@ describe(compareStreamConfig.name, () => {
       expect(result.changes[0]!.mutability).toBe('enable-only');
     });
 
-    it.each(enableOnlyProperties)('should classify %s true→false as immutable', (property) => {
+    it.each(enableOnlyProperties)('should classify %s true->false as immutable', (property) => {
       // Given
       const current: Partial<StreamConfig> = { [property]: true };
       const desired: Partial<StreamConfig> = { [property]: false };

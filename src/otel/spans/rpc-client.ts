@@ -35,7 +35,7 @@ export enum RpcOutcomeKind {
   ReplyError = 'reply-error',
   /** Round-trip exceeded the configured timeout. Span status ERROR, `rpc.timeout` message. */
   Timeout = 'timeout',
-  /** Any other failure during the round-trip (publish reject, connection drop, decode, …). Span status ERROR + recordException. */
+  /** Any other failure during the round-trip (publish reject, connection drop, decode, ...). Span status ERROR + recordException. */
   Error = 'error',
 }
 
@@ -75,8 +75,8 @@ export interface RpcClientSpanHandle {
  * drop, publish reject) mark the span ERROR.
  *
  * Fast paths:
- * - `otel.enabled: false` → no span, no propagation (full kill switch).
- * - `traces` excludes `RpcClientSend` → no span, but the active context is
+ * - `otel.enabled: false` -> no span, no propagation (full kill switch).
+ * - `traces` excludes `RpcClientSend` -> no span, but the active context is
  *   still injected so downstream consumers keep the trace chain.
  */
 export const beginRpcClientSpan = (

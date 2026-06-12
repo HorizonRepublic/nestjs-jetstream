@@ -39,7 +39,7 @@ describe('assertStorageBudget', () => {
   afterEach(vi.resetAllMocks);
 
   it('should warn when the reservation exceeds the remaining account budget', async () => {
-    // Given: account limit 10 GiB, 6 already reserved; this service wants 5×1 = 5 GiB
+    // Given: account limit 10 GiB, 6 already reserved; this service wants 5x1 = 5 GiB
     const jsm = createMock({
       getAccountInfo: vi
         .fn()
@@ -106,7 +106,7 @@ describe('assertStorageBudget', () => {
     });
     const logger = createMock<Logger>();
 
-    // When: 2×3 = 6 GiB needed, only 1 GiB remains in R3
+    // When: 2x3 = 6 GiB needed, only 1 GiB remains in R3
     await assertStorageBudget(jsm as never, 'svc', [reservation(3, 2 * GIB)], logger);
 
     // Then
@@ -128,7 +128,7 @@ describe('assertStorageBudget', () => {
     });
     const logger = createMock<Logger>();
 
-    // When: R1 1×1 = 1 GiB (fits), R3 2×3 = 6 GiB (only 1 GiB remains in R3)
+    // When: R1 1x1 = 1 GiB (fits), R3 2x3 = 6 GiB (only 1 GiB remains in R3)
     await assertStorageBudget(
       jsm as never,
       'svc',

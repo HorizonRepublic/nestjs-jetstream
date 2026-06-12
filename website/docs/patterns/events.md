@@ -8,7 +8,7 @@ schema:
   headline: "Workqueue Events — NestJS JetStream At-Least-Once Delivery"
   description: "NestJS NATS JetStream workqueue events with at-least-once delivery, automatic retry, publish-side deduplication, and dead letter handling."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-27"
+  dateModified: "2026-06-12"
 ---
 
 # Events (Workqueue)
@@ -261,7 +261,7 @@ This prevents duplicate publishes in scenarios like:
 - The publisher retries after a network timeout (but the first publish actually succeeded).
 - A controller endpoint is called twice with the same data.
 
-The default `duplicate_window` is **2 minutes** — messages with the same ID published within that window are deduplicated. To extend it, override `events.stream.duplicate_window` in `forRoot()` (e.g. `duplicate_window: toNanos(5, 'minutes')`). See [Custom configuration](#custom-configuration) for the full override pattern.
+The default `duplicate_window` is **2 minutes**; messages with the same ID published within that window are deduplicated. To extend it, override `events.stream.duplicate_window` in `forRoot()` (e.g. `duplicate_window: toNanos(5, 'minutes')`). See [Custom configuration](#custom-configuration) for the full override pattern.
 
 When no message ID is set explicitly, the transport generates a random UUID for each publish — meaning no deduplication occurs by default. Always set a deterministic message ID when duplicate publishes are a concern.
 
@@ -323,7 +323,7 @@ See [Default Configs — Event Stream](/docs/reference/default-configs#event-str
 
 ## Error handling
 
-When a handler throws, the transport automatically `nak`'s the message for redelivery. For most cases, this is all you need. However, some errors are **non-recoverable** — retrying will never succeed. For these, use `ctx.terminate()` to permanently discard the message.
+When a handler throws, the transport automatically `nak`'s the message for redelivery. For most cases, this is all you need. However, some errors are **non-recoverable**; retrying will never succeed. For these, use `ctx.terminate()` to permanently discard the message.
 
 ```typescript title="src/orders/orders.controller.ts"
 import { Controller, Logger } from '@nestjs/common';
@@ -373,7 +373,7 @@ Every message ends in one of three states:
 
 **Auto-ack** (no action needed). The handler returns successfully. The transport calls `ack()` on the underlying message automatically — the message is removed from the stream.
 
-**`ctx.retry()`** — for recoverable errors. The message is redelivered, optionally with a `{ delayMs }` delay. The transport applies the same retry semantics automatically when a handler throws, so you only need to call `ctx.retry()` manually when you want to return early without raising an exception.
+**`ctx.retry()`**; for recoverable errors. The message is redelivered, optionally with a `{ delayMs }` delay. The transport applies the same retry semantics automatically when a handler throws, so you only need to call `ctx.retry()` manually when you want to return early without raising an exception.
 
 **`ctx.terminate(reason)`** — for non-recoverable errors. The message is permanently discarded. Must be called manually in the handler.
 

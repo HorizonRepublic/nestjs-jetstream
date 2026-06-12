@@ -77,7 +77,7 @@ const waitForSample = (
 const waitForTextMatch = (register: Registry, re: RegExp, timeoutMs = 5_000): Promise<void> =>
   waitForCondition(async () => re.test(await register.metrics()), timeoutMs);
 
-describe('Metrics — integration', () => {
+describe('Metrics; integration', () => {
   let nc: NatsConnection;
   let container: StartedTestContainer;
   let port: number;
@@ -176,7 +176,7 @@ describe('Metrics — integration', () => {
     });
 
     it('should increment messages_processed_total with status=error and errors_total{context=handler} when handler throws', async () => {
-      // Given/When: handler always throws → nak'd, may redeliver up to max_deliver
+      // Given/When: handler always throws -> nak'd, may redeliver up to max_deliver
       await firstValueFrom(client.emit('orders.cancelled', { orderId: 'c1' }));
 
       // Wait for at least one error to surface (redeliveries are best-effort)
@@ -360,7 +360,7 @@ describe('Metrics — integration', () => {
         {
           name: serviceName,
           port,
-          // metrics omitted → module not registered
+          // metrics omitted -> module not registered
         },
         [MetricsController],
         [serviceName],

@@ -216,7 +216,7 @@ export class JetstreamClient extends ClientProxy {
     const nc = this.connection.unwrap;
 
     if (!nc) {
-      throw new Error('Not connected — call connect() before unwrap()');
+      throw new Error('Not connected; call connect() before unwrap()');
     }
 
     return nc as T;
@@ -245,8 +245,8 @@ export class JetstreamClient extends ClientProxy {
     }
 
     const eventSubject = this.buildEventSubject(packet.pattern);
-    // Replace kind segment with _sch: {svc}.ev.{pattern} → {svc}._sch.{pattern}
-    // For broadcast: broadcast.{pattern} → broadcast._sch.{pattern}
+    // Replace kind segment with _sch: {svc}.ev.{pattern} -> {svc}._sch.{pattern}
+    // For broadcast: broadcast.{pattern} -> broadcast._sch.{pattern}
     const publishSubject = schedule ? this.buildScheduleSubject(eventSubject) : eventSubject;
     const msgHeaders = this.buildHeaders(hdrs, { subject: eventSubject });
     const encoded = this.codec.encode(data);
@@ -530,7 +530,7 @@ export class JetstreamClient extends ClientProxy {
         this.reportPublished(declaredPattern, StreamKind.Command, startedAt, 'error');
         this.reportRpcCompleted(declaredPattern, startedAt, 'error');
         callback({
-          err: new Error('Inbox not initialized — JetStream RPC mode requires a connected inbox'),
+          err: new Error('Inbox not initialized; JetStream RPC mode requires a connected inbox'),
           response: null,
           isDisposed: true,
         });

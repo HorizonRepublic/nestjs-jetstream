@@ -1042,7 +1042,7 @@ describe(EventRouter, () => {
           } as DeliveryInfo,
         });
 
-      describe('when options.dlq is set — happy path (publish succeeds)', () => {
+      describe('when options.dlq is set; happy path (publish succeeds)', () => {
         it('should publish to DLQ stream, call onDeadLetter, and term the message', async () => {
           // Given: a DLQ-enabled router with a working connection
           const options: JetstreamModuleOptions = {
@@ -1350,7 +1350,7 @@ describe(EventRouter, () => {
         });
       });
 
-      describe('when options.dlq is set — publish fails', () => {
+      describe('when options.dlq is set; publish fails', () => {
         it('should nak and preserve the message in dlq-only mode (no callback to fall back to)', async () => {
           // Given: dlq-only configuration and a DLQ publish that never succeeds
           const options: JetstreamModuleOptions = {

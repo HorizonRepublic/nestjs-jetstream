@@ -9,7 +9,7 @@ const MIN_ACK_EXTENSION_INTERVAL = 500;
 /**
  * Resolve the ack extension interval from user config and NATS ack_wait.
  *
- * @param config  - `false`/`undefined` → disabled, `number` → explicit ms, `true` → auto from ack_wait.
+ * @param config  - `false`/`undefined` -> disabled, `number` -> explicit ms, `true` -> auto from ack_wait.
  * @param ackWaitNanos - Consumer `ack_wait` in nanoseconds (for auto-calculation).
  * @returns Interval in ms, or `null` if disabled.
  */

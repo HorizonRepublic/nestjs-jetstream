@@ -86,7 +86,7 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
 
     if (!this.config.register) {
       throw new Error(
-        'JetstreamMetricsService requires a prom-client Registry — none was resolved by JetstreamMetricsModule.',
+        'JetstreamMetricsService requires a prom-client Registry; none was resolved by JetstreamMetricsModule.',
       );
     }
 

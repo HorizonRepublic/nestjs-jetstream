@@ -117,7 +117,7 @@ export class RpcContext extends BaseRpcContext<[NatsMessage]> {
     this.assertJetStream('retry');
 
     if (this._shouldTerminate) {
-      throw new Error('Cannot retry — terminate() was already called');
+      throw new Error('Cannot retry; terminate() was already called');
     }
 
     this._shouldRetry = true;
@@ -137,7 +137,7 @@ export class RpcContext extends BaseRpcContext<[NatsMessage]> {
     this.assertJetStream('terminate');
 
     if (this._shouldRetry) {
-      throw new Error('Cannot terminate — retry() was already called');
+      throw new Error('Cannot terminate; retry() was already called');
     }
 
     this._shouldTerminate = true;

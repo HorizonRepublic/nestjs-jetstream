@@ -192,7 +192,7 @@ The injection token is the service name string you passed to `forFeature({ name 
 private readonly usersClient: ClientProxy;
 ```
 
-The library exports a `getClientToken(name)` helper that returns the same string — it exists for code bases that prefer explicit symbolic tokens, but `@Inject('users')` is the canonical form and the one used throughout these docs.
+The library exports a `getClientToken(name)` helper that returns the same string; it exists for code bases that prefer explicit symbolic tokens, but `@Inject('users')` is the canonical form and the one used throughout these docs.
 
 ### Per-client codec override
 
@@ -284,11 +284,11 @@ JetstreamModule.forRoot({
 | `ManagementMode.Auto` | Library creates and updates every entity. **Default.** |
 | `ManagementMode.Manual` | Library binds to existing entities; fails at boot if any are absent. |
 
-The global value can be overridden per entity via `events.management`, `broadcast.management`, etc. Resolution order: per-entity → global → `Auto`. See [Bring Your Own Infrastructure](/docs/guides/external-infrastructure) for a complete guide.
+The global value can be overridden per entity via `events.management`, `broadcast.management`, etc. Resolution order: per-entity -> global -> `Auto`. See [Bring Your Own Infrastructure](/docs/guides/external-infrastructure) for a complete guide.
 
 #### `metadata` &mdash; `MetadataRegistryOptions`
 
-Default: auto-enabled if any handler has `meta`. Handler metadata registry — publishes `@EventPattern` / `@MessagePattern` handler metadata to a NATS KV bucket for cross-service discovery. No-op when `consumer: false`. See [Handler Metadata](/docs/patterns/handler-metadata). <Since version="2.9.0" />
+Default: auto-enabled if any handler has `meta`. Handler metadata registry; publishes `@EventPattern` / `@MessagePattern` handler metadata to a NATS KV bucket for cross-service discovery. No-op when `consumer: false`. See [Handler Metadata](/docs/patterns/handler-metadata). <Since version="2.9.0" />
 
 #### `metrics` &mdash; `MetricsOption`
 
@@ -319,7 +319,7 @@ RPC configuration is a discriminated union on `mode`. Pick the mode based on whe
 **`mode: 'jetstream'`** &mdash; commands persisted in a JetStream stream before delivery. Default timeout `180_000` ms (3 min). Best for commands that must survive a handler restart (payments, state changes).
 
 :::note Timeout unit
-The `timeout` field is specified in **milliseconds**, not seconds. Writing `timeout: 30` means 30 ms — almost certainly a bug. Use `timeout: 30_000` for 30 seconds.
+The `timeout` field is specified in **milliseconds**, not seconds. Writing `timeout: 30` means 30 ms; almost certainly a bug. Use `timeout: 30_000` for 30 seconds.
 :::
 
 ```typescript
@@ -480,7 +480,7 @@ The `name` and `servers` fields from the top-level options take precedence over 
 
 ### TLS
 
-The `tls` block is passed straight through to `@nats-io/transport-node`, so any field supported by its [`TlsOptions`](https://github.com/nats-io/nats.js/tree/main/transport-node) works here — paths (`certFile`, `keyFile`, `caFile`), inline PEM (`cert`, `key`, `ca`), or an empty `tls: {}` for server-only TLS against a broker whose CA your system already trusts.
+The `tls` block is passed straight through to `@nats-io/transport-node`, so any field supported by its [`TlsOptions`](https://github.com/nats-io/nats.js/tree/main/transport-node) works here; paths (`certFile`, `keyFile`, `caFile`), inline PEM (`cert`, `key`, `ca`), or an empty `tls: {}` for server-only TLS against a broker whose CA your system already trusts.
 
 ```typescript
 JetstreamModule.forRoot({

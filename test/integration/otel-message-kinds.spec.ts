@@ -53,7 +53,7 @@ class KindsController {
   }
 }
 
-describe('OTel message-kind attributes integration — broadcast, ordered, scheduled', () => {
+describe('OTel message-kind attributes integration; broadcast, ordered, scheduled', () => {
   let nc: NatsConnection;
   let container: StartedTestContainer;
   let port: number;

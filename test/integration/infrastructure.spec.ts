@@ -196,7 +196,7 @@ describe('Stream & Consumer Lifecycle', () => {
         );
 
         expect(info.config.durable_name).toBe(`${internalName}_broadcast-consumer`);
-        // Single broadcast pattern → filter_subject (not filter_subjects)
+        // Single broadcast pattern -> filter_subject (not filter_subjects)
         expect(info.config.filter_subject).toBe('broadcast.config.updated');
         expect(info.config.filter_subjects ?? []).toHaveLength(0);
       } finally {
@@ -232,7 +232,7 @@ describe('Stream & Consumer Lifecycle', () => {
       }
     });
 
-    it('should be idempotent — re-listen does not duplicate', async () => {
+    it('should be idempotent; re-listen does not duplicate', async () => {
       const serviceName = uniqueServiceName();
 
       const { app: app1 } = await createTestApp({ name: serviceName, port }, [
