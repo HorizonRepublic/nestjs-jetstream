@@ -245,11 +245,11 @@ describe(CoreRpcServer, () => {
             data: codec.encode({}),
           });
 
-          // When: message arrives — handleRequest throws, caught by .catch()
+          // When: message arrives; handleRequest throws, caught by .catch()
           subscriptionCallback(null, msg);
           await new Promise(process.nextTick);
 
-          // Then: no crash — the outer .catch() handles it silently
+          // Then: no crash, the outer .catch() handles it silently
           expect(msg.respond).not.toHaveBeenCalled();
         });
       });
@@ -268,7 +268,6 @@ describe(CoreRpcServer, () => {
             data: new TextEncoder().encode('{}'),
           });
 
-          // Make encode throw when encoding the error response
           codec.encode.mockImplementation(() => {
             throw new Error('encode failed');
           });
@@ -373,7 +372,7 @@ describe(CoreRpcServer, () => {
 
           const msg = createMock<Msg>({
             subject: `${serviceName}__microservice.cmd.test`,
-            reply: '', // empty reply = fire-and-forget
+            reply: '',
             data: codec.encode({}),
           });
 

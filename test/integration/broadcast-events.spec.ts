@@ -70,7 +70,6 @@ describe('Broadcast Event Delivery', () => {
       serviceA = uniqueServiceName();
       serviceB = uniqueServiceName();
 
-      // Two independent services sharing the broadcast stream
       ({ app: appA, module: moduleA } = await createTestApp(
         { name: serviceA, port },
         [BroadcastControllerA],

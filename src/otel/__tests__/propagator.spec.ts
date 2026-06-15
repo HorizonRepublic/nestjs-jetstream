@@ -18,8 +18,7 @@ describe('propagator', () => {
 
   describe('without a registered global propagator', () => {
     beforeEach(() => {
-      // `propagation.disable()` reverts the global back to the no-op
-      // propagator shipped inside `@opentelemetry/api`.
+      // disable() reverts the global to the no-op propagator from `@opentelemetry/api`.
       propagation.disable();
     });
 
@@ -35,8 +34,7 @@ describe('propagator', () => {
       // When
       injectContext(ROOT_CONTEXT, carrier, setter);
 
-      // Then — library does NOT ship its own fallback propagator; if the
-      // host app hasn't registered an SDK there is nothing to propagate.
+      // Then: the library ships no fallback propagator, so nothing is written
       expect(carrier).toEqual({});
     });
 
@@ -51,7 +49,7 @@ describe('propagator', () => {
       // When
       const result = extractContext(ROOT_CONTEXT, carrier, getter);
 
-      // Then — no propagator to read headers with, ROOT_CONTEXT passes through
+      // Then: no propagator to read headers with, ROOT_CONTEXT passes through
       expect(result).toBe(ROOT_CONTEXT);
     });
   });

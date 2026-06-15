@@ -15,16 +15,10 @@ export const hdrsSetter: TextMapSetter<MsgHdrs> = {
 
 /**
  * `TextMapGetter` that reads propagation keys from a NATS `MsgHdrs`
- * instance. Normalizes empty-string returns to `undefined` since NATS
- * `MsgHdrs.get()` returns `''` when a key is absent.
- *
- * Multi-valued headers are joined with `,` — matches the W3C Baggage and
- * Trace Context list-header convention, and W3C `traceparent` never occurs
- * as a real multi-value so the join is a no-op on the common path. Using
- * `values(key)` when available means composite propagators that produce a
- * multi-value `baggage`/`tracestate` across publishers don't silently drop
- * entries. Falls back to `get(key)` if the carrier does not expose
- * `values` (e.g. a partial test double).
+ * instance. Normalizes empty strings to `undefined` since `MsgHdrs.get()`
+ * returns `''` for absent keys. Multi-valued headers are joined with `,`
+ * per the W3C list-header convention, via `values(key)` when the carrier
+ * exposes it so multi-value `baggage` / `tracestate` entries aren't dropped.
  */
 export const hdrsGetter: TextMapGetter<MsgHdrs | undefined> = {
   keys: (headers) => (headers ? headers.keys() : []),
@@ -34,9 +28,7 @@ export const hdrsGetter: TextMapGetter<MsgHdrs | undefined> = {
     const all = typeof headers.values === 'function' ? headers.values(key) : undefined;
 
     if (Array.isArray(all)) {
-      // Drop empty entries before joining so `['', 'x']` yields `'x'` (not
-      // `',x'`) and `['', '']` yields `undefined` (not the literal `,`),
-      // matching the single-value branch's empty-string treatment.
+      // Drop empty entries so `['', '']` yields `undefined`, matching the single-value branch.
       const nonEmpty = all.filter((value) => value !== '');
 
       if (nonEmpty.length === 0) return undefined;

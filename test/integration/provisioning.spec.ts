@@ -19,7 +19,7 @@ describe('Provisioning error clarity', () => {
   let port: number;
 
   beforeAll(async () => {
-    // 1 MiB file store — far below the 5 GiB default event-stream max_bytes
+    // 1 MiB file store, far below the 5 GiB default event-stream max_bytes
     ({ container, port } = await startNatsContainerWithFileStoreLimit(1024 * 1024));
   });
 

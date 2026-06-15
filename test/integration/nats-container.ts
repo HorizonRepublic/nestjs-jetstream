@@ -64,11 +64,6 @@ const waitForJetStreamReady = async (port: number, timeoutMs = 30_000): Promise<
   throw new Error(`NATS JetStream on port ${port} not ready within ${timeoutMs / 1_000}s`);
 };
 
-/**
- * Start a NATS container with JetStream enabled.
- * Returns the started container and the mapped host port.
- * Includes a TCP-level readiness probe to handle port-forwarding lag on Docker Desktop.
- */
 export const startNatsContainer = async (): Promise<NatsContainerResult> => {
   const container = await new GenericContainer(NATS_IMAGE)
     .withCommand(['--js', '--store_dir', '/data'])
@@ -78,18 +73,13 @@ export const startNatsContainer = async (): Promise<NatsContainerResult> => {
 
   const port = container.getMappedPort(4222);
 
-  // Docker Desktop on macOS can lag on port forwarding after container start.
-  // Poll until we can establish a real NATS connection.
+  // Docker Desktop on macOS can lag on port forwarding; poll until a real connection works
   await waitForNatsReady(port);
 
   return { container, port };
 };
 
-/**
- * Start a NATS container with a fixed host port binding.
- * Required for restart tests — Docker Desktop may reassign dynamic ports on restart,
- * but fixed bindings survive `container.restart()`.
- */
+/** For restart tests: dynamic ports may be reassigned on restart, fixed bindings survive. */
 export const startNatsContainerWithFixedPort = async (
   hostPort: number,
 ): Promise<NatsContainerResult> => {
@@ -104,10 +94,7 @@ export const startNatsContainerWithFixedPort = async (
   return { container, port: hostPort };
 };
 
-/**
- * Start a NATS container whose JetStream file store is capped to `maxFileStoreBytes`.
- * Used to provoke insufficient-storage provisioning failures deterministically.
- */
+/** Caps the JetStream file store to provoke insufficient-storage failures deterministically. */
 export const startNatsContainerWithFileStoreLimit = async (
   maxFileStoreBytes: number,
 ): Promise<NatsContainerResult> => {
@@ -133,11 +120,7 @@ export const startNatsContainerWithFileStoreLimit = async (
   return { container, port };
 };
 
-/**
- * Poll until the cluster can actually host a replicated stream with `expectedPeers`
- * replicas — the real "cluster formed" signal. Creates a tiny probe stream and
- * deletes it. Cluster gossip/RAFT election is slow, so timeouts are generous.
- */
+/** Probe-create a stream with `expectedPeers` replicas: the real "cluster formed" signal. */
 const waitForClusterFormed = async (
   port: number,
   expectedPeers: number,
@@ -174,13 +157,7 @@ const waitForClusterFormed = async (
   );
 };
 
-/**
- * Start a multi-node NATS JetStream cluster on a shared Docker network.
- * Each node runs in clustered mode with routes to every peer (`n0`,`n1`,...).
- * Used to provoke placement failures (e.g. `num_replicas` unsatisfiable by peers).
- *
- * @returns Started containers, the shared network, node-0's mapped client port, and a `stop()`.
- */
+/** Multi-node JetStream cluster on a shared network; used to provoke placement failures. */
 export const startNatsCluster = async (
   opts: NatsClusterOptions = {},
 ): Promise<NatsClusterResult> => {
@@ -247,14 +224,7 @@ export const startNatsCluster = async (
   }
 };
 
-/**
- * Restart a NATS container and wait for JetStream readiness.
- * Container filesystem (including JetStream store) persists across restarts.
- *
- * @returns The mapped host port after restart. Dynamic ports may change on restart;
- *   callers using fixed port bindings (via `startNatsContainerWithFixedPort`) can
- *   safely ignore the return value since the port is stable.
- */
+/** Restart and wait for JetStream readiness; returns the possibly-remapped host port. */
 export const restartNatsContainer = async (container: StartedTestContainer): Promise<number> => {
   await container.restart();
 

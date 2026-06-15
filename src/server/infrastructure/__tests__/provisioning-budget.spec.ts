@@ -3,6 +3,7 @@ import { createMock } from '@golevelup/ts-vitest';
 import { Logger } from '@nestjs/common';
 import { RetentionPolicy, StorageType } from '@nats-io/jetstream';
 
+import { StreamKind } from '../../../interfaces';
 import { assertStorageBudget } from '../provisioning-budget';
 import { type StreamReservation } from '../provisioning-summary';
 
@@ -13,7 +14,7 @@ const reservation = (
   maxBytes: number,
   storage: StorageType = StorageType.File,
 ): StreamReservation => ({
-  kind: 'ev',
+  kind: StreamKind.Event,
   name: 'svc__microservice_ev-stream',
   storage,
   numReplicas,
@@ -38,7 +39,7 @@ describe('assertStorageBudget', () => {
   afterEach(vi.resetAllMocks);
 
   it('should warn when the reservation exceeds the remaining account budget', async () => {
-    // Given: account limit 10 GiB, 6 already reserved; this service wants 5×1 = 5 GiB
+    // Given: account limit 10 GiB, 6 already reserved; this service wants 5x1 = 5 GiB
     const jsm = createMock({
       getAccountInfo: vi
         .fn()
@@ -105,7 +106,7 @@ describe('assertStorageBudget', () => {
     });
     const logger = createMock<Logger>();
 
-    // When: 2×3 = 6 GiB needed, only 1 GiB remains in R3
+    // When: 2x3 = 6 GiB needed, only 1 GiB remains in R3
     await assertStorageBudget(jsm as never, 'svc', [reservation(3, 2 * GIB)], logger);
 
     // Then
@@ -127,7 +128,7 @@ describe('assertStorageBudget', () => {
     });
     const logger = createMock<Logger>();
 
-    // When: R1 1×1 = 1 GiB (fits), R3 2×3 = 6 GiB (only 1 GiB remains in R3)
+    // When: R1 1x1 = 1 GiB (fits), R3 2x3 = 6 GiB (only 1 GiB remains in R3)
     await assertStorageBudget(
       jsm as never,
       'svc',
@@ -152,7 +153,7 @@ describe('assertStorageBudget', () => {
     });
     const logger = createMock<Logger>();
 
-    // When: 100 GiB memory stream — must not count against file storage
+    // When: 100 GiB memory stream, must not count against file storage
     await assertStorageBudget(
       jsm as never,
       'svc',
@@ -171,7 +172,7 @@ describe('assertStorageBudget', () => {
     });
     const logger = createMock<Logger>();
 
-    // When / Then: never-throws guard — resolves undefined, treats missing limit as unset
+    // When / Then: never-throws guard; resolves undefined, treats missing limit as unset
     await expect(
       assertStorageBudget(jsm as never, 'svc', [reservation(1, 5 * GIB)], logger),
     ).resolves.toBeUndefined();

@@ -53,7 +53,7 @@ class KindsController {
   }
 }
 
-describe('OTel message-kind attributes integration — broadcast, ordered, scheduled', () => {
+describe('OTel message-kind attributes integration; broadcast, ordered, scheduled', () => {
   let nc: NatsConnection;
   let container: StartedTestContainer;
   let port: number;
@@ -156,7 +156,7 @@ describe('OTel message-kind attributes integration — broadcast, ordered, sched
 
   describe('scheduled event', () => {
     it('should set jetstream.schedule.target to the consumer subject on the publish span', async () => {
-      // Given — schedule a delivery 1s out so the test runs reasonably fast.
+      // Given: schedule delivery 1s out so the test runs reasonably fast
       const payload = { orderId: 'sch-1' };
       const record = new JetstreamRecordBuilder(payload)
         .scheduleAt(new Date(Date.now() + 1_000))
@@ -167,9 +167,8 @@ describe('OTel message-kind attributes integration — broadcast, ordered, sched
       await waitForCondition(() => controller.scheduled.length === 1, 10_000);
       await provider.forceFlush();
 
-      // Then — the publish span captures the scheduled subject as its
-      // `jetstream.schedule.target`, while `messaging.destination.name`
-      // points at the physical `_sch.*` subject that NATS stores.
+      // Then: jetstream.schedule.target holds the consumer subject, while
+      // messaging.destination.name is the physical _sch.* subject NATS stores
       const spans = exporter.getFinishedSpans();
       const publish = spans
         .filter((s) => s.kind === SpanKind.PRODUCER)
@@ -203,8 +202,7 @@ describe('OTel message-kind attributes integration — broadcast, ordered, sched
 
   describe('per-message TTL header', () => {
     it('should never expose the Nats-TTL header as messaging.header.* even with captureHeaders=true', async () => {
-      // Given — re-bootstrap with TTL allowed on the stream and full
-      // capture so we can prove the denylist still wins.
+      // Given: re-bootstrap with allow_msg_ttl and captureHeaders=true
       await app.close();
       await cleanupStreams(nc, serviceName);
 
@@ -231,9 +229,7 @@ describe('OTel message-kind attributes integration — broadcast, ordered, sched
       await waitForCondition(() => controller.events.length === 1, 5_000);
       await provider.forceFlush();
 
-      // Then — `Nats-TTL` is server-managed, never useful as a span attr.
-      // It is in our HEADER_DENYLIST so it must not appear under any
-      // casing on either span.
+      // Then: Nats-TTL is in HEADER_DENYLIST and must not appear under any casing
       const spans = exporter.getFinishedSpans();
 
       for (const span of spans) {

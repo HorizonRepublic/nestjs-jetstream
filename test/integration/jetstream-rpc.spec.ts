@@ -84,7 +84,7 @@ describe('JetStream RPC Round-Trip', () => {
   });
 
   it('should complete cleanly when the handler returns nothing', async () => {
-    // NestJS skips next() for undefined replies — the observable completes
+    // NestJS skips next() for undefined replies: the observable completes
     // empty, but must not surface a decode error.
     await expect(
       firstValueFrom(client.send('user.touch', { id: 7 }), { defaultValue: undefined }),

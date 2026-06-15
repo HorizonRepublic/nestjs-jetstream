@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 import { createMock } from '@golevelup/ts-vitest';
 import { faker } from '@faker-js/faker';
@@ -5,7 +6,7 @@ import type { StreamInfo } from '@nats-io/jetstream';
 import { JetStreamApiError, RetentionPolicy, StorageType } from '@nats-io/jetstream';
 
 import { ConnectionProvider } from '../../../connection';
-import { StreamKind } from '../../../interfaces';
+import { ManagementMode, StreamKind } from '../../../interfaces';
 import type { JetstreamModuleOptions, StreamConfigOverrides } from '../../../interfaces';
 import {
   DEFAULT_BROADCAST_STREAM_CONFIG,
@@ -14,6 +15,9 @@ import {
   internalName,
 } from '../../../jetstream.constants';
 
+import { InfrastructureBinder } from '../infrastructure-binder';
+import { NameResolver } from '../name-resolver';
+import { PatternRegistry } from '../../routing';
 import { StreamProvider } from '../stream.provider';
 
 describe(StreamProvider, () => {
@@ -28,6 +32,14 @@ describe(StreamProvider, () => {
       update: ReturnType<typeof vi.fn>;
     };
     getAccountInfo?: ReturnType<typeof vi.fn>;
+  };
+
+  const makeSut = (binder?: InfrastructureBinder): StreamProvider => {
+    const names = new NameResolver(options);
+    const resolvedBinder =
+      binder ?? new InfrastructureBinder(options, names, createMock<PatternRegistry>());
+
+    return new StreamProvider(options, connection, names, resolvedBinder);
   };
 
   beforeEach(() => {
@@ -45,7 +57,7 @@ describe(StreamProvider, () => {
       getJetStreamManager: vi.fn().mockResolvedValue(mockJsm),
     });
 
-    sut = new StreamProvider(options, connection);
+    sut = makeSut();
   });
 
   afterEach(vi.resetAllMocks);
@@ -106,7 +118,7 @@ describe(StreamProvider, () => {
       it('should include the _sch namespace', () => {
         // Given: scheduling enabled via stream override
         options.events = { stream: { allow_msg_schedules: true } };
-        sut = new StreamProvider(options, connection);
+        sut = makeSut();
         const name = internalName(options.name);
 
         // When
@@ -121,7 +133,7 @@ describe(StreamProvider, () => {
       it('should NOT include the _sch namespace', () => {
         // Given: scheduling explicitly disabled
         options.events = { stream: { allow_msg_schedules: false } };
-        sut = new StreamProvider(options, connection);
+        sut = makeSut();
         const name = internalName(options.name);
 
         // When
@@ -144,9 +156,9 @@ describe(StreamProvider, () => {
     });
 
     describe('when kind is Broadcast with allow_msg_schedules: true', () => {
-      it('should NOT add a schedule subject — broadcast.> already covers it', () => {
+      it('should NOT add a schedule subject; broadcast.> already covers it', () => {
         options.broadcast = { stream: { allow_msg_schedules: true } };
-        sut = new StreamProvider(options, connection);
+        sut = makeSut();
 
         // When
         const subjects = sut.getSubjects(StreamKind.Broadcast);
@@ -184,7 +196,7 @@ describe(StreamProvider, () => {
       it('should never include _sch even when broadcast has allow_msg_schedules enabled', () => {
         // Given: broadcast scheduling is enabled but Ordered should be unaffected
         options.broadcast = { stream: { allow_msg_schedules: true } };
-        sut = new StreamProvider(options, connection);
+        sut = makeSut();
         const name = internalName(options.name);
 
         // When
@@ -220,7 +232,7 @@ describe(StreamProvider, () => {
       // When
       await sut.ensureStreams([StreamKind.Broadcast]);
 
-      // Then: no update — the local config must not clobber the shared stream
+      // Then: no update, the local config must not clobber the shared stream
       expect(mockJsm.streams.update).not.toHaveBeenCalled();
       expect(mockJsm.streams.add).not.toHaveBeenCalled();
     });
@@ -264,7 +276,7 @@ describe(StreamProvider, () => {
     it('should refuse destructive migration of the shared broadcast stream', async () => {
       // Given: an immutable diff on the shared stream and the migration flag on
       options.allowDestructiveMigration = true;
-      sut = new StreamProvider(options, connection);
+      sut = makeSut();
 
       mockStreamInfo(
         createMock<StreamInfo>({
@@ -273,7 +285,7 @@ describe(StreamProvider, () => {
       );
 
       // When/Then: recreating broadcast-stream would delete every other
-      // service's durable consumers — fail loudly instead
+      // service's durable consumers, so fail loudly instead
       await expect(sut.ensureStreams([StreamKind.Broadcast])).rejects.toThrow(
         /broadcast-stream.*shared|shared.*broadcast-stream/i,
       );
@@ -327,7 +339,7 @@ describe(StreamProvider, () => {
         // When
         await sut.ensureStreams([StreamKind.Event]);
 
-        // Then: no changes detected — neither update nor add should be called
+        // Then: no changes detected, neither update nor add should be called
         expect(mockJsm.streams.update).not.toHaveBeenCalled();
         expect(mockJsm.streams.add).not.toHaveBeenCalled();
       });
@@ -435,7 +447,7 @@ describe(StreamProvider, () => {
             stream: { retention: RetentionPolicy.Limits } as unknown as StreamConfigOverrides,
           },
         };
-        sut = new StreamProvider(options, connection);
+        sut = makeSut();
 
         const notFoundError = new JetStreamApiError({
           err_code: 10059,
@@ -481,7 +493,7 @@ describe(StreamProvider, () => {
         it('should create the DLQ stream', async () => {
           // Given: options with dlq enabled
           options = { ...options, dlq: {} };
-          sut = new StreamProvider(options, connection);
+          sut = makeSut();
 
           const notFoundError = new JetStreamApiError({
             err_code: 10059,
@@ -514,11 +526,11 @@ describe(StreamProvider, () => {
 
       describe('when the DLQ stream already exists with no config changes', () => {
         it('should skip update for the DLQ stream', async () => {
-          // Given: both regular stream and DLQ stream already exist with matching config
+          // Given: the event stream is absent (gets created); the DLQ stream
+          // already exists with matching config
           options = { ...options, dlq: {} };
-          sut = new StreamProvider(options, connection);
+          sut = makeSut();
 
-          // Event stream is absent (gets created); the DLQ stream exists
           const existingDlqInfo = createMock<StreamInfo>({
             config: {
               ...DEFAULT_DLQ_STREAM_CONFIG,
@@ -549,7 +561,7 @@ describe(StreamProvider, () => {
         it('should rethrow the error from ensureDlqStream', async () => {
           // Given: options with dlq, but DLQ stream.info throws auth error
           options = { ...options, dlq: {} };
-          sut = new StreamProvider(options, connection);
+          sut = makeSut();
 
           const notFoundError = new JetStreamApiError({
             err_code: 10059,
@@ -563,8 +575,8 @@ describe(StreamProvider, () => {
           });
 
           mockJsm.streams.info
-            .mockRejectedValueOnce(notFoundError) // event stream → create
-            .mockRejectedValueOnce(authError); // DLQ stream → rethrow
+            .mockRejectedValueOnce(notFoundError) // event stream -> create
+            .mockRejectedValueOnce(authError); // DLQ stream -> rethrow
 
           mockJsm.streams.add.mockResolvedValue(createMock<StreamInfo>());
 
@@ -605,7 +617,7 @@ describe(StreamProvider, () => {
     it('should run the preflight check only when provisioning.preflightStorageCheck is set', async () => {
       // Given: existing stream with no diff, preflight enabled
       options.provisioning = { preflightStorageCheck: true };
-      sut = new StreamProvider(options, connection);
+      sut = makeSut();
 
       const getAccountInfo = vi.fn().mockResolvedValue({
         storage: 0,
@@ -631,6 +643,238 @@ describe(StreamProvider, () => {
     });
   });
 
+  describe('custom naming', () => {
+    it('should create the event stream under the custom name and prefix subjects', async () => {
+      options.events = {
+        stream: { name: 'company_orders_stream' },
+        subjectPrefix: 'company.orders.',
+      };
+      sut = makeSut();
+
+      mockJsm.streams.info.mockRejectedValue(streamNotFound());
+      mockJsm.streams.add.mockResolvedValue(createMock<StreamInfo>());
+
+      await sut.ensureStreams([StreamKind.Event]);
+
+      const added = mockJsm.streams.add.mock.calls[0]![0] as { name: string; subjects: string[] };
+
+      expect(added.name).toBe('company_orders_stream');
+      expect(added.subjects).toEqual(['company.orders.>']);
+    });
+
+    it('should not emit a separate schedule subject under a custom prefix', async () => {
+      options.events = {
+        stream: { allow_msg_schedules: true },
+        subjectPrefix: 'company.orders.',
+      };
+      sut = makeSut();
+
+      expect(sut.getSubjects(StreamKind.Event)).toEqual(['company.orders.>']);
+    });
+  });
+
+  describe('Manual management', () => {
+    it('should bind without add/update/migration when the stream is Manual', async () => {
+      // Given
+      options.events = { management: { stream: ManagementMode.Manual } };
+      sut = makeSut();
+      mockStreamInfo(
+        createMock<StreamInfo>({
+          config: {
+            name: `${options.name}__microservice_ev-stream`,
+            retention: RetentionPolicy.Workqueue,
+            subjects: [`${internalName(options.name)}.ev.>`],
+          } as StreamInfo['config'],
+        }),
+      );
+
+      // When
+      await sut.ensureStreams([StreamKind.Event]);
+
+      // Then
+      expect(mockJsm.streams.add).not.toHaveBeenCalled();
+      expect(mockJsm.streams.update).not.toHaveBeenCalled();
+    });
+
+    it('should throw when a Manual stream is missing', async () => {
+      // Given
+      options.events = { management: { stream: ManagementMode.Manual } };
+      sut = makeSut();
+      mockJsm.streams.info.mockRejectedValue(streamNotFound());
+
+      // When / Then
+      await expect(sut.ensureStreams([StreamKind.Event])).rejects.toThrow(/[Mm]anual/);
+      expect(mockJsm.streams.add).not.toHaveBeenCalled();
+    });
+
+    it('should skip migration recovery for Manual streams', async () => {
+      // Given: global Manual; live stream exists
+      options.provisioning = { management: ManagementMode.Manual };
+      sut = makeSut();
+      mockStreamInfo(
+        createMock<StreamInfo>({
+          config: {
+            name: `${options.name}__microservice_ev-stream`,
+            retention: RetentionPolicy.Workqueue,
+            subjects: [`${internalName(options.name)}.ev.>`],
+          } as StreamInfo['config'],
+        }),
+      );
+
+      // When
+      await sut.ensureStreams([StreamKind.Event]);
+
+      // Then: nothing was mutated, so no migration recovery could have run
+      expect(mockJsm.streams.add).not.toHaveBeenCalled();
+
+      expect(mockJsm.streams.update).not.toHaveBeenCalled();
+    });
+
+    it('should exclude Manual streams from storage reservations and show them as external', async () => {
+      // Given: global Manual + preflightStorageCheck enabled
+      options.provisioning = { management: ManagementMode.Manual, preflightStorageCheck: true };
+      sut = makeSut();
+
+      const getAccountInfo = vi.fn();
+
+      mockJsm.getAccountInfo = getAccountInfo;
+      mockStreamInfo(
+        createMock<StreamInfo>({
+          config: {
+            name: `${options.name}__microservice_ev-stream`,
+            retention: RetentionPolicy.Workqueue,
+            subjects: [`${internalName(options.name)}.ev.>`],
+          } as StreamInfo['config'],
+        }),
+      );
+
+      const logSpy = vi.spyOn(Logger.prototype, 'log');
+
+      // When
+      await sut.ensureStreams([StreamKind.Event]);
+
+      // Then: no storage budget check for all-Manual setup
+      expect(getAccountInfo).not.toHaveBeenCalled();
+
+      // And the summary contains an external marker
+      const summaryLog = logSpy.mock.calls
+        .map((args: unknown[]) => String(args[0]))
+        .find((m: string) => m.includes(options.name) && m.includes('external'));
+
+      expect(summaryLog).toBeDefined();
+    });
+
+    it('should provision the Auto kind and bind the Manual kind in a mixed partition', async () => {
+      // Given: Event=Manual, Command=Auto
+      options.events = { management: { stream: ManagementMode.Manual } };
+      sut = makeSut();
+
+      const evStreamName = `${options.name}__microservice_ev-stream`;
+      const cmdStreamName = `${options.name}__microservice_cmd-stream`;
+
+      mockJsm.streams.info.mockImplementation(async (name: string) => {
+        if (name === evStreamName) {
+          return createMock<StreamInfo>({
+            config: {
+              name: evStreamName,
+              retention: RetentionPolicy.Workqueue,
+              subjects: [`${internalName(options.name)}.ev.>`],
+            } as StreamInfo['config'],
+          });
+        }
+
+        if (name.endsWith('__migration_backup')) throw streamNotFound();
+
+        throw streamNotFound();
+      });
+
+      mockJsm.streams.add.mockResolvedValue(createMock<StreamInfo>());
+
+      // When
+      await sut.ensureStreams([StreamKind.Event, StreamKind.Command]);
+
+      // Then: Command (Auto) was created; Event (Manual) was only looked up via info
+      expect(mockJsm.streams.add).toHaveBeenCalledOnce();
+
+      const addedName = (mockJsm.streams.add.mock.calls[0]![0] as { name: string }).name;
+
+      expect(addedName).toBe(cmdStreamName);
+      expect(mockJsm.streams.update).not.toHaveBeenCalled();
+      expect(mockJsm.streams.info).toHaveBeenCalledWith(evStreamName);
+    });
+
+    it('should bind the DLQ stream externally when dlq management is Manual', async () => {
+      // Given: DLQ Manual; Event Auto (does not exist -> created)
+      options.dlq = { management: { stream: ManagementMode.Manual } };
+      sut = makeSut();
+
+      const dlqName = `${options.name}__microservice_dlq-stream`;
+
+      mockJsm.streams.info.mockImplementation(async (name: string) => {
+        if (name === dlqName) {
+          return createMock<StreamInfo>({
+            config: {
+              name: dlqName,
+              retention: RetentionPolicy.Limits,
+              subjects: [dlqName],
+            } as StreamInfo['config'],
+          });
+        }
+
+        if (name.endsWith('__migration_backup')) throw streamNotFound();
+
+        throw streamNotFound();
+      });
+
+      mockJsm.streams.add.mockResolvedValue(createMock<StreamInfo>());
+
+      const logSpy = vi.spyOn(Logger.prototype, 'log');
+
+      // When
+      await sut.ensureStreams([StreamKind.Event]);
+
+      // Then: DLQ bound via info only, no add/update for the dlq stream
+      expect(mockJsm.streams.info).toHaveBeenCalledWith(dlqName);
+      expect(mockJsm.streams.add).not.toHaveBeenCalledWith(
+        expect.objectContaining({ name: dlqName }),
+      );
+      expect(mockJsm.streams.update).not.toHaveBeenCalled();
+
+      // And the boot summary marks it as external
+      const summaryLog = logSpy.mock.calls
+        .map((args: unknown[]) => String(args[0]))
+        .find((m: string) => m.includes(dlqName) && m.includes('external'));
+
+      expect(summaryLog).toBeDefined();
+    });
+
+    it('should bind the Broadcast stream externally when broadcast management is Manual', async () => {
+      // Given: Broadcast=Manual; shared stream exists with correct subjects
+      options.broadcast = { management: { stream: ManagementMode.Manual } };
+      sut = makeSut();
+
+      const broadcastStreamName = 'broadcast-stream';
+
+      mockJsm.streams.info.mockResolvedValue(
+        createMock<StreamInfo>({
+          config: {
+            name: broadcastStreamName,
+            retention: RetentionPolicy.Limits,
+            subjects: ['broadcast.>'],
+          } as StreamInfo['config'],
+        }),
+      );
+
+      // When
+      await sut.ensureStreams([StreamKind.Broadcast]);
+
+      // Then: only info was called, no provisioning for the external broadcast stream
+      expect(mockJsm.streams.info).toHaveBeenCalledWith(broadcastStreamName);
+      expect(mockJsm.streams.add).not.toHaveBeenCalled();
+      expect(mockJsm.streams.update).not.toHaveBeenCalled();
+    });
+  });
+
   describe('getSubjects (via ensureStreams)', () => {
     describe('when kind is Command with rpc.mode=jetstream and stream overrides', () => {
       it('should use rpc.stream overrides for command stream', async () => {
@@ -639,7 +883,7 @@ describe(StreamProvider, () => {
           ...options,
           rpc: { mode: 'jetstream', stream: { max_age: 60_000 } },
         };
-        sut = new StreamProvider(options, connection);
+        sut = makeSut();
 
         const notFoundError = new JetStreamApiError({
           err_code: 10059,
@@ -667,7 +911,7 @@ describe(StreamProvider, () => {
           ...options,
           rpc: { mode: 'core', stream: { max_age: 99_999 } } as never,
         };
-        sut = new StreamProvider(options, connection);
+        sut = makeSut();
 
         const notFoundError = new JetStreamApiError({
           err_code: 10059,
@@ -696,7 +940,7 @@ describe(StreamProvider, () => {
           ...options,
           ordered: { stream: { max_age: 30_000 } },
         };
-        sut = new StreamProvider(options, connection);
+        sut = makeSut();
 
         const notFoundError = new JetStreamApiError({
           err_code: 10059,

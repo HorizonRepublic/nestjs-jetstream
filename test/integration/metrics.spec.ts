@@ -77,7 +77,7 @@ const waitForSample = (
 const waitForTextMatch = (register: Registry, re: RegExp, timeoutMs = 5_000): Promise<void> =>
   waitForCondition(async () => re.test(await register.metrics()), timeoutMs);
 
-describe('Metrics — integration', () => {
+describe('Metrics; integration', () => {
   let nc: NatsConnection;
   let container: StartedTestContainer;
   let port: number;
@@ -176,10 +176,10 @@ describe('Metrics — integration', () => {
     });
 
     it('should increment messages_processed_total with status=error and errors_total{context=handler} when handler throws', async () => {
-      // Given/When: handler always throws → nak'd, may redeliver up to max_deliver
+      // Given/When: handler always throws -> nak'd, may redeliver up to max_deliver
       await firstValueFrom(client.emit('orders.cancelled', { orderId: 'c1' }));
 
-      // Wait for at least one error to surface — redeliveries are best-effort
+      // Wait for at least one error to surface (redeliveries are best-effort)
       await waitForSample(register, 'jetstream_messages_processed_total', {
         subject: 'orders.cancelled',
         status: 'error',
@@ -209,8 +209,7 @@ describe('Metrics — integration', () => {
     });
 
     it('should record connection_up=1 after bootstrap completes', async () => {
-      // The Connect event fires during ConnectionProvider initialization.
-      // The metric is set on the registry at that point.
+      // The Connect event during bootstrap already set the gauge; no traffic needed.
       const conn = await samples(register, 'jetstream_connection_up');
       const upSample = conn.find((s) => s.value === 1);
 
@@ -267,14 +266,8 @@ describe('Metrics — integration', () => {
     });
 
     it('should bucket unknown subjects into messages_unhandled_total when nothing routes', async () => {
-      // Given/When: emit a MessageRouted with a subject we have no handler for.
-      // We trigger this via the Core NATS publish path that mimics a stray
-      // message arriving on the cmd subject — easier: publish directly to the
-      // event stream subject for a non-existent pattern via raw client emit.
-      // The transport will land in event router → no handler → term.
-      // For the metrics path we drive via EventBus by emitting MessageRouted
-      // through the existing connection — but that's internal. So instead, just
-      // assert the COUNTER FAMILY EXISTS (will be 0 absent unmatched traffic).
+      // Given/When: unmatched traffic is hard to drive end-to-end, so only assert
+      // that the counter family is registered
       const unhandled = await samples(register, 'jetstream_messages_unhandled_total');
 
       // The metric family is always registered; with no traffic the values
@@ -346,7 +339,7 @@ describe('Metrics — integration', () => {
 
     it('should not register metrics_poll_errors_total samples during healthy polling', async () => {
       // Given/When: emit one event and wait until at least one poll tick has
-      // actually written a stream gauge — that proves the poll loop ran healthily.
+      // actually written a stream gauge, proving the poll loop ran healthily
       await firstValueFrom(client.emit('orders.created', { id: 'p2' }));
       await waitForTextMatch(register, /^jetstream_consumer_num_ack_pending\{/m);
 
@@ -367,7 +360,7 @@ describe('Metrics — integration', () => {
         {
           name: serviceName,
           port,
-          // metrics omitted → module not registered
+          // metrics omitted -> module not registered
         },
         [MetricsController],
         [serviceName],

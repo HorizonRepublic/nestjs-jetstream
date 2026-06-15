@@ -9,10 +9,7 @@ import { StreamKind, TransportEvent } from '../../../interfaces';
 
 import { MessageProvider } from '../message.provider';
 
-/**
- * Creates a simple async iterator next() function for status events.
- * Yields events from the array, then blocks until stopped.
- */
+/** Status-event iterator next(): yields the given events, then blocks until stopped. */
 const createStatusIterator = (
   events: { type: string; count: number }[],
   isStopped: () => boolean,
@@ -39,11 +36,7 @@ const createStatusIterator = (
   };
 };
 
-/**
- * Creates a mock ConsumerMessages that supports both the callback-based
- * and async-iterator consumption modes. `callback` is invoked on `deliver()`;
- * `closed()` resolves once `stop()` is called.
- */
+/** Mock ConsumerMessages supporting both callback and async-iterator consumption modes. */
 interface MockMessages extends ConsumerMessages {
   /** Push pending messages through the registered callback. */
   deliver(): void;
@@ -129,10 +122,7 @@ interface ConsumeOptsWithCallback {
   callback?(msg: JsMsg): void;
 }
 
-/**
- * Build a Consumer mock whose `consume()` wires the caller's callback into
- * the returned mock messages, matching the production callback-mode path.
- */
+/** Consumer mock whose `consume()` wires the caller's callback into the mock messages. */
 const makeConsumer = (messages: MockMessages): Consumer => {
   const consume = vi.fn(async (opts?: ConsumeOptsWithCallback) => {
     if (opts?.callback) messages.setCallback(opts.callback);
@@ -205,7 +195,7 @@ describe(MessageProvider, () => {
           consumers: {
             get: vi.fn().mockReturnValue(
               new Promise(() => {
-                // Never resolves — simulates a hanging connection
+                // Never resolves, simulates a hanging connection
               }),
             ),
           },
@@ -389,7 +379,7 @@ describe(MessageProvider, () => {
         await new Promise(process.nextTick);
         await new Promise(process.nextTick);
 
-        // Then: messages.stop() NOT called — 1 missed heartbeat is within threshold
+        // Then: messages.stop() NOT called, 1 missed heartbeat is within threshold
         expect(mockMessages.stop).not.toHaveBeenCalled();
 
         sut.destroy();
@@ -417,7 +407,7 @@ describe(MessageProvider, () => {
 
         connection.getJetStreamClient.mockReturnValue(js as never);
 
-        // When: startOrdered() called — attach .catch immediately to avoid unhandled rejection
+        // When: startOrdered() called; attach .catch immediately to avoid unhandled rejection
         const orderedPromise = sut
           .startOrdered('test-stream', ['test.>'])
           .catch((err: Error) => err);
@@ -468,7 +458,6 @@ describe(MessageProvider, () => {
     describe('when unknown stream kind is passed', () => {
       it('should throw', () => {
         // Given: an invalid kind triggers the exhaustive switch default
-        // We access getTargetSubject indirectly via start() with an invalid kind
         const invalidKind = 'invalid' as never;
 
         const consumers = new Map<StreamKind, ConsumerInfo>();

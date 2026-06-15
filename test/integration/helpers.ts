@@ -13,25 +13,13 @@ import {
 } from '../../src';
 import type { JetstreamModuleOptions } from '../../src';
 
-/**
- * Create a unique service name per test to avoid stream/consumer collisions.
- */
+/** Unique service name per test to avoid stream/consumer collisions. */
 export const uniqueServiceName = (): string => `test-${Math.random().toString(36).slice(2, 10)}`;
 
-/**
- * Create a standalone NATS connection for test assertions.
- */
 export const createNatsConnection = async (port: number): Promise<NatsConnection> =>
   connect({ servers: [`nats://localhost:${port}`] });
 
-/**
- * Bootstrap a full NestJS app with JetStream microservice transport.
- * Returns the app (with strategy started) and the compiled module.
- *
- * @param options Module options (name and port are required).
- * @param controllers Controllers to register with the module.
- * @param clientTargets Service names to register as forFeature clients.
- */
+/** Bootstrap a NestJS app with the JetStream microservice strategy started. */
 export const createTestApp = async (
   options: Partial<JetstreamModuleOptions> & { name: string; port: number },
   controllers: Type[] = [],
@@ -54,7 +42,7 @@ export const createTestApp = async (
   const app = module.createNestApplication({ logger: false });
   const strategy: JetstreamStrategy | undefined = module.get(JetstreamStrategy, { strict: false });
 
-  // Publisher-only mode (consumer: false) has no strategy — skip microservice setup
+  // Publisher-only mode (consumer: false) has no strategy; skip microservice setup
   if (strategy) {
     app.connectMicroservice<MicroserviceOptions>({ strategy } as MicroserviceOptions);
     await app.startAllMicroservices();
@@ -65,11 +53,8 @@ export const createTestApp = async (
   return { app, module };
 };
 
-/**
- * Silently delete a stream if it exists. Only suppresses "stream not found"
- * errors — auth/connection failures will propagate.
- */
-const deleteStreamIfExists = async (jsm: JetStreamManager, name: string): Promise<void> => {
+/** Delete a stream, suppressing only "stream not found"; other failures propagate. */
+export const deleteStreamIfExists = async (jsm: JetStreamManager, name: string): Promise<void> => {
   try {
     await jsm.streams.delete(name);
   } catch (err: unknown) {
@@ -79,10 +64,7 @@ const deleteStreamIfExists = async (jsm: JetStreamManager, name: string): Promis
   }
 };
 
-/**
- * Clean up streams and consumers created during test.
- * Uses the same naming helpers as production code to stay in sync.
- */
+/** Delete all streams a test service may have created, via the production naming helpers. */
 export const cleanupStreams = async (nc: NatsConnection, serviceName: string): Promise<void> => {
   const jsm = await jetstreamManager(nc);
 
@@ -94,9 +76,6 @@ export const cleanupStreams = async (nc: NatsConnection, serviceName: string): P
   await deleteStreamIfExists(jsm, dlqStreamName(serviceName));
 };
 
-/**
- * Wait for an async condition to become true, polling at intervals.
- */
 export const waitForCondition = async (
   condition: () => boolean | Promise<boolean>,
   timeoutMs: number,

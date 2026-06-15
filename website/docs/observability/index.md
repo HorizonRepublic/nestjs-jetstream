@@ -8,7 +8,7 @@ schema:
   headline: "Observability — NestJS JetStream Transport"
   description: "Distributed tracing and Prometheus metrics built into the transport. Zero-config integration with OpenTelemetry SDKs and prom-client-based exporters."
   datePublished: "2026-05-27"
-  dateModified: "2026-05-27"
+  dateModified: "2026-06-12"
 ---
 
 # Observability
@@ -21,7 +21,7 @@ The transport ships with two complementary observability surfaces. Both work out
 
 ## Picking what you need
 
-**Reach for tracing when** debugging a specific request: a slow order, a dropped event, an RPC that failed in a weird way. A single trace shows the full path through `client.emit() → consumer → handler → reply` across every service that touched the message.
+**Reach for tracing when** debugging a specific request: a slow order, a dropped event, an RPC that failed in a weird way. A single trace shows the full path through `client.emit() -> consumer -> handler -> reply` across every service that touched the message.
 
 **Reach for metrics when** running the system day to day: alert if consumer lag exceeds a threshold, dashboard p99 handler latency over time, get paged when the error rate spikes. Aggregated numbers — not individual requests — are what you want here.
 
@@ -32,7 +32,7 @@ Both surfaces complement each other. Most production deployments enable both: tr
 Neither surface costs anything when off:
 
 - **Tracing**: with no OpenTelemetry SDK registered in the host application, every tracer call inside the transport short-circuits to a no-op. `@opentelemetry/api` is an optional peer; nothing in the library forces it into your bundle.
-- **Metrics**: with `metrics` omitted from `forRoot`, the metrics module is never registered. `prom-client` is never imported — not even dynamically. Per-message overhead drops to a single `Map.get` (~30 nanoseconds) that checks whether anyone is listening.
+- **Metrics**: with `metrics` omitted from `forRoot`, the metrics module is never registered. `prom-client` is never imported; not even dynamically. Per-message overhead drops to a single `Map.get` (~30 nanoseconds) that checks whether anyone is listening.
 
 You can enable either independently, or both. They share the same `EventBus` for transport events but are otherwise isolated.
 

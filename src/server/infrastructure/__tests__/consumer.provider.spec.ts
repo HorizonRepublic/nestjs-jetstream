@@ -5,11 +5,14 @@ import type { ConsumerInfo, StreamInfo } from '@nats-io/jetstream';
 import { JetStreamApiError } from '@nats-io/jetstream';
 
 import { ConnectionProvider } from '../../../connection';
-import { StreamKind } from '../../../interfaces';
+import { ManagementMode, StreamKind } from '../../../interfaces';
 import type { JetstreamModuleOptions } from '../../../interfaces';
+import { internalName } from '../../../jetstream.constants';
 import { PatternRegistry } from '../../routing';
 
 import { ConsumerProvider } from '../consumer.provider';
+import { InfrastructureBinder } from '../infrastructure-binder';
+import { NameResolver } from '../name-resolver';
 import { StreamProvider } from '../stream.provider';
 
 describe(ConsumerProvider, () => {
@@ -19,6 +22,7 @@ describe(ConsumerProvider, () => {
   let connection: Mocked<ConnectionProvider>;
   let streamProvider: Mocked<StreamProvider>;
   let patternRegistry: Mocked<PatternRegistry>;
+  let mockBinder: Mocked<InfrastructureBinder>;
   let mockJsm: {
     consumers: {
       info: ReturnType<typeof vi.fn>;
@@ -29,6 +33,16 @@ describe(ConsumerProvider, () => {
       info: ReturnType<typeof vi.fn>;
     };
   };
+
+  const makeSut = (): ConsumerProvider =>
+    new ConsumerProvider(
+      options,
+      connection,
+      streamProvider,
+      patternRegistry,
+      new NameResolver(options),
+      mockBinder,
+    );
 
   beforeEach(() => {
     options = { name: faker.lorem.word(), servers: ['nats://localhost:4222'] };
@@ -58,8 +72,9 @@ describe(ConsumerProvider, () => {
       getStreamName: vi.fn().mockReturnValue('test-stream'),
     });
     patternRegistry = createMock<PatternRegistry>();
+    mockBinder = createMock<InfrastructureBinder>();
 
-    sut = new ConsumerProvider(options, connection, streamProvider, patternRegistry);
+    sut = makeSut();
   });
 
   afterEach(vi.resetAllMocks);
@@ -86,7 +101,7 @@ describe(ConsumerProvider, () => {
 
     describe('when consumer add() hits race condition (another pod created it)', () => {
       it('should fall back to info() on CONSUMER_ALREADY_EXISTS (10148)', async () => {
-        // Given: info → not found, add → already exists (race)
+        // Given: info -> not found, add -> already exists (race)
         const notFoundError = new JetStreamApiError({
           err_code: 10014,
           code: 404,
@@ -99,7 +114,7 @@ describe(ConsumerProvider, () => {
         });
         const existingInfo = createMock<ConsumerInfo>();
 
-        // First info → not found, second info (after race) → found
+        // First info -> not found, second info (after race) -> found
         mockJsm.consumers.info
           .mockRejectedValueOnce(notFoundError)
           .mockResolvedValueOnce(existingInfo);
@@ -115,7 +130,7 @@ describe(ConsumerProvider, () => {
       });
 
       it('should wrap non-race add() failures into JetstreamProvisioningError', async () => {
-        // Given: info → not found, add → resource limit (not a race)
+        // Given: info -> not found, add -> resource limit (not a race)
         const notFoundError = new JetStreamApiError({
           err_code: 10014,
           code: 404,
@@ -164,7 +179,7 @@ describe(ConsumerProvider, () => {
 
     describe('when consumer does not exist', () => {
       it('should create it without updating', async () => {
-        // Given: consumer not found → create succeeds
+        // Given: consumer not found -> create succeeds
         const notFoundError = new JetStreamApiError({
           err_code: 10014,
           code: 404,
@@ -189,7 +204,7 @@ describe(ConsumerProvider, () => {
 
     describe('when consumer created by another pod during recovery', () => {
       it('should fall back to info without updating', async () => {
-        // Given: info → not found, add → already exists, second info → found
+        // Given: info -> not found, add -> already exists, second info -> found
         const notFoundError = new JetStreamApiError({
           err_code: 10014,
           code: 404,
@@ -224,7 +239,6 @@ describe(ConsumerProvider, () => {
 
         mockJsm.streams.info.mockResolvedValue(backupInfo);
 
-        // Consumer not found
         const notFoundError = new JetStreamApiError({
           err_code: 10014,
           code: 404,
@@ -370,6 +384,186 @@ describe(ConsumerProvider, () => {
         );
         expect(mockJsm.consumers.add).not.toHaveBeenCalled();
         expect(mockJsm.consumers.update).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('Manual management', () => {
+      it('should bind without add/update when the consumer is Manual', async () => {
+        // Given
+        options.events = { management: { consumer: ManagementMode.Manual } };
+        sut = makeSut();
+        mockBinder.bindConsumer.mockResolvedValue(
+          createMock<ConsumerInfo>({
+            config: {
+              filter_subject: `${internalName(options.name)}.ev.>`,
+            } as ConsumerInfo['config'],
+          }),
+        );
+
+        // When
+        await sut.ensureConsumers([StreamKind.Event]);
+
+        // Then
+        expect(mockJsm.consumers.add).not.toHaveBeenCalled();
+        expect(mockJsm.consumers.update).not.toHaveBeenCalled();
+      });
+
+      it('recoverConsumer should throw externally-managed error and NEVER create for Manual consumers', async () => {
+        // Given
+        options.events = { management: { consumer: ManagementMode.Manual } };
+        sut = makeSut();
+        mockJsm.consumers.info.mockRejectedValue(
+          new JetStreamApiError({
+            err_code: 10014,
+            code: 404,
+            description: 'consumer not found',
+          }),
+        );
+
+        const jsm = await connection.getJetStreamManager();
+
+        // When/Then
+        await expect(sut.recoverConsumer(jsm as never, StreamKind.Event)).rejects.toThrow(
+          /externally managed/i,
+        );
+
+        expect(mockJsm.consumers.add).not.toHaveBeenCalled();
+      });
+
+      it('recoverConsumer should skip the migration-backup lock for Manual consumers', async () => {
+        // Given
+        options.events = { management: { consumer: ManagementMode.Manual } };
+        sut = makeSut();
+
+        const liveInfo = createMock<ConsumerInfo>();
+
+        mockJsm.consumers.info.mockResolvedValue(liveInfo);
+
+        const jsm = await connection.getJetStreamManager();
+
+        // When
+        const result = await sut.recoverConsumer(jsm as never, StreamKind.Event);
+
+        // Then
+        expect(result).toBe(liveInfo);
+
+        expect(mockJsm.consumers.info).toHaveBeenCalled();
+
+        expect(mockJsm.streams.info).not.toHaveBeenCalled();
+      });
+
+      it('recoverConsumer should rethrow unexpected lookup errors for Manual consumers', async () => {
+        // Given: a non-404 infrastructure failure during rebind
+        options.events = { management: { consumer: ManagementMode.Manual } };
+        sut = makeSut();
+
+        const boom = new Error('connection reset');
+
+        mockJsm.consumers.info.mockRejectedValue(boom);
+
+        const jsm = await connection.getJetStreamManager();
+
+        // When/Then
+        await expect(sut.recoverConsumer(jsm as never, StreamKind.Event)).rejects.toBe(boom);
+
+        expect(mockJsm.consumers.add).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('ordered kind misuse', () => {
+      it('should reject durable config for ordered consumers', async () => {
+        // Given
+        sut = makeSut();
+
+        // When/Then
+        await expect(sut.ensureConsumers([StreamKind.Ordered])).rejects.toThrow(/ephemeral/i);
+
+        expect(mockJsm.consumers.add).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('when events have a custom subjectPrefix', () => {
+      it('should use exact per-pattern filters instead of a wildcard', async () => {
+        // Given: custom prefix on events, one registered pattern
+        const customOptions: JetstreamModuleOptions = {
+          name: 'orders',
+          servers: ['nats://localhost:4222'],
+          events: {
+            consumer: { durable_name: 'company_worker' },
+            subjectPrefix: 'company.orders.',
+          },
+        };
+        const customNames = new NameResolver(customOptions);
+
+        sut = new ConsumerProvider(
+          customOptions,
+          connection,
+          streamProvider,
+          patternRegistry,
+          customNames,
+          mockBinder,
+        );
+
+        patternRegistry.getEventPatterns.mockReturnValue(['order.created']);
+
+        mockJsm.consumers.info.mockResolvedValue(createMock<ConsumerInfo>());
+
+        const updated = createMock<ConsumerInfo>();
+
+        mockJsm.consumers.update.mockResolvedValue(updated);
+
+        // When: ensure event consumer
+        await sut.ensureConsumers([StreamKind.Event]);
+
+        // Then: consumer uses custom durable_name and exact filter_subject
+        expect(mockJsm.consumers.update).toHaveBeenCalledWith(
+          'test-stream',
+          'company_worker',
+          expect.objectContaining({
+            durable_name: 'company_worker',
+            filter_subject: 'company.orders.order.created',
+          }),
+        );
+      });
+
+      it('should switch to filter_subjects when several patterns are registered', async () => {
+        // Given: custom prefix on events, two registered patterns
+        const customOptions: JetstreamModuleOptions = {
+          name: 'orders',
+          servers: ['nats://localhost:4222'],
+          events: {
+            consumer: { durable_name: 'company_worker' },
+            subjectPrefix: 'company.orders.',
+          },
+        };
+        const customNames = new NameResolver(customOptions);
+
+        sut = new ConsumerProvider(
+          customOptions,
+          connection,
+          streamProvider,
+          patternRegistry,
+          customNames,
+          mockBinder,
+        );
+
+        patternRegistry.getEventPatterns.mockReturnValue(['order.created', 'order.cancelled']);
+
+        mockJsm.consumers.info.mockResolvedValue(createMock<ConsumerInfo>());
+        mockJsm.consumers.update.mockResolvedValue(createMock<ConsumerInfo>());
+
+        // When: ensure event consumer
+        await sut.ensureConsumers([StreamKind.Event]);
+
+        // Then: exact per-pattern filter list, no wildcard
+        expect(mockJsm.consumers.update).toHaveBeenCalledWith(
+          'test-stream',
+          'company_worker',
+          expect.objectContaining({
+            durable_name: 'company_worker',
+            filter_subjects: ['company.orders.order.created', 'company.orders.order.cancelled'],
+          }),
+        );
       });
     });
   });

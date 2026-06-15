@@ -18,8 +18,7 @@ import {
 } from './helpers';
 import { startNatsContainer } from './nats-container';
 
-// Custom test codec: Base64-encoded JSON
-// Proves the codec is actually used end-to-end (not just the default JSON).
+// Base64 JSON codec proves a custom codec is used end-to-end, not just the default JSON.
 
 class Base64JsonCodec implements Codec {
   encode(data: unknown): Uint8Array {

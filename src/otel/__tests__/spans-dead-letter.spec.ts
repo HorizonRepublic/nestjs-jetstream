@@ -55,7 +55,7 @@ describe('withDeadLetterSpan', () => {
 
   describe('toggle gating', () => {
     it('should run fn directly when DeadLetter trace is off', async () => {
-      // Given — DeadLetter is part of DEFAULT_TRACES, so disable explicitly
+      // Given: DeadLetter is part of DEFAULT_TRACES, so disable explicitly
       const config = resolveOtelOptions({ traces: [JetstreamTrace.Publish] });
       const fn = vi.fn().mockResolvedValue('ok');
 

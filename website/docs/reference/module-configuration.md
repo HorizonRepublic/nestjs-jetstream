@@ -8,7 +8,7 @@ schema:
   headline: "Module Configuration Reference"
   description: "Reference for forRoot(), forRootAsync(), and forFeature() registration methods with stream, consumer, and connection options."
   datePublished: "2026-03-21"
-  dateModified: "2026-05-27"
+  dateModified: "2026-06-12"
 ---
 
 import Since from '@site/src/components/Since';
@@ -192,7 +192,7 @@ The injection token is the service name string you passed to `forFeature({ name 
 private readonly usersClient: ClientProxy;
 ```
 
-The library exports a `getClientToken(name)` helper that returns the same string — it exists for code bases that prefer explicit symbolic tokens, but `@Inject('users')` is the canonical form and the one used throughout these docs.
+The library exports a `getClientToken(name)` helper that returns the same string; it exists for code bases that prefer explicit symbolic tokens, but `@Inject('users')` is the canonical form and the one used throughout these docs.
 
 ### Per-client codec override
 
@@ -257,13 +257,38 @@ Default: none. Transport lifecycle hook handlers. Unset hooks are silently ignor
 
 Default: none. Async callback for dead letter handling. Called and awaited when a message exhausts all delivery attempts. See [Dead Letter Queue](/docs/guides/dead-letter-queue). <Since version="2.2.0" />
 
-#### `dlq` &mdash; `{ stream?: StreamConfigOverrides }`
+#### `dlq` &mdash; `{ stream?: StreamConfigOverrides; management?: EntityManagement }`
 
-Default: none. Built-in Dead Letter Queue stream. When set, exhausted messages are automatically republished to a dedicated DLQ stream with tracking headers. See [Built-in DLQ stream](/docs/guides/dead-letter-queue#built-in-dlq-stream). <Since version="2.9.0" />
+Default: none. Built-in Dead Letter Queue stream. When set, exhausted messages are automatically republished to a dedicated DLQ stream with tracking headers. The optional `management` field controls whether the DLQ stream is auto-provisioned (`Auto`, default) or externally managed (`Manual`). See [Built-in DLQ stream](/docs/guides/dead-letter-queue#built-in-dlq-stream) and [External DLQ](/docs/guides/external-infrastructure#external-dlq). <Since version="2.9.0" />
+
+#### `provisioning` &mdash; `ProvisioningOptions`
+
+Default: `{ management: ManagementMode.Auto }`. Controls global provisioning behavior. <Since version="2.10.0" />
+
+The most important field is `management`:
+
+```typescript
+import { ManagementMode } from '@horizon-republic/nestjs-jetstream';
+
+JetstreamModule.forRoot({
+  name: 'orders',
+  servers: ['nats://localhost:4222'],
+  provisioning: {
+    management: ManagementMode.Manual, // bind to all entities; never create or update
+  },
+})
+```
+
+| `management` value | Behavior |
+|---|---|
+| `ManagementMode.Auto` | Library creates and updates every entity. **Default.** |
+| `ManagementMode.Manual` | Library binds to existing entities; fails at boot if any are absent. |
+
+The global value can be overridden per entity via `events.management`, `broadcast.management`, etc. Resolution order: per-entity -> global -> `Auto`. See [Bring Your Own Infrastructure](/docs/guides/external-infrastructure) for a complete guide.
 
 #### `metadata` &mdash; `MetadataRegistryOptions`
 
-Default: auto-enabled if any handler has `meta`. Handler metadata registry — publishes `@EventPattern` / `@MessagePattern` handler metadata to a NATS KV bucket for cross-service discovery. No-op when `consumer: false`. See [Handler Metadata](/docs/patterns/handler-metadata). <Since version="2.9.0" />
+Default: auto-enabled if any handler has `meta`. Handler metadata registry; publishes `@EventPattern` / `@MessagePattern` handler metadata to a NATS KV bucket for cross-service discovery. No-op when `consumer: false`. See [Handler Metadata](/docs/patterns/handler-metadata). <Since version="2.9.0" />
 
 #### `metrics` &mdash; `MetricsOption`
 
@@ -294,7 +319,7 @@ RPC configuration is a discriminated union on `mode`. Pick the mode based on whe
 **`mode: 'jetstream'`** &mdash; commands persisted in a JetStream stream before delivery. Default timeout `180_000` ms (3 min). Best for commands that must survive a handler restart (payments, state changes).
 
 :::note Timeout unit
-The `timeout` field is specified in **milliseconds**, not seconds. Writing `timeout: 30` means 30 ms — almost certainly a bug. Use `timeout: 30_000` for 30 seconds.
+The `timeout` field is specified in **milliseconds**, not seconds. Writing `timeout: 30` means 30 ms; almost certainly a bug. Use `timeout: 30_000` for 30 seconds.
 :::
 
 ```typescript
@@ -313,6 +338,8 @@ rpc: {
 :::info Timeout applies to both sides
 The `timeout` value controls both the **client-side wait** (how long the caller waits for a response) and the **server-side handler limit** (how long the handler is allowed to run before being terminated). Both sides use the value from their own `forRoot()` configuration.
 :::
+
+The `mode: 'jetstream'` variant also accepts `management` and `subjectPrefix` fields with the same semantics as `StreamConsumerOverrides`. <Since version="2.10.0" />
 
 See [RPC Patterns](/docs/patterns/rpc) for a full comparison of the two modes.
 
@@ -344,6 +371,53 @@ These overrides are merged with the [production defaults](/docs/reference/defaul
 :::tip The toNanos() helper
 NATS JetStream uses nanoseconds for all time-based configuration. The library exports a `toNanos(value, unit)` helper that converts human-readable durations to nanoseconds. Supported units: `'ms'`, `'seconds'`, `'minutes'`, `'hours'`, `'days'`.
 :::
+
+#### `stream.name` &mdash; `string`
+
+Default: derived from `name` + kind convention (e.g., `orders__microservice_ev-stream`). Set an explicit stream name to bind to an externally provisioned stream with a custom name. <Since version="2.10.0" />
+
+```typescript
+events: {
+  stream: { name: 'platform_orders_stream' },
+}
+```
+
+#### `consumer.durable_name` &mdash; `string`
+
+Default: derived from `name` + kind convention (e.g., `orders__microservice_ev-consumer`). Set an explicit durable name to bind to an externally provisioned consumer. <Since version="2.10.0" />
+
+```typescript
+events: {
+  consumer: { durable_name: 'platform_orders_worker' },
+}
+```
+
+#### `management` &mdash; `EntityManagement`
+
+Default: falls back to `provisioning.management`, then `ManagementMode.Auto`. Per-kind provisioning control with separate overrides for the stream and consumer: <Since version="2.10.0" />
+
+```typescript
+import { ManagementMode } from '@horizon-republic/nestjs-jetstream';
+
+events: {
+  management: {
+    stream:   ManagementMode.Manual, // bind to external stream
+    consumer: ManagementMode.Auto,   // library manages the consumer
+  },
+}
+```
+
+#### `subjectPrefix` &mdash; `string`
+
+Default: library convention (e.g., `orders__microservice.ev.`). Override the subject prefix for all subjects in this kind. The trailing dot is normalized automatically. When a custom prefix is set, subjects become `{prefix}{pattern}` and consumers use exact `filter_subjects` entries instead of a single wildcard filter. <Since version="2.10.0" />
+
+```typescript
+events: {
+  subjectPrefix: 'company.orders.', // publishes to company.orders.{pattern}
+}
+```
+
+See [Bring Your Own Infrastructure](/docs/guides/external-infrastructure#custom-names-and-subject-prefixes) for how custom prefixes interact with scheduling subjects.
 
 ### OrderedEventOverrides
 
@@ -386,6 +460,14 @@ Default: none. Start time as an ISO string. Only used with `DeliverPolicy.StartT
 
 Default: `ReplayPolicy.Instant`. Replay policy for historical messages.
 
+#### `management` &mdash; `EntityManagement`
+
+Default: falls back to `provisioning.management`, then `ManagementMode.Auto`. Per-kind provisioning control for the ordered stream. Same semantics as `StreamConsumerOverrides.management`. <Since version="2.10.0" />
+
+#### `subjectPrefix` &mdash; `string`
+
+Default: library convention. Custom subject prefix for ordered-event subjects. Same semantics as `StreamConsumerOverrides.subjectPrefix`. <Since version="2.10.0" />
+
 See [Ordered Events](/docs/patterns/ordered-events) for detailed usage.
 
 ## connectionOptions
@@ -398,7 +480,7 @@ The `name` and `servers` fields from the top-level options take precedence over 
 
 ### TLS
 
-The `tls` block is passed straight through to `@nats-io/transport-node`, so any field supported by its [`TlsOptions`](https://github.com/nats-io/nats.js/tree/main/transport-node) works here — paths (`certFile`, `keyFile`, `caFile`), inline PEM (`cert`, `key`, `ca`), or an empty `tls: {}` for server-only TLS against a broker whose CA your system already trusts.
+The `tls` block is passed straight through to `@nats-io/transport-node`, so any field supported by its [`TlsOptions`](https://github.com/nats-io/nats.js/tree/main/transport-node) works here; paths (`certFile`, `keyFile`, `caFile`), inline PEM (`cert`, `key`, `ca`), or an empty `tls: {}` for server-only TLS against a broker whose CA your system already trusts.
 
 ```typescript
 JetstreamModule.forRoot({

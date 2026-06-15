@@ -146,7 +146,7 @@ describe('captureMatchingHeaders', () => {
   });
 
   it('should never emit transport-internal headers even when allowlisted explicitly', () => {
-    // Given — user tries to capture the internal correlation id and the transport subject.
+    // Given
     const hdrs = natsHeaders();
 
     hdrs.set('x-correlation-id', faker.string.uuid());
@@ -204,26 +204,24 @@ describe('captureBodyAttribute', () => {
   });
 
   it('should substitute U+FFFD for invalid UTF-8 bytes instead of dropping the whole attribute', () => {
-    // Given — bytes that do not form a valid UTF-8 sequence.
+    // Given
     const payload = new Uint8Array([0xff, 0xfe, 0xfd]);
 
     // When
     const result = captureBodyAttribute('orders.created', payload, { maxBytes: 1024 });
 
-    // Then — `fatal: false` in `TextDecoder` renders the bad bytes as U+FFFD
-    // so operators still get some signal in APM instead of a silent base64
-    // fallback that's hard to recognise visually.
+    // Then: `fatal: false` in TextDecoder renders the bad bytes as U+FFFD
     expect(result['messaging.nats.message.body']).toBe('���');
   });
 
   it('should decode UTF-8 payloads truncated mid-codepoint without collapsing to base64', () => {
-    // Given — a multi-byte UTF-8 char (😀 = F0 9F 98 80) clipped after 2 bytes.
+    // Given: a multi-byte UTF-8 char (😀 = F0 9F 98 80) clipped after 2 bytes
     const payload = new Uint8Array([0xf0, 0x9f]);
 
     // When
     const result = captureBodyAttribute('orders.created', payload, { maxBytes: 1024 });
 
-    // Then — trailing replacement char, not base64
+    // Then: trailing replacement char, not base64
     expect(result['messaging.nats.message.body']).toBe('�');
   });
 

@@ -197,7 +197,7 @@ describe(MetadataProvider, () => {
     });
 
     it('should refresh entries at half the TTL interval', async () => {
-      // Given: published entries with default TTL (30s → heartbeat every 15s)
+      // Given: published entries with default TTL (30s -> heartbeat every 15s)
       const entries = new Map<string, Record<string, unknown>>([['key', { v: 1 }]]);
 
       await sut.publish(entries);
@@ -239,7 +239,7 @@ describe(MetadataProvider, () => {
       await vi.advanceTimersByTimeAsync(DEFAULT_METADATA_TTL / 2);
       await vi.advanceTimersByTimeAsync(DEFAULT_METADATA_TTL / 2);
 
-      // Then: KV handle was reused — no additional openBucket calls
+      // Then: KV handle was reused, no additional openBucket calls
       expect(mockCreate).not.toHaveBeenCalled();
 
       // Then: entries were still refreshed via the cached handle

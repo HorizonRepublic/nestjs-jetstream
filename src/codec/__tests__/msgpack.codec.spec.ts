@@ -44,7 +44,7 @@ describe(MsgpackCodec, () => {
 
   describe('roundtrip', () => {
     it('should roundtrip values through a stub Packr', () => {
-      // Given — minimal stub that mimics msgpackr by JSON encoding
+      // Given: minimal stub that mimics msgpackr by JSON encoding
       const stub: PackrLike = {
         pack: (data: unknown): Uint8Array => new TextEncoder().encode(JSON.stringify(data)),
         unpack: (data: Uint8Array): unknown => JSON.parse(new TextDecoder().decode(data)),
@@ -82,7 +82,7 @@ describe(MsgpackCodec, () => {
       };
       const sut = new MsgpackCodec(packr);
 
-      // When + Then: non-empty input — empty payloads short-circuit to undefined
+      // When + Then: non-empty input (empty payloads short-circuit to undefined)
       expect(() => sut.decode(new Uint8Array([0x91]))).toThrow('truncated frame');
     });
 

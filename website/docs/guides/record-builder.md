@@ -8,7 +8,7 @@ schema:
   headline: "JetstreamRecordBuilder — Headers, Message IDs & Deduplication"
   description: "Build NestJS NATS messages with custom headers, deterministic message IDs for publish-side deduplication, and per-request RPC timeouts."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-11"
+  dateModified: "2026-06-12"
 ---
 
 import Since from '@site/src/components/Since';
@@ -35,7 +35,7 @@ await lastValueFrom(this.client.emit('order.created', record));
 const result = await lastValueFrom(this.client.send('get.order', record));
 ```
 
-The builder is immutable after `.build()` — the returned `JetstreamRecord` is a frozen snapshot of the data, headers, timeout, and message ID at the time of construction.
+The builder is immutable after `.build()`; the returned `JetstreamRecord` is a frozen snapshot of the data, headers, timeout, and message ID at the time of construction.
 
 :::note `setTimeout()` is RPC-only
 `.setTimeout()` and the per-request override it provides only apply to `client.send()`. On `client.emit()` it has no effect. See [Per-request timeout override](#per-request-timeout-override) below.
@@ -209,7 +209,7 @@ class JetstreamRecordBuilder<T = unknown> {
 }
 ```
 
-The `RESERVED_HEADERS` set is also exported from the package — use it in custom tooling (e.g., a header-sanitization helper) to check whether a key is blocked before calling `.setHeader()`:
+The `RESERVED_HEADERS` set is also exported from the package; use it in custom tooling (e.g., a header-sanitization helper) to check whether a key is blocked before calling `.setHeader()`:
 
 ```typescript
 import { RESERVED_HEADERS } from '@horizon-republic/nestjs-jetstream';

@@ -3,7 +3,7 @@ import { Controller, INestApplication } from '@nestjs/common';
 import { ClientProxy, EventPattern, Payload } from '@nestjs/microservices';
 import { TestingModule } from '@nestjs/testing';
 import type { NatsConnection } from '@nats-io/transport-node';
-import { DeliverPolicy } from '@nats-io/jetstream';
+import { DeliverPolicy, jetstreamManager } from '@nats-io/jetstream';
 import { firstValueFrom } from 'rxjs';
 import type { StartedTestContainer } from 'testcontainers';
 
@@ -253,7 +253,7 @@ describe('Ordered Event Delivery', () => {
 
     it('should only deliver messages published after consumer started', async () => {
       // Given: consumer already running with DeliverPolicy.New
-      // (no delay needed — startOrdered awaits consumer readiness)
+      // (no delay needed: startOrdered awaits consumer readiness)
 
       // When: publish after consumer started
       await firstValueFrom(client.emit('ordered:order.status', { status: 'new-only' }));
@@ -283,7 +283,7 @@ describe('Ordered Event Delivery', () => {
       await firstValueFrom(client.emit('ordered:order.status', { status: 'third' }));
       await app.close();
 
-      // Step 2: restart with DeliverPolicy.Last — should get only the last message
+      // Step 2: restart with DeliverPolicy.Last, expecting only the last message
       ({ app, module } = await createTestApp(
         { name: serviceName, port, ordered: { deliverPolicy: DeliverPolicy.Last } },
         [OrderedController],
@@ -334,7 +334,7 @@ describe('Ordered Event Delivery', () => {
         5_000,
       );
 
-      // Then: last message per subject — not all messages
+      // Then: last message per subject, not all messages
       expect(controller.statusReceived).toEqual([{ status: 'latest-status' }]);
       expect(controller.auditReceived).toEqual([{ action: 'latest-audit' }]);
 
@@ -395,17 +395,39 @@ describe('Ordered Event Delivery', () => {
       );
 
       const client = module.get<ClientProxy>(getClientToken(serviceName));
+      const jsm = await jetstreamManager(nc);
+      const orderedStream = `${serviceName}__microservice_ordered-stream`;
+      const orderedSubject = `${serviceName}__microservice.ordered.order.status`;
+
+      // Server-side timestamp of the latest message; the client clock may drift
+      // from the server clock, so opt_start_time must come from server time.
+      const lastServerTimeMs = async (): Promise<number> => {
+        const stored = await jsm.streams.getMessage(orderedStream, {
+          last_by_subj: orderedSubject,
+        });
+
+        return new Date((stored as unknown as { time: string | Date }).time).getTime();
+      };
 
       await firstValueFrom(client.emit('ordered:order.status', { status: 'before' }));
 
-      // Ensure NATS timestamps differ — sub-millisecond publishes can share the same timestamp
-      await new Promise((r) => setTimeout(r, 50));
-      const startTime = new Date().toISOString();
+      const startMs = (await lastServerTimeMs()) + 2;
+      const startTime = new Date(startMs).toISOString();
 
-      await firstValueFrom(client.emit('ordered:order.status', { status: 'after' }));
+      // Publish 'after' until its server timestamp lands past startTime
+      let afterMs = 0;
+
+      for (let attempt = 0; attempt < 10 && afterMs < startMs; attempt += 1) {
+        await new Promise((r) => setTimeout(r, 5));
+        await firstValueFrom(client.emit('ordered:order.status', { status: 'after' }));
+        afterMs = await lastServerTimeMs();
+      }
+
+      expect(afterMs).toBeGreaterThanOrEqual(startMs);
+
       await app.close();
 
-      // Step 2: restart with StartTime — should skip 'before', get 'after'
+      // Step 2: restart with StartTime, expecting 'before' skipped and 'after' delivered
       ({ app, module } = await createTestApp(
         {
           name: serviceName,
@@ -460,7 +482,6 @@ describe('Ordered Event Delivery', () => {
       // Wait a bit to ensure no redelivery
       await new Promise((r) => setTimeout(r, 2_000));
 
-      // Ordered consumer: handler called once, no retry
       expect(controller.callCount).toBe(1);
     });
   });
@@ -555,7 +576,7 @@ describe('Ordered Event Delivery', () => {
       // Given: workqueue handler that always throws (max_deliver: 3)
       await firstValueFrom(client.emit('order.process', { orderId: 1 }));
 
-      // Wait for all redeliveries + DLQ (ack_wait 10s × 3 attempts)
+      // Wait for all redeliveries + DLQ (ack_wait 10s x 3 attempts)
       await waitForCondition(() => deadLetters.length > 0, 35_000);
 
       // Then: DLQ triggered for workqueue, not for ordered

@@ -1,0 +1,139 @@
+import { StreamKind } from '../../interfaces';
+import type { JetstreamModuleOptions } from '../../interfaces';
+import {
+  BROADCAST_SUBJECT_PREFIX,
+  consumerName,
+  dlqStreamName,
+  internalName,
+  SCHEDULE_SEGMENT,
+  streamName,
+  subjectPrefix,
+} from '../../jetstream.constants';
+
+import { kindOptionsBlock } from './management';
+
+interface KindNames {
+  stream: string;
+  consumer: string;
+  prefix: string;
+  schedulePrefix: string;
+  custom: boolean;
+}
+
+/** Single source of truth for all stream, consumer, and subject names. */
+export class NameResolver {
+  private readonly kinds: Map<StreamKind, KindNames>;
+  private readonly dlq: string;
+
+  public constructor(private readonly options: JetstreamModuleOptions) {
+    this.dlq = options.dlq?.stream?.name ?? dlqStreamName(options.name);
+    this.kinds = this.buildKindMap();
+  }
+
+  public streamName(kind: StreamKind): string {
+    return this.get(kind).stream;
+  }
+
+  public consumerName(kind: StreamKind): string {
+    return this.get(kind).consumer;
+  }
+
+  public dlqStreamName(): string {
+    return this.dlq;
+  }
+
+  public subject(kind: StreamKind, pattern: string): string {
+    return `${this.get(kind).prefix}${pattern}`;
+  }
+
+  public filterSubject(kind: StreamKind): string {
+    return `${this.get(kind).prefix}>`;
+  }
+
+  public schedulePrefix(kind: StreamKind): string {
+    return this.get(kind).schedulePrefix;
+  }
+
+  public hasCustomPrefix(kind: StreamKind): boolean {
+    return this.get(kind).custom;
+  }
+
+  /**
+   * Map a resolved event subject back to its schedule-holder base subject
+   * (the `_sch` namespace twin, without the per-message unique suffix).
+   */
+  public scheduleSubjectBase(eventSubject: string): string {
+    for (const kind of [StreamKind.Broadcast, StreamKind.Event, StreamKind.Ordered]) {
+      const { prefix, schedulePrefix } = this.get(kind);
+
+      if (eventSubject.startsWith(prefix)) {
+        return `${schedulePrefix}${eventSubject.slice(prefix.length)}`;
+      }
+    }
+
+    throw new Error(`Unexpected event subject format: ${eventSubject}`);
+  }
+
+  private get(kind: StreamKind): KindNames {
+    const entry = this.kinds.get(kind);
+
+    if (!entry) throw new Error(`Unknown StreamKind: ${String(kind)}`);
+
+    return entry;
+  }
+
+  private buildKindMap(): Map<StreamKind, KindNames> {
+    const map = new Map<StreamKind, KindNames>();
+    const { name } = this.options;
+
+    for (const kind of Object.values(StreamKind)) {
+      const block = kindOptionsBlock(this.options, kind);
+      const customPrefix = block?.subjectPrefix;
+      const custom = customPrefix !== undefined;
+      const prefix = custom
+        ? this.normalizePrefix(customPrefix)
+        : this.conventionPrefix(name, kind);
+
+      map.set(kind, {
+        stream: block?.stream?.name ?? streamName(name, kind),
+        consumer: block?.consumer?.durable_name ?? consumerName(name, kind),
+        prefix,
+        schedulePrefix: custom
+          ? `${prefix}${SCHEDULE_SEGMENT}`
+          : this.conventionSchedulePrefix(name, kind),
+        custom,
+      });
+    }
+
+    return map;
+  }
+
+  private normalizePrefix(raw: string): string {
+    let end = raw.length;
+
+    while (end > 0 && raw[end - 1] === '.') end -= 1;
+
+    const trimmed = raw.slice(0, end);
+    const tokens = trimmed.split('.');
+
+    if (trimmed.length === 0 || tokens.some((t) => t.length === 0 || t === '>')) {
+      throw new Error(
+        `Invalid subjectPrefix "${raw}": expected non-empty dot-separated tokens without ">".`,
+      );
+    }
+
+    return `${trimmed}.`;
+  }
+
+  private conventionPrefix(name: string, kind: StreamKind): string {
+    if (kind === StreamKind.Broadcast) return BROADCAST_SUBJECT_PREFIX;
+
+    return subjectPrefix(name, kind);
+  }
+
+  private conventionSchedulePrefix(name: string, kind: StreamKind): string {
+    if (kind === StreamKind.Broadcast) return `${BROADCAST_SUBJECT_PREFIX}${SCHEDULE_SEGMENT}`;
+
+    return `${internalName(name)}.${SCHEDULE_SEGMENT}`;
+  }
+}

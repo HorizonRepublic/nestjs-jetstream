@@ -25,7 +25,7 @@ export class PollRunner {
 
     this.timer = setInterval(() => {
       if (this.inFlight !== null) {
-        this.logger.warn('Skipping poll tick — previous cycle still in flight');
+        this.logger.warn('Skipping poll tick; previous cycle still in flight');
         return;
       }
 

@@ -243,7 +243,7 @@ describe('buildExpectedErrorAttributes', () => {
   });
 
   it('should extract a stable string-code RpcException payload', () => {
-    // Given — stable UPPER_SNAKE_CASE tokens are safe to surface on the span.
+    // Given: stable UPPER_SNAKE_CASE token, safe to surface on the span
     const code = 'ORDER_NOT_FOUND';
     const err = new RpcException(code);
 
@@ -255,8 +255,7 @@ describe('buildExpectedErrorAttributes', () => {
   });
 
   it('should drop free-form RpcException messages to avoid high-cardinality error codes', () => {
-    // Given — arbitrary message strings can contain PII / request-scoped data
-    // and must not land on the `error.code` attribute.
+    // Given: free-form messages can contain PII and must not land on error.code
     const err = new RpcException('User 42 is not authorised for this order');
 
     // When

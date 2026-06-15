@@ -8,7 +8,7 @@ schema:
   headline: "Quick Start"
   description: "Complete working example in four steps: register the module, connect the transport, define handlers, and send messages."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-11"
+  dateModified: "2026-06-12"
 ---
 
 # Quick Start
@@ -174,7 +174,7 @@ export class GatewayController {
 }
 ```
 
-Use `client.emit()` for fire-and-forget events — at-least-once delivery through JetStream, no response. Use `client.send()` for request/reply RPC — it returns an `Observable<TResponse>` with the handler's reply.
+Use `client.emit()` for fire-and-forget events; at-least-once delivery through JetStream, no response. Use `client.send()` for request/reply RPC; it returns an `Observable<TResponse>` with the handler's reply.
 
 :::info Broadcast prefix
 To send a broadcast event, prefix the pattern with `broadcast:` when calling `emit()`. On the handler side, use `{ broadcast: true }` in the decorator extras — no prefix needed.

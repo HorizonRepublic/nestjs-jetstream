@@ -8,7 +8,7 @@ schema:
   headline: "RpcContext — Handler Context & Message Settlement"
   description: "Access JetStream metadata and control ack, retry, and terminate actions in NestJS message handlers via RpcContext."
   datePublished: "2026-03-21"
-  dateModified: "2026-06-10"
+  dateModified: "2026-06-12"
 ---
 
 import Since from '@site/src/components/Since';
@@ -97,9 +97,9 @@ class RpcContext {
 
 Control how the transport acknowledges the message — without throwing errors.
 
-**`ctx.retry({ delayMs? })`** → `msg.nak(delayMs)`, redelivering the message. Use for business-level retries (external service unavailable, resource locked). Each retry consumes a delivery attempt; a `retry()` on the final permitted delivery is routed through [dead-letter handling](/docs/guides/dead-letter-queue) just like a throwing handler, so the message is captured instead of stranded.
+**`ctx.retry({ delayMs? })`** -> `msg.nak(delayMs)`, redelivering the message. Use for business-level retries (external service unavailable, resource locked). Each retry consumes a delivery attempt; a `retry()` on the final permitted delivery is routed through [dead-letter handling](/docs/guides/dead-letter-queue) just like a throwing handler, so the message is captured instead of stranded.
 
-**`ctx.terminate(reason?)`** → `msg.term(reason)`, permanently rejecting. Use when the message is no longer relevant (order cancelled, entity deleted).
+**`ctx.terminate(reason?)`** -> `msg.term(reason)`, permanently rejecting. Use when the message is no longer relevant (order cancelled, entity deleted).
 
 **No action** → `msg.ack()`, the default. The transport acknowledges automatically when the handler returns successfully.
 
@@ -195,7 +195,7 @@ flowchart TD
 ```
 
 :::warning Mutual exclusivity
-`retry()` and `terminate()` cannot both be called in the same handler — the second call throws an `Error`. Choose one intent per message.
+`retry()` and `terminate()` cannot both be called in the same handler; the second call throws an `Error`. Choose one intent per message.
 :::
 
 :::info Scope
@@ -236,7 +236,7 @@ if (ctx.isJetStream()) {
 ```
 
 :::info When is it not JetStream?
-This check is useful when writing code that works across both Core RPC mode (`Msg`) and JetStream mode (`JsMsg`). The new metadata getters (`getDeliveryCount()`, etc.) already handle this internally — they return `undefined` for Core messages.
+This check is useful when writing code that works across both Core RPC mode (`Msg`) and JetStream mode (`JsMsg`). The new metadata getters (`getDeliveryCount()`, etc.) already handle this internally; they return `undefined` for Core messages.
 :::
 
 ## Accessing the raw NATS message

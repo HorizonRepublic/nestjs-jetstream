@@ -885,8 +885,8 @@ describe(RpcRouter, () => {
     });
 
     it('should auto-calculate interval from ackWaitMap when ackExtension is true', async () => {
-      // Given: sut with ackExtension = true and ackWaitMap with 200ms (in nanos) ack_wait
-      const ackWaitNanos = 1_000 * 1_000_000; // 1000ms in nanoseconds
+      // Given: sut with ackExtension = true and ackWaitMap with 1000ms (in nanos) ack_wait
+      const ackWaitNanos = 1_000 * 1_000_000;
       const ackWaitMap = new Map<StreamKind, number>([[StreamKind.Command, ackWaitNanos]]);
 
       sut = new RpcRouter(

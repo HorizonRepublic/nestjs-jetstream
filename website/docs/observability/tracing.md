@@ -8,7 +8,7 @@ schema:
   headline: "Distributed Tracing — NestJS JetStream Transport"
   description: "Built-in W3C Trace Context propagation and OpenTelemetry spans for every publish, consume, and RPC round-trip."
   datePublished: "2026-04-24"
-  dateModified: "2026-05-27"
+  dateModified: "2026-06-12"
 ---
 
 # Distributed Tracing
@@ -168,7 +168,7 @@ Two configuration knobs deal with potentially sensitive data. Both default to sa
 
 Captures matching message headers as `messaging.header.<name>` span attributes. Default allowlist is `['x-request-id']`. Glob wildcards (`x-*`, `*-id`) and exclusions (`!x-internal-*`) are supported.
 
-The library-internal `x-correlation-id` is never emitted as a `messaging.header.*` attribute even if added to the allowlist — it surfaces on RPC spans as the standard `messaging.message.conversation_id` attribute instead, which keeps the OpenTelemetry semantic-conventions contract intact and avoids duplicating the same value under two keys.
+The library-internal `x-correlation-id` is never emitted as a `messaging.header.*` attribute even if added to the allowlist; it surfaces on RPC spans as the standard `messaging.message.conversation_id` attribute instead, which keeps the OpenTelemetry semantic-conventions contract intact and avoids duplicating the same value under two keys.
 
 :::warning
 Headers frequently carry authentication tokens, session identifiers, and other sensitive data. Captured values are exported to your OTel backend (Sentry, Datadog, etc.). **Never set `captureHeaders: true` in production** — that captures every header. Use an explicit allowlist.
@@ -225,7 +225,7 @@ otel: {
 
 ## Cross-language interoperability
 
-The transport reads and writes the W3C Trace Context standard (`traceparent`, `tracestate`, `baggage`). Any publisher that injects a `traceparent` header is automatically linked into the trace, regardless of language or runtime — Go, Python, Java, Rust, or a bare `curl` invocation.
+The transport reads and writes the W3C Trace Context standard (`traceparent`, `tracestate`, `baggage`). Any publisher that injects a `traceparent` header is automatically linked into the trace, regardless of language or runtime; Go, Python, Java, Rust, or a bare `curl` invocation.
 
 For the precise header contract used at the wire level, see the [Header Contract reference](../reference/header-contract).
 
@@ -238,7 +238,7 @@ Confirm that an OpenTelemetry SDK has been registered _before_ the application b
 This requires an OpenTelemetry `ContextManager` (typically `AsyncLocalStorageContextManager`) so the active trace context survives across `await` points inside your handler. Every modern OTel-aware SDK (Sentry, Datadog, NodeSDK) registers one automatically. If you only installed `@opentelemetry/api` without an SDK, register the context manager explicitly.
 
 **Span attributes contain sensitive data.**
-Review your `captureHeaders` allowlist — set explicit headers, never `true`. Confirm `captureBody` is `false`. If you need backend-side scrubbing, register a custom `SpanProcessor` that drops or rewrites attributes in `onEnd`.
+Review your `captureHeaders` allowlist; set explicit headers, never `true`. Confirm `captureBody` is `false`. If you need backend-side scrubbing, register a custom `SpanProcessor` that drops or rewrites attributes in `onEnd`.
 
 **Span name format looks "reversed" in my APM.**
 The library uses the OpenTelemetry messaging convention: `{operation} {destination}` (`publish orders.created`, `process orders.created`). Some older APMs render it differently — rendering is a UI concern, not a span data issue.

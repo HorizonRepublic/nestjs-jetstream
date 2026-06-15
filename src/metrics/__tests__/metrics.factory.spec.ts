@@ -97,9 +97,8 @@ describe(createMetrics, () => {
       // Then
       const text = await register.metrics();
 
-      // Custom bucket boundary should appear
       expect(text).toMatch(/jetstream_handler_duration_seconds_bucket\{[^}]*le="0\.5"/);
-      // Default ms-level bucket should NOT appear
+      // le="0.001" is a default ms-level bucket that the override must replace
       expect(text).not.toMatch(/jetstream_handler_duration_seconds_bucket\{[^}]*le="0\.001"/);
     });
   });

@@ -17,7 +17,7 @@ import { ConnectionProvider } from './connection';
 import { deriveOtelAttrs, withSelfHealingSpan } from './otel';
 import { EventBus } from './hooks';
 import { JetstreamHealthIndicator } from './health';
-import { StreamKind } from './interfaces';
+import { ManagementMode, StreamKind } from './interfaces';
 import type {
   Codec,
   DeadLetterConfig,
@@ -47,24 +47,41 @@ import {
   StreamProvider,
   type ConsumerRecoveryFn,
 } from './server';
+import { InfrastructureBinder } from './server/infrastructure/infrastructure-binder';
+import { NameResolver } from './server/infrastructure/name-resolver';
 import { ShutdownManager } from './shutdown';
 
 /** DI token for the shared ackWaitMap instance (populated at runtime by strategy). */
 const JETSTREAM_ACK_WAIT_MAP = Symbol('JETSTREAM_ACK_WAIT_MAP');
 
+export const DESTRUCTIVE_MIGRATION_MANUAL_WARNING =
+  'allowDestructiveMigration has no effect under provisioning.management: Manual; the library never migrates externally managed streams.';
+
+export const warnIfManualWithDestructive = (
+  options: JetstreamModuleOptions,
+  logger: Logger,
+): void => {
+  if (
+    options.allowDestructiveMigration &&
+    options.provisioning?.management === ManagementMode.Manual
+  ) {
+    logger.warn(DESTRUCTIVE_MIGRATION_MANUAL_WARNING);
+  }
+};
+
 /**
  * Root module for the NestJS JetStream transport.
  *
- * - `forRoot()` / `forRootAsync()` — registers once in AppModule.
+ * - `forRoot()` / `forRootAsync()`: registers once in AppModule.
  *   Creates shared NATS connection, codec, event bus, and optionally
  *   the consumer infrastructure.
  *
- * - `forFeature()` — registers in feature modules.
+ * - `forFeature()`: registers in feature modules.
  *   Creates a lightweight client proxy targeting a specific service.
  *
  * @example
  * ```typescript
- * // AppModule — global setup
+ * // AppModule: global setup
  * @Module({
  *   imports: [
  *     JetstreamModule.forRoot({
@@ -75,7 +92,7 @@ const JETSTREAM_ACK_WAIT_MAP = Symbol('JETSTREAM_ACK_WAIT_MAP');
  * })
  * export class AppModule {}
  *
- * // Feature module — per-service clients
+ * // Feature module: per-service clients
  * @Module({
  *   imports: [
  *     JetstreamModule.forFeature({ name: 'users' }),
@@ -121,6 +138,7 @@ export class JetstreamModule implements OnApplicationShutdown {
         ShutdownManager,
         JetstreamStrategy,
         JetstreamHealthIndicator,
+        NameResolver,
       ],
     };
   }
@@ -152,6 +170,7 @@ export class JetstreamModule implements OnApplicationShutdown {
         ShutdownManager,
         JetstreamStrategy,
         JetstreamHealthIndicator,
+        NameResolver,
       ],
     };
   }
@@ -170,16 +189,30 @@ export class JetstreamModule implements OnApplicationShutdown {
 
     const clientProvider: Provider = {
       provide: clientToken,
-      inject: [JETSTREAM_OPTIONS, JETSTREAM_CONNECTION, JETSTREAM_CODEC, JETSTREAM_EVENT_BUS],
+      inject: [
+        JETSTREAM_OPTIONS,
+        JETSTREAM_CONNECTION,
+        JETSTREAM_CODEC,
+        JETSTREAM_EVENT_BUS,
+        { token: NameResolver, optional: true },
+      ],
       useFactory: (
         rootOptions: JetstreamModuleOptions,
         connection: ConnectionProvider,
         rootCodec: Codec,
         eventBus: EventBus,
+        names: NameResolver | null,
       ) => {
         const codec = options.codec ?? rootCodec;
 
-        return new JetstreamClient(rootOptions, options.name, connection, codec, eventBus);
+        return new JetstreamClient(
+          rootOptions,
+          options.name,
+          connection,
+          codec,
+          eventBus,
+          names ?? undefined,
+        );
       },
     };
 
@@ -203,7 +236,6 @@ export class JetstreamModule implements OnApplicationShutdown {
   /** Create providers that depend on JETSTREAM_OPTIONS (shared by sync and async). */
   private static createCoreDependentProviders(): Provider[] {
     return [
-      // EventBus — hook system with Logger fallback
       {
         provide: JETSTREAM_EVENT_BUS,
         inject: [JETSTREAM_OPTIONS],
@@ -214,7 +246,6 @@ export class JetstreamModule implements OnApplicationShutdown {
         },
       },
 
-      // Codec — global encode/decode
       {
         provide: JETSTREAM_CODEC,
         inject: [JETSTREAM_OPTIONS],
@@ -223,7 +254,6 @@ export class JetstreamModule implements OnApplicationShutdown {
         },
       },
 
-      // ConnectionProvider — single NATS connection
       {
         provide: JETSTREAM_CONNECTION,
         inject: [JETSTREAM_OPTIONS, JETSTREAM_EVENT_BUS],
@@ -232,7 +262,6 @@ export class JetstreamModule implements OnApplicationShutdown {
         },
       },
 
-      // JetstreamHealthIndicator — health check for NATS connection
       {
         provide: JetstreamHealthIndicator,
         inject: [JETSTREAM_CONNECTION],
@@ -241,7 +270,6 @@ export class JetstreamModule implements OnApplicationShutdown {
         },
       },
 
-      // ShutdownManager — graceful shutdown orchestration
       {
         provide: ShutdownManager,
         inject: [JETSTREAM_CONNECTION, JETSTREAM_EVENT_BUS, JETSTREAM_OPTIONS],
@@ -258,57 +286,100 @@ export class JetstreamModule implements OnApplicationShutdown {
         },
       },
 
-      // Consumer infrastructure — only created when consumer !== false.
-      // Providers return null when consumer is disabled (publisher-only mode).
-
-      // PatternRegistry — subject-to-handler mapping
+      // Consumer infrastructure providers below return null when consumer === false
+      // (publisher-only mode). NameResolver is the exception: clients need it too.
       {
-        provide: PatternRegistry,
+        provide: NameResolver,
         inject: [JETSTREAM_OPTIONS],
-        useFactory: (options: JetstreamModuleOptions): PatternRegistry | null => {
-          if (options.consumer === false) return null;
+        useFactory: (options: JetstreamModuleOptions): NameResolver => {
+          const logger = new Logger('Jetstream:Module');
 
-          return new PatternRegistry(options);
+          warnIfManualWithDestructive(options, logger);
+
+          return new NameResolver(options);
         },
       },
 
-      // StreamProvider — JetStream stream lifecycle
+      {
+        provide: PatternRegistry,
+        inject: [JETSTREAM_OPTIONS, NameResolver],
+        useFactory: (
+          options: JetstreamModuleOptions,
+          names: NameResolver,
+        ): PatternRegistry | null => {
+          if (options.consumer === false) return null;
+
+          return new PatternRegistry(options, names);
+        },
+      },
+
+      {
+        provide: InfrastructureBinder,
+        inject: [JETSTREAM_OPTIONS, NameResolver, PatternRegistry],
+        useFactory: (
+          options: JetstreamModuleOptions,
+          names: NameResolver,
+          registry: PatternRegistry,
+        ): InfrastructureBinder | null => {
+          if (options.consumer === false) return null;
+
+          return new InfrastructureBinder(options, names, registry);
+        },
+      },
+
       {
         provide: StreamProvider,
-        inject: [JETSTREAM_OPTIONS, JETSTREAM_CONNECTION],
+        inject: [JETSTREAM_OPTIONS, JETSTREAM_CONNECTION, NameResolver, InfrastructureBinder],
         useFactory: (
           options: JetstreamModuleOptions,
           connection: ConnectionProvider,
+          names: NameResolver,
+          binder: InfrastructureBinder,
         ): StreamProvider | null => {
           if (options.consumer === false) return null;
 
-          return new StreamProvider(options, connection);
+          return new StreamProvider(options, connection, names, binder);
         },
       },
 
-      // ConsumerProvider — JetStream consumer lifecycle (receives PatternRegistry for broadcast filtering)
+      // ConsumerProvider needs PatternRegistry for broadcast filtering.
       {
         provide: ConsumerProvider,
-        inject: [JETSTREAM_OPTIONS, JETSTREAM_CONNECTION, StreamProvider, PatternRegistry],
+        inject: [
+          JETSTREAM_OPTIONS,
+          JETSTREAM_CONNECTION,
+          StreamProvider,
+          PatternRegistry,
+          NameResolver,
+          InfrastructureBinder,
+        ],
         useFactory: (
           options: JetstreamModuleOptions,
           connection: ConnectionProvider,
           streamProvider: StreamProvider,
           patternRegistry: PatternRegistry,
+          names: NameResolver,
+          binder: InfrastructureBinder,
         ): ConsumerProvider | null => {
           if (options.consumer === false) return null;
 
-          return new ConsumerProvider(options, connection, streamProvider, patternRegistry);
+          return new ConsumerProvider(
+            options,
+            connection,
+            streamProvider,
+            patternRegistry,
+            names,
+            binder,
+          );
         },
       },
 
-      // Shared ack_wait map — populated by strategy after ensureConsumers()
+      // Shared ack_wait map, populated by the strategy after ensureConsumers().
       {
         provide: JETSTREAM_ACK_WAIT_MAP,
         useFactory: (): Map<StreamKind, number> => new Map(),
       },
 
-      // MessageProvider — pull-based message consumption
       {
         provide: MessageProvider,
         inject: [
@@ -338,7 +409,7 @@ export class JetstreamModule implements OnApplicationShutdown {
             consumeOptionsMap.set(StreamKind.Command, options.rpc.consume);
           }
 
-          // Recovery callback: recreate consumer when "not found" during self-healing
+          // Recreates the consumer when self-healing hits "consumer not found".
           const derived = deriveOtelAttrs(options);
           const { otel, serverEndpoint: otelEndpoint, serviceName: otelServiceName } = derived;
           const consumerRecoveryFn: ConsumerRecoveryFn | undefined =
@@ -365,7 +436,6 @@ export class JetstreamModule implements OnApplicationShutdown {
         },
       },
 
-      // EventRouter — routes event and broadcast messages to handlers
       {
         provide: EventRouter,
         inject: [
@@ -376,6 +446,7 @@ export class JetstreamModule implements OnApplicationShutdown {
           JETSTREAM_EVENT_BUS,
           JETSTREAM_ACK_WAIT_MAP,
           JETSTREAM_CONNECTION,
+          NameResolver,
         ],
         useFactory: (
           options: JetstreamModuleOptions,
@@ -385,6 +456,7 @@ export class JetstreamModule implements OnApplicationShutdown {
           eventBus: EventBus,
           ackWaitMap: Map<StreamKind, number>,
           connection: ConnectionProvider,
+          names: NameResolver,
         ): EventRouter | null => {
           if (options.consumer === false) return null;
 
@@ -419,11 +491,11 @@ export class JetstreamModule implements OnApplicationShutdown {
             ackWaitMap,
             connection,
             options,
+            names,
           );
         },
       },
 
-      // RpcRouter — routes RPC command messages in JetStream mode
       {
         provide: RpcRouter,
         inject: [
@@ -468,7 +540,6 @@ export class JetstreamModule implements OnApplicationShutdown {
         },
       },
 
-      // CoreRpcServer — RPC via NATS Core request/reply
       {
         provide: CoreRpcServer,
         inject: [
@@ -477,6 +548,7 @@ export class JetstreamModule implements OnApplicationShutdown {
           PatternRegistry,
           JETSTREAM_CODEC,
           JETSTREAM_EVENT_BUS,
+          NameResolver,
         ],
         useFactory: (
           options: JetstreamModuleOptions,
@@ -484,14 +556,14 @@ export class JetstreamModule implements OnApplicationShutdown {
           patternRegistry: PatternRegistry,
           codec: Codec,
           eventBus: EventBus,
+          names: NameResolver,
         ): CoreRpcServer | null => {
           if (options.consumer === false) return null;
 
-          return new CoreRpcServer(options, connection, patternRegistry, codec, eventBus);
+          return new CoreRpcServer(options, connection, patternRegistry, codec, eventBus, names);
         },
       },
 
-      // MetadataProvider — handler metadata KV registry (decoupled from stream/consumer infra)
       {
         provide: MetadataProvider,
         inject: [JETSTREAM_OPTIONS, JETSTREAM_CONNECTION],
@@ -505,7 +577,6 @@ export class JetstreamModule implements OnApplicationShutdown {
         },
       },
 
-      // JetstreamStrategy — server-side transport (only when consumer enabled)
       {
         provide: JetstreamStrategy,
         inject: [
@@ -585,7 +656,7 @@ export class JetstreamModule implements OnApplicationShutdown {
       ];
     }
 
-    // useClass — guaranteed by the discriminated union after excluding useFactory and useExisting
+    // useClass is guaranteed by the discriminated union after the branches above.
     const useClass = asyncOptions.useClass;
 
     return [

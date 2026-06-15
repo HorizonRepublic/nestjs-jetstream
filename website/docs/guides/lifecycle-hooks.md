@@ -8,7 +8,7 @@ schema:
   headline: "How to register lifecycle hooks for NestJS JetStream"
   description: "Subscribe to transport events for monitoring, alerting, and logging integration."
   datePublished: "2026-03-21"
-  dateModified: "2026-05-27"
+  dateModified: "2026-06-12"
 ---
 
 import Since from '@site/src/components/Since';
@@ -37,7 +37,7 @@ The full event set is defined in the `TransportEvent` enum:
 | `ShutdownComplete` | `() => void` | Graceful shutdown sequence finishes |
 | `DeadLetter` | `(info: DeadLetterInfo) => void` | A message exhausts all delivery attempts |
 
-The `MessageKind` enum on `MessageRouted` has two values — `Event` and `Rpc` — and is importable from `@horizon-republic/nestjs-jetstream`.
+The `MessageKind` enum on `MessageRouted` has two values; `Event` and `Rpc`; and is importable from `@horizon-republic/nestjs-jetstream`.
 
 ## Registering hooks
 

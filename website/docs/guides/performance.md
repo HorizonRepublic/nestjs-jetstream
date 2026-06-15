@@ -6,7 +6,7 @@ schema:
   headline: "Performance Tuning"
   description: "Tune ackWait, maxAckPending, batch sizes, and ack extension for high-throughput workloads."
   datePublished: "2026-03-26"
-  dateModified: "2026-04-11"
+  dateModified: "2026-06-12"
 ---
 
 # Performance Tuning
@@ -20,7 +20,7 @@ Pull consumers provide **implicit backpressure** — the client controls how fas
 The message flow through the system:
 
 ```text
-NATS Server → pull consumer (max_ack_pending) → consume() buffer → RxJS mergeMap (concurrency) → handler → ack → frees slot
+NATS Server -> pull consumer (max_ack_pending) -> consume() buffer -> RxJS mergeMap (concurrency) -> handler -> ack -> frees slot
 ```
 
 The primary flow control knob is `max_ack_pending` on the consumer. It limits how many messages can be in-flight (delivered but not yet acknowledged) at any time. When the limit is reached, the server stops delivering new messages until existing ones are acknowledged — creating natural backpressure.
@@ -39,7 +39,7 @@ The primary flow control knob is `max_ack_pending` on the consumer. It limits ho
 
 - **`max_ack_pending`** is the ceiling. The server will never deliver more than this many unacked messages.
 - **`concurrency`** controls how many messages are processed in parallel by your handlers. If `concurrency` is lower than `max_ack_pending`, excess messages wait in the internal buffer.
-- **`consume.max_messages`** and **`consume.threshold_messages`** control the prefetch buffer — how many messages the `@nats-io/jetstream` client requests from the server in a single batch and when it requests more.
+- **`consume.max_messages`** and **`consume.threshold_messages`** control the prefetch buffer; how many messages the `@nats-io/jetstream` client requests from the server in a single batch and when it requests more.
 
 For most workloads, tuning `max_ack_pending` and `concurrency` is sufficient.
 

@@ -26,7 +26,7 @@ export enum JetstreamTrace {
 
   /**
    * `CLIENT` span covering a full RPC round-trip on the caller side
-   * (`client.send()` → reply received). Wraps the inner publish.
+   * (`client.send()` -> reply received). Wraps the inner publish.
    * Default: ON.
    */
   RpcClientSend = 'rpc.client.send',

@@ -189,7 +189,7 @@ describe(EventBus, () => {
       expect(sub).toHaveBeenCalledOnce();
     });
 
-    it('should isolate subscriber failures — one throwing does not block others', () => {
+    it('should isolate subscriber failures; one throwing does not block others', () => {
       // Given: two subscribers, first throws
       const throwing = vi.fn(() => {
         throw new Error('boom');

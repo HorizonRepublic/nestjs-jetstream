@@ -125,7 +125,6 @@ describe('Dead Letter Queue Hook', () => {
       expect(deadLetters[0]!.stream).toBeDefined();
       expect(deadLetters[0]!.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
 
-      // Handler was attempted exactly max_deliver times
       expect(controller.attempts).toBe(2);
     });
   });
@@ -381,7 +380,7 @@ describe('Dead Letter Queue Hook', () => {
         {
           name: serviceName,
           port,
-          dlq: {}, // enable native DLQ
+          dlq: {},
           events: {
             consumer: {
               max_deliver: 2,
@@ -436,10 +435,9 @@ describe('Dead Letter Queue Hook', () => {
       expect(hdrs.get(JetstreamDlqHeader.DeliveryCount)).toBe('2');
       expect(hdrs.get(JetstreamDlqHeader.OriginalStream)).toBeDefined();
 
-      // Ensure fallback callback was ALSO invoked
+      // Then: the onDeadLetter fallback was ALSO invoked
       expect(deadLetters).toHaveLength(1);
 
-      // Ensure the handler was attempted exactly max_deliver times (2)
       expect(controller.attempts).toBe(2);
     });
   });

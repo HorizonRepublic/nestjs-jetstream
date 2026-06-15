@@ -10,7 +10,7 @@ import {
 import type { ConsumerConfig, StreamConfig } from '@nats-io/jetstream';
 
 import { StreamKind } from './interfaces';
-import type { RpcConfig, SubjectKind } from './interfaces';
+import type { JetStreamRpcConfig, RpcConfig, SubjectKind } from './interfaces';
 
 /** Token for the resolved JetstreamModuleOptions. */
 export const JETSTREAM_OPTIONS = Symbol('JETSTREAM_OPTIONS');
@@ -25,7 +25,7 @@ export const JETSTREAM_CODEC = Symbol('JETSTREAM_CODEC');
  * Token for the EventBus instance.
  *
  * @internal Reserved for the library's own DI wiring. Not part of the
- * public API — user code should register hooks via `forRoot({ hooks })`
+ * public API; user code should register hooks via `forRoot({ hooks })`
  * instead of injecting the bus directly.
  */
 export const JETSTREAM_EVENT_BUS = Symbol('JETSTREAM_EVENT_BUS');
@@ -76,8 +76,6 @@ const NANOS_PER: Record<TimeUnit, number> = {
  * ```
  */
 export const toNanos = (value: number, unit: TimeUnit): number => value * NANOS_PER[unit];
-
-/* eslint-disable @typescript-eslint/naming-convention -- NATS API uses snake_case property names */
 
 /** Base stream config shared by all stream types. */
 const baseStreamConfig: Partial<StreamConfig> = {
@@ -187,8 +185,6 @@ export const DEFAULT_BROADCAST_CONSUMER_CONFIG: Partial<ConsumerConfig> = {
   replay_policy: ReplayPolicy.Instant,
 };
 
-/* eslint-enable @typescript-eslint/naming-convention */
-
 /** Default RPC timeout for Core mode (30 seconds). */
 export const DEFAULT_RPC_TIMEOUT = 30_000;
 
@@ -245,7 +241,7 @@ export enum JetstreamHeader {
 }
 
 export enum JetstreamDlqHeader {
-  /** Reason for the message being sent to the DLQ — the last handler error message. */
+  /** Reason the message was sent to the DLQ: the last handler error message. */
   DeadLetterReason = 'x-dead-letter-reason',
   /** Original NATS subject the message was originally published to */
   OriginalSubject = 'x-original-subject',
@@ -267,8 +263,8 @@ export const RESERVED_HEADERS = new Set<string>([
 /**
  * Lowercase prefix of NATS server control headers (Nats-Msg-Id, Nats-TTL,
  * Nats-Rollup, Nats-Schedule-*, Nats-Expected-*). These drive server-side
- * behavior — a stray Nats-Rollup purges every pending message on the
- * subject — so they are managed exclusively through builder APIs.
+ * behavior (a stray Nats-Rollup purges every pending message on the
+ * subject), so they are managed exclusively through builder APIs.
  */
 export const NATS_CONTROL_HEADER_PREFIX = 'nats-';
 
@@ -288,8 +284,17 @@ export const internalName = (name: string): string => `${name}__microservice`;
  * @param pattern - The message pattern (e.g. `'user.created'`).
  * @returns `{serviceName}__microservice.{kind}.{pattern}`
  */
+export const subjectPrefix = (serviceName: string, kind: SubjectKind): string =>
+  `${internalName(serviceName)}.${kind}.`;
+
 export const buildSubject = (serviceName: string, kind: SubjectKind, pattern: string): string =>
-  `${internalName(serviceName)}.${kind}.${pattern}`;
+  `${subjectPrefix(serviceName, kind)}${pattern}`;
+
+/** Broadcast subjects are not scoped to a service and always share this prefix. */
+export const BROADCAST_SUBJECT_PREFIX = 'broadcast.';
+
+/** Subject segment that namespaces schedule-holder messages away from consumer filters. */
+export const SCHEDULE_SEGMENT = '_sch.';
 
 /**
  * Build a broadcast subject.
@@ -297,7 +302,36 @@ export const buildSubject = (serviceName: string, kind: SubjectKind, pattern: st
  * @param pattern - The message pattern (e.g. `'config.updated'`).
  * @returns `broadcast.{pattern}`
  */
-export const buildBroadcastSubject = (pattern: string): string => `broadcast.${pattern}`;
+export const buildBroadcastSubject = (pattern: string): string =>
+  `${BROADCAST_SUBJECT_PREFIX}${pattern}`;
+
+/**
+ * Map a convention event subject to its schedule-holder base subject
+ * (without the per-message unique suffix), for foreign-target publishes
+ * where no NameResolver instance exists.
+ */
+export const conventionScheduleSubjectBase = (targetName: string, eventSubject: string): string => {
+  if (eventSubject.startsWith(BROADCAST_SUBJECT_PREFIX)) {
+    const bare = eventSubject.slice(BROADCAST_SUBJECT_PREFIX.length);
+
+    return `${BROADCAST_SUBJECT_PREFIX}${SCHEDULE_SEGMENT}${bare}`;
+  }
+
+  const targetPrefix = `${internalName(targetName)}.`;
+
+  if (!eventSubject.startsWith(targetPrefix)) {
+    throw new Error(`Unexpected event subject format: ${eventSubject}`);
+  }
+
+  const withoutPrefix = eventSubject.slice(targetPrefix.length);
+  const dotIndex = withoutPrefix.indexOf('.');
+
+  if (dotIndex === -1) {
+    throw new Error(`Event subject missing pattern segment: ${eventSubject}`);
+  }
+
+  return `${targetPrefix}${SCHEDULE_SEGMENT}${withoutPrefix.slice(dotIndex + 1)}`;
+};
 
 /**
  * Build the JetStream stream name for a given service and kind.
@@ -345,7 +379,7 @@ export enum PatternPrefix {
 }
 
 /** Check if the RPC config specifies JetStream mode. */
-export const isJetStreamRpcMode = (rpc: RpcConfig | undefined): boolean =>
+export const isJetStreamRpcMode = (rpc: RpcConfig | undefined): rpc is JetStreamRpcConfig =>
   rpc?.mode === 'jetstream';
 
 /** Check if the RPC config specifies Core mode (default). */

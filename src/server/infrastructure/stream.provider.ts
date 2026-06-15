@@ -8,18 +8,16 @@ import {
 } from '@nats-io/jetstream';
 
 import { ConnectionProvider } from '../../connection';
-import { StreamKind } from '../../interfaces';
+import { ManagementMode, StreamKind } from '../../interfaces';
 import type { JetstreamModuleOptions } from '../../interfaces';
 import {
   DEFAULT_BROADCAST_STREAM_CONFIG,
   DEFAULT_COMMAND_STREAM_CONFIG,
   DEFAULT_EVENT_STREAM_CONFIG,
   DEFAULT_ORDERED_STREAM_CONFIG,
-  internalName,
-  streamName,
-  dlqStreamName,
   DEFAULT_DLQ_STREAM_CONFIG,
 } from '../../jetstream.constants';
+import { NameResolver } from './name-resolver';
 import {
   deriveOtelAttrs,
   withMigrationSpan,
@@ -30,36 +28,25 @@ import {
 import { NatsErrorCode } from './nats-error-codes';
 import { assertStorageBudget } from './provisioning-budget';
 import { mapProvisioningError, type ProvisioningErrorContext } from './provisioning-error';
-import { formatProvisioningSummary, type StreamReservation } from './provisioning-summary';
+import {
+  formatProvisioningSummary,
+  type ExternalBinding,
+  type ReservationKind,
+  type StreamReservation,
+} from './provisioning-summary';
+import { kindOptionsBlock, resolveManagementMode } from './management';
+import { InfrastructureBinder } from './infrastructure-binder';
 import { compareStreamConfig, type StreamConfigDiffResult } from './stream-config-diff';
 import { StreamMigration } from './stream-migration';
-
-/** A `StreamKind` or the `'dlq'` label, used for reservation/error provenance. */
-type ReservationKind = StreamKind | 'dlq';
-
-/** True when `broad` matches everything `narrow` matches. Identical entries return false. */
-const subjectCovers = (broad: string, narrow: string): boolean => {
-  if (broad === narrow) return false;
-
-  const broadTokens = broad.split('.');
-  const narrowTokens = narrow.split('.');
-
-  for (let i = 0; i < broadTokens.length; i += 1) {
-    if (broadTokens[i] === '>') return i < narrowTokens.length;
-    if (i >= narrowTokens.length || narrowTokens[i] === '>') return false;
-    if (broadTokens[i] !== '*' && broadTokens[i] !== narrowTokens[i]) return false;
-  }
-
-  return broadTokens.length === narrowTokens.length;
-};
+import { subjectCovers } from './subject-utils';
 
 /**
  * Manages JetStream stream lifecycle: creation, updates, and idempotent ensures.
  *
  * Creates up to three stream types depending on configuration:
- * - **Event stream** — workqueue events (always, when consumer enabled)
- * - **Command stream** — RPC commands (only in jetstream RPC mode)
- * - **Broadcast stream** — fan-out events (only if broadcast handlers exist)
+ * - **Event stream**: workqueue events (always, when consumer enabled)
+ * - **Command stream**: RPC commands (only in jetstream RPC mode)
+ * - **Broadcast stream**: fan-out events (only if broadcast handlers exist)
  *
  * All operations are idempotent: safe to call on every startup and reconnection.
  */
@@ -74,6 +61,8 @@ export class StreamProvider {
   public constructor(
     private readonly options: JetstreamModuleOptions,
     private readonly connection: ConnectionProvider,
+    private readonly names: NameResolver,
+    private readonly binder: InfrastructureBinder,
   ) {
     const derived = deriveOtelAttrs(options);
 
@@ -92,55 +81,62 @@ export class StreamProvider {
   public async ensureStreams(kinds: StreamKind[]): Promise<void> {
     const jsm = await this.connection.getJetStreamManager();
 
-    const reservations = kinds.map((kind) => this.buildReservation(kind, this.buildConfig(kind)));
+    const { autoKinds, externalKinds } = this.partitionByManagement(kinds);
+
+    const reservations = autoKinds.map((kind) =>
+      this.buildReservation(kind, this.buildConfig(kind)),
+    );
+    const external: ExternalBinding[] = externalKinds.map((kind) => ({
+      kind,
+      name: this.names.streamName(kind),
+    }));
+
+    const dlqIsManual =
+      !!this.options.dlq &&
+      resolveManagementMode(this.options, 'dlq', 'stream') === ManagementMode.Manual;
 
     if (this.options.dlq) {
-      reservations.push(this.buildReservation('dlq', this.buildDlqConfig()));
+      if (dlqIsManual) {
+        external.push({ kind: 'dlq', name: this.names.dlqStreamName() });
+      } else {
+        reservations.push(this.buildReservation('dlq', this.buildDlqConfig()));
+      }
     }
 
-    this.logger.log(`\n${formatProvisioningSummary(this.options.name, reservations)}`);
+    this.logger.log(`\n${formatProvisioningSummary(this.options.name, reservations, external)}`);
 
-    if (this.options.provisioning?.preflightStorageCheck) {
+    if (this.options.provisioning?.preflightStorageCheck && reservations.length > 0) {
       await assertStorageBudget(jsm, this.options.name, reservations, this.logger);
     }
 
-    await Promise.all(kinds.map((kind) => this.ensureStream(jsm, kind)));
+    await Promise.all([
+      ...autoKinds.map((kind) => this.ensureStream(jsm, kind)),
+      ...externalKinds.map((kind) => this.bindStream(jsm, kind)),
+    ]);
+
     if (this.options.dlq) {
-      await this.ensureDlqStream(jsm);
+      if (dlqIsManual) {
+        await this.bindDlqStream(jsm);
+      } else {
+        await this.ensureDlqStream(jsm);
+      }
     }
   }
 
   /** Get the stream name for a given kind. */
   public getStreamName(kind: StreamKind): string {
-    return streamName(this.options.name, kind);
+    return this.names.streamName(kind);
   }
 
   /** Get the subjects pattern for a given kind. */
   public getSubjects(kind: StreamKind): string[] {
-    const name = internalName(this.options.name);
+    const filter = this.names.filterSubject(kind);
+    const dedicatedSchedule =
+      kind === StreamKind.Event &&
+      this.isSchedulingEnabled(kind) &&
+      !this.names.hasCustomPrefix(kind);
 
-    switch (kind) {
-      case StreamKind.Event: {
-        const subjects = [`${name}.${StreamKind.Event}.>`];
-
-        // When scheduling is enabled, add a schedule-holder subject namespace
-        // so scheduled messages reside in the same stream but are NOT matched
-        // by the event consumer's filter (which only matches {svc}.ev.>).
-        if (this.isSchedulingEnabled(kind)) {
-          subjects.push(`${name}._sch.>`);
-        }
-
-        return subjects;
-      }
-
-      case StreamKind.Command:
-        return [`${name}.${StreamKind.Command}.>`];
-      case StreamKind.Broadcast:
-        return ['broadcast.>'];
-
-      case StreamKind.Ordered:
-        return [`${name}.${StreamKind.Ordered}.>`];
-    }
+    return dedicatedSchedule ? [filter, `${this.names.schedulePrefix(kind)}>`] : [filter];
   }
 
   /** Ensure a single stream exists, creating or updating as needed. */
@@ -261,7 +257,7 @@ export class StreamProvider {
     if (diff.hasTransportControlledConflicts) {
       const conflicts = diff.changes
         .filter((c) => c.mutability === 'transport-controlled')
-        .map((c) => `${c.property}: ${JSON.stringify(c.current)} → ${JSON.stringify(c.desired)}`)
+        .map((c) => `${c.property}: ${JSON.stringify(c.current)} -> ${JSON.stringify(c.desired)}`)
         .join(', ');
 
       throw new Error(
@@ -271,20 +267,19 @@ export class StreamProvider {
     }
 
     if (!diff.hasImmutableChanges) {
-      // Mutable-only or enable-only — normal update
+      // Mutable-only or enable-only changes: normal update
       this.logger.debug(`Stream exists, updating: ${config.name}`);
 
       return await this.runStreamOp(ctx, () => jsm.streams.update(config.name, config));
     }
 
-    // Immutable changes detected
     if (!this.options.allowDestructiveMigration) {
       this.logger.warn(
         `Stream ${config.name} has immutable config conflicts. ` +
           `Enable allowDestructiveMigration to recreate the stream.`,
       );
 
-      // Apply mutable-only changes by building config without immutable overrides
+      // Still apply the mutable subset of the changes
       if (diff.hasMutableChanges) {
         const mutableConfig = this.buildMutableOnlyConfig(config, currentInfo.config, diff);
 
@@ -302,7 +297,6 @@ export class StreamProvider {
       );
     }
 
-    // Destructive migration
     await withMigrationSpan(
       this.otel,
       {
@@ -350,14 +344,14 @@ export class StreamProvider {
     migrationEnabled: boolean,
   ): void {
     for (const c of diff.changes) {
-      const detail = `${c.property}: ${JSON.stringify(c.current)} → ${JSON.stringify(c.desired)}`;
+      const detail = `${c.property}: ${JSON.stringify(c.current)} -> ${JSON.stringify(c.desired)}`;
 
       if (c.mutability === 'transport-controlled') {
         this.logger.error(
-          `Stream ${streamName}: ${detail} — transport-controlled, cannot be changed`,
+          `Stream ${streamName}: ${detail}; transport-controlled, cannot be changed`,
         );
       } else if (c.mutability === 'immutable' && !migrationEnabled) {
-        this.logger.warn(`Stream ${streamName}: ${detail} — requires allowDestructiveMigration`);
+        this.logger.warn(`Stream ${streamName}: ${detail}; requires allowDestructiveMigration`);
       } else {
         this.logger.log(`Stream ${streamName}: ${detail}`);
       }
@@ -406,7 +400,62 @@ export class StreamProvider {
     }
   }
 
-  /** The broadcast stream is global — every service in the cluster shares it. */
+  private partitionByManagement(kinds: StreamKind[]): {
+    autoKinds: StreamKind[];
+    externalKinds: StreamKind[];
+  } {
+    const autoKinds: StreamKind[] = [];
+    const externalKinds: StreamKind[] = [];
+
+    for (const kind of kinds) {
+      if (resolveManagementMode(this.options, kind, 'stream') === ManagementMode.Manual) {
+        externalKinds.push(kind);
+      } else {
+        autoKinds.push(kind);
+      }
+    }
+
+    return { autoKinds, externalKinds };
+  }
+
+  private async bindStream(
+    jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
+    kind: StreamKind,
+  ): Promise<StreamInfo> {
+    const name = this.names.streamName(kind);
+
+    return withProvisioningSpan(
+      this.otel,
+      {
+        serviceName: this.otelServiceName,
+        endpoint: this.otelEndpoint,
+        entity: 'stream',
+        name,
+        action: 'bind',
+      },
+      () => this.binder.bindStream(jsm, kind),
+    );
+  }
+
+  private async bindDlqStream(
+    jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
+  ): Promise<StreamInfo> {
+    const name = this.names.dlqStreamName();
+
+    return withProvisioningSpan(
+      this.otel,
+      {
+        serviceName: this.otelServiceName,
+        endpoint: this.otelEndpoint,
+        entity: 'stream',
+        name,
+        action: 'bind',
+      },
+      () => this.binder.bindDlqStream(jsm),
+    );
+  }
+
+  /** The broadcast stream is global; every service in the cluster shares it. */
   private isSharedStream(name: string): boolean {
     return name === this.getStreamName(StreamKind.Broadcast);
   }
@@ -436,13 +485,11 @@ export class StreamProvider {
   }
 
   /**
-   * Build the stream configuration for the Dead-Letter Queue (DLQ).
-   *
-   * Merges the library default DLQ config with user-provided overrides.
-   * Ensures transport-controlled settings like retention are safely decoupled.
+   * Build the DLQ stream config: library defaults merged with user overrides,
+   * with transport-controlled settings like retention stripped.
    */
   private buildDlqConfig(): Partial<StreamConfig> & { name: string; subjects: string[] } {
-    const name = dlqStreamName(this.options.name);
+    const name = this.names.dlqStreamName();
     const subjects = [name];
     const description = `JetStream DLQ stream for ${this.options.name}`;
     const overrides = this.options.dlq?.stream ?? {};
@@ -480,24 +527,7 @@ export class StreamProvider {
 
   /** Get user-provided overrides for a stream kind, stripping transport-controlled properties. */
   private getOverrides(kind: StreamKind): Partial<StreamConfig> {
-    let overrides: Partial<StreamConfig>;
-
-    switch (kind) {
-      case StreamKind.Event:
-        overrides = this.options.events?.stream ?? {};
-        break;
-      case StreamKind.Command:
-        overrides = this.options.rpc?.mode === 'jetstream' ? (this.options.rpc.stream ?? {}) : {};
-        break;
-      case StreamKind.Broadcast:
-        overrides = this.options.broadcast?.stream ?? {};
-        break;
-      case StreamKind.Ordered:
-        overrides = this.options.ordered?.stream ?? {};
-        break;
-    }
-
-    return this.stripTransportControlled(overrides);
+    return this.stripTransportControlled(kindOptionsBlock(this.options, kind)?.stream ?? {});
   }
 
   /**
@@ -509,7 +539,7 @@ export class StreamProvider {
     if (!('retention' in overrides)) return overrides;
 
     this.logger.debug(
-      'Stripping user-provided retention override — retention is managed by the transport',
+      'Stripping user-provided retention override; retention is managed by the transport',
     );
 
     const cleaned = { ...overrides };

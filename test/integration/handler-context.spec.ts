@@ -137,7 +137,7 @@ describe('Handler Context', () => {
       // When: emit an event
       await firstValueFrom(client.emit('order.retry', { id: 1 }));
 
-      // Then: handler called twice — retry on first, success on second
+      // Then: handler called twice (retry on first, success on second)
       await waitForCondition(() => controller.received.length === 1, 10_000);
 
       expect(controller.attempts).toBe(2);
@@ -229,7 +229,7 @@ describe('Handler Context', () => {
       // When: emit an event
       await firstValueFrom(client.emit('order.terminate', { id: 3 }));
 
-      // Then: handler called exactly once — terminated, no redelivery
+      // Then: handler called exactly once (terminated, no redelivery)
       await waitForCondition(() => controller.attempts === 1, 5_000);
 
       // Poll to confirm no redelivery arrives within ack_wait window

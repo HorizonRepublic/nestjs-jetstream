@@ -104,7 +104,7 @@ describe('Stream sourcing behavior (NATS verification)', () => {
     expect(infoB.state.messages).toBe(10);
   });
 
-  it('should allow sourcing into a stream with different storage type (File → Memory)', async () => {
+  it('should allow sourcing into a stream with different storage type (File -> Memory)', async () => {
     // Given: File stream with messages
     const nameFile = `storage-file-${Date.now()}`;
     const nameMem = `storage-mem-${Date.now()}`;
@@ -227,7 +227,7 @@ describe('Stream sourcing behavior (NATS verification)', () => {
       });
     });
 
-    describe('reverse migration (Memory → File)', () => {
+    describe('reverse migration (Memory -> File)', () => {
       it('should migrate Memory back to File and preserve messages', async () => {
         const serviceName = uniqueServiceName();
 
@@ -246,7 +246,6 @@ describe('Stream sourcing behavior (NATS verification)', () => {
 
         await app1.close();
 
-        // Publish messages directly
         const evStreamName = streamName(serviceName, StreamKind.Event);
         const subject = buildSubject(serviceName, StreamKind.Event, 'migration.test');
         const encoder = new TextEncoder();
@@ -260,7 +259,7 @@ describe('Stream sourcing behavior (NATS verification)', () => {
         expect(infoBefore.config.storage).toBe(StorageType.Memory);
         expect(infoBefore.state.messages).toBe(5);
 
-        // When: migrate Memory → File
+        // When: migrate Memory -> File
         const { app: app2, module: module2 } = await createTestApp(
           {
             name: serviceName,
@@ -300,10 +299,8 @@ describe('Stream sourcing behavior (NATS verification)', () => {
           [serviceName],
         );
 
-        // Close the consumer so messages accumulate in the stream
         await app1.close();
 
-        // Publish 10 messages directly into the stream (no consumer running)
         const evStreamName = streamName(serviceName, StreamKind.Event);
         const subject = buildSubject(serviceName, StreamKind.Event, 'migration.test');
         const encoder = new TextEncoder();
@@ -312,7 +309,6 @@ describe('Stream sourcing behavior (NATS verification)', () => {
           await js.publish(subject, encoder.encode(JSON.stringify({ index: i })));
         }
 
-        // Verify messages exist in stream
         const infoBefore = await jsm.streams.info(evStreamName);
 
         expect(infoBefore.state.messages).toBeGreaterThanOrEqual(10);
@@ -388,7 +384,7 @@ describe('Stream sourcing behavior (NATS verification)', () => {
     });
 
     describe('randomized bulk migration', () => {
-      it('should preserve and deliver 20–50 random events through File→Memory migration', async () => {
+      it('should preserve and deliver 20-50 random events through File->Memory migration', async () => {
         const messageCount = faker.number.int({ min: 20, max: 50 });
         const serviceName = uniqueServiceName();
 
@@ -401,7 +397,6 @@ describe('Stream sourcing behavior (NATS verification)', () => {
 
         await app1.close();
 
-        // Publish N random messages directly into the stream
         const evStreamName = streamName(serviceName, StreamKind.Event);
         const subject = buildSubject(serviceName, StreamKind.Event, 'migration.test');
         const encoder = new TextEncoder();
@@ -418,7 +413,7 @@ describe('Stream sourcing behavior (NATS verification)', () => {
 
         expect(infoBefore.state.messages).toBe(messageCount);
 
-        // When: migrate File → Memory
+        // When: migrate File -> Memory
         const migrationStart = Date.now();
 
         const { app: app2, module: module2 } = await createTestApp(
@@ -445,14 +440,12 @@ describe('Stream sourcing behavior (NATS verification)', () => {
 
         expect(controller.received).toHaveLength(messageCount);
 
-        // Verify content integrity — every published payload arrived
         const receivedIds = new Set(controller.received.map((r) => (r as { id: number }).id));
 
         for (const msg of published) {
           expect(receivedIds.has(msg.id)).toBe(true);
         }
 
-        // Log timing for observability
         const migrationMs = migrationDone - migrationStart;
         const deliveryMs = deliveryDone - migrationDone;
 
@@ -465,7 +458,6 @@ describe('Stream sourcing behavior (NATS verification)', () => {
         // Sanity: migration + delivery should complete within 30s
         expect(migrationMs + deliveryMs).toBeLessThan(30_000);
 
-        // Verify new storage applied
         const infoAfter = await jsm.streams.info(evStreamName);
 
         expect(infoAfter.config.storage).toBe(StorageType.Memory);
@@ -550,8 +542,8 @@ describe('Stream sourcing behavior (NATS verification)', () => {
         const subject = buildSubject(serviceName, StreamKind.Event, 'migration.test');
         const encoder = new TextEncoder();
 
-        // Given: a crash between delete and create left only the backup —
-        // the sole copy of the data (no metadata, like a stale leftover)
+        // Given: a crash between delete and create left only the backup, the sole
+        // copy of the data (no metadata, like a stale leftover)
         await jsm.streams.add({
           name: backupName,
           subjects: [subject],
@@ -564,7 +556,7 @@ describe('Stream sourcing behavior (NATS verification)', () => {
           await js.publish(subject, encoder.encode(JSON.stringify({ i })));
         }
 
-        // The real backup holds no subjects — clear them so the recreated
+        // The real backup holds no subjects; clear them so the recreated
         // event stream does not overlap
         const backupInfo = await jsm.streams.info(backupName);
 

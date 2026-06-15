@@ -34,9 +34,8 @@ export interface HandlerMetadata {
 
 /**
  * Host / port pair surfaced as `server.address` / `server.port` span
- * attributes. `port` is optional — OTel semconv makes it conditional on
- * being different from the protocol default, and we'd rather emit nothing
- * than invent a number the user never configured.
+ * attributes. `port` is optional: OTel semconv makes it conditional, so we
+ * omit it rather than invent a number the user never configured.
  */
 export interface ServerEndpoint {
   readonly host: string;
@@ -104,7 +103,7 @@ export interface JetstreamResponseContext {
 
 /**
  * Classification outcome for a thrown error. Affects span status and
- * attributes only — reply envelopes and internal logging are unchanged.
+ * attributes only; reply envelopes and internal logging are unchanged.
  */
 export type ErrorClassification = 'expected' | 'unexpected';
 
@@ -128,7 +127,7 @@ export interface CaptureBodyOptions {
 }
 
 /**
- * OpenTelemetry configuration for `JetstreamModule.forRoot({ otel: … })`.
+ * OpenTelemetry configuration for `JetstreamModule.forRoot({ otel: ... })`.
  * All fields are optional; when the host app has not registered an OTel
  * SDK, every call made by the library is a no-op regardless of config.
  */
@@ -144,11 +143,11 @@ export interface OtelOptions {
   /**
    * Which trace kinds to emit.
    *
-   * - `'default'` — publish, consume, RPC client round-trip, dead letter
-   * - `'all'` — every trace kind defined in {@link JetstreamTrace}
-   * - `'none'` — emit no spans at all (useful with `enabled: true` for
+   * - `'default'`: publish, consume, RPC client round-trip, dead letter
+   * - `'all'`: every trace kind defined in {@link JetstreamTrace}
+   * - `'none'`: emit no spans at all (useful with `enabled: true` for
    *   pure trace-context propagation without the span overhead)
-   * - `JetstreamTrace[]` — explicit selection
+   * - `JetstreamTrace[]`: explicit selection
    *
    * @default 'default'
    */
@@ -167,7 +166,7 @@ export interface OtelOptions {
    *
    * Transport-internal headers (`x-correlation-id`, `x-reply-to`, `x-error`,
    * `x-subject`, `x-caller-name`) and propagator-owned headers
-   * (`traceparent`, `tracestate`, `baggage`, `sentry-trace`, `b3`, …) are
+   * (`traceparent`, `tracestate`, `baggage`, `sentry-trace`, `b3`, ...) are
    * always suppressed regardless of the allowlist.
    *
    * @default ['x-request-id']
@@ -194,7 +193,7 @@ export interface OtelOptions {
   /**
    * Invoked after a publish span has been started and before the actual
    * publish call executes. Use to enrich the span with custom attributes.
-   * Must be synchronous — thrown errors are caught and logged at debug
+   * Must be synchronous; thrown errors are caught and logged at debug
    * level without affecting the publish path.
    */
   publishHook?(span: Span, ctx: JetstreamPublishContext): void;
@@ -235,9 +234,9 @@ export interface OtelOptions {
    * RPC contract) or `'unexpected'` (infrastructure failure or bug). Drives
    * OpenTelemetry span status and attributes only.
    *
-   * - `'expected'` → span status `OK` with `jetstream.rpc.reply.has_error`
+   * - `'expected'` -> span status `OK` with `jetstream.rpc.reply.has_error`
    *   and `jetstream.rpc.reply.error.code` attributes
-   * - `'unexpected'` → span status `ERROR` with `span.recordException(err)`
+   * - `'unexpected'` -> span status `ERROR` with `span.recordException(err)`
    *
    * Reply envelopes delivered to RPC clients are identical in both cases.
    * This classification affects only the observability artifact.
@@ -279,13 +278,10 @@ const DEFAULT_CAPTURE_HEADERS: readonly string[] = ['x-request-id'];
 const DEFAULT_CAPTURE_BODY_MAX_BYTES = 4096;
 
 /**
- * NestJS wraps a bare `throw new Error(...)` from a `@MessagePattern` handler
- * into `{ status: 'error', message: 'Internal server error' }` before it
- * reaches the consume-span catch block. Match the exact `status` / `message`
- * pair used by NestJS's internal error normalization — checking just the
- * shape (and not `keys.length === 2`) keeps the sentinel detection working
- * if NestJS extends the wrapper with extra diagnostic fields in a future
- * minor release.
+ * NestJS wraps a bare `throw new Error(...)` from a handler into
+ * `{ status: 'error', message: 'Internal server error' }` before it reaches
+ * the consume-span catch block. Shape-only check (no key count) so the
+ * sentinel still matches if NestJS adds diagnostic fields.
  */
 const NESTJS_BARE_ERROR_MESSAGE = 'Internal server error';
 
@@ -293,11 +289,10 @@ const isNestjsBareErrorSentinel = (obj: Record<string, unknown>): boolean =>
   obj.status === 'error' && obj.message === NESTJS_BARE_ERROR_MESSAGE;
 
 /**
- * Default classifier. Recognizes `RpcException` / `HttpException` (and
- * subclasses) by prototype-chain walk so we stay a type-only dependency on
- * NestJS. Plain non-Error objects arriving at the catch path are almost
- * always `RpcException.getError()` output and count as expected; the only
- * exception is NestJS's "Internal server error" sentinel for bare throws.
+ * Default classifier. Matches `RpcException` / `HttpException` subclasses by
+ * constructor name up the prototype chain, keeping NestJS a type-only
+ * dependency. Plain non-Error objects are `RpcException.getError()` output
+ * and count as expected, except the bare-throw sentinel above.
  */
 const defaultErrorClassifier = (err: unknown): ErrorClassification => {
   if (err === null || typeof err !== 'object') return 'unexpected';
@@ -308,9 +303,7 @@ const defaultErrorClassifier = (err: unknown): ErrorClassification => {
     return 'expected';
   }
 
-  // Walk the prototype chain starting from the instance itself so direct
-  // `RpcException` / `HttpException` throws and deeper subclasses
-  // (`NotFoundException extends HttpException`, …) match uniformly.
+  // Start from the instance itself so direct throws and deep subclasses match uniformly.
   let proto: object | null = err;
 
   while (proto) {
@@ -346,13 +339,7 @@ const resolveCaptureBody = (
   };
 };
 
-/**
- * Apply defaults to user-supplied OTel options. Called once at module
- * init. Hook / predicate types are enforced by TypeScript; runtime
- * validation would duplicate what the compiler already checks and isn't
- * this layer's job — the NestJS / NATS infra above us owns config
- * integrity.
- */
+/** Apply defaults to user-supplied OTel options. Called once at module init. */
 export const resolveOtelOptions = (options: OtelOptions | boolean = {}): ResolvedOtelOptions => {
   if (options === true) options = {};
   if (options === false) options = { enabled: false };
