@@ -56,10 +56,7 @@ export const compileHeaderAllowlist = (allowlist: readonly string[] | boolean): 
   return (name: string): boolean => {
     const lower = name.toLowerCase();
 
-    if (!includes.some((re) => re.test(lower))) return false;
-    if (excludes.some((re) => re.test(lower))) return false;
-
-    return true;
+    return includes.some((re) => re.test(lower)) && !excludes.some((re) => re.test(lower));
   };
 };
 

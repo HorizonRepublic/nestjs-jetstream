@@ -277,16 +277,23 @@ export const NATS_CONTROL_HEADER_PREFIX = 'nats-';
 export const internalName = (name: string): string => `${name}__microservice`;
 
 /**
- * Build a fully-qualified NATS subject for workqueue events, RPC commands, or ordered events.
+ * Build the subject prefix for workqueue events, RPC commands, or ordered events.
+ *
+ * @param serviceName - Target service name.
+ * @param kind - Subject kind ({@link StreamKind.Event}, {@link StreamKind.Command}, or {@link StreamKind.Ordered}).
+ * @returns `{serviceName}__microservice.{kind}.`
+ */
+export const subjectPrefix = (serviceName: string, kind: SubjectKind): string =>
+  `${internalName(serviceName)}.${kind}.`;
+
+/**
+ * Build a fully-qualified NATS subject by appending the pattern to the subject prefix.
  *
  * @param serviceName - Target service name.
  * @param kind - Subject kind ({@link StreamKind.Event}, {@link StreamKind.Command}, or {@link StreamKind.Ordered}).
  * @param pattern - The message pattern (e.g. `'user.created'`).
  * @returns `{serviceName}__microservice.{kind}.{pattern}`
  */
-export const subjectPrefix = (serviceName: string, kind: SubjectKind): string =>
-  `${internalName(serviceName)}.${kind}.`;
-
 export const buildSubject = (serviceName: string, kind: SubjectKind, pattern: string): string =>
   `${subjectPrefix(serviceName, kind)}${pattern}`;
 

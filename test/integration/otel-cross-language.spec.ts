@@ -180,11 +180,9 @@ describe('OTel cross-language interop integration', () => {
       const sub = nc.subscribe(subject, { max: 1 });
 
       const inbound = (async (): Promise<string | undefined> => {
-        for await (const msg of sub) {
-          return msg.headers?.get('traceparent');
-        }
+        const { value: msg } = await sub[Symbol.asyncIterator]().next();
 
-        return undefined;
+        return msg?.headers?.get('traceparent');
       })();
 
       // When: emit through a publisher-side app
