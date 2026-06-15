@@ -72,7 +72,7 @@ const histogramCount = async (
     .join(',');
   // Parse the `_count` sample from text exposition; typed histogram shapes churn across versions.
   const re = new RegExp(
-    `^${escapeRegex(metricName)}_count\\{[^}]*${labelExpr}[^}]*\\}\\s+(\\d+)`,
+    `^${escapeRegex(metricName)}_count\\{[^}]*${labelExpr}[^}]*}\\s+(\\d+)`,
     'm',
   );
   const match = re.exec(text);
