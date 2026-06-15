@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.13.0](https://github.com/HorizonRepublic/nestjs-jetstream/compare/v2.12.1...v2.13.0) (2026-06-15)
+
+
+### Features
+
+* **naming:** honor custom stream names, durable names, and subject prefixes ([2303add](https://github.com/HorizonRepublic/nestjs-jetstream/commit/2303add7a71210f238744426656c7d531173adb9))
+* **provisioning:** bind to externally managed streams and consumers with ManagementMode.Manual ([2303add](https://github.com/HorizonRepublic/nestjs-jetstream/commit/2303add7a71210f238744426656c7d531173adb9))
+
+
+### Bug Fixes
+
+* **binder:** reject schedule-swallowing consumer filters at boot ([2303add](https://github.com/HorizonRepublic/nestjs-jetstream/commit/2303add7a71210f238744426656c7d531173adb9))
+* **binder:** treat unfiltered consumers as covering handler subjects ([2303add](https://github.com/HorizonRepublic/nestjs-jetstream/commit/2303add7a71210f238744426656c7d531173adb9))
+* **naming:** route self-rpc, broadcast publish, and metrics labels through the resolver ([2303add](https://github.com/HorizonRepublic/nestjs-jetstream/commit/2303add7a71210f238744426656c7d531173adb9))
+
 ## [2.12.1](https://github.com/HorizonRepublic/nestjs-jetstream/compare/v2.12.0...v2.12.1) (2026-06-11)
 
 
