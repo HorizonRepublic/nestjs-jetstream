@@ -65,7 +65,7 @@ describe('assertStorageBudget', () => {
       getAccountInfo: vi
         .fn()
         .mockResolvedValue(
-          accountInfo({ reserved_storage: 1 * GIB, limits: { max_storage: 10 * GIB } }),
+          accountInfo({ reserved_storage: GIB, limits: { max_storage: 10 * GIB } }),
         ),
     });
     const logger = createMock<Logger>();
@@ -132,7 +132,7 @@ describe('assertStorageBudget', () => {
     await assertStorageBudget(
       jsm as never,
       'svc',
-      [reservation(1, 1 * GIB), reservation(3, 2 * GIB)],
+      [reservation(1, GIB), reservation(3, 2 * GIB)],
       logger,
     );
 
@@ -148,7 +148,7 @@ describe('assertStorageBudget', () => {
       getAccountInfo: vi
         .fn()
         .mockResolvedValue(
-          accountInfo({ reserved_storage: 1 * GIB, limits: { max_storage: 10 * GIB } }),
+          accountInfo({ reserved_storage: GIB, limits: { max_storage: 10 * GIB } }),
         ),
     });
     const logger = createMock<Logger>();

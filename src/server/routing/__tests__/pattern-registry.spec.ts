@@ -179,9 +179,9 @@ describe(PatternRegistry, () => {
   describe('resolveDeclared()', () => {
     describe('happy path', () => {
       it.each([
-        ['RPC', { isEvent: false }, StreamKind.Command, `${'__svc__'}.cmd.`],
-        ['event', { isEvent: true }, StreamKind.Event, `${'__svc__'}.ev.`],
-        ['ordered', { ordered: true }, StreamKind.Ordered, `${'__svc__'}.ordered.`],
+        ['RPC', { isEvent: false }, StreamKind.Command, '__svc__.cmd.'],
+        ['event', { isEvent: true }, StreamKind.Event, '__svc__.ev.'],
+        ['ordered', { ordered: true }, StreamKind.Ordered, '__svc__.ordered.'],
         ['broadcast', { isEvent: true, broadcast: true }, StreamKind.Broadcast, 'broadcast.'],
       ])(
         'should return declared pattern and %s StreamKind',

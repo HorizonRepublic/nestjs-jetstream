@@ -162,7 +162,7 @@ describe('Metrics; integration', () => {
       await firstValueFrom(client.emit('orders.created', { orderId: 'b1' }));
 
       const re = new RegExp(
-        `^jetstream_handler_duration_seconds_count\\{[^}]*subject="orders\\.created"[^}]*\\}\\s+(\\d+)`,
+        `^jetstream_handler_duration_seconds_count\\{[^}]*subject="orders\\.created"[^}]*}\\s+(\\d+)`,
         'm',
       );
 
@@ -230,7 +230,7 @@ describe('Metrics; integration', () => {
 
       expect(findSample(published, labels)?.value).toBe(1);
       expect(await register.metrics()).toMatch(
-        /^jetstream_publish_duration_seconds_count\{[^}]*subject="orders\.created"[^}]*\}\s+\d+/m,
+        /^jetstream_publish_duration_seconds_count\{[^}]*subject="orders\.created"[^}]*}\s+\d+/m,
       );
     });
 
@@ -239,7 +239,7 @@ describe('Metrics; integration', () => {
       await firstValueFrom(client.send('orders.get', { id: 99 }));
 
       const rpcCountRe =
-        /^jetstream_rpc_duration_seconds_count\{[^}]*subject="orders\.get"[^}]*status="success"[^}]*\}\s+\d+/m;
+        /^jetstream_rpc_duration_seconds_count\{[^}]*subject="orders\.get"[^}]*status="success"[^}]*}\s+\d+/m;
 
       await waitForTextMatch(register, rpcCountRe);
 
@@ -257,7 +257,7 @@ describe('Metrics; integration', () => {
       await firstValueFrom(client.send('orders.fail', {})).catch(() => undefined);
 
       const rpcErrorRe =
-        /^jetstream_rpc_duration_seconds_count\{[^}]*subject="orders\.fail"[^}]*status="error"[^}]*\}\s+\d+/m;
+        /^jetstream_rpc_duration_seconds_count\{[^}]*subject="orders\.fail"[^}]*status="error"[^}]*}\s+\d+/m;
 
       await waitForTextMatch(register, rpcErrorRe);
 
@@ -311,7 +311,7 @@ describe('Metrics; integration', () => {
       // Wait for the poll cycle that publishes the asserted stream gauge; that cycle
       // also publishes the consumer gauges, so this avoids a stream/consumer race under load.
       const streamGauge = new RegExp(
-        `^jetstream_stream_messages\\{stream="${streamName(serviceName, StreamKind.Event)}"\\}`,
+        `^jetstream_stream_messages\\{stream="${streamName(serviceName, StreamKind.Event)}"}`,
         'm',
       );
 
@@ -321,17 +321,17 @@ describe('Metrics; integration', () => {
       const text = await register.metrics();
 
       expect(text).toMatch(
-        new RegExp(`^jetstream_consumer_num_pending\\{[^}]*kind="event"[^}]*\\}`, 'm'),
+        new RegExp(`^jetstream_consumer_num_pending\\{[^}]*kind="event"[^}]*}`, 'm'),
       );
       expect(text).toMatch(
         new RegExp(
-          `^jetstream_stream_messages\\{stream="${streamName(serviceName, StreamKind.Event)}"\\}`,
+          `^jetstream_stream_messages\\{stream="${streamName(serviceName, StreamKind.Event)}"}`,
           'm',
         ),
       );
       expect(text).toMatch(
         new RegExp(
-          `^jetstream_stream_bytes\\{stream="${streamName(serviceName, StreamKind.Event)}"\\}`,
+          `^jetstream_stream_bytes\\{stream="${streamName(serviceName, StreamKind.Event)}"}`,
           'm',
         ),
       );
@@ -346,7 +346,7 @@ describe('Metrics; integration', () => {
       // Then: the poll-error family carries no non-zero samples
       const text = await register.metrics();
 
-      expect(text).not.toMatch(/^jetstream_metrics_poll_errors_total\{[^}]+\}\s+[1-9]/m);
+      expect(text).not.toMatch(/^jetstream_metrics_poll_errors_total\{[^}]+}\s+[1-9]/m);
     });
   });
 
