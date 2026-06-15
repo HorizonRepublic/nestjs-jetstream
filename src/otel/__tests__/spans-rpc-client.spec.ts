@@ -71,7 +71,7 @@ describe('beginRpcClientSpan', () => {
     });
 
     it('should still inject context when the trace kind is filtered out', () => {
-      // Given — we need an active span so `traceparent` has something to encode
+      // Given: an active ambient span so `traceparent` has something to encode
       const config = resolveOtelOptions({ traces: [JetstreamTrace.Publish] });
       const tracer = trace.getTracer('test');
       const ambient = tracer.startSpan('ambient');
@@ -158,7 +158,7 @@ describe('beginRpcClientSpan', () => {
       // Given
       const handle = beginRpcClientSpan(baseCtx(), resolveOtelOptions());
 
-      // When — first finish wins, second is a no-op
+      // When
       handle.finish({ kind: RpcOutcomeKind.Ok, reply: 'first' });
       handle.finish({ kind: RpcOutcomeKind.Error, error: new Error('late') });
 
@@ -170,10 +170,7 @@ describe('beginRpcClientSpan', () => {
     });
 
     it('should fall back to ERROR on an unrecognized outcome instead of throwing', () => {
-      // Given — synthetic outcome simulates a future enum variant slipping
-      // past the type-checker (e.g. via `as unknown as RpcOutcome` in user
-      // code). The helper must close the span gracefully so the caller's
-      // RPC pipeline keeps running.
+      // Given: synthetic outcome simulating a variant that slipped past the type-checker
       const handle = beginRpcClientSpan(baseCtx(), resolveOtelOptions());
       const outcome = { kind: 'future-variant' } as unknown as Parameters<typeof handle.finish>[0];
 

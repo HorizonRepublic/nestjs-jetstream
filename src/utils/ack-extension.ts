@@ -1,3 +1,5 @@
+import type { AckExtensionConfig } from '../interfaces';
+
 /** Default ack extension interval fallback when ack_wait is unknown (ms). */
 const DEFAULT_ACK_EXTENSION_INTERVAL = 5_000;
 
@@ -7,12 +9,12 @@ const MIN_ACK_EXTENSION_INTERVAL = 500;
 /**
  * Resolve the ack extension interval from user config and NATS ack_wait.
  *
- * @param config  - `false`/`undefined` → disabled, `number` → explicit ms, `true` → auto from ack_wait.
+ * @param config  - `false`/`undefined` -> disabled, `number` -> explicit ms, `true` -> auto from ack_wait.
  * @param ackWaitNanos - Consumer `ack_wait` in nanoseconds (for auto-calculation).
  * @returns Interval in ms, or `null` if disabled.
  */
 export const resolveAckExtensionInterval = (
-  config: boolean | number | undefined,
+  config: AckExtensionConfig | undefined,
   ackWaitNanos: number | undefined,
 ): number | null => {
   if (config === false || config === undefined) return null;
@@ -47,7 +49,7 @@ interface AckEntry {
  * has passed, and re-schedules for the new earliest.
  *
  * The timer is marked `.unref()` so the pool cannot keep the event loop
- * alive on its own — lifecycle management is the caller's responsibility
+ * alive on its own; lifecycle management is the caller's responsibility
  * (every `schedule()` must be paired with a `cancel()`).
  */
 class AckExtensionPool {
@@ -148,7 +150,7 @@ export const startAckExtensionTimer = (
 };
 
 /**
- * Internal — exposed for tests only.
+ * Internal, exposed for tests only.
  * @internal
  */
 export const _ackExtensionPoolForTest = pool;

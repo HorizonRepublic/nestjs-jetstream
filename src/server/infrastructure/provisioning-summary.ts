@@ -1,8 +1,13 @@
 import { type RetentionPolicy, StorageType } from '@nats-io/jetstream';
 
+import type { ManagedKind } from './management';
+
+/** A `StreamKind` or the `'dlq'` label, used for reservation/error provenance. */
+export type ReservationKind = ManagedKind;
+
 /** One stream's provisioning footprint, used to build the boot summary. */
 export interface StreamReservation {
-  readonly kind: string;
+  readonly kind: ReservationKind;
   readonly name: string;
   readonly storage: StorageType;
   readonly numReplicas: number;
@@ -11,6 +16,12 @@ export interface StreamReservation {
   /** Retention age in nanoseconds (0 = unlimited). */
   readonly maxAge: number;
   readonly retention: RetentionPolicy;
+}
+
+/** An externally-managed stream that is bound (not provisioned) by this library. */
+export interface ExternalBinding {
+  readonly kind: ReservationKind;
+  readonly name: string;
 }
 
 const GIB = 1024 ** 3;
@@ -32,12 +43,14 @@ const formatAge = (nanos: number): string => {
   return `${(nanos / NANOS_PER_SECOND).toFixed(0)}s`;
 };
 
-/** Operator-facing summary of each stream's storage reservation. Pure — caller logs it. */
+/** Operator-facing summary of each stream's storage reservation. Pure; the caller logs it. */
 export const formatProvisioningSummary = (
   serviceName: string,
   reservations: StreamReservation[],
+  external: ExternalBinding[] = [],
 ): string => {
-  const lines: string[] = [`Provisioning ${reservations.length} stream(s) for "${serviceName}":`];
+  const totalStreams = reservations.length + external.length;
+  const lines: string[] = [`Provisioning ${totalStreams} stream(s) for "${serviceName}":`];
 
   let totalFileMaxBytes = 0;
 
@@ -47,14 +60,18 @@ export const formatProvisioningSummary = (
     const clusterReservation = r.maxBytes * r.numReplicas;
 
     lines.push(
-      `  • ${r.name} [${r.kind}] storage=${r.storage} replicas=${r.numReplicas} ` +
+      `  - ${r.name} [${r.kind}] storage=${r.storage} replicas=${r.numReplicas} ` +
         `max_bytes=${formatBytes(r.maxBytes)} max_age=${formatAge(r.maxAge)} retention=${r.retention} ` +
-        `→ cluster reservation ${formatBytes(clusterReservation)}`,
+        `-> cluster reservation ${formatBytes(clusterReservation)}`,
     );
   }
 
+  for (const e of external) {
+    lines.push(`  - ${e.name} [${e.kind}] external (bound)`);
+  }
+
   lines.push(
-    `  Σ per-node file-backed footprint ≈ ${formatBytes(totalFileMaxBytes)} ` +
+    `  Total per-node file-backed footprint ~ ${formatBytes(totalFileMaxBytes)} ` +
       `(sum of max_bytes; worst case replicas = nodes). ` +
       `Ensure the NATS server max_file_store accommodates the sum across ALL services.`,
   );

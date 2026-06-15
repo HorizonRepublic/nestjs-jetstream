@@ -100,7 +100,7 @@ export class MessageProvider {
   /**
    * Start an ordered consumer for strict sequential delivery.
    *
-   * Unlike durable consumers, ordered consumers are ephemeral — created at
+   * Unlike durable consumers, ordered consumers are ephemeral: created at
    * consumption time, no durable state. nats.js handles auto-recreation.
    *
    * @param streamName - JetStream stream to consume from.
@@ -112,7 +112,6 @@ export class MessageProvider {
     filterSubjects: string[],
     orderedConfig?: OrderedEventOverrides,
   ): Promise<void> {
-    // eslint-disable-next-line @typescript-eslint/naming-convention -- NATS API uses snake_case
     const consumerOpts: Partial<OrderedConsumerOptions> = { filter_subjects: filterSubjects };
 
     // Workaround: in nats.js (v2.29.x), explicitly passing DeliverPolicy.All to an
@@ -219,15 +218,13 @@ export class MessageProvider {
       }
     }
 
-    /* eslint-disable @typescript-eslint/naming-convention -- NATS API uses snake_case */
     const defaults: Partial<ConsumeOptions> = { idle_heartbeat: 5_000 };
-    /* eslint-enable @typescript-eslint/naming-convention */
     const userOptions = this.consumeOptionsMap.get(kind) ?? {};
 
     // Push messages directly into the subject via a sync callback so each
     // delivery skips the async-iterator next()/{value,done} wrapper allocated
     // by `for await`. The callback path in @nats-io/jetstream requires the
-    // body to be synchronous — `Subject.next` meets that contract.
+    // body to be synchronous; `Subject.next` meets that contract.
     const messages = await consumer.consume({
       ...defaults,
       ...userOptions,
@@ -238,7 +235,7 @@ export class MessageProvider {
 
     this.activeIterators.add(messages);
     this.monitorConsumerHealth(messages, consumerName);
-    // Signal recovery now — consume() succeeded, the consumer is live.
+    // Signal recovery now: consume() succeeded, the consumer is live.
     // Doing it after `await messages.closed()` would log "recovered" only
     // when the stream ends, which is the wrong moment.
     onConnected();
@@ -390,7 +387,6 @@ export class MessageProvider {
       },
     } as ConsumeOptions);
 
-    // Signal that the ordered consumer is ready to receive messages
     if (this.orderedReadyResolve) {
       this.orderedReadyResolve();
       this.orderedReadyResolve = null;
@@ -398,7 +394,7 @@ export class MessageProvider {
     }
 
     this.activeIterators.add(messages);
-    // Signal recovery now — consume() succeeded, the consumer is live.
+    // Signal recovery now: consume() succeeded, the consumer is live.
     // See consumeOnce for the same rationale.
     onConnected();
 

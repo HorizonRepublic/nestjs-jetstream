@@ -255,12 +255,12 @@ describe(PollRunner, () => {
         targets: [targets[0]!],
       });
 
-      // When: advance fake time well past several intervals — the in-flight tick
+      // When: advance fake time past several intervals while the in-flight tick
       // is still blocked on firstTickPromise, so subsequent ticks must be skipped.
       sut.start();
       await vi.advanceTimersByTimeAsync(250);
 
-      // Then: backpressure prevented overlap — only the first tick is in flight
+      // Then: backpressure prevented overlap, only the first tick is in flight
       expect(ticks).toBe(1);
 
       // Cleanup: release the first tick, drain the runner, then stop.

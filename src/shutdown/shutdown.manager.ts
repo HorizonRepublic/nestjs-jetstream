@@ -18,7 +18,7 @@ export interface Stoppable {
  * 3. Drain and close NATS connection (with timeout safety net)
  * 4. Emit onShutdownComplete hook
  *
- * Idempotent — concurrent or repeated calls return the same promise.
+ * Idempotent: concurrent or repeated calls return the same promise.
  * This is critical because NestJS may call `onApplicationShutdown` on
  * multiple module instances (forRoot + forFeature) that share this
  * singleton, and the call order is not guaranteed.
@@ -36,7 +36,7 @@ export class ShutdownManager {
   /**
    * Execute the full shutdown sequence.
    *
-   * Idempotent — concurrent or repeated calls return the same promise.
+   * Idempotent: concurrent or repeated calls return the same promise.
    *
    * @param strategy Optional stoppable to close (stops consumers and subscriptions).
    */

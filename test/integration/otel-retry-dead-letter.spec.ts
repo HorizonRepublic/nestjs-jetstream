@@ -155,7 +155,7 @@ describe('OTel retry + dead letter integration', () => {
       const last = consumeSpans[consumeSpans.length - 1]!;
 
       expect(last.status.code).toBe(SpanStatusCode.OK);
-      // The first two attempts threw bare Error → should be ERROR
+      // The first two attempts threw bare Error, classified unexpected, hence ERROR.
       expect(consumeSpans[0]!.status.code).toBe(SpanStatusCode.ERROR);
       expect(consumeSpans[1]!.status.code).toBe(SpanStatusCode.ERROR);
     }, 20_000);

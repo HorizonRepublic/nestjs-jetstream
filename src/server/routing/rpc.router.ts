@@ -33,25 +33,21 @@ import {
 } from '../../utils';
 
 import { MessageProvider } from '../infrastructure';
+import { ConcurrencyGate } from './concurrency-gate';
 import { PatternRegistry } from './pattern-registry';
+import type { ParkTimerFn } from './routing.types';
 
 /**
- * Resolved routing shape for one incoming RPC command — the handler selected
- * for dispatch, the decoded payload, and the reply coordinates read from the
- * message headers. `null` is returned by {@link RpcRouter} resolution helpers
- * when the message cannot be routed and has already been settled.
+ * Routing shape resolved for one incoming RPC command: the selected handler,
+ * the decoded payload, and the reply coordinates read from the message headers.
+ * {@link RpcRouter} resolution helpers return `null` when the message cannot be
+ * routed and has already been settled.
  */
 interface ResolvedCommand {
   readonly handler: MessageHandler;
   readonly data: unknown;
   readonly replyTo: string;
   readonly correlationId: string;
-}
-
-/** A command parked in the concurrency backlog with its ack-extension timer. */
-interface QueuedCommand {
-  readonly msg: JsMsg;
-  readonly stopAckExtension: (() => void) | null;
 }
 
 /**
@@ -64,7 +60,7 @@ interface QueuedCommand {
  * - Timeout -> no response -> term
  * - No handler / decode error -> term immediately
  *
- * Nak is never used for RPC — prevents duplicate side effects.
+ * Nak is never used for RPC; it would risk duplicate side effects.
  */
 export class RpcRouter {
   private readonly logger = new Logger('Jetstream:RpcRouter');
@@ -97,7 +93,7 @@ export class RpcRouter {
       this.serviceName = derived.serviceName;
       this.serverEndpoint = derived.serverEndpoint;
     } else {
-      // Unit-test instantiation without options — disable OTel entirely
+      // Unit-test instantiation without options: disable OTel entirely
       // so span helpers short-circuit on `config.enabled` before touching
       // the placeholder values. See EventRouter for the same pattern.
       this.otel = resolveOtelOptions({ enabled: false });
@@ -224,7 +220,7 @@ export class RpcRouter {
         logger.error('Unexpected error in RPC router', err);
         // Terminate the command so NATS does not redeliver into the same
         // synchronous failure forever. term() itself may throw when the
-        // connection is degraded — swallow that to keep the subscription alive.
+        // connection is degraded; swallow that to keep the subscription alive.
         try {
           msg.term('Unexpected router error');
         } catch (termErr) {
@@ -242,7 +238,7 @@ export class RpcRouter {
      * Promise when we are still awaiting user work, so the concurrency
      * limiter can skip `.finally()` allocation on the sync path.
      *
-     * The deadline `setTimeout` is only armed on the async branch — sync
+     * The deadline `setTimeout` is only armed on the async branch: sync
      * handlers cannot miss the deadline they return inside, so registering
      * a timer just to clear it microseconds later is wasted work.
      */
@@ -320,13 +316,13 @@ export class RpcRouter {
         // Close the CONSUMER span early via the abort signal; the handler's
         // eventual resolution is ignored (span is idempotent after first finish).
         abortController.abort();
-        // RpcTimeout hook is the canonical signal here — no separate log.
+        // RpcTimeout hook is the canonical signal here, no separate log.
         emitRpcTimeout(subject, correlationId);
-        // Bare timer callback — an unguarded term throw would be an uncaught exception.
+        // Bare timer callback: an unguarded term throw would be an uncaught exception.
         settleQuietly(logger, `Failed to term ${subject}:`, () => {
           msg.term('Handler timeout');
         });
-        // Transport outcome is terminated — the handler's eventual resolution
+        // Transport outcome is terminated; the handler's eventual resolution
         // is irrelevant once we've replied with timeout.
         reportHandlerCompleted(msg, startedAt, 'terminated');
       }, timeout);
@@ -357,96 +353,22 @@ export class RpcRouter {
       );
     };
 
-    const backlogWarnThreshold = 1_000;
-    let active = 0;
-    let backlogWarned = false;
-    const backlog: QueuedCommand[] = [];
-
-    const onAsyncDone = (): void => {
-      active--;
-      drainBacklog();
-    };
-
-    // A throw here must not leak the concurrency slot or kill the subscription.
-    const routeSafely = (msg: JsMsg): Promise<void> | undefined => {
-      try {
-        return handleSafe(msg);
-      } catch (err) {
-        logger.error(`Unexpected routing failure for ${msg.subject}:`, err);
-
-        return undefined;
-      }
-    };
-
-    const trackAsync = (result: Promise<void>, msg: JsMsg): void => {
-      void result
-        .catch((err: unknown) => {
-          logger.error(`Unexpected routing failure for ${msg.subject}:`, err);
-        })
-        .finally(onAsyncDone);
-    };
-
-    const drainBacklog = (): void => {
-      while (active < maxActive) {
-        const next = backlog.shift();
-
-        if (next === undefined) return;
-        next.stopAckExtension?.();
-        active++;
-        const result = routeSafely(next.msg);
-
-        if (result !== undefined) {
-          trackAsync(result, next.msg);
-        } else {
-          active--;
-        }
-      }
-
-      if (backlog.length < backlogWarnThreshold) backlogWarned = false;
-    };
+    const parkTimer: ParkTimerFn | null = hasAckExtension
+      ? (msg): (() => void) | null => startAckExtensionTimer(msg, ackExtensionInterval)
+      : null;
+    const gate = new ConcurrencyGate(maxActive, handleSafe, parkTimer, logger, 'RPC');
 
     this.subscription = this.messageProvider.commands$.subscribe({
       next: (msg: JsMsg): void => {
-        if (active >= maxActive) {
-          // A parked command's ack_wait clock is already running on the server.
-          backlog.push({
-            msg,
-            stopAckExtension: hasAckExtension
-              ? startAckExtensionTimer(msg, ackExtensionInterval)
-              : null,
-          });
-          if (!backlogWarned && backlog.length >= backlogWarnThreshold) {
-            backlogWarned = true;
-            logger.warn(
-              `RPC backlog reached ${backlog.length} messages — consumer may be falling behind`,
-            );
-          }
-
-          return;
-        }
-
-        active++;
-        const result = routeSafely(msg);
-
-        if (result !== undefined) {
-          trackAsync(result, msg);
-        } else {
-          active--;
-          if (backlog.length > 0) drainBacklog();
-        }
+        gate.push(msg);
       },
       error: (err: unknown): void => {
         logger.error('Stream error in RPC router', err);
       },
     });
 
-    // Stop the parked timers on unsubscribe.
     this.subscription.add(() => {
-      for (const queued of backlog) {
-        queued.stopAckExtension?.();
-      }
-
-      backlog.length = 0;
+      gate.dispose();
     });
   }
 

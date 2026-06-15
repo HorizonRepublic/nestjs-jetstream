@@ -43,7 +43,7 @@ describe('hdrsGetter', () => {
     // Given
     const hdrs = natsHeaders();
 
-    // When + Then — MsgHdrs.get returns '' for missing keys
+    // When + Then: MsgHdrs.get returns '' for missing keys
     expect(hdrsGetter.get(hdrs, 'never-set')).toBeUndefined();
   });
 
@@ -62,7 +62,7 @@ describe('hdrsGetter', () => {
   });
 
   it('should comma-join multi-valued headers (W3C baggage/tracestate convention)', () => {
-    // Given — NATS headers permit multiple values under one key via append().
+    // Given
     const hdrs = natsHeaders();
 
     hdrs.append('baggage', 'tenant=acme');
@@ -71,13 +71,12 @@ describe('hdrsGetter', () => {
     // When
     const joined = hdrsGetter.get(hdrs, 'baggage');
 
-    // Then — both entries survive, joined with `,` per the W3C list-header
-    // grammar so composite propagators don't silently drop baggage items.
+    // Then: joined with ',' per the W3C list-header grammar
     expect(joined).toBe('tenant=acme,region=eu');
   });
 
   it('should fall back to get() when carrier has no values() method', () => {
-    // Given — a partial test double (shape of createMock<JsMsg>().headers)
+    // Given: a partial test double (shape of createMock<JsMsg>().headers)
     const fakeCarrier = {
       keys: (): string[] => ['traceparent'],
       get: (key: string): string => (key === 'traceparent' ? 'partial' : ''),
@@ -86,13 +85,12 @@ describe('hdrsGetter', () => {
     // When
     const result = hdrsGetter.get(fakeCarrier, 'traceparent');
 
-    // Then — values() absent → falls back to single-value get() path
+    // Then
     expect(result).toBe('partial');
   });
 
   it('should return undefined when values() yields an empty array', () => {
-    // Given — `values(key)` may return `[]` for keys that exist but were
-    // appended with no value (rare, but a real carrier shape).
+    // Given: values() may return [] for keys appended with no value (a real carrier shape)
     const fakeCarrier = {
       keys: (): string[] => ['traceparent'],
       get: (): string => '',
@@ -104,8 +102,7 @@ describe('hdrsGetter', () => {
   });
 
   it('should return undefined when joined values are an empty string', () => {
-    // Given — single-entry array containing an empty string
-    // (`[''].join(',') === ''`). Treat as missing per the W3C convention.
+    // Given: [''].join(',') === '', treated as missing
     const fakeCarrier = {
       keys: (): string[] => ['baggage'],
       get: (): string => '',
@@ -117,8 +114,7 @@ describe('hdrsGetter', () => {
   });
 
   it('should return undefined when every entry in a multi-value array is empty', () => {
-    // Given — `['', ''].join(',') === ','` would otherwise leak a stray
-    // comma to the propagator. Filter empties before joining.
+    // Given: ['', ''].join(',') === ',' would leak a stray comma without empty-entry filtering
     const fakeCarrier = {
       keys: (): string[] => ['baggage'],
       get: (): string => '',
@@ -130,7 +126,7 @@ describe('hdrsGetter', () => {
   });
 
   it('should drop empty entries when joining a partially-empty array', () => {
-    // Given — only the non-empty entry survives.
+    // Given
     const fakeCarrier = {
       keys: (): string[] => ['baggage'],
       get: (): string => '',

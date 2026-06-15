@@ -6,7 +6,7 @@ schema:
   headline: "Graceful Shutdown"
   description: "Automatic shutdown handling with in-flight message completion and NATS connection drain."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-11"
+  dateModified: "2026-06-12"
 ---
 
 # Graceful Shutdown
@@ -137,4 +137,4 @@ See [Lifecycle Hooks](/docs/guides/lifecycle-hooks) for all available events.
 
 ## See also
 
-If a handler is still running when `shutdownTimeout` fires, its message is not acked — NATS redelivers it to another instance after `ack_wait` expires. Make sure your deployment strategy accounts for this overlap, and see [Dead Letter Queue](/docs/guides/dead-letter-queue) for what happens when a handler fails its final delivery attempt mid-shutdown.
+If a handler is still running when `shutdownTimeout` fires, its message is not acked; NATS redelivers it to another instance after `ack_wait` expires. Make sure your deployment strategy accounts for this overlap, and see [Dead Letter Queue](/docs/guides/dead-letter-queue) for what happens when a handler fails its final delivery attempt mid-shutdown.

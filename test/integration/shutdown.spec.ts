@@ -15,7 +15,7 @@ import {
   startNatsContainerWithFixedPort,
 } from './nats-container';
 
-// Fixed port for the shutdown-during-reconnect test — must survive container.restart()
+// Fixed port for the shutdown-during-reconnect test; must survive container.restart()
 const SHUTDOWN_RECONNECT_PORT = 14_223;
 
 @Controller()
@@ -59,12 +59,10 @@ describe('Graceful Shutdown', () => {
     try {
       const connection = module.get<ConnectionProvider>(JETSTREAM_CONNECTION);
 
-      // Connection should be active before close
       expect(connection.unwrap).not.toBeNull();
 
       await app.close();
 
-      // After close, connection should be cleaned up
       expect(connection.unwrap).toBeNull();
     } finally {
       await app.close().catch(() => {});
@@ -83,10 +81,8 @@ describe('Graceful Shutdown', () => {
       const jsm = await jetstreamManager(nc);
       const internalName = `${serviceName}__microservice`;
 
-      // No event stream should exist
       await expect(jsm.streams.info(`${internalName}_ev-stream`)).rejects.toThrow();
 
-      // No command stream should exist
       await expect(jsm.streams.info(`${internalName}_cmd-stream`)).rejects.toThrow();
     } finally {
       await app.close();
@@ -104,13 +100,10 @@ describe('Graceful Shutdown', () => {
     try {
       const connection = module.get<ConnectionProvider>(JETSTREAM_CONNECTION);
 
-      // Should be connected
       expect(connection.unwrap).not.toBeNull();
 
-      // Close should not throw
       await app.close();
 
-      // Connection drained
       expect(connection.unwrap).toBeNull();
     } finally {
       await app.close().catch(() => {});
@@ -137,10 +130,10 @@ describe('Graceful Shutdown', () => {
         ShutdownEventController,
       ]);
 
-      // Restart NATS — transport enters reconnection state
+      // Restart NATS so the transport enters reconnection state
       await restartNatsContainer(reconnectContainer);
 
-      // Close app during reconnection — should not throw or hang
+      // Closing during reconnection must not throw or hang
       await app.close();
     });
   });

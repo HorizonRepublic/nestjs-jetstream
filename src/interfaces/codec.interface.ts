@@ -3,7 +3,7 @@
  *
  * Implementations handle serialization between application objects and
  * binary data transmitted over NATS. The transport uses a single global
- * codec — all messages (RPC and events) share the same format.
+ * codec: all messages (RPC and events) share the same format.
  *
  * @example
  * ```typescript

@@ -8,7 +8,7 @@ schema:
   headline: "Storage budgeting & provisioning"
   description: "How JetStream stream reservations relate to the server max_file_store, and how to read the boot-time provisioning summary."
   datePublished: "2026-06-02"
-  dateModified: "2026-06-03"
+  dateModified: "2026-06-12"
 ---
 
 # Storage budgeting & provisioning
@@ -23,7 +23,7 @@ A stream reserves `max_bytes` **per replica**:
 
 ```text
 cluster reservation (one stream) = max_bytes × num_replicas
-per-node footprint (your service) ≈ Σ max_bytes   (worst case: replicas = nodes)
+per-node footprint (your service) ~ Total max_bytes   (worst case: replicas = nodes)
 ```
 
 On a 3-node cluster with `num_replicas: 3`, every stream keeps a replica on every node, so each
@@ -39,12 +39,12 @@ On startup the transport logs a summary at `INFO` (always on):
 
 ```text
 Provisioning 2 stream(s) for "orders":
-  • orders__microservice_ev-stream [ev] storage=file replicas=3 max_bytes=5.00 GiB max_age=7.0d retention=workqueue → cluster reservation 15.00 GiB
-  • broadcast-stream [broadcast] storage=file replicas=3 max_bytes=2.00 GiB max_age=1.0h retention=limits → cluster reservation 6.00 GiB
-  Σ per-node file-backed footprint ≈ 7.00 GiB (sum of max_bytes; worst case replicas = nodes). Ensure the NATS server max_file_store accommodates the sum across ALL services.
+  - orders__microservice_ev-stream [ev] storage=file replicas=3 max_bytes=5.00 GiB max_age=7.0d retention=workqueue -> cluster reservation 15.00 GiB
+  - broadcast-stream [broadcast] storage=file replicas=3 max_bytes=2.00 GiB max_age=1.0h retention=limits -> cluster reservation 6.00 GiB
+  Total per-node file-backed footprint ~ 7.00 GiB (sum of max_bytes; worst case replicas = nodes). Ensure the NATS server max_file_store accommodates the sum across ALL services.
 ```
 
-Read the `Σ per-node file-backed footprint` line first: that is what each node must accommodate
+Read the `Total per-node file-backed footprint` line first: that is what each node must accommodate
 from this service alone.
 
 ## When provisioning fails

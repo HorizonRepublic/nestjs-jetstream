@@ -24,7 +24,7 @@ export const DEFAULT_HISTOGRAM_BUCKETS: Required<HistogramBuckets> = {
 
 /**
  * Maps free-form `TransportEvent.Error` context strings to bounded
- * {@link ErrorContext} values via prefix match (unknown → `other`). Extend
+ * {@link ErrorContext} values via prefix match (unknown -> `other`). Extend
  * this list whenever a new emission site introduces an unfamiliar context.
  */
 export const ERROR_CONTEXT_PREFIXES: readonly (readonly [string, ErrorContext])[] = [
@@ -37,7 +37,7 @@ export const ERROR_CONTEXT_PREFIXES: readonly (readonly [string, ErrorContext])[
   ['consume', 'consume'],
   ['core-rpc-handler', 'handler'],
   ['rpc-handler', 'handler'],
-  // EventRouter formats contexts as `${StreamKind.*}-handler:...` — the enum
+  // EventRouter formats contexts as `${StreamKind.*}-handler:...`; the enum
   // uses short forms (`ev`, `ordered`, `broadcast`) so both surface in the wild.
   ['ev-handler', 'handler'],
   ['event-handler', 'handler'],

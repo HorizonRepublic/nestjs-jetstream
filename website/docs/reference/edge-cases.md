@@ -8,7 +8,7 @@ schema:
   headline: "Edge Cases & FAQ — NestJS JetStream Transport"
   description: "NestJS JetStream transport FAQ: publisher-only mode, consumer self-healing, NATS header limits, fire-and-forget messaging, and DeliverPolicy edge cases."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-11"
+  dateModified: "2026-06-12"
 ---
 
 # Edge Cases & FAQ
@@ -158,8 +158,8 @@ See [Ordered Events](/docs/patterns/ordered-events) for the full ordered consume
 NATS JetStream uses nanosecond timestamps internally (`int64` in Go), but the `@nats-io/transport-node` SDK represents them as JavaScript `number` (IEEE 754 float64). Since `Number.MAX_SAFE_INTEGER` is ~9x10^15 and current timestamps in nanos are ~1.7x10^18, **arithmetic on nanosecond values loses +/-1ms precision**.
 
 This affects:
-- `ctx.getTimestamp()` — returns `Date` (millisecond precision), accurate to +/-1ms
+- `ctx.getTimestamp()`; returns `Date` (millisecond precision), accurate to +/-1ms
 - `toNanos()` helper — output is accurate for typical config values (seconds, minutes), but sub-millisecond precision is not guaranteed
 - `msg.info.timestampNanos` — raw value from the SDK, already truncated before reaching this library
 
-This is a fundamental limitation of the NATS JavaScript SDK, not this library. Using `BigInt` internally would not help — the SDK converts to/from `number` at the boundary. For ordering and deduplication, NATS uses stream sequence numbers (integers, always safe) rather than timestamps.
+This is a fundamental limitation of the NATS JavaScript SDK, not this library. Using `BigInt` internally would not help; the SDK converts to/from `number` at the boundary. For ordering and deduplication, NATS uses stream sequence numbers (integers, always safe) rather than timestamps.

@@ -9,10 +9,8 @@ import {
 import type { HeaderMatcher } from './config';
 
 const NEGATION_PREFIX = '!';
-// `*` is deliberately included in the regex-meta class: `escapeForRegex`
-// must turn it into `\*` so the subsequent `replace(/\\\*/, '.*')` in
-// `globToRegex` can distinguish a glob wildcard from any other meta char.
-// Don't drop `*` from this class — wildcards stop working.
+// `*` must stay in this class: escaping it to `\*` is what lets `globToRegex`
+// swap glob wildcards to `.*`. Dropping it breaks wildcards.
 const REGEX_SPECIAL_RE = /[.+?^${}()|[\]\\*]/gu;
 
 const escapeForRegex = (input: string): string => input.replace(REGEX_SPECIAL_RE, '\\$&');
@@ -27,18 +25,16 @@ const globToRegex = (glob: string): RegExp => {
  * Compile a `captureHeaders` allowlist into a {@link HeaderMatcher}
  * predicate. Accepts:
  *
- * - `true` — match every header (dev only — see security note)
- * - `false` or empty array — match nothing
- * - `string[]` — case-insensitive glob match. Each pattern supports `*`
- *   wildcards. A leading `!` marks an exclusion that runs after the
- *   include list — `['x-*', '!x-internal-*']` keeps `x-tenant-id` while
- *   dropping `x-internal-secret`.
+ * - `true`: match every header (dev only)
+ * - `false` or empty array: match nothing
+ * - `string[]`: case-insensitive glob match with `*` wildcards; a leading
+ *   `!` marks an exclusion applied after the includes, so
+ *   `['x-*', '!x-internal-*']` keeps `x-tenant-id` and drops
+ *   `x-internal-secret`.
  *
- * Library-internal headers (`x-correlation-id`, `x-reply-to`, `x-error`,
- * `x-subject`, `x-caller-name`, `nats-msg-id`) and propagator-owned
- * headers (`traceparent`, `tracestate`, `baggage`, `sentry-trace`, `b3`,
- * Jaeger format) are filtered downstream in {@link captureMatchingHeaders}
- * regardless of the matcher result, so passing them here has no effect.
+ * Library-internal and propagator-owned headers are filtered downstream in
+ * {@link captureMatchingHeaders} regardless of the matcher result, so
+ * passing them here has no effect.
  */
 export const compileHeaderAllowlist = (allowlist: readonly string[] | boolean): HeaderMatcher => {
   if (allowlist === true) return () => true;
@@ -75,7 +71,7 @@ const subjectMatcherCache = new WeakMap<readonly string[], SubjectMatcher>();
 /**
  * Compile a `subjectAllowlist` into a reusable matcher. Supports the same
  * `*` wildcards as {@link compileHeaderAllowlist}; negation is not
- * accepted — the allowlist is purely positive. Undefined / empty allowlist
+ * accepted, the allowlist is purely positive. Undefined / empty allowlist
  * matches every subject.
  */
 export const compileSubjectAllowlist = (
@@ -109,10 +105,9 @@ export const subjectMatchesAllowlist = (
 ): boolean => compileSubjectAllowlist(allowlist)(subject);
 
 /**
- * Names of headers we never expose as `messaging.header.*` attributes —
- * they are either propagator-owned (read by OTel/W3C/B3 directly) or
- * library-internal (correlation ID, reply-to, error flag) and would be
- * noise on every span.
+ * Headers never exposed as `messaging.header.*` attributes: either
+ * propagator-owned (read by OTel/W3C/B3 directly) or library-internal,
+ * and noise on every span.
  */
 const HEADER_DENYLIST = new Set<string>([
   'traceparent',
@@ -134,12 +129,9 @@ const HEADER_DENYLIST = new Set<string>([
 ]);
 
 /**
- * Server-managed `Nats-*` headers (`Nats-Msg-Id`, `Nats-TTL`, `Nats-Schedule`,
- * `Nats-Expected-*`, `Nats-Rollup`, …) are populated by the broker itself
- * and never user-meaningful as `messaging.header.*` attributes — exposing
- * them is at best noise and at worst leaks scheduling / dedup metadata
- * into APM. Whitelisted via prefix so future `Nats-Foo` headers added by
- * the server don't silently start surfacing.
+ * Server-managed `Nats-*` headers are broker-populated and at worst leak
+ * scheduling / dedup metadata into APM. Prefix match so future `Nats-Foo`
+ * headers don't silently start surfacing.
  */
 const isNatsServerHeader = (lower: string): boolean => lower.startsWith('nats-');
 
@@ -170,14 +162,12 @@ export const captureMatchingHeaders = (
 };
 
 const tryUtf8Decode = (bytes: Uint8Array): string => {
-  // `fatal: false` so a valid UTF-8 payload truncated mid-codepoint (the
-  // common case when `maxBytes` clips a 2/3/4-byte sequence) decodes with
-  // a trailing U+FFFD replacement instead of throwing and silently
-  // collapsing the whole attribute to base64.
+  // `fatal: false` so a payload clipped mid-codepoint by `maxBytes` decodes
+  // with a trailing U+FFFD instead of collapsing to base64.
   try {
     return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
   } catch {
-    // Strictly binary payload — base64 is the legible fallback.
+    // Strictly binary payload; base64 is the legible fallback.
     return Buffer.from(bytes).toString('base64');
   }
 };

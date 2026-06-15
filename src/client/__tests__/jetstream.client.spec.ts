@@ -16,7 +16,9 @@ import {
   JetstreamHeader,
 } from '../../jetstream.constants';
 
+import { NameResolver } from '../../server/infrastructure/name-resolver';
 import { JetstreamClient } from '../jetstream.client';
+import { RpcReplyInbox } from '../rpc-reply-inbox';
 import { JetstreamRecordBuilder } from '../jetstream.record';
 
 describe(JetstreamClient, () => {
@@ -161,9 +163,9 @@ describe(JetstreamClient, () => {
         await sut.close();
 
         // Then: inbox is reset (symmetric with handleDisconnect)
-        // Access private field to verify internal state consistency
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        expect((sut as any).inbox).toBeNull();
+        const rpcInbox = Reflect.get(sut, 'rpcInbox') as RpcReplyInbox;
+
+        expect(rpcInbox.address).toBeNull();
       });
     });
   });
@@ -247,7 +249,6 @@ describe(JetstreamClient, () => {
           expect.objectContaining({ headers: expect.anything() }),
         );
 
-        // Verify custom header was set
         const publishedHeaders: MsgHdrs = mockJs.publish.mock.calls[0]![2]!.headers!;
 
         expect(publishedHeaders.get('x-trace-id')).toBe(traceId);
@@ -315,7 +316,7 @@ describe(JetstreamClient, () => {
         await firstValueFrom(sut.emit('order.reminder', record));
 
         // Then: published to _sch namespace (not matched by consumer) with a
-        // per-message unique suffix — ADR-51 allows one active schedule per subject
+        // per-message unique suffix; ADR-51 allows one active schedule per subject
         const expectedScheduleSubject = new RegExp(
           `^${targetName}__microservice\\._sch\\.order\\.reminder\\.[A-Za-z0-9]+$`,
         );
@@ -358,8 +359,48 @@ describe(JetstreamClient, () => {
         );
       });
 
+      it('should resolve the schedule subject through the resolver for a self target with a custom prefix', async () => {
+        // Given: self-targeted client with a custom event subjectPrefix
+        const selfOptions: JetstreamModuleOptions = {
+          ...options,
+          events: { subjectPrefix: 'company.orders.' },
+        };
+        const names = new NameResolver(selfOptions);
+        const selfSut = new JetstreamClient(
+          selfOptions,
+          selfOptions.name,
+          connection,
+          codec,
+          eventBus,
+          names,
+        );
+
+        const data = { orderId: faker.number.int() };
+        const futureDate = new Date(Date.now() + 60_000);
+        const record = new JetstreamRecordBuilder(data).scheduleAt(futureDate).build();
+
+        // When: event emitted with schedule
+        await firstValueFrom(selfSut.emit('order.reminder', record));
+
+        // Then: holder lives under the custom prefix _sch namespace, target is the resolved subject
+        const expectedScheduleSubject = /^company\.orders\._sch\.order\.reminder\.[A-Za-z0-9]+$/;
+
+        expect(mockJs.publish).toHaveBeenCalledWith(
+          expect.stringMatching(expectedScheduleSubject),
+          codec.encode(data),
+          expect.objectContaining({
+            schedule: {
+              specification: futureDate,
+              target: 'company.orders.order.reminder',
+            },
+          }),
+        );
+
+        await selfSut.close();
+      });
+
       it('should reject scheduleAt for ordered patterns', async () => {
-        // Given: ordered event with schedule — the schedule holder would land
+        // Given: ordered event with schedule; the schedule holder would land
         // in the event stream while the target lives in the ordered stream,
         // which the server rejects (schedule target must share the stream)
         const data = { status: faker.lorem.word() };
@@ -386,7 +427,7 @@ describe(JetstreamClient, () => {
         // When: event emitted with schedule + ttl
         await firstValueFrom(sut.emit('order.reminder', record));
 
-        // Then: ttl rides on the schedule (Nats-Schedule-TTL) — a top-level ttl
+        // Then: ttl rides on the schedule (Nats-Schedule-TTL); a top-level ttl
         // would become Nats-TTL on the holder and cancel the schedule on expiry
         const publishOpts = mockJs.publish.mock.calls[0]![2]!;
 
@@ -429,7 +470,7 @@ describe(JetstreamClient, () => {
     });
   });
 
-  describe('send() / publish() — core RPC mode', () => {
+  describe('send() / publish(); core RPC mode', () => {
     describe('happy path', () => {
       it('should send request via nc.request() and return decoded response', async () => {
         // Given: server responds successfully
@@ -647,7 +688,7 @@ describe(JetstreamClient, () => {
     });
   });
 
-  describe('send() / publish() — jetstream RPC mode', () => {
+  describe('send() / publish(); jetstream RPC mode', () => {
     let inboxCallback: (err: Error | null, msg: Msg) => void;
 
     beforeEach(async () => {
@@ -656,7 +697,6 @@ describe(JetstreamClient, () => {
       options.rpc = { mode: 'jetstream' };
       sut = new JetstreamClient(options, targetName, connection, codec, eventBus);
 
-      // Connect to set up inbox
       await sut.connect();
 
       // Capture inbox subscription callback
@@ -681,11 +721,9 @@ describe(JetstreamClient, () => {
         // Allow publish to complete
         await vi.advanceTimersByTimeAsync(0);
 
-        // Extract correlation ID from published headers
         const publishedHeaders: MsgHdrs = mockJs.publish.mock.calls[0]![2]!.headers!;
         const correlationId = publishedHeaders.get(JetstreamHeader.CorrelationId);
 
-        // Simulate inbox reply
         const replyHeaders = natsHeaders();
 
         replyHeaders.set(JetstreamHeader.CorrelationId, correlationId);
@@ -742,7 +780,6 @@ describe(JetstreamClient, () => {
 
         await vi.advanceTimersByTimeAsync(0);
 
-        // Simulate error reply
         const publishedHeaders: MsgHdrs = mockJs.publish.mock.calls[0]![2]!.headers!;
         const correlationId = publishedHeaders.get(JetstreamHeader.CorrelationId);
         const replyHeaders = natsHeaders();
@@ -770,7 +807,6 @@ describe(JetstreamClient, () => {
 
         await vi.advanceTimersByTimeAsync(0);
 
-        // Advance past the timeout
         vi.advanceTimersByTime(DEFAULT_JETSTREAM_RPC_TIMEOUT);
 
         // Then: timeout error surfaces the unified `rpc.timeout` label
@@ -798,7 +834,6 @@ describe(JetstreamClient, () => {
         // (timeout was cleared by teardown)
         vi.advanceTimersByTime(DEFAULT_JETSTREAM_RPC_TIMEOUT);
 
-        // No timeout event should have been emitted
         expect(eventBus.emit).not.toHaveBeenCalledWith(
           TransportEvent.RpcTimeout,
           expect.anything(),
@@ -809,7 +844,7 @@ describe(JetstreamClient, () => {
 
     describe('inbox edge cases', () => {
       it('should ignore inbox reply without correlation-id', async () => {
-        // When/Then: inbox reply arrives without correlation-id — no crash
+        // When/Then: inbox reply arrives without correlation-id, no crash
         expect(() => {
           inboxCallback(
             null,
@@ -852,7 +887,6 @@ describe(JetstreamClient, () => {
 
         await vi.advanceTimersByTimeAsync(0);
 
-        // Get correlationId from published message
         const publishedHeaders: MsgHdrs = mockJs.publish.mock.calls[0]![2]!.headers!;
         const correlationId = publishedHeaders.get(JetstreamHeader.CorrelationId);
 
@@ -930,7 +964,7 @@ describe(JetstreamClient, () => {
 
       await vi.advanceTimersByTimeAsync(0);
 
-      // Advance to just before timeout — should NOT have fired yet
+      // Advance to just before the timeout: should NOT have fired yet
       vi.advanceTimersByTime(DEFAULT_JETSTREAM_RPC_TIMEOUT - 1);
       expect(eventBus.emit).not.toHaveBeenCalledWith(
         TransportEvent.RpcTimeout,
@@ -938,7 +972,7 @@ describe(JetstreamClient, () => {
         expect.anything(),
       );
 
-      // Advance past timeout — should fire
+      // Advance past the timeout: should fire
       vi.advanceTimersByTime(1);
       expect(eventBus.emit).toHaveBeenCalledWith(
         TransportEvent.RpcTimeout,
@@ -970,7 +1004,7 @@ describe(JetstreamClient, () => {
     });
 
     it('should fail fast when the command publish is deduplicated by the stream', async () => {
-      // Given: the stream reports the publish as a duplicate — the original
+      // Given: the stream reports the publish as a duplicate; the original
       // command owns the reply, this correlation id will never receive one
       mockJs.publish.mockResolvedValue(createMock<PubAck>({ duplicate: true, seq: 5 }));
 
@@ -1066,7 +1100,7 @@ describe(JetstreamClient, () => {
 
       await coreClient.connect();
 
-      // When/Then: disconnect fires — no crash
+      // When/Then: disconnect fires, no crash
       expect(() => {
         statusSubject.next({ type: 'disconnect', server: '' });
       }).not.toThrow();
@@ -1101,7 +1135,7 @@ describe(JetstreamClient, () => {
       it.each([
         ['broadcast:config.updated', 'config.updated', 'broadcast'],
         ['ordered:order.status', 'order.status', 'ordered'],
-      ])('should strip the prefix from %s → %s (kind=%s)', async (pattern, declared, kind) => {
+      ])('should strip the prefix from %s -> %s (kind=%s)', async (pattern, declared, kind) => {
         // Given/When
         await firstValueFrom(sut.emit(pattern, {}));
 
@@ -1199,6 +1233,134 @@ describe(JetstreamClient, () => {
 
         expect(completed![3]).toBe('timeout');
       });
+    });
+  });
+
+  describe('self-RPC subject routing', () => {
+    it('should publish send() to the resolver subject when targeting self with custom rpc.subjectPrefix', async () => {
+      // Given: self-target client, custom command prefix, jetstream RPC mode
+      vi.useFakeTimers();
+
+      const selfOptions: JetstreamModuleOptions = {
+        name: 'orders',
+        servers: ['nats://localhost:4222'],
+        rpc: { mode: 'jetstream', subjectPrefix: 'company.cmd.' },
+      };
+      const selfNames = new NameResolver(selfOptions);
+
+      sut = new JetstreamClient(selfOptions, 'orders', connection, codec, eventBus, selfNames);
+      await sut.connect();
+
+      // When: RPC sent to self
+      firstValueFrom(sut.send('do.x', {})).catch(() => {});
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Then: published under the custom command prefix, not the convention
+      expect(mockJs.publish).toHaveBeenCalledWith(
+        'company.cmd.do.x',
+        expect.anything(),
+        expect.anything(),
+      );
+
+      vi.useRealTimers();
+    });
+
+    it('should keep the convention command subject for foreign targets', async () => {
+      // Given: own service has custom rpc prefix; client targets a DIFFERENT service
+      vi.useFakeTimers();
+
+      const selfOptions: JetstreamModuleOptions = {
+        name: 'orders',
+        servers: ['nats://localhost:4222'],
+        rpc: { mode: 'jetstream', subjectPrefix: 'company.cmd.' },
+      };
+
+      sut = new JetstreamClient(selfOptions, 'other-svc', connection, codec, eventBus);
+      await sut.connect();
+
+      // When: RPC sent to foreign target
+      firstValueFrom(sut.send('do.y', {})).catch(() => {});
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Then: uses convention subject for the foreign service
+      expect(mockJs.publish).toHaveBeenCalledWith(
+        'other-svc__microservice.cmd.do.y',
+        expect.anything(),
+        expect.anything(),
+      );
+
+      vi.useRealTimers();
+    });
+  });
+
+  describe('broadcast subject routing', () => {
+    it('should publish emit() broadcast under the custom broadcast.subjectPrefix', async () => {
+      // Given: own service has a custom broadcast prefix
+      const selfOptions: JetstreamModuleOptions = {
+        name: 'orders',
+        servers: ['nats://localhost:4222'],
+        broadcast: { subjectPrefix: 'company.bc.' },
+      };
+      const selfNames = new NameResolver(selfOptions);
+
+      sut = new JetstreamClient(selfOptions, 'orders', connection, codec, eventBus, selfNames);
+      await sut.connect();
+
+      // When: broadcast event emitted
+      await firstValueFrom(sut.emit('broadcast:config.updated', {}));
+
+      // Then: published under the custom broadcast prefix
+      expect(mockJs.publish).toHaveBeenCalledWith(
+        'company.bc.config.updated',
+        expect.anything(),
+        expect.anything(),
+      );
+    });
+  });
+
+  describe('self vs foreign subject routing', () => {
+    it('should publish self events under the custom subjectPrefix', async () => {
+      // Given: own service has a custom events.subjectPrefix; client targets itself
+      const selfOptions: JetstreamModuleOptions = {
+        name: 'orders',
+        servers: ['nats://localhost:4222'],
+        events: { subjectPrefix: 'company.orders.' },
+      };
+
+      sut = new JetstreamClient(selfOptions, 'orders', connection, codec, eventBus);
+      await sut.connect();
+
+      // When: event emitted to self
+      await firstValueFrom(sut.emit('order.created', {}));
+
+      // Then: published under the custom prefix, not the convention
+      expect(mockJs.publish).toHaveBeenCalledWith(
+        'company.orders.order.created',
+        expect.anything(),
+        expect.anything(),
+      );
+    });
+
+    it('should keep the convention subject for foreign targets regardless of own prefix', async () => {
+      // Given: own service has custom prefix; client targets a DIFFERENT service
+      const selfOptions: JetstreamModuleOptions = {
+        name: 'orders',
+        servers: ['nats://localhost:4222'],
+        events: { subjectPrefix: 'company.orders.' },
+      };
+
+      sut = new JetstreamClient(selfOptions, 'other-svc', connection, codec, eventBus);
+      await sut.connect();
+
+      // When: event emitted to foreign target
+      await firstValueFrom(sut.emit('x', {}));
+
+      // Then: uses convention subject for the foreign service
+      expect(mockJs.publish).toHaveBeenCalledWith(
+        'other-svc__microservice.ev.x',
+        expect.anything(),
+        expect.anything(),
+      );
     });
   });
 });

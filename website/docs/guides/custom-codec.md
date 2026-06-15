@@ -8,7 +8,7 @@ schema:
   headline: "How to use a custom codec with NestJS JetStream"
   description: "Replace JSON with MessagePack, Protobuf, or a custom binary codec for NATS message serialization."
   datePublished: "2026-03-21"
-  dateModified: "2026-05-27"
+  dateModified: "2026-06-12"
 ---
 
 # How to use a custom codec
@@ -119,7 +119,7 @@ codec: new MsgpackCodec(new Packr({ structuredClone: true })),
 ```
 
 :::note
-The record extension is a `msgpackr`-specific optimization — use it only when every producer and consumer on the stream also runs `msgpackr` with matching options. Mixed fleets (e.g. a Python consumer) must stick with the plain `new Packr()`.
+The record extension is a `msgpackr`-specific optimization; use it only when every producer and consumer on the stream also runs `msgpackr` with matching options. Mixed fleets (e.g. a Python consumer) must stick with the plain `new Packr()`.
 :::
 
 ## Protobuf implementation

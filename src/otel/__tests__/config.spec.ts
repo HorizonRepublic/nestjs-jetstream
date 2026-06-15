@@ -182,8 +182,7 @@ describe('resolveOtelOptions', () => {
     });
 
     it('should default-classify NestJS-unwrapped RpcException payload (plain object) as expected', () => {
-      // Given — this is what the consume span actually sees after the NestJS
-      // observable pipeline unwraps `RpcException.getError()`
+      // Given: what the consume span sees after NestJS unwraps `RpcException.getError()`
       const sut = resolveOtelOptions();
       const payload = { code: 'NOT_AUTHORIZED', message: 'denied' };
 
@@ -192,8 +191,7 @@ describe('resolveOtelOptions', () => {
     });
 
     it('should default-classify the NestJS bare-Error sentinel as unexpected', () => {
-      // Given — NestJS converts a bare `throw new Error(...)` from a
-      // @MessagePattern handler into this exact sentinel before our catch path
+      // Given: NestJS converts a bare Error from a @MessagePattern handler into this sentinel
       const sut = resolveOtelOptions();
       const sentinel = { status: 'error', message: 'Internal server error' };
 

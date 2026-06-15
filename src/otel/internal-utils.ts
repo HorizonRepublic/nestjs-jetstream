@@ -12,12 +12,10 @@ import {
 const logger = new Logger('Jetstream:Otel');
 
 /**
- * Invoke a user hook with a try/catch so a broken hook can't break the
- * message path. Hooks are documented as synchronous, but TypeScript widens
- * `Promise<void>` to `void`, so an `async` hook compiles cleanly. Both
- * synchronous throws and async rejections are swallowed and logged at
- * `debug` so they don't add noise to prod logs but are still available
- * during diagnosis.
+ * Invoke a user hook so a broken hook can't break the message path. Hooks
+ * are documented as synchronous, but TypeScript assigns `Promise<void>` to
+ * `void`, so async hooks compile; both throws and rejections are swallowed
+ * and logged at debug level.
  */
 export const safelyInvokeHook = <A extends readonly unknown[]>(
   hookName: string,
@@ -33,9 +31,7 @@ export const safelyInvokeHook = <A extends readonly unknown[]>(
   };
 
   try {
-    // The public hook signature is `(...args) => void`, but TypeScript
-    // assigns `Promise<void>` to `void`, so an async user hook reaches us
-    // returning a thenable. Cast through `unknown` so we can detect that
+    // Async hooks return a thenable despite the `void` signature; detect it
     // and forward rejections instead of leaking them as unhandled.
     const result: unknown = (hook as (...args: A) => unknown)(...args);
 
@@ -64,25 +60,17 @@ const parsePort = (portRaw: string | undefined): number | undefined => {
 
 /**
  * Best-effort host/port extraction for the `server.address` / `server.port`
- * span attributes — **not** NATS URL validation. If the user misconfigures
- * `servers`, the NATS client itself surfaces a real connection error long
- * before tracing matters; our job here is just to reflect what the user
- * configured as far as we can parse it.
- *
- * Only `servers[0]` is inspected — NATS client-side failover picks the
- * reachable entry at runtime, and the actual connected URL is surfaced
- * separately via the connection-lifecycle span (`NatsConnection.getServer()`).
- *
- * Returns `null` when nothing useful can be extracted; the caller skips
- * the server.* attributes rather than inventing `localhost:4222`.
+ * span attributes, not NATS URL validation. Only `servers[0]` is inspected;
+ * the actually-connected URL is surfaced by the connection-lifecycle span.
+ * Returns `null` when nothing useful can be extracted, and the caller then
+ * skips the `server.*` attributes rather than inventing `localhost:4222`.
  */
 export const parseServerAddress = (servers: readonly string[]): ServerEndpoint | null => {
   const raw = servers[0];
 
   if (!raw) return null;
 
-  // Scheme-qualified — WHATWG URL handles `nats://` / `tls://` / `ws://`
-  // / `wss://`, userinfo, and IPv6 brackets uniformly.
+  // Scheme-qualified: WHATWG URL handles all NATS schemes, userinfo, and IPv6 brackets.
   if (raw.includes('://')) {
     try {
       const url = new URL(raw);
@@ -97,7 +85,7 @@ export const parseServerAddress = (servers: readonly string[]): ServerEndpoint |
     }
   }
 
-  // Bare IPv6 authority `[::1]:port` — URL rejects it without scheme.
+  // Bare IPv6 authority `[::1]:port`; URL rejects it without a scheme.
   if (raw.startsWith('[')) {
     const closeIdx = raw.indexOf(']');
 
@@ -117,11 +105,7 @@ export const parseServerAddress = (servers: readonly string[]): ServerEndpoint |
   return port === undefined ? { host } : { host, port };
 };
 
-/**
- * Config bundle surfaced by {@link deriveOtelAttrs} — the three values
- * every span-emitting provider or router holds on to for the lifetime of
- * the module.
- */
+/** Bundle from {@link deriveOtelAttrs}, held by span-emitting providers for the module lifetime. */
 export interface DerivedOtelAttrs {
   readonly otel: ResolvedOtelOptions;
   readonly serviceName: string;
@@ -130,9 +114,8 @@ export interface DerivedOtelAttrs {
 
 /**
  * Derive the OTel attribute bundle every router / provider holds onto.
- * `serverEndpoint` may be `null` when the configured NATS URL can't be
- * parsed — downstream attribute builders then skip the `server.*`
- * keys rather than inventing a value.
+ * `serverEndpoint` is `null` when the configured NATS URL can't be parsed;
+ * attribute builders then skip the `server.*` keys.
  */
 export const deriveOtelAttrs = (options: {
   readonly otel?: OtelOptions | boolean;

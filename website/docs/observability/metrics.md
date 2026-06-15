@@ -8,12 +8,12 @@ schema:
   headline: "Prometheus Metrics — NestJS JetStream Transport"
   description: "Production-ready Prometheus metrics for NATS JetStream transport: throughput, handler latency, consumer lag, dead letters, and publish errors."
   datePublished: "2026-05-27"
-  dateModified: "2026-05-27"
+  dateModified: "2026-06-12"
 ---
 
 # Prometheus Metrics
 
-The transport ships built-in Prometheus metrics covering throughput, handler latency, consumer lag, publish errors, dead letters, and connection health. Metrics are written to a `prom-client` registry — the de-facto standard in the NestJS ecosystem — so any `/metrics` endpoint exporter picks them up without additional wiring.
+The transport ships built-in Prometheus metrics covering throughput, handler latency, consumer lag, publish errors, dead letters, and connection health. Metrics are written to a `prom-client` registry; the de-facto standard in the NestJS ecosystem; so any `/metrics` endpoint exporter picks them up without additional wiring.
 
 ## Why this exists
 
@@ -250,7 +250,7 @@ If you set `defaultLabels` with high-cardinality values (e.g. per-request IDs), 
 Per-message overhead with metrics enabled:
 
 - 1× `performance.now()` at handler entry.
-- 1× `EventBus.emit(HandlerCompleted, ...)` after settlement — `Map.get` + callback invocation.
+- 1× `EventBus.emit(HandlerCompleted, ...)` after settlement; `Map.get` + callback invocation.
 - 1× `PatternRegistry.resolveDeclared()` (a `Map.get`) inside the metrics service.
 - 1× `Counter.inc()` + 1× `Histogram.observe()` in `prom-client`.
 

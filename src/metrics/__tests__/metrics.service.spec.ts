@@ -14,17 +14,16 @@ import { MessageKind, StreamKind, TransportEvent } from '../../interfaces';
 import { streamName } from '../../jetstream.constants';
 import { PatternRegistry } from '../../server/routing/pattern-registry';
 
+import { NameResolver } from '../../server/infrastructure/name-resolver';
 import { DEFAULT_POLL_INTERVAL_MS, UNMATCHED_SUBJECT_LABEL } from '../metrics.constants';
 import { JetstreamMetricsService } from '../metrics.service';
-import type { PromClientRuntime } from '../metrics.types';
+import type { ConsumerPollTarget, PromClientRuntime } from '../metrics.types';
+import { ConnectionProvider } from '../../connection';
+import type { NatsConnection } from '@nats-io/transport-node';
 
 type Subscribers = Map<string, ((...args: unknown[]) => void)[]>;
 
-/**
- * Capture every `subscribe()` call into a map keyed by event name so tests can
- * invoke the metrics service's handlers directly. Mirrors the real EventBus
- * dispatching contract closely enough for label/value assertions.
- */
+/** Captures `subscribe()` calls keyed by event name so tests can invoke handlers directly. */
 const captureSubscribers = (eventBus: Mocked<EventBus>): Subscribers => {
   const subs: Subscribers = new Map();
 
@@ -71,9 +70,7 @@ const histogramCount = async (
   const labelExpr = Object.entries(matchLabels)
     .map(([k, v]) => `${escapeRegex(k)}="${escapeRegex(v)}"`)
     .join(',');
-  // The `_count` suffix is appended by prom-client when rendering histograms;
-  // we parse it from the text exposition to avoid the typed-API churn around
-  // histogram bucket samples (rich metric object reshapes across versions).
+  // Parse the `_count` sample from text exposition; typed histogram shapes churn across versions.
   const re = new RegExp(
     `^${escapeRegex(metricName)}_count\\{[^}]*${labelExpr}[^}]*\\}\\s+(\\d+)`,
     'm',
@@ -198,7 +195,7 @@ describe(JetstreamMetricsService, () => {
     });
   });
 
-  describe('Connect/Disconnect/Reconnect → connection_up gauge', () => {
+  describe('Connect/Disconnect/Reconnect -> connection_up gauge', () => {
     it('should flip connection_up to 1 on Connect for the given server', async () => {
       // Given
       const { subs } = await setup({ options, register, promClient, eventBus });
@@ -244,7 +241,7 @@ describe(JetstreamMetricsService, () => {
     });
   });
 
-  describe('Error → errors_total counter', () => {
+  describe('Error -> errors_total counter', () => {
     it('should map a known context to its bounded enum value', async () => {
       // Given
       const { subs } = await setup({ options, register, promClient, eventBus });
@@ -268,7 +265,7 @@ describe(JetstreamMetricsService, () => {
     });
   });
 
-  describe('RpcTimeout → rpc_timeout_total counter', () => {
+  describe('RpcTimeout -> rpc_timeout_total counter', () => {
     it('should increment using the declared pattern when available', async () => {
       // Given
       const patternRegistry = createMock<PatternRegistry>();
@@ -307,7 +304,7 @@ describe(JetstreamMetricsService, () => {
       // When
       dispatch(subs, TransportEvent.RpcTimeout, 'unknown.subject', faker.string.uuid());
 
-      // Then: cardinality stays bounded — no raw wire subject leaks into the label
+      // Then: cardinality stays bounded, no raw wire subject leaks into the label
       expect(
         await sampleValue(register, 'jetstream_rpc_timeout_total', {
           subject: UNMATCHED_SUBJECT_LABEL,
@@ -316,7 +313,7 @@ describe(JetstreamMetricsService, () => {
     });
   });
 
-  describe('MessageRouted → messages_received_total / messages_unhandled_total', () => {
+  describe('MessageRouted -> messages_received_total / messages_unhandled_total', () => {
     it('should increment messages_received_total with declared labels for known subjects', async () => {
       // Given
       const patternRegistry = createMock<PatternRegistry>();
@@ -362,7 +359,7 @@ describe(JetstreamMetricsService, () => {
     });
   });
 
-  describe('DeadLetter → messages_dead_letter_total counter', () => {
+  describe('DeadLetter -> messages_dead_letter_total counter', () => {
     it('should increment with the declared pattern and stream from the info payload', async () => {
       // Given
       const patternRegistry = createMock<PatternRegistry>();
@@ -397,7 +394,7 @@ describe(JetstreamMetricsService, () => {
     });
   });
 
-  describe('ConsumerRecovered → consumer_recovered_total counter', () => {
+  describe('ConsumerRecovered -> consumer_recovered_total counter', () => {
     it('should increment with the recovery label as kind', async () => {
       // Given
       const { subs } = await setup({ options, register, promClient, eventBus });
@@ -412,7 +409,7 @@ describe(JetstreamMetricsService, () => {
     });
   });
 
-  describe('HandlerCompleted → processed_total + handler_duration_seconds', () => {
+  describe('HandlerCompleted -> processed_total + handler_duration_seconds', () => {
     it('should increment processed counter and observe duration when handler succeeds', async () => {
       // Given
       const { subs } = await setup({ options, register, promClient, eventBus });
@@ -483,7 +480,7 @@ describe(JetstreamMetricsService, () => {
     });
   });
 
-  describe('Published → publish_total + publish_duration_seconds', () => {
+  describe('Published -> publish_total + publish_duration_seconds', () => {
     it('should increment publish_total and observe duration for a successful event publish', async () => {
       // Given
       const { subs } = await setup({ options, register, promClient, eventBus });
@@ -556,7 +553,7 @@ describe(JetstreamMetricsService, () => {
     });
   });
 
-  describe('RpcCompleted → rpc_duration_seconds', () => {
+  describe('RpcCompleted -> rpc_duration_seconds', () => {
     it('should observe duration with status=success on a successful RPC round-trip', async () => {
       // Given
       const { subs } = await setup({ options, register, promClient, eventBus });
@@ -603,6 +600,52 @@ describe(JetstreamMetricsService, () => {
     });
   });
 
+  describe('HandlerCompleted stream label with custom NameResolver', () => {
+    it('should use resolver stream name in the stream label when names is provided', async () => {
+      // Given: options with custom event stream name
+      const customOptions: JetstreamModuleOptions = {
+        name: 'orders',
+        servers: ['nats://localhost:4222'],
+        metrics: true,
+        events: { stream: { name: 'custom-ev-stream' } },
+      };
+      const names = new NameResolver(customOptions);
+
+      const subs = captureSubscribers(eventBus);
+      const sut = new JetstreamMetricsService(
+        eventBus,
+        { register, pollInterval: 0 },
+        promClient,
+        customOptions,
+        null,
+        null,
+        names,
+      );
+
+      await sut.onApplicationBootstrap();
+
+      // When
+      dispatch(
+        subs,
+        TransportEvent.HandlerCompleted,
+        'orders.created',
+        StreamKind.Event,
+        100,
+        'success',
+      );
+
+      // Then: stream label must come from the resolver, not the convention helper
+      expect(
+        await sampleValue(register, 'jetstream_messages_processed_total', {
+          stream: 'custom-ev-stream',
+          subject: 'orders.created',
+          kind: 'event',
+          status: 'success',
+        }),
+      ).toBe(1);
+    });
+  });
+
   describe('edge cases', () => {
     it('should default pollInterval to 15s when not provided', () => {
       // Given/When
@@ -613,11 +656,127 @@ describe(JetstreamMetricsService, () => {
     });
 
     it('should throw on bootstrap when registry is missing', async () => {
-      // Given: config without register — module factory normally guards this
+      // Given: config without register (module factory normally guards this)
       const sut = new JetstreamMetricsService(eventBus, {}, promClient, options, null);
 
       // Then
       await expect(sut.onApplicationBootstrap()).rejects.toThrow(/Registry/);
+    });
+  });
+
+  describe('poll targets', () => {
+    const buildTargets = (sut: JetstreamMetricsService): ConsumerPollTarget[] =>
+      (Reflect.get(sut, 'buildPollTargets') as () => ConsumerPollTarget[]).call(sut);
+
+    const makeRegistry = (kinds: {
+      events?: boolean;
+      rpc?: boolean;
+      broadcasts?: boolean;
+    }): PatternRegistry => {
+      const registry = createMock<PatternRegistry>();
+
+      registry.hasEventHandlers.mockReturnValue(kinds.events ?? false);
+      registry.hasRpcHandlers.mockReturnValue(kinds.rpc ?? false);
+      registry.hasBroadcastHandlers.mockReturnValue(kinds.broadcasts ?? false);
+
+      return registry;
+    };
+
+    it('should poll one target per active handler kind', async () => {
+      // Given: events + broadcast handlers, jetstream rpc mode
+      const sut = new JetstreamMetricsService(
+        eventBus,
+        { register, pollInterval: 0 },
+        promClient,
+        { ...options, rpc: { mode: 'jetstream' } },
+        makeRegistry({ events: true, rpc: true, broadcasts: true }),
+      );
+
+      await sut.onApplicationBootstrap();
+
+      // When
+      const targets = buildTargets(sut);
+
+      // Then: ordered kinds are ephemeral and never polled
+      expect(targets.map((t) => t.kind)).toEqual([
+        StreamKind.Event,
+        StreamKind.Command,
+        StreamKind.Broadcast,
+      ]);
+    });
+
+    it('should not poll commands in core rpc mode', async () => {
+      // Given: rpc handlers exist but core mode owns no JetStream consumer
+      const sut = new JetstreamMetricsService(
+        eventBus,
+        { register, pollInterval: 0 },
+        promClient,
+        { ...options, rpc: { mode: 'core' } },
+        makeRegistry({ rpc: true }),
+      );
+
+      await sut.onApplicationBootstrap();
+
+      // When / Then
+      expect(buildTargets(sut)).toEqual([]);
+    });
+
+    it('should resolve target names through the resolver when provided', async () => {
+      // Given: custom stream and durable names on events
+      const customOptions: JetstreamModuleOptions = {
+        name: 'orders',
+        servers: ['nats://localhost:4222'],
+        metrics: true,
+        events: {
+          stream: { name: 'ext-stream' },
+          consumer: { durable_name: 'ext-worker' },
+        },
+      };
+      const sut = new JetstreamMetricsService(
+        eventBus,
+        { register, pollInterval: 0 },
+        promClient,
+        customOptions,
+        makeRegistry({ events: true }),
+        null,
+        new NameResolver(customOptions),
+      );
+
+      await sut.onApplicationBootstrap();
+
+      // When
+      const targets = buildTargets(sut);
+
+      // Then
+      expect(targets).toEqual([
+        { kind: StreamKind.Event, stream: 'ext-stream', consumer: 'ext-worker' },
+      ]);
+    });
+  });
+
+  describe('initial connection state', () => {
+    it('should mark the current server up when a connection exists at bootstrap', async () => {
+      // Given: a live connection exposing its server address
+      const server = 'nats-1:4222';
+      const connection = createMock<ConnectionProvider>({
+        unwrap: createMock<NatsConnection>({ getServer: () => server }),
+      });
+
+      const sut = new JetstreamMetricsService(
+        eventBus,
+        { register, pollInterval: 0 },
+        promClient,
+        options,
+        null,
+        connection,
+      );
+
+      await sut.onApplicationBootstrap();
+
+      // Then
+      const text = await register.metrics();
+
+      expect(text).toContain(`jetstream_connection_up{server="${server}"} 1`);
     });
   });
 });

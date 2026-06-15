@@ -8,7 +8,7 @@ schema:
   headline: "Handler Metadata Registry — NATS KV Service Discovery for NestJS"
   description: "Publish NestJS handler metadata to a NATS KV bucket for dynamic service discovery, API gateway routing, and automatic catalog generation."
   datePublished: "2026-04-02"
-  dateModified: "2026-04-11"
+  dateModified: "2026-06-12"
 ---
 
 import Since from '@site/src/components/Since';
@@ -109,10 +109,10 @@ JetstreamModule.forRoot({
 
 - **`bucket`** &mdash; `'handler_registry'`. KV bucket name.
 - **`replicas`** &mdash; `1`. Bucket replicas (1, 3, or 5).
-- **`ttl`** &mdash; `30_000`. Entry TTL in milliseconds — entries expire unless refreshed by heartbeat (minimum: `5_000` ms). Note: this field is in ms, not nanoseconds.
+- **`ttl`** &mdash; `30_000`. Entry TTL in milliseconds; entries expire unless refreshed by heartbeat (minimum: `5_000` ms). Note: this field is in ms, not nanoseconds.
 
 :::note Bucket configuration
-The KV bucket is created on first startup. Changing `ttl` or `replicas` after creation requires deleting the existing bucket — NATS KV does not update bucket config in place. Use the NATS CLI: `nats kv rm handler_registry`.
+The KV bucket is created on first startup. Changing `ttl` or `replicas` after creation requires deleting the existing bucket; NATS KV does not update bucket config in place. Use the NATS CLI: `nats kv rm handler_registry`.
 :::
 
 ## KV key format

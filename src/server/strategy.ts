@@ -19,13 +19,8 @@ import { EventRouter, PatternRegistry, RpcRouter } from './routing';
 /**
  * NestJS custom transport strategy for NATS JetStream.
  *
- * Coordinates all server-side providers:
- * 1. Registers handlers from NestJS into PatternRegistry
- * 2. Creates required streams and consumers
- * 3. Starts message consumption and routing
- * 4. Handles Core or JetStream RPC based on configuration
- *
- * All dependencies are injected via the NestJS DI container.
+ * Registers handlers, provisions streams and consumers, then starts message
+ * consumption and routing (Core or JetStream RPC based on configuration).
  */
 export class JetstreamStrategy extends Server implements CustomTransportStrategy {
   public readonly transportId = Symbol('jetstream-transport');
@@ -58,7 +53,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     try {
       await this.doListen(callback);
     } catch (err) {
-      // NestJS bridges listen() via a callback — forward errors there so
+      // NestJS bridges listen() via a callback; forward errors there so
       // startAllMicroservices() rejects instead of leaving an unhandled rejection.
       callback(err);
     }
@@ -75,15 +70,11 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
   }
 
   /**
-   * Override NestJS `Server.addHandler` to fail-fast on duplicate pattern registration.
+   * Override NestJS `Server.addHandler` to fail fast on duplicate pattern registration.
    *
-   * The base class silently overwrites duplicate RPC handlers (last wins) and appends
-   * duplicate event handlers to a linked list. Both behaviors are hazardous in a
-   * JetStream context: silent overwrite drops a handler the user wrote, and double
-   * event dispatch double-acks/double-processes the same JetStream message.
-   *
-   * We treat any pattern collision as a fatal misconfiguration so it surfaces at
-   * bootstrap instead of in production traffic.
+   * The base class silently overwrites duplicate RPC handlers and chains duplicate event
+   * handlers, which would double-ack the same JetStream message. Any collision is treated
+   * as a fatal misconfiguration so it surfaces at bootstrap, not in production traffic.
    */
   public override addHandler(
     pattern: unknown,
@@ -96,7 +87,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     if (this.messageHandlers.has(normalizedPattern)) {
       throw new Error(
         `Duplicate handler registered for pattern "${normalizedPattern}". ` +
-          `Each @EventPattern() / @MessagePattern() value must be unique within a microservice — ` +
+          `Each @EventPattern() / @MessagePattern() value must be unique within a microservice; ` +
           `find and remove the second declaration.`,
       );
     }
@@ -104,12 +95,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     super.addHandler(pattern, callback, isEventHandler, extras);
   }
 
-  /**
-   * Register event listener (required by Server base class).
-   *
-   * Stores callbacks for client use. Primary lifecycle events
-   * are routed through EventBus.
-   */
+  /** Register event listener (required by Server base class); lifecycle events use EventBus. */
   // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
   public on(event: string, callback: Function): void {
     const existing = this.listeners.get(event) ?? [];
@@ -127,7 +113,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     const nc = this.connection.unwrap;
 
     if (!nc) {
-      throw new Error('Not connected — transport has not started');
+      throw new Error('Not connected; transport has not started');
     }
 
     return nc as T;
@@ -140,50 +126,40 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
 
   private async doListen(callback: (...args: unknown[]) => void): Promise<void> {
     if (this.started) {
-      this.logger.warn('listen() called more than once — ignoring');
+      this.logger.warn('listen() called more than once; ignoring');
 
       return;
     }
 
     this.started = true;
 
-    // 1. Register all NestJS handlers
     this.patternRegistry.registerHandlers(this.getHandlers());
 
-    // 2. Determine which streams and durable consumers are needed
     const { streams: streamKinds, durableConsumers: durableKinds } = this.resolveRequiredKinds();
 
     if (streamKinds.length > 0) {
-      // 3. Ensure streams exist
       await this.streamProvider.ensureStreams(streamKinds);
 
-      // 4. Ensure durable consumers exist (ordered consumers are ephemeral — skip)
       let consumers: Map<StreamKind, ConsumerInfo> | null = null;
 
       if (durableKinds.length > 0) {
         consumers = await this.consumerProvider.ensureConsumers(durableKinds);
 
-        // 5. Populate shared ack_wait map from actual NATS consumer configs
         this.populateAckWaitMap(consumers);
-
-        // 6. Update DLQ thresholds from actual NATS consumer configs
         this.eventRouter.updateMaxDeliverMap(this.buildMaxDeliverMap(consumers));
       }
 
-      // 7. Subscribe routers BEFORE consumption starts — consumers flush their
+      // Routers must subscribe before consumption starts: consumers flush their
       // backlog immediately, and a subject with no observers drops messages.
       await this.startRouters();
 
-      // 8. Start durable and ordered message consumption
       await this.startConsumption(consumers);
     }
 
-    // 9. Start Core RPC server if core mode
     if (isCoreRpcMode(this.options.rpc) && this.patternRegistry.hasRpcHandlers()) {
       await this.coreRpcServer.start();
     }
 
-    // 10. Publish handler metadata to KV (non-critical — errors logged, not thrown)
     if (this.metadataProvider && this.patternRegistry.hasMetadata()) {
       await this.metadataProvider.publish(this.patternRegistry.getMetadataEntries());
     }
@@ -211,7 +187,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
       durableConsumers.push(StreamKind.Broadcast);
     }
 
-    // Ordered consumers are ephemeral — stream only, no durable consumer
+    // Ordered consumers are ephemeral: stream only, no durable consumer
     if (this.patternRegistry.hasOrderedHandlers()) {
       streams.push(StreamKind.Ordered);
     }

@@ -26,7 +26,7 @@ export interface StreamConfigDiffResult {
 
 /**
  * Stream properties controlled by the transport layer.
- * A mismatch is always an error — retention is tied to transport semantics
+ * A mismatch is always an error: retention is tied to transport semantics
  * (Workqueue for events/commands, Limits for broadcast/ordered) and is never migratable.
  */
 const TRANSPORT_CONTROLLED_PROPERTIES: ReadonlySet<keyof StreamConfig> = new Set([
@@ -45,7 +45,7 @@ const IMMUTABLE_PROPERTIES: ReadonlySet<keyof StreamConfig> = new Set([
 ] as const satisfies (keyof StreamConfig)[]);
 
 /**
- * NATS stream properties that can be enabled (false→true) but never disabled (true→false).
+ * NATS stream properties that can be enabled (false->true) but never disabled (true->false).
  * Disabling is classified as `immutable`.
  *
  * Ref: https://docs.nats.io/nats-concepts/jetstream/streams
@@ -62,7 +62,7 @@ const ENABLE_ONLY_PROPERTIES: ReadonlySet<keyof StreamConfig> = new Set([
  * Compare current (from NATS) vs desired (from forRoot config) stream configuration.
  *
  * Classifies each changed property as mutable, enable-only, immutable, or transport-controlled.
- * Only compares properties present in `desired` — server-managed fields in
+ * Only compares properties present in `desired`; server-managed fields in
  * `current` that are absent from `desired` are ignored.
  */
 export const compareStreamConfig = (

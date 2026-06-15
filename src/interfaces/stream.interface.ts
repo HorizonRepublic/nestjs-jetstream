@@ -1,10 +1,10 @@
 /**
  * Identifies a JetStream stream/consumer kind.
  *
- * - `Event`     — Workqueue events (at-least-once delivery to one consumer).
- * - `Command`   — RPC commands (JetStream mode only).
- * - `Broadcast` — Broadcast events (fan-out to all consumers).
- * - `Ordered`   — Ordered events (strict sequential delivery, Limits retention).
+ * - `Event`: workqueue events (at-least-once delivery to one consumer).
+ * - `Command`: RPC commands (JetStream mode only).
+ * - `Broadcast`: broadcast events (fan-out to all consumers).
+ * - `Ordered`: ordered events (strict sequential delivery, Limits retention).
  */
 export enum StreamKind {
   Event = 'ev',

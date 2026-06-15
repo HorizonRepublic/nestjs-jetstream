@@ -8,7 +8,7 @@ schema:
   headline: "Ordered Events — Strict Sequential Delivery in NATS JetStream"
   description: "Strict sequential NestJS NATS JetStream event delivery with ephemeral ordered consumers, deliver policies, and CQRS replay patterns."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-11"
+  dateModified: "2026-06-12"
 ---
 
 import Since from '@site/src/components/Since';
@@ -546,7 +546,7 @@ async handleOrderStatus(@Payload() data: OrderStatusDto) {
 |---|---|---|
 | **Delivery guarantee** | At-least-once | At-most-once |
 | **Message ordering** | Not guaranteed (parallel) | Strict sequential |
-| **Handler parallelism** | `mergeMap` — concurrent | `concatMap` — one at a time |
+| **Handler parallelism** | `mergeMap`; concurrent | `concatMap` — one at a time |
 | **Retry on failure** | Yes (`nak` triggers redeliver) | No (error logged, continues) |
 | **Dead letter queue** | Yes (after `max_deliver` attempts) | No |
 | **Acknowledgment** | Explicit (`msg.ack()`) | Automatic by the client |
@@ -601,7 +601,7 @@ Ordered consumers do not support "resume from where I left off" natively. If the
 
 ### Stream name is derived automatically
 
-The ordered stream name follows the library's [naming conventions](/docs/reference/naming-conventions): `{name}__microservice_ordered-stream`. You cannot specify a custom stream name — it's computed from the `name` field in `forRoot()`.
+The ordered stream name follows the library's [naming conventions](/docs/reference/naming-conventions): `{name}__microservice_ordered-stream`. You cannot specify a custom stream name; it's computed from the `name` field in `forRoot()`.
 
 ## What's next?
 

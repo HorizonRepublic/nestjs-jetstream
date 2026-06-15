@@ -8,6 +8,7 @@ import {
   JETSTREAM_EVENT_BUS,
   JETSTREAM_OPTIONS,
 } from '../jetstream.constants';
+import { NameResolver } from '../server/infrastructure/name-resolver';
 import { PatternRegistry } from '../server/routing/pattern-registry';
 
 import type { MetricsConfig, MetricsOption } from './metrics.config';
@@ -50,7 +51,7 @@ const normalizeMetricsConfig = (
 
 /**
  * Internal module wired unconditionally by `JetstreamModule`. Providers gate
- * themselves on `JETSTREAM_OPTIONS.metrics` at resolution time — when metrics
+ * themselves on `JETSTREAM_OPTIONS.metrics` at resolution time: when metrics
  * are disabled they resolve to `null` and `prom-client` is never loaded, so
  * the peer dependency stays truly optional.
  */
@@ -62,9 +63,10 @@ export class JetstreamMetricsModule {
       inject: [JETSTREAM_OPTIONS],
       useFactory: async (opts: JetstreamModuleOptions): Promise<PromClientRuntime | null> => {
         if (!opts.metrics) return null;
+
         const mod = await resolvePromClient();
 
-        /* eslint-disable @typescript-eslint/naming-convention */
+        /* eslint-disable @typescript-eslint/naming-convention -- mirrors prom-client class names */
         return { Counter: mod.Counter, Histogram: mod.Histogram, Gauge: mod.Gauge };
         /* eslint-enable @typescript-eslint/naming-convention */
       },
@@ -96,6 +98,7 @@ export class JetstreamMetricsModule {
         JETSTREAM_OPTIONS,
         { token: PatternRegistry, optional: true },
         { token: JETSTREAM_CONNECTION, optional: true },
+        { token: NameResolver, optional: true },
       ],
       useFactory: (
         eventBus: EventBus,
@@ -104,7 +107,17 @@ export class JetstreamMetricsModule {
         opts: JetstreamModuleOptions,
         patternRegistry: PatternRegistry | null,
         connection: ConnectionProvider | null,
-      ) => new JetstreamMetricsService(eventBus, cfg, runtime, opts, patternRegistry, connection),
+        names: NameResolver | null,
+      ) =>
+        new JetstreamMetricsService(
+          eventBus,
+          cfg,
+          runtime,
+          opts,
+          patternRegistry,
+          connection,
+          names,
+        ),
     };
 
     return {

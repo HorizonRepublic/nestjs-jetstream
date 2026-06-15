@@ -2,14 +2,12 @@ import { Logger } from '@nestjs/common';
 import { JetStreamApiError, type ConsumerConfig, type ConsumerInfo } from '@nats-io/jetstream';
 
 import { ConnectionProvider } from '../../connection';
-import { StreamKind } from '../../interfaces';
+import { ManagementMode, StreamKind } from '../../interfaces';
 import type { JetstreamModuleOptions } from '../../interfaces';
 import {
-  consumerName,
   DEFAULT_BROADCAST_CONSUMER_CONFIG,
   DEFAULT_COMMAND_CONSUMER_CONFIG,
   DEFAULT_EVENT_CONSUMER_CONFIG,
-  internalName,
 } from '../../jetstream.constants';
 import {
   deriveOtelAttrs,
@@ -21,6 +19,9 @@ import { PatternRegistry } from '../routing';
 
 import { mapProvisioningError, type ProvisioningErrorContext } from './provisioning-error';
 import { NatsErrorCode } from './nats-error-codes';
+import { NameResolver } from './name-resolver';
+import { kindOptionsBlock, resolveManagementMode } from './management';
+import { InfrastructureBinder } from './infrastructure-binder';
 import { MIGRATION_BACKUP_SUFFIX } from './stream-migration';
 import { StreamProvider } from './stream.provider';
 
@@ -42,6 +43,8 @@ export class ConsumerProvider {
     private readonly connection: ConnectionProvider,
     private readonly streamProvider: StreamProvider,
     private readonly patternRegistry: PatternRegistry,
+    private readonly names: NameResolver,
+    private readonly binder: InfrastructureBinder,
   ) {
     const derived = deriveOtelAttrs(options);
 
@@ -72,13 +75,12 @@ export class ConsumerProvider {
 
   /** Get the consumer name for a given kind. */
   public getConsumerName(kind: StreamKind): string {
-    return consumerName(this.options.name, kind);
+    return this.names.consumerName(kind);
   }
 
   /**
    * Ensure a single consumer exists with the desired config.
-   * Used at **startup** — creates or updates the consumer to match
-   * the current pod's configuration.
+   * Startup path: creates or updates the consumer to match the current pod's configuration.
    */
   public async ensureConsumer(
     jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
@@ -88,13 +90,23 @@ export class ConsumerProvider {
     const config = this.buildConfig(kind);
     const name = config.durable_name;
 
+    const spanAttrs = {
+      serviceName: this.otelServiceName,
+      endpoint: this.otelEndpoint,
+      entity: 'consumer' as const,
+      name,
+    };
+
+    if (resolveManagementMode(this.options, kind, 'consumer') === ManagementMode.Manual) {
+      return withProvisioningSpan(this.otel, { ...spanAttrs, action: 'bind' }, () =>
+        this.binder.bindConsumer(jsm, kind),
+      );
+    }
+
     return withProvisioningSpan(
       this.otel,
       {
-        serviceName: this.otelServiceName,
-        endpoint: this.otelEndpoint,
-        entity: 'consumer',
-        name,
+        ...spanAttrs,
         action: 'ensure',
       },
       async () => {
@@ -123,16 +135,11 @@ export class ConsumerProvider {
 
   /**
    * Recover a consumer that disappeared during runtime.
-   * Used by **self-healing** — creates if missing, but NEVER updates config.
    *
-   * If a migration backup stream exists, another pod is mid-migration — we
-   * throw so the self-healing retry loop waits with backoff until migration
-   * completes and the backup is cleaned up.
-   *
-   * This prevents old pods from:
-   * - Overwriting a newer pod's consumer config during rolling updates
-   * - Creating consumers during migration (which would consume and delete
-   *   workqueue messages while they're being restored)
+   * Self-healing path: creates if missing but never updates config, so an old pod
+   * cannot overwrite a newer pod's config during rolling updates. If a migration
+   * backup stream exists, throws so the retry loop backs off until migration completes;
+   * creating a consumer mid-migration would eat workqueue messages being restored.
    */
   public async recoverConsumer(
     jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
@@ -142,23 +149,47 @@ export class ConsumerProvider {
     const config = this.buildConfig(kind);
     const name = config.durable_name;
 
+    const spanAttrs = {
+      serviceName: this.otelServiceName,
+      endpoint: this.otelEndpoint,
+      entity: 'consumer' as const,
+      name,
+    };
+
+    if (resolveManagementMode(this.options, kind, 'consumer') === ManagementMode.Manual) {
+      return withProvisioningSpan(this.otel, { ...spanAttrs, action: 'rebind' }, async () => {
+        try {
+          return await jsm.consumers.info(stream, name);
+        } catch (err) {
+          if (
+            err instanceof JetStreamApiError &&
+            err.apiError().err_code === NatsErrorCode.ConsumerNotFound
+          ) {
+            throw new Error(
+              `Consumer ${name} on ${stream} is externally managed and currently absent; ` +
+                `waiting for it to be restored.`,
+            );
+          }
+
+          throw err;
+        }
+      });
+    }
+
     return withProvisioningSpan(
       this.otel,
       {
-        serviceName: this.otelServiceName,
-        endpoint: this.otelEndpoint,
-        entity: 'consumer',
-        name,
+        ...spanAttrs,
         action: 'recover',
       },
       async () => {
         this.logger.log(`Recovering consumer: ${name} on stream: ${stream}`);
 
-        // Check if another pod is mid-migration — backup stream acts as a lock
+        // The migration backup stream acts as a lock held by the migrating pod
         await this.assertNoMigrationInProgress(jsm, stream);
 
         try {
-          // Consumer already exists (another pod may have recreated it) — use as-is
+          // Another pod may have recreated the consumer; use it as-is
           return await jsm.consumers.info(stream, name);
         } catch (err) {
           if (
@@ -188,13 +219,12 @@ export class ConsumerProvider {
     try {
       await jsm.streams.info(backupName);
 
-      // Backup exists → migration in progress
       throw new Error(
         `Stream ${stream} is being migrated (backup ${backupName} exists). ` +
           `Waiting for migration to complete before recovering consumer.`,
       );
     } catch (err) {
-      // Backup doesn't exist → no migration in progress → proceed
+      // StreamNotFound means no backup, so no migration in progress
       if (
         err instanceof JetStreamApiError &&
         err.apiError().err_code === NatsErrorCode.StreamNotFound
@@ -202,20 +232,17 @@ export class ConsumerProvider {
         return;
       }
 
-      // Re-throw: either the "migration in progress" error or an unexpected error
+      // Re-throws our own "migration in progress" error as well as unexpected ones
       throw err;
     }
   }
 
-  /**
-   * Create a consumer, handling the race where another pod creates it first.
-   */
+  /** Create a consumer, handling the race where another pod creates it first. */
   private async createConsumer(
     jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
     stream: string,
     name: string,
     kind: StreamKind,
-    /* eslint-disable-next-line @typescript-eslint/naming-convention -- NATS API uses snake_case */
     config: Partial<ConsumerConfig> & { durable_name: string },
   ): Promise<ConsumerInfo> {
     this.logger.log(`Creating consumer: ${name}`);
@@ -255,15 +282,12 @@ export class ConsumerProvider {
   }
 
   /** Build consumer config by merging defaults with user overrides. */
-  // eslint-disable-next-line @typescript-eslint/naming-convention -- NATS API uses snake_case
   private buildConfig(kind: StreamKind): Partial<ConsumerConfig> & { durable_name: string } {
-    const name = this.getConsumerName(kind);
-    const serviceName = internalName(this.options.name);
+    const durableName = this.getConsumerName(kind);
 
     const defaults = this.getDefaults(kind);
     const overrides = this.getOverrides(kind);
 
-    /* eslint-disable @typescript-eslint/naming-convention -- NATS API uses snake_case */
     if (kind === StreamKind.Broadcast) {
       const broadcastPatterns = this.patternRegistry.getBroadcastPatterns();
 
@@ -275,8 +299,8 @@ export class ConsumerProvider {
         return {
           ...defaults,
           ...overrides,
-          name,
-          durable_name: name,
+          name: durableName,
+          durable_name: durableName,
           filter_subject: broadcastPatterns[0],
         };
       }
@@ -284,8 +308,8 @@ export class ConsumerProvider {
       return {
         ...defaults,
         ...overrides,
-        name,
-        durable_name: name,
+        name: durableName,
+        durable_name: durableName,
         filter_subjects: broadcastPatterns,
       };
     }
@@ -294,16 +318,51 @@ export class ConsumerProvider {
       throw new Error(`Unexpected durable consumer kind: ${kind}`);
     }
 
-    const filter_subject = `${serviceName}.${kind}.>`;
+    if (this.names.hasCustomPrefix(kind)) {
+      return this.buildCustomPrefixConfig(kind, durableName, defaults, overrides);
+    }
+
+    const filter_subject = this.names.filterSubject(kind);
 
     return {
       ...defaults,
       ...overrides,
-      name,
-      durable_name: name,
+      name: durableName,
+      durable_name: durableName,
       filter_subject,
     };
-    /* eslint-enable @typescript-eslint/naming-convention */
+  }
+
+  private buildCustomPrefixConfig(
+    kind: StreamKind,
+    durableName: string,
+    defaults: Partial<ConsumerConfig>,
+    overrides: Partial<ConsumerConfig>,
+  ): Partial<ConsumerConfig> & { durable_name: string } {
+    const patterns =
+      kind === StreamKind.Event
+        ? this.patternRegistry.getEventPatterns()
+        : this.patternRegistry.getCommandPatterns();
+
+    const subjects = patterns.map((p) => this.names.subject(kind, p));
+
+    if (subjects.length === 1) {
+      return {
+        ...defaults,
+        ...overrides,
+        name: durableName,
+        durable_name: durableName,
+        filter_subject: subjects[0],
+      };
+    }
+
+    return {
+      ...defaults,
+      ...overrides,
+      name: durableName,
+      durable_name: durableName,
+      filter_subjects: subjects,
+    };
   }
 
   /** Get default config for a consumer kind. */
@@ -328,21 +387,6 @@ export class ConsumerProvider {
 
   /** Get user-provided overrides for a consumer kind. */
   private getOverrides(kind: StreamKind): Partial<ConsumerConfig> {
-    switch (kind) {
-      case StreamKind.Event:
-        return this.options.events?.consumer ?? {};
-      case StreamKind.Command:
-        return this.options.rpc?.mode === 'jetstream' ? (this.options.rpc.consumer ?? {}) : {};
-      case StreamKind.Broadcast:
-        return this.options.broadcast?.consumer ?? {};
-      case StreamKind.Ordered:
-        throw new Error('Ordered consumers are ephemeral and should not use durable config');
-      /* v8 ignore next 5 -- exhaustive switch guard, unreachable */
-      default: {
-        const _exhaustive: never = kind;
-
-        throw new Error(`Unexpected StreamKind: ${_exhaustive}`);
-      }
-    }
+    return kindOptionsBlock(this.options, kind)?.consumer ?? {};
   }
 }

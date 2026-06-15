@@ -156,7 +156,7 @@ export const beginConnectionLifecycleSpan = (
   return {
     recordEvent: (name: string, attributes?: SpanEventAttributes): void => {
       if (finalized) {
-        // A hook after `finish()` is a misuse — quiet debug log so libraries
+        // An event after `finish()` is a misuse; quiet debug log so libraries
         // that forward NestJS `debug` to APM can catch it in development.
         logger.debug(`recordEvent('${name}') called after connection span finished`);
 
@@ -200,7 +200,7 @@ export const withSelfHealingSpan = <T>(
 
 export type ProvisioningEntity = 'stream' | 'consumer';
 
-export type ProvisioningAction = 'create' | 'update' | 'ensure' | 'recover';
+export type ProvisioningAction = 'create' | 'update' | 'ensure' | 'recover' | 'bind' | 'rebind';
 
 export interface ProvisioningSpanContext extends InfrastructureSpanContext {
   readonly entity: ProvisioningEntity;

@@ -3,7 +3,7 @@ import { isObservable, Observable, Subscription } from 'rxjs';
 /**
  * Unwrap a handler return value into something the transport can settle on.
  *
- * Handler results come in several shapes — sync values, Promises, Observables,
+ * Handler results come in several shapes: sync values, Promises, Observables,
  * and occasionally `Promise<Observable>` when NestJS exception filters convert
  * errors into `throwError()` streams. This function collapses them into either
  * the value itself (for sync results) or a Promise that resolves to the first
@@ -61,7 +61,7 @@ const subscribeToFirst = (obs: Observable<unknown>): Promise<unknown> =>
     });
 
     // `next` may have fired synchronously during subscribe() and already
-    // flipped `done` — unsubscribe immediately if so.
+    // flipped `done`; unsubscribe immediately if so.
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- mutated in sync callback above
     if (done) {
       subscription.unsubscribe();

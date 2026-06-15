@@ -117,7 +117,7 @@ export class RpcContext extends BaseRpcContext<[NatsMessage]> {
     this.assertJetStream('retry');
 
     if (this._shouldTerminate) {
-      throw new Error('Cannot retry — terminate() was already called');
+      throw new Error('Cannot retry; terminate() was already called');
     }
 
     this._shouldRetry = true;
@@ -137,7 +137,7 @@ export class RpcContext extends BaseRpcContext<[NatsMessage]> {
     this.assertJetStream('terminate');
 
     if (this._shouldRetry) {
-      throw new Error('Cannot terminate — retry() was already called');
+      throw new Error('Cannot terminate; retry() was already called');
     }
 
     this._shouldTerminate = true;
@@ -149,7 +149,7 @@ export class RpcContext extends BaseRpcContext<[NatsMessage]> {
     return this.isJetStream() ? (this.args[0] as JsMsg) : null;
   }
 
-  /** Ensure the message is JetStream — settlement actions are not available for Core NATS. */
+  /** Ensure the message is JetStream; settlement actions are not available for Core NATS. */
   private assertJetStream(method: string): void {
     if (!this.isJetStream()) {
       throw new Error(`${method}() is only available for JetStream messages`);

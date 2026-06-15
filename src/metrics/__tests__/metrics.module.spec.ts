@@ -7,6 +7,7 @@ import { Registry, register as globalRegister } from 'prom-client';
 import { EventBus } from '../../hooks';
 import type { JetstreamModuleOptions } from '../../interfaces';
 import { JETSTREAM_EVENT_BUS, JETSTREAM_OPTIONS } from '../../jetstream.constants';
+import { NameResolver } from '../../server/infrastructure/name-resolver';
 
 import {
   JETSTREAM_METRICS_CONFIG,
@@ -27,14 +28,19 @@ const baseOptions: JetstreamModuleOptions = {
 const compile = async (
   options: JetstreamModuleOptions,
   eventBus: EventBus,
+  names?: NameResolver,
 ): Promise<import('@nestjs/testing').TestingModule> => {
+  const extraProviders = names ? [{ provide: NameResolver, useValue: names }] : [];
+  const extraExports = names ? [NameResolver] : [];
+
   @Global()
   @Module({
     providers: [
       { provide: JETSTREAM_EVENT_BUS, useValue: eventBus },
       { provide: JETSTREAM_OPTIONS, useValue: options },
+      ...extraProviders,
     ],
-    exports: [JETSTREAM_EVENT_BUS, JETSTREAM_OPTIONS],
+    exports: [JETSTREAM_EVENT_BUS, JETSTREAM_OPTIONS, ...extraExports],
   })
   class TestRootModule {}
 
@@ -124,13 +130,33 @@ describe(JetstreamMetricsModule, () => {
     });
   });
 
+  describe('NameResolver forwarding', () => {
+    it('should inject NameResolver into JetstreamMetricsService when available in DI', async () => {
+      // Given: NameResolver is provided (as JetstreamModule does via exports)
+      const customOptions: JetstreamModuleOptions = {
+        ...baseOptions,
+        metrics: true,
+        events: { stream: { name: 'custom-ev-stream' } },
+      };
+      const names = new NameResolver(customOptions);
+      const moduleRef = await compile(customOptions, eventBus, names);
+
+      // When
+      const service = moduleRef.get(JetstreamMetricsService);
+
+      // Then: private field 'names' is set via DI
+      const injectedNames = Reflect.get(service, 'names') as unknown;
+
+      expect(injectedNames).toBe(names);
+    });
+  });
+
   describe('edge cases', () => {
     it('should resolve config to null when metrics option is disabled', async () => {
       // Given/When
       const moduleRef = await compile({ ...baseOptions, metrics: false }, eventBus);
 
-      // Then: providers exist (module is always imported) but resolve to null,
-      // so prom-client is never loaded and the service self-disables on bootstrap.
+      // Then: providers resolve to null, prom-client is never loaded, service self-disables
       expect(moduleRef.get(JETSTREAM_METRICS_CONFIG)).toBeNull();
       expect(moduleRef.get(JetstreamMetricsService)).toBeInstanceOf(JetstreamMetricsService);
     });

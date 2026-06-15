@@ -45,7 +45,7 @@ export interface ConsumeSpanContext {
 /**
  * Optional knobs the RPC router uses to end the CONSUMER span early when
  * its own deadline fires. The handler's Promise may still be pending in
- * that case — the span status reflects the RPC outcome, not the
+ * that case; the span status reflects the RPC outcome, not the
  * handler's eventual settlement.
  */
 export interface ConsumeSpanOptions {
@@ -77,17 +77,17 @@ const applyUnexpectedError = (span: Span, err: unknown): void => {
 /**
  * Wrap a handler invocation in a CONSUMER span whose parent comes from the
  * incoming message headers. Preserves the caller's sync-vs-async result
- * shape — sync handlers return sync, async handlers return a Promise.
+ * shape: sync handlers return sync, async handlers return a Promise.
  *
  * Fast paths:
- * - `otel.enabled: false` → run `fn` directly, no span, no context extract
+ * - `otel.enabled: false` -> run `fn` directly, no span, no context extract
  *   (full kill switch).
- * - `traces` excludes `Consume` or `shouldTraceConsume` returns false →
+ * - `traces` excludes `Consume` or `shouldTraceConsume` returns false ->
  *   still extract the parent from headers and run `fn` under that context
  *   so the host app's tracer sees the right parent, but no span is created.
  *
- * Thrown errors go through `config.errorClassifier`: expected → status OK
- * with `jetstream.rpc.reply.*` attrs; unexpected → status ERROR with
+ * Thrown errors go through `config.errorClassifier`: expected -> status OK
+ * with `jetstream.rpc.reply.*` attrs; unexpected -> status ERROR with
  * `recordException`. The error rethrows, so the caller's settlement logic
  * (nak / term / DLQ) runs unchanged.
  */
@@ -137,17 +137,15 @@ export const withConsumeSpan = <T>(
   const start = Date.now();
   let finalized = false;
 
-  // External abort: the RPC router wires its own deadline here so the
-  // span closes even when the handler never settles. The handler's
-  // eventual resolution / rejection is still observed below but becomes
-  // a no-op — `finishOk` / `finishError` respect the `finalized` flag.
+  // External abort: the RPC router wires its own deadline here so the span
+  // closes even when the handler never settles; the handler's eventual
+  // settlement is then a no-op via the `finalized` flag.
   const { signal, timeoutLabel = 'handler.timeout' } = options;
   let detachAbort: (() => void) | null = null;
 
   const invokeResponseHook = (durationMs: number, error?: Error): void => {
-    // Run inside the span's active context so hooks that create child
-    // spans (`tracer.startSpan`, `trace.getActiveSpan`) parent under this
-    // CONSUMER span instead of the ambient one.
+    // Run inside the span's context so hooks that create child spans
+    // parent under this CONSUMER span instead of the ambient one.
     context.with(ctxWithSpan, () => {
       safelyInvokeHook(HOOK_RESPONSE, config.responseHook, span, {
         subject: ctx.subject,
@@ -171,9 +169,8 @@ export const withConsumeSpan = <T>(
     finalized = true;
     detachAbort?.();
 
-    // Wrap the user classifier so a throwing implementation can't leak the
-    // span (un-`end`ed → never exported) or shadow the original error on
-    // the rethrow path. Symmetric with `safelyInvokeHook` for the hooks.
+    // Guard the user classifier: a throwing implementation must not leak an
+    // un-ended span or shadow the original error on the rethrow path.
     let classification: 'expected' | 'unexpected' = 'unexpected';
 
     try {
@@ -209,10 +206,8 @@ export const withConsumeSpan = <T>(
       onAbort();
     } else {
       signal.addEventListener('abort', onAbort, { once: true });
-      // Detach when the handler finishes first so the closure (and its
-      // captured `span` / `ctx`) doesn't pin GC for the lifetime of a
-      // long-lived caller signal (e.g. an app-shutdown signal threaded
-      // through many consumes).
+      // Detach when the handler finishes first so the closure doesn't pin
+      // `span` / `ctx` for the lifetime of a long-lived caller signal.
       detachAbort = (): void => {
         signal.removeEventListener('abort', onAbort);
       };
@@ -222,10 +217,8 @@ export const withConsumeSpan = <T>(
   let result: T | Promise<T>;
 
   try {
-    // consumeHook fires inside the span's active context so any nested
-    // OTel work (`tracer.startSpan`, `trace.getActiveSpan`) parents under
-    // this CONSUMER span instead of the ambient one — symmetric with
-    // `withPublishSpan`'s `publishHook` placement.
+    // consumeHook fires inside the span's context so nested OTel work
+    // parents under this CONSUMER span; symmetric with `withPublishSpan`.
     result = context.with(ctxWithSpan, () => {
       safelyInvokeHook(HOOK_CONSUME, config.consumeHook, span, {
         subject: ctx.subject,

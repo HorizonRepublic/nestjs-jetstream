@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { RetentionPolicy, StorageType } from '@nats-io/jetstream';
 
-import { formatProvisioningSummary, type StreamReservation } from '../provisioning-summary';
+import { StreamKind } from '../../../interfaces';
+import {
+  formatProvisioningSummary,
+  type ExternalBinding,
+  type StreamReservation,
+} from '../provisioning-summary';
 
 const GIB = 1024 ** 3;
 
@@ -9,7 +14,7 @@ describe('formatProvisioningSummary', () => {
   // Given: two streams with different replicas
   const reservations: StreamReservation[] = [
     {
-      kind: 'ev',
+      kind: StreamKind.Event,
       name: 'svc__microservice_ev-stream',
       storage: StorageType.File,
       numReplicas: 3,
@@ -18,7 +23,7 @@ describe('formatProvisioningSummary', () => {
       retention: RetentionPolicy.Workqueue,
     },
     {
-      kind: 'broadcast',
+      kind: StreamKind.Broadcast,
       name: 'broadcast-stream',
       storage: StorageType.File,
       numReplicas: 3,
@@ -36,15 +41,15 @@ describe('formatProvisioningSummary', () => {
     expect(result).toContain('svc__microservice_ev-stream [ev]');
     expect(result).toContain('replicas=3');
     expect(result).toContain('max_bytes=5.00 GiB');
-    expect(result).toContain('cluster reservation 15.00 GiB'); // 5 × 3
+    expect(result).toContain('cluster reservation 15.00 GiB'); // 5 x 3
   });
 
   it('should render a per-node total = sum of max_bytes (worst case replicas=nodes)', () => {
     // When
     const result = formatProvisioningSummary('svc', reservations);
 
-    // Then: 5 + 2 = 7 GiB per node, not 5×3 + 2×3
-    expect(result).toContain('per-node file-backed footprint ≈ 7.00 GiB');
+    // Then: 5 + 2 = 7 GiB per node, not 5x3 + 2x3
+    expect(result).toContain('per-node file-backed footprint ~ 7.00 GiB');
     expect(result).toContain('max_file_store');
   });
 
@@ -52,7 +57,7 @@ describe('formatProvisioningSummary', () => {
     // Given: one file stream (2 GiB) + one memory stream (3 GiB)
     const mixed: StreamReservation[] = [
       {
-        kind: 'ev',
+        kind: StreamKind.Event,
         name: 'svc__microservice_ev-stream',
         storage: StorageType.File,
         numReplicas: 1,
@@ -61,7 +66,7 @@ describe('formatProvisioningSummary', () => {
         retention: RetentionPolicy.Limits,
       },
       {
-        kind: 'broadcast',
+        kind: StreamKind.Broadcast,
         name: 'broadcast-stream',
         storage: StorageType.Memory,
         numReplicas: 1,
@@ -75,14 +80,14 @@ describe('formatProvisioningSummary', () => {
     const result = formatProvisioningSummary('svc', mixed);
 
     // Then: only the file-backed 2 GiB counts toward the footer total
-    expect(result).toContain('per-node file-backed footprint ≈ 2.00 GiB');
+    expect(result).toContain('per-node file-backed footprint ~ 2.00 GiB');
   });
 
   it('should render zero max_bytes safely', () => {
     // Given: a stream with no byte limit
     const zero: StreamReservation[] = [
       {
-        kind: 'ev',
+        kind: StreamKind.Event,
         name: 'svc__microservice_ev-stream',
         storage: StorageType.File,
         numReplicas: 3,
@@ -98,5 +103,58 @@ describe('formatProvisioningSummary', () => {
     // Then
     expect(result).toContain('max_bytes=0 B');
     expect(result).toContain('max_age=unlimited');
+  });
+
+  describe('external bindings', () => {
+    const external: ExternalBinding[] = [
+      { kind: StreamKind.Event, name: 'acme__microservice_ev-stream' },
+      { kind: 'dlq', name: 'acme__microservice_dlq-stream' },
+    ];
+
+    it('should render external rows with an "external (bound)" marker', () => {
+      // When
+      const result = formatProvisioningSummary('acme', [], external);
+
+      // Then
+      expect(result).toContain('acme__microservice_ev-stream');
+      expect(result).toContain('external (bound)');
+    });
+
+    it('should not include external rows in the file-backed footprint total', () => {
+      // Given: one Auto reservation + two external bindings
+      const auto: StreamReservation[] = [
+        {
+          kind: StreamKind.Broadcast,
+          name: 'broadcast-stream',
+          storage: StorageType.File,
+          numReplicas: 1,
+          maxBytes: 2 * GIB,
+          maxAge: 0,
+          retention: RetentionPolicy.Limits,
+        },
+      ];
+
+      // When
+      const result = formatProvisioningSummary('acme', auto, external);
+
+      // Then: totals only include the auto broadcast stream (2 GiB), not externals
+      expect(result).toContain('per-node file-backed footprint ~ 2.00 GiB');
+    });
+
+    it('should count both auto and external rows in the header stream count', () => {
+      // When: 0 auto + 2 external
+      const result = formatProvisioningSummary('acme', [], external);
+
+      // Then: header says 2 stream(s); the externals count as streams for operator visibility
+      expect(result).toContain('2 stream(s)');
+    });
+
+    it('should work when external list is omitted (backward-compatible default)', () => {
+      // When: no third argument
+      const result = formatProvisioningSummary('svc', reservations);
+
+      // Then: existing tests remain valid, no crash, no "external" text
+      expect(result).not.toContain('external');
+    });
   });
 });

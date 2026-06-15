@@ -157,7 +157,7 @@ describe('OTel publish + consume integration', () => {
       await waitForCondition(() => controller.received.length === 1, 5_000);
       await provider.forceFlush();
 
-      // Then — only the two functional spans, no provisioning/connection/etc.
+      // Then: only the two functional spans, no provisioning/connection/etc.
       const spans = exporter.getFinishedSpans();
       const kinds = new Set(spans.map((s) => s.kind));
 
@@ -166,10 +166,8 @@ describe('OTel publish + consume integration', () => {
       // INTERNAL would only be present if infrastructure traces were enabled.
       expect(spans.filter((s: ReadableSpan) => s.kind === SpanKind.INTERNAL)).toHaveLength(0);
 
-      // Belt-and-suspenders: also pin the infrastructure span-name prefixes so
-      // a future change that accidentally defaults ConnectionLifecycle /
-      // Provisioning / SelfHealing / Migration / Shutdown to ON would fail
-      // here instead of going unnoticed.
+      // Also pin infrastructure span-name prefixes so accidentally defaulting any
+      // infrastructure trace kind to ON fails here instead of going unnoticed.
       const infraPrefixRe =
         /^(jetstream\.(provisioning|migration|self_healing|shutdown)|nats\.connection)/u;
 

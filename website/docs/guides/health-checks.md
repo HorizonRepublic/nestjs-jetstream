@@ -8,7 +8,7 @@ schema:
   headline: "How to expose health checks for NATS JetStream"
   description: "Expose NATS connection status and RTT latency as a Kubernetes readiness/liveness probe using JetstreamHealthIndicator."
   datePublished: "2026-03-21"
-  dateModified: "2026-05-27"
+  dateModified: "2026-06-12"
 ---
 
 import Since from '@site/src/components/Since';
@@ -138,7 +138,7 @@ return this.health.check([
 ```
 
 :::caution Terminus error details
-The `isHealthy()` method throws a plain `Error` with structured details attached as a property — not a Terminus `HealthCheckError`. Terminus still picks up the details correctly because it reads the error properties, but be aware of this if you catch the error directly in custom code.
+The `isHealthy()` method throws a plain `Error` with structured details attached as a property; not a Terminus `HealthCheckError`. Terminus still picks up the details correctly because it reads the error properties, but be aware of this if you catch the error directly in custom code.
 :::
 
 ## Without @nestjs/terminus (standalone)
@@ -176,7 +176,7 @@ This gives you full control over the response shape and HTTP status code without
 
 ## Auto-registration
 
-`JetstreamHealthIndicator` is automatically provided and exported by `JetstreamModule`. Since `forRoot()` registers the module globally, the indicator is available for injection in **any** module in the application — no need to import `JetstreamModule` again:
+`JetstreamHealthIndicator` is automatically provided and exported by `JetstreamModule`. Since `forRoot()` registers the module globally, the indicator is available for injection in **any** module in the application; no need to import `JetstreamModule` again:
 
 ```typescript
 import { JetstreamHealthIndicator } from '@horizon-republic/nestjs-jetstream';
@@ -194,7 +194,7 @@ export class MonitoringService {
 }
 ```
 
-No need to add it to any `providers` array or re-import `JetstreamModule` — it's available globally via `forRoot()`.
+No need to add it to any `providers` array or re-import `JetstreamModule`; it's available globally via `forRoot()`.
 
 ## See also
 

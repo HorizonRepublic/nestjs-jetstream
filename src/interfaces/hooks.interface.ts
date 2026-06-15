@@ -13,7 +13,7 @@ export type HandlerStatus = 'success' | 'error' | 'retried' | 'terminated';
 
 /**
  * Outcome of a client publish (event emit or RPC publish leg). Outbound
- * operations either acknowledge cleanly or surface a transport error — there
+ * operations either acknowledge cleanly or surface a transport error; there
  * is no retried/terminated dimension at the publish boundary.
  */
 export type PublishStatus = 'success' | 'error';
@@ -119,7 +119,7 @@ export interface TransportHooks {
    * Fired after every client-side publish (event emit or RPC publish leg)
    * completes, regardless of outcome.
    *
-   * @param subject  Declared user pattern (e.g. `orders.created`) — bounded
+   * @param subject  Declared user pattern (e.g. `orders.created`), bounded
    *                 by handler registration, safe for high-cardinality labels.
    * @param kind     Stream kind the publish targets: `Event`, `Broadcast`,
    *                 `Ordered`, or `Command` (RPC publish leg).
@@ -134,7 +134,7 @@ export interface TransportHooks {
   ): void;
 
   /**
-   * Fired after an RPC round-trip completes from the caller's perspective —
+   * Fired after an RPC round-trip completes from the caller's perspective:
    * either a reply is received, the call errors out, or the deadline expires.
    *
    * Distinct from {@link Published} which only covers the publish leg.
@@ -153,7 +153,7 @@ export interface TransportHooks {
 
 /**
  * Internal subscriber for a transport event. Multiple subscribers may be
- * registered per event via `EventBus.subscribe()` — used by built-in
+ * registered per event via `EventBus.subscribe()`; used by built-in
  * observers (e.g. metrics) without overriding the user-provided hook.
  */
 export type TransportEventSubscriber<K extends keyof TransportHooks> = (

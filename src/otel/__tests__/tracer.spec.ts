@@ -21,13 +21,13 @@ describe('getTracer', () => {
   });
 
   it('should reflect a TracerProvider registered after first resolution', () => {
-    // Given — first call before any provider is registered returns a no-op.
+    // Given: first call before any provider is registered returns a no-op
     const before = getTracer();
     const beforeSpan = before.startSpan('warm-up');
 
     beforeSpan.end();
 
-    // When — host app registers an SDK afterwards (Sentry, NodeSDK, etc.).
+    // When: host app registers an SDK afterwards
     const exporter = new InMemorySpanExporter();
     const provider = new BasicTracerProvider({
       spanProcessors: [new SimpleSpanProcessor(exporter)],
@@ -40,8 +40,7 @@ describe('getTracer', () => {
 
     afterSpan.end();
 
-    // Then — the second tracer is bound to the live provider, so spans
-    // actually reach the exporter (no stale no-op cache).
+    // Then: the second tracer is bound to the live provider (no stale no-op cache)
     expect(exporter.getFinishedSpans().some((span) => span.name === 'post-register')).toBe(true);
   });
 });

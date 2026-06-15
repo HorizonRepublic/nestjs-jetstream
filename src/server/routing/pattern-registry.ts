@@ -2,18 +2,9 @@ import { Logger } from '@nestjs/common';
 import { MessageHandler } from '@nestjs/microservices';
 
 import { MessageKind, StreamKind } from '../../interfaces';
-import type {
-  JetstreamModuleOptions,
-  PatternsByKind,
-  RegisteredHandler,
-  SubjectKind,
-} from '../../interfaces';
-import {
-  buildBroadcastSubject,
-  buildSubject,
-  internalName,
-  metadataKey,
-} from '../../jetstream.constants';
+import type { JetstreamModuleOptions, PatternsByKind, RegisteredHandler } from '../../interfaces';
+import { metadataKey } from '../../jetstream.constants';
+import { NameResolver } from '../infrastructure/name-resolver';
 
 /** Maps StreamKind to a human-readable label for logging. */
 const HANDLER_LABELS: Record<StreamKind, string> = {
@@ -35,7 +26,7 @@ export class PatternRegistry {
   private readonly logger = new Logger('Jetstream:PatternRegistry');
   private readonly registry = new Map<string, RegisteredHandler>();
 
-  // Cached after registerHandlers() — the registry is immutable from that point
+  // Cached after registerHandlers(); the registry is immutable from that point
   private cachedPatterns: PatternsByKind | null = null;
   private _hasEvents = false;
   private _hasCommands = false;
@@ -43,7 +34,10 @@ export class PatternRegistry {
   private _hasOrdered = false;
   private _hasMetadata = false;
 
-  public constructor(private readonly options: JetstreamModuleOptions) {}
+  public constructor(
+    private readonly options: JetstreamModuleOptions,
+    private readonly names: NameResolver,
+  ) {}
 
   /**
    * Register all handlers from the NestJS strategy.
@@ -51,8 +45,6 @@ export class PatternRegistry {
    * @param handlers Map of pattern -> MessageHandler from `Server.getHandlers()`.
    */
   public registerHandlers(handlers: Map<string, MessageHandler>): void {
-    const serviceName = this.options.name;
-
     for (const [pattern, handler] of handlers) {
       const extras = handler.extras as Record<string, unknown> | undefined;
       const isEvent = handler.isEventHandler ?? false;
@@ -73,10 +65,7 @@ export class PatternRegistry {
       else if (isEvent) kind = StreamKind.Event;
       else kind = StreamKind.Command;
 
-      const fullSubject =
-        kind === StreamKind.Broadcast
-          ? buildBroadcastSubject(pattern)
-          : buildSubject(serviceName, kind as SubjectKind, pattern);
+      const fullSubject = this.names.subject(kind, pattern);
 
       this.registry.set(fullSubject, {
         handler,
@@ -108,7 +97,7 @@ export class PatternRegistry {
    * Resolve the declared pattern and {@link StreamKind} for a full NATS subject.
    *
    * Returns `null` when the subject is not registered. The declared pattern is
-   * the value the user passed to `@EventPattern`/`@MessagePattern` — stable and
+   * the value the user passed to `@EventPattern`/`@MessagePattern`: stable and
    * bounded, suitable for use as a Prometheus label without cardinality risk.
    */
   public resolveDeclared(subject: string): { pattern: string; kind: StreamKind } | null {
@@ -121,7 +110,19 @@ export class PatternRegistry {
 
   /** Get all registered broadcast patterns (for consumer filter_subject setup). */
   public getBroadcastPatterns(): string[] {
-    return this.getPatternsByKind().broadcasts.map((p) => buildBroadcastSubject(p));
+    return this.getPatternsByKind().broadcasts.map((p) =>
+      this.names.subject(StreamKind.Broadcast, p),
+    );
+  }
+
+  /** Get registered event patterns as raw user-declared patterns. */
+  public getEventPatterns(): string[] {
+    return this.getPatternsByKind().events;
+  }
+
+  /** Get registered command patterns as raw user-declared patterns. */
+  public getCommandPatterns(): string[] {
+    return this.getPatternsByKind().commands;
   }
 
   public hasBroadcastHandlers(): boolean {
@@ -142,9 +143,7 @@ export class PatternRegistry {
 
   /** Get fully-qualified NATS subjects for ordered handlers. */
   public getOrderedSubjects(): string[] {
-    return this.getPatternsByKind().ordered.map((p) =>
-      buildSubject(this.options.name, StreamKind.Ordered, p),
-    );
+    return this.getPatternsByKind().ordered.map((p) => this.names.subject(StreamKind.Ordered, p));
   }
 
   /** Check if any registered handler has metadata. */
@@ -183,25 +182,6 @@ export class PatternRegistry {
       broadcasts: [...patterns.broadcasts],
       ordered: [...patterns.ordered],
     };
-  }
-
-  /** Normalize a full NATS subject back to the user-facing pattern. */
-  public normalizeSubject(subject: string): string {
-    const name = internalName(this.options.name);
-    const prefixes = [
-      `${name}.${StreamKind.Command}.`,
-      `${name}.${StreamKind.Event}.`,
-      `${name}.${StreamKind.Ordered}.`,
-      `${StreamKind.Broadcast}.`,
-    ];
-
-    for (const prefix of prefixes) {
-      if (subject.startsWith(prefix)) {
-        return subject.slice(prefix.length);
-      }
-    }
-
-    return subject;
   }
 
   private buildPatternsByKind(): PatternsByKind {

@@ -139,7 +139,7 @@ describe(StreamMigration.name, () => {
       // When
       await sut.migrate(jsm, testStreamName, newConfig);
 
-      // Then: updates ordered quiesce → clear backup sources → attach restore
+      // Then: updates ordered quiesce -> clear backup sources -> attach restore
       const updateCalls = vi.mocked(jsm.streams.update).mock.calls;
 
       expect(updateCalls[0]![0]).toBe(testStreamName);
@@ -267,7 +267,7 @@ describe(StreamMigration.name, () => {
       });
 
     it("should leave another instance's live backup alone during recovery", async () => {
-      // Given: a backup stamped moments ago — a peer is migrating right now
+      // Given: a backup stamped moments ago, a peer is migrating right now
       const sut = new StreamMigration(200, 200);
       const jsm = createMock<JetStreamManager>({
         streams: {
@@ -345,7 +345,7 @@ describe(StreamMigration.name, () => {
       // When
       await sut.migrate(jsm, testStreamName, newConfig);
 
-      // Then: mutable reconciliation only — nothing recreated
+      // Then: mutable reconciliation only, nothing recreated
       expect(jsm.streams.update).toHaveBeenCalledWith(testStreamName, newConfig);
       expect(jsm.streams.add).not.toHaveBeenCalled();
       expect(jsm.streams.delete).not.toHaveBeenCalled();
@@ -377,7 +377,7 @@ describe(StreamMigration.name, () => {
 
   describe('interrupted-migration recovery', () => {
     it('should recreate the stream and drop an empty backup after a delete/create crash', async () => {
-      // Given: only an empty stale backup exists — the original was deleted
+      // Given: only an empty stale backup exists; the original was deleted
       // and held no messages when the process died
       const sut = new StreamMigration();
       const jsm = createMock<JetStreamManager>({
@@ -409,7 +409,7 @@ describe(StreamMigration.name, () => {
     });
 
     it('should finish a restore whose source is still attached', async () => {
-      // Given: the stream still sources from the backup — the process died
+      // Given: the stream still sources from the backup; the process died
       // mid-restore and the server kept the source position
       const sut = new StreamMigration();
       const jsm = createMock<JetStreamManager>({
@@ -440,7 +440,7 @@ describe(StreamMigration.name, () => {
       // When
       const recovered = await sut.recoverInterrupted(jsm, testStreamName, newConfig);
 
-      // Then: drained, backup removed, source detached — in that order
+      // Then: drained, backup removed, source detached, in that order
       expect(recovered).toBe(true);
       expect(jsm.streams.delete).toHaveBeenCalledWith(backupStreamName);
 

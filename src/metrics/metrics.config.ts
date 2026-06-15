@@ -34,7 +34,7 @@ export interface MetricsConfig {
   /**
    * Polling interval (ms) for gauge metrics that query `JetStreamManager`
    * (consumer pending, stream messages, etc.). Default `15_000`.
-   * Set to `0` to disable polling — counter/histogram metrics still update
+   * Set to `0` to disable polling; counter/histogram metrics still update
    * via the event bus.
    */
   pollInterval?: number;
@@ -52,7 +52,7 @@ export type MetricsOption = boolean | MetricsConfig;
 /**
  * Bounded enum used to label `jetstream_errors_total{context}`. Free-form
  * context strings emitted by transport are mapped to one of these values
- * by the metrics service (unknown → `other`).
+ * by the metrics service (unknown -> `other`).
  */
 export type ErrorContext =
   | 'connection'
