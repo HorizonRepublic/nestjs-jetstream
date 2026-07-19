@@ -13,6 +13,7 @@ export type {
   JetstreamModuleAsyncOptions,
   JetstreamModuleOptions,
   MetadataRegistryOptions,
+  NatsConnectionFactory,
   OrderedEventOverrides,
   ProvisioningOptions,
   RpcConfig,

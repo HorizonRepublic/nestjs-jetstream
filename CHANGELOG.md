@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.13.0-trebik.1]
+
+### Features
+
+* **connection:** add a custom `connectionFactory` for compatible transports such as NATS WebSocket while preserving the full JetStream lifecycle
+
 ## [2.13.0](https://github.com/HorizonRepublic/nestjs-jetstream/compare/v2.12.1...v2.13.0) (2026-06-15)
 
 

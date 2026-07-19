@@ -14,9 +14,10 @@ import type { NatsConnection, Status } from '@nats-io/transport-node';
 import { connect } from '@nats-io/transport-node';
 import type { JetStreamClient, JetStreamManager } from '@nats-io/jetstream';
 import { jetstream, jetstreamManager } from '@nats-io/jetstream';
+import { wsconnect } from '@nats-io/nats-core';
 
 import { EventBus } from '../../hooks';
-import type { JetstreamModuleOptions } from '../../interfaces';
+import type { JetstreamModuleOptions, NatsConnectionFactory } from '../../interfaces';
 import { TransportEvent } from '../../interfaces';
 
 import { ConnectionProvider } from '../connection.provider';
@@ -113,6 +114,38 @@ describe(ConnectionProvider, () => {
         // Then: same connection, single connect call
         expect(nc1).toBe(nc2);
         expect(mockConnect).toHaveBeenCalledTimes(1);
+      });
+
+      it('should use a custom connection factory with merged options', async () => {
+        // Given: a custom transport factory such as wsconnect
+        const connectionFactory = vi.fn<NatsConnectionFactory>().mockResolvedValue(mockNc);
+
+        options.connectionOptions = {
+          name: 'custom-connection-name',
+          reconnectTimeWait: 2_000,
+        };
+        options.connectionFactory = connectionFactory;
+        sut = new ConnectionProvider(options, eventBus);
+
+        // When: connection requested
+        const nc = await sut.getConnection();
+
+        // Then: the custom factory receives the fully resolved configuration
+        expect(nc).toBe(mockNc);
+        expect(connectionFactory).toHaveBeenCalledTimes(1);
+        expect(connectionFactory).toHaveBeenCalledWith({
+          maxReconnectAttempts: -1,
+          reconnectTimeWait: 2_000,
+          name: 'custom-connection-name',
+          servers: options.servers,
+        });
+        expect(mockConnect).not.toHaveBeenCalled();
+      });
+
+      it('should accept the WebSocket connection factory', () => {
+        const connectionFactory: NatsConnectionFactory = wsconnect;
+
+        expect(connectionFactory).toBe(wsconnect);
       });
     });
 

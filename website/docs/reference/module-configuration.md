@@ -306,6 +306,10 @@ Default: `10_000` (10 s). Graceful shutdown timeout in milliseconds. Handlers ex
 
 Default: none. Raw NATS `ConnectionOptions` pass-through for TLS, auth, reconnection, etc. See [connectionOptions](#connectionoptions) below.
 
+#### `connectionFactory` &mdash; `NatsConnectionFactory`
+
+Default: `connect` from `@nats-io/transport-node`. Replaces only the physical connection constructor while keeping the complete JetStream consumer, routing, acknowledgement, and recovery lifecycle. Use it for compatible transports such as `wsconnect`. See [connectionFactory](#connectionfactory) below.
+
 #### `otel` &mdash; `OtelOptions`
 
 Default: enabled with sensible defaults. OpenTelemetry tracing configuration. See [Distributed Tracing](/docs/observability/tracing).
@@ -523,6 +527,22 @@ connectionOptions: {
   reconnectJitter: 500,        // add up to 500ms random jitter
 }
 ```
+
+## connectionFactory
+
+`connectionFactory` receives the fully merged `ConnectionOptions` and returns a compatible `NatsConnection`. This is useful when the service must connect over WebSocket while retaining the transport's durable pull consumer and self-healing behavior:
+
+```typescript
+import { wsconnect } from '@nats-io/nats-core';
+
+JetstreamModule.forRoot({
+  name: 'orders',
+  servers: ['wss://nats.example.com'],
+  connectionFactory: (options) => wsconnect(options),
+})
+```
+
+When `connectionFactory` is omitted, the transport uses `connect` from `@nats-io/transport-node` exactly as before.
 
 ## Publisher-only mode
 

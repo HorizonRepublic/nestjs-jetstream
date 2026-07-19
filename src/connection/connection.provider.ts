@@ -203,7 +203,7 @@ export class ConnectionProvider {
   /** Internal: establish the physical connection with reconnect monitoring. */
   private async establish(): Promise<NatsConnection> {
     try {
-      const nc = await connect({
+      const connectionOptions: ConnectionOptions = {
         ...DEFAULT_OPTIONS,
         // Default the NATS connection name to the OTel-derived service name so
         // `nats server info` lines up with span attributes, but let user-supplied
@@ -211,7 +211,10 @@ export class ConnectionProvider {
         name: this.otelServiceName,
         ...this.options.connectionOptions,
         servers: this.options.servers,
-      } as ConnectionOptions);
+      };
+      const nc = this.options.connectionFactory
+        ? await this.options.connectionFactory(connectionOptions)
+        : await connect(connectionOptions);
 
       this.connection = nc;
       this.logger.log(`NATS connection established: ${nc.getServer()}`);

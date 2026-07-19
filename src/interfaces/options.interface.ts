@@ -1,5 +1,5 @@
 import { FactoryProvider, ModuleMetadata, Type } from '@nestjs/common';
-import type { ConnectionOptions } from '@nats-io/transport-node';
+import type { ConnectionOptions, NatsConnection } from '@nats-io/transport-node';
 import { DeliverPolicy, ReplayPolicy } from '@nats-io/jetstream';
 import type { ConsumerConfig, ConsumeOptions, StreamConfig } from '@nats-io/jetstream';
 
@@ -221,6 +221,9 @@ export interface ProvisioningOptions {
   management?: ManagementMode;
 }
 
+/** Creates the NATS connection used by the transport. */
+export type NatsConnectionFactory = (options: ConnectionOptions) => Promise<NatsConnection>;
+
 /**
  * Root module configuration for `JetstreamModule.forRoot()`.
  *
@@ -367,6 +370,18 @@ export interface JetstreamModuleOptions {
    * Merged with `name` and `servers`; those take precedence.
    */
   connectionOptions?: Partial<ConnectionOptions>;
+
+  /**
+   * Custom NATS connection factory.
+   *
+   * Use this when the application needs a transport other than the default
+   * Node TCP/TLS client, for example `wsconnect` from `@nats-io/nats-core`.
+   * The factory receives the same merged options that would be passed to the
+   * default `connect()` implementation.
+   *
+   * @default connect from @nats-io/transport-node
+   */
+  connectionFactory?: NatsConnectionFactory;
 
   /**
    * Built-in Prometheus metrics.
