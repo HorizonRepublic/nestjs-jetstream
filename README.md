@@ -46,6 +46,19 @@ NestJS' [built-in NATS transport](https://docs.nestjs.com/microservices/nats) lo
 - **Scheduled messages, per-message TTL, health checks, graceful shutdown** — all the production levers.
 - **OpenTelemetry-compatible** — W3C `traceparent` propagated through every hop.
 
+## Connection transports
+
+The library always speaks the NATS protocol and automatically chooses the physical connection from the server URL:
+
+| URL | Connection |
+|---|---|
+| `nats://` | NATS over TCP |
+| `tls://` | NATS over TLS |
+| `ws://` | NATS over WebSocket |
+| `wss://` | NATS over secure WebSocket |
+
+No `connectionFactory` is needed for WebSocket. RPC is a separate message-level choice: both Core RPC and JetStream RPC work over TCP/TLS or WebSocket, as do durable events, broadcast, and ordered delivery. See [Connection Transports](website/docs/getting-started/connection-transports.md) for examples and the compatibility matrix.
+
 ## Install
 
 ```bash

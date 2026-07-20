@@ -8,7 +8,7 @@ schema:
   headline: "NestJS NATS RPC — Core vs JetStream Request/Reply"
   description: "Synchronous NestJS NATS request-reply in Core NATS or JetStream mode, with timeout handling, error serialization, and per-request overrides."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-11"
+  dateModified: "2026-07-20"
 ---
 
 # RPC (Request/Reply)
@@ -17,6 +17,10 @@ schema:
 > **You pick:** **Core** mode for sub-millisecond replies, **JetStream** mode for commands that must survive a restart. Same `@MessagePattern` either way.
 
 Your API gateway needs to fetch an order from the orders microservice. The client sends a command, the handler processes it, and the response travels back within a timeout window. This is request/reply (RPC), and the library offers two modes: **Core** for lowest latency, **JetStream** for persistence.
+
+:::info RPC mode is not the connection transport
+`rpc.mode` controls whether request commands are sent directly through Core NATS or persisted in JetStream. The `servers` URL independently controls the physical connection: NATS TCP/TLS (`nats://`, `tls://`) or WebSocket (`ws://`, `wss://`). Both RPC modes work over either connection. See [Connection Transports](/docs/getting-started/connection-transports).
+:::
 
 ## Core Mode (Default)
 

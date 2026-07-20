@@ -8,7 +8,7 @@ schema:
   headline: "Module Configuration Reference"
   description: "Reference for forRoot(), forRootAsync(), and forFeature() registration methods with stream, consumer, and connection options."
   datePublished: "2026-03-21"
-  dateModified: "2026-06-12"
+  dateModified: "2026-07-20"
 ---
 
 import Since from '@site/src/components/Since';
@@ -20,6 +20,8 @@ Reference for the three registration methods exposed by `JetstreamModule`: `forR
 ## forRoot()
 
 `forRoot()` registers the transport globally. Call it **once** in your root `AppModule`. It creates the shared NATS connection, codec, event bus, and (optionally) the full consumer infrastructure.
+
+The `servers` URL selects the physical connection independently of message behavior: `nats://` and `tls://` use TCP/TLS, while `ws://` and `wss://` use WebSocket. Options such as `rpc.mode`, events, broadcast, and ordered delivery work over either connection. See [Connection Transports](/docs/getting-started/connection-transports).
 
 ```typescript title="src/app.module.ts"
 import { Module } from '@nestjs/common';
@@ -221,7 +223,16 @@ Service name. Used for stream, consumer, and subject naming. Must be unique per 
 
 #### `servers` &mdash; `string[]`
 
-NATS server URLs (e.g., `['nats://localhost:4222']`).
+NATS server URLs. The URL scheme selects the physical connection automatically:
+
+| Scheme | Connection |
+|---|---|
+| `nats://` | NATS over TCP |
+| `tls://` | NATS over TLS |
+| `ws://` | NATS over WebSocket |
+| `wss://` | NATS over secure WebSocket |
+
+All URLs must use the same physical transport family; do not mix WebSocket and TCP/TLS URLs in one list. RPC mode and event delivery are configured separately and work over either family. See [Connection Transports](/docs/getting-started/connection-transports).
 
 ### Optional options
 
@@ -308,7 +319,7 @@ Default: none. Raw NATS `ConnectionOptions` pass-through for TLS, auth, reconnec
 
 #### `connectionFactory` &mdash; `NatsConnectionFactory`
 
-Default: selected from the server URLs. `ws://` and `wss://` use `wsconnect`; TCP/TLS URLs use `connect` from `@nats-io/transport-node`. An explicit factory replaces only the physical connection constructor while keeping the complete JetStream consumer, routing, acknowledgement, and recovery lifecycle. See [connectionFactory](#connectionfactory) below.
+Default: selected from the server URLs. `ws://` and `wss://` use `wsconnect`; TCP/TLS URLs use `connect` from `@nats-io/transport-node`. An explicit factory replaces only the physical connection constructor while keeping the complete JetStream consumer, routing, acknowledgement, and recovery lifecycle. See [connectionFactory](#connection-transport-selection-and-connectionfactory) below.
 
 #### `otel` &mdash; `OtelOptions`
 
@@ -528,9 +539,9 @@ connectionOptions: {
 }
 ```
 
-## connectionFactory
+## Connection transport selection and connectionFactory
 
-The transport automatically selects WebSocket when every configured server starts with `ws://` or `wss://`:
+The URL scheme in `servers` selects the physical connection automatically. WebSocket does not require an explicit `connectionFactory`:
 
 ```typescript
 JetstreamModule.forRoot({
@@ -539,9 +550,11 @@ JetstreamModule.forRoot({
 })
 ```
 
-TCP/TLS URLs continue to use `connect` from `@nats-io/transport-node`. WebSocket and TCP/TLS URLs cannot be mixed in one server list because they require different physical transports.
+TCP/TLS URLs use `connect` from `@nats-io/transport-node`. WebSocket URLs use `wsconnect` from `@nats-io/nats-core`. WebSocket and TCP/TLS URLs cannot be mixed in one server list because they require different physical transports.
 
 Set `connectionFactory` only when an application needs to override this scheme-based selection or provide another compatible transport. The factory receives the fully merged `ConnectionOptions` and returns a compatible `NatsConnection`.
+
+This setting changes only the physical connection. It does not change Core RPC, JetStream RPC, or any event delivery semantics. See [Connection Transports](/docs/getting-started/connection-transports) for the complete distinction.
 
 ## Publisher-only mode
 

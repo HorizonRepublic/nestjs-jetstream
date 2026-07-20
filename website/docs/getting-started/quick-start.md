@@ -8,7 +8,7 @@ schema:
   headline: "Quick Start"
   description: "Complete working example in four steps: register the module, connect the transport, define handlers, and send messages."
   datePublished: "2026-03-21"
-  dateModified: "2026-06-12"
+  dateModified: "2026-07-20"
 ---
 
 # Quick Start
@@ -47,6 +47,19 @@ import { GatewayController } from './gateway.controller';
 })
 export class AppModule {}
 ```
+
+The `servers` URL selects the physical connection automatically: `nats://` and `tls://` use the Node TCP/TLS transport, while `ws://` and `wss://` use WebSocket. It does not select the RPC mode or message pattern.
+
+For example, the same service can connect through secure WebSocket without a custom connection factory:
+
+```typescript
+JetstreamModule.forRoot({
+  name: 'orders',
+  servers: ['wss://nats.example.com/nats'],
+})
+```
+
+See [Connection Transports](/docs/getting-started/connection-transports) for the URL table and the transport/message-mode compatibility matrix.
 
 :::tip Naming matters
 The `name` in `forRoot()` identifies **this** service. The `name` in `forFeature()` identifies the **target** service you want to send messages to. When a service sends messages to itself, the two names are the same.
@@ -200,6 +213,7 @@ curl http://localhost:3000/orders/42
 
 ## What's next?
 
+- [**Connection Transports**](/docs/getting-started/connection-transports) — connect through NATS TCP/TLS or WebSocket and understand how this differs from RPC mode
 - [**Module Configuration**](/docs/reference/module-configuration) — learn about all configuration options, async setup, and advanced connection settings
 - [**RPC Patterns**](/docs/patterns/rpc) — deep dive into Core vs JetStream RPC modes
 - [**Events & Broadcast**](/docs/patterns/events) — workqueue events, broadcast fan-out, and ordered events
