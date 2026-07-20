@@ -374,12 +374,13 @@ export interface JetstreamModuleOptions {
   /**
    * Custom NATS connection factory.
    *
-   * Use this when the application needs a transport other than the default
-   * Node TCP/TLS client, for example `wsconnect` from `@nats-io/nats-core`.
+   * WebSocket transport is selected automatically when every server uses
+   * `ws://` or `wss://`. Use this factory only to override the scheme-based
+   * selection or provide another compatible transport.
    * The factory receives the same merged options that would be passed to the
-   * default `connect()` implementation.
+   * selected connection implementation.
    *
-   * @default connect from @nats-io/transport-node
+   * @default wsconnect for WebSocket URLs; connect for TCP/TLS URLs
    */
   connectionFactory?: NatsConnectionFactory;
 

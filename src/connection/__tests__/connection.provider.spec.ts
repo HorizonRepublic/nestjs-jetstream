@@ -27,6 +27,11 @@ vi.mock('@nats-io/transport-node', async () => ({
   connect: vi.fn(),
 }));
 
+vi.mock('@nats-io/nats-core', async () => ({
+  ...(await vi.importActual('@nats-io/nats-core')),
+  wsconnect: vi.fn(),
+}));
+
 vi.mock('@nats-io/jetstream', async () => ({
   ...(await vi.importActual('@nats-io/jetstream')),
   jetstream: vi.fn(),
@@ -34,6 +39,7 @@ vi.mock('@nats-io/jetstream', async () => ({
 }));
 
 const mockConnect = connect as MockedFunction<typeof connect>;
+const mockWsConnect = wsconnect as MockedFunction<typeof wsconnect>;
 
 describe(ConnectionProvider, () => {
   let sut: ConnectionProvider;
@@ -67,6 +73,7 @@ describe(ConnectionProvider, () => {
     eventBus = createMock<EventBus>();
     mockNc = createNc();
     mockConnect.mockResolvedValue(mockNc);
+    mockWsConnect.mockResolvedValue(mockNc);
     mockJetstream.mockReturnValue(createMock<JetStreamClient>());
 
     sut = new ConnectionProvider(options, eventBus);
@@ -120,6 +127,7 @@ describe(ConnectionProvider, () => {
         // Given: a custom transport factory such as wsconnect
         const connectionFactory = vi.fn<NatsConnectionFactory>().mockResolvedValue(mockNc);
 
+        options.servers = ['wss://nats.example.com'];
         options.connectionOptions = {
           name: 'custom-connection-name',
           reconnectTimeWait: 2_000,
@@ -140,16 +148,43 @@ describe(ConnectionProvider, () => {
           servers: options.servers,
         });
         expect(mockConnect).not.toHaveBeenCalled();
+        expect(mockWsConnect).not.toHaveBeenCalled();
       });
 
-      it('should accept the WebSocket connection factory', () => {
-        const connectionFactory: NatsConnectionFactory = wsconnect;
+      it.each(['ws://nats.example.com', 'wss://nats.example.com'])(
+        'should automatically use the WebSocket transport for %s',
+        async (server) => {
+          // Given: every configured server uses WebSocket
+          options.servers = [server];
+          sut = new ConnectionProvider(options, eventBus);
 
-        expect(connectionFactory).toBe(wsconnect);
-      });
+          // When: connection requested
+          const nc = await sut.getConnection();
+
+          // Then: WebSocket transport receives the resolved options
+          expect(nc).toBe(mockNc);
+          expect(mockWsConnect).toHaveBeenCalledWith(
+            expect.objectContaining({ servers: [server] }),
+          );
+          expect(mockConnect).not.toHaveBeenCalled();
+        },
+      );
     });
 
     describe('error paths', () => {
+      it('should reject mixed WebSocket and TCP server URLs', async () => {
+        // Given: no single physical transport can serve both URL families
+        options.servers = ['wss://nats.example.com', 'nats://nats.internal:4222'];
+        sut = new ConnectionProvider(options, eventBus);
+
+        // When/Then: configuration fails before attempting a connection
+        await expect(sut.getConnection()).rejects.toThrow(
+          'NATS servers cannot mix WebSocket and TCP/TLS URLs',
+        );
+        expect(mockWsConnect).not.toHaveBeenCalled();
+        expect(mockConnect).not.toHaveBeenCalled();
+      });
+
       it('should throw RuntimeException on CONNECTION_REFUSED', async () => {
         // Given: connection refused
         mockConnect.mockRejectedValue(new Error('CONNECTION_REFUSED'));

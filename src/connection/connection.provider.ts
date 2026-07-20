@@ -5,6 +5,7 @@ import {
   type NatsConnection,
   type Status,
 } from '@nats-io/transport-node';
+import { hasWsProtocol, wsconnect } from '@nats-io/nats-core';
 import {
   jetstream,
   jetstreamManager,
@@ -15,7 +16,7 @@ import { defer, from, Observable, share, shareReplay, switchMap } from 'rxjs';
 
 import { EventBus } from '../hooks';
 import { TransportEvent } from '../interfaces';
-import type { JetstreamModuleOptions } from '../interfaces';
+import type { JetstreamModuleOptions, NatsConnectionFactory } from '../interfaces';
 import {
   ATTR_NATS_CONNECTION_SERVER,
   beginConnectionLifecycleSpan,
@@ -31,6 +32,19 @@ import {
 const DEFAULT_OPTIONS: Partial<ConnectionOptions> = {
   maxReconnectAttempts: -1,
   reconnectTimeWait: 1_000,
+};
+
+const resolveDefaultConnectionFactory = (options: ConnectionOptions): NatsConnectionFactory => {
+  const servers = typeof options.servers === 'string' ? [options.servers] : (options.servers ?? []);
+  const websocketServerCount = servers.filter((server) =>
+    hasWsProtocol({ servers: [server] }),
+  ).length;
+
+  if (websocketServerCount > 0 && websocketServerCount < servers.length) {
+    throw new Error('NATS servers cannot mix WebSocket and TCP/TLS URLs');
+  }
+
+  return websocketServerCount > 0 ? wsconnect : connect;
 };
 
 /**
@@ -212,9 +226,9 @@ export class ConnectionProvider {
         ...this.options.connectionOptions,
         servers: this.options.servers,
       };
-      const nc = this.options.connectionFactory
-        ? await this.options.connectionFactory(connectionOptions)
-        : await connect(connectionOptions);
+      const connectionFactory =
+        this.options.connectionFactory ?? resolveDefaultConnectionFactory(connectionOptions);
+      const nc = await connectionFactory(connectionOptions);
 
       this.connection = nc;
       this.logger.log(`NATS connection established: ${nc.getServer()}`);

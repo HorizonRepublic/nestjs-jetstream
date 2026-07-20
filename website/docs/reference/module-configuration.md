@@ -308,7 +308,7 @@ Default: none. Raw NATS `ConnectionOptions` pass-through for TLS, auth, reconnec
 
 #### `connectionFactory` &mdash; `NatsConnectionFactory`
 
-Default: `connect` from `@nats-io/transport-node`. Replaces only the physical connection constructor while keeping the complete JetStream consumer, routing, acknowledgement, and recovery lifecycle. Use it for compatible transports such as `wsconnect`. See [connectionFactory](#connectionfactory) below.
+Default: selected from the server URLs. `ws://` and `wss://` use `wsconnect`; TCP/TLS URLs use `connect` from `@nats-io/transport-node`. An explicit factory replaces only the physical connection constructor while keeping the complete JetStream consumer, routing, acknowledgement, and recovery lifecycle. See [connectionFactory](#connectionfactory) below.
 
 #### `otel` &mdash; `OtelOptions`
 
@@ -530,19 +530,18 @@ connectionOptions: {
 
 ## connectionFactory
 
-`connectionFactory` receives the fully merged `ConnectionOptions` and returns a compatible `NatsConnection`. This is useful when the service must connect over WebSocket while retaining the transport's durable pull consumer and self-healing behavior:
+The transport automatically selects WebSocket when every configured server starts with `ws://` or `wss://`:
 
 ```typescript
-import { wsconnect } from '@nats-io/nats-core';
-
 JetstreamModule.forRoot({
   name: 'orders',
   servers: ['wss://nats.example.com'],
-  connectionFactory: (options) => wsconnect(options),
 })
 ```
 
-When `connectionFactory` is omitted, the transport uses `connect` from `@nats-io/transport-node` exactly as before.
+TCP/TLS URLs continue to use `connect` from `@nats-io/transport-node`. WebSocket and TCP/TLS URLs cannot be mixed in one server list because they require different physical transports.
+
+Set `connectionFactory` only when an application needs to override this scheme-based selection or provide another compatible transport. The factory receives the fully merged `ConnectionOptions` and returns a compatible `NatsConnection`.
 
 ## Publisher-only mode
 
