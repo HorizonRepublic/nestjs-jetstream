@@ -34,8 +34,7 @@ const DEFAULT_OPTIONS: Partial<ConnectionOptions> = {
   reconnectTimeWait: 1_000,
 };
 
-const resolveDefaultConnectionFactory = (options: ConnectionOptions): NatsConnectionFactory => {
-  const servers = typeof options.servers === 'string' ? [options.servers] : (options.servers ?? []);
+const resolveDefaultConnectionFactory = (servers: readonly string[]): NatsConnectionFactory => {
   const websocketServerCount = servers.filter((server) =>
     hasWsProtocol({ servers: [server] }),
   ).length;
@@ -227,7 +226,7 @@ export class ConnectionProvider {
         servers: this.options.servers,
       };
       const connectionFactory =
-        this.options.connectionFactory ?? resolveDefaultConnectionFactory(connectionOptions);
+        this.options.connectionFactory ?? resolveDefaultConnectionFactory(this.options.servers);
       const nc = await connectionFactory(connectionOptions);
 
       this.connection = nc;
