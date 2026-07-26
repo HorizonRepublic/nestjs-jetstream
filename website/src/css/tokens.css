@@ -53,6 +53,10 @@
    Paper carries a trace of warmth so the page reads as stock, not as a
    clinical panel. */
 [data-theme="light"] {
+  /* Native widgets - scrollbars, form controls, the canvas behind the page -
+     follow the theme too, otherwise a dark page keeps a light scrollbar. */
+  color-scheme: light;
+
   --jt-bg-0: #f8f8fa; /* page */
   --jt-bg-1: #ffffff; /* cards, navbar, code surfaces */
   --jt-bg-2: #eef0f5; /* inline code, input wells */
@@ -100,6 +104,8 @@
 /* ---- DARK ---------------------------------------------------------------
    The 3am shift. Same drawing, state colours lifted to hold contrast. */
 [data-theme="dark"] {
+  color-scheme: dark;
+
   --jt-bg-0: #171a21;
   --jt-bg-1: #1d212a;
   --jt-bg-2: #232834;

@@ -197,9 +197,11 @@ const config: Config = {
       },
     },
     colorMode: {
+      // First visit follows the OS setting; the switch still wins and its
+      // choice is remembered from then on.
       defaultMode: 'light',
       disableSwitch: false,
-      respectPrefersColorScheme: false,
+      respectPrefersColorScheme: true,
     },
     navbar: {
       title: 'nestjs-jetstream',
