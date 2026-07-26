@@ -108,6 +108,16 @@
   font-size: 13px;
 }
 
+.empty a {
+  color: var(--jt-accent);
+}
+
+/* Pushed to the trailing edge: a status line, not another shortcut. */
+.footCount {
+  margin-inline-start: auto;
+  color: var(--jt-fg-3);
+}
+
 .foot {
   display: flex;
   gap: 14px;

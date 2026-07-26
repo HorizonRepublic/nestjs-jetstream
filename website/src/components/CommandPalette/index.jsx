@@ -9,18 +9,49 @@ import styles from "./styles.module.css";
  * Wire to DocSearch later by replacing the static items prop.
  */
 const DEFAULT_ITEMS = [
-  { section: "Getting started", kind: "doc", label: "Quick Start", to: "/docs/getting-started/quick-start" },
-  { section: "Getting started", kind: "doc", label: "Why JetStream?", to: "/docs/getting-started/why-jetstream" },
-  { section: "Getting started", kind: "doc", label: "Migration from Core NATS", to: "/docs/guides/migration" },
-  { section: "Patterns", kind: "doc", label: "Events", to: "/docs/patterns/events" },
-  { section: "Patterns", kind: "doc", label: "RPC", to: "/docs/patterns/rpc" },
-  { section: "Patterns", kind: "doc", label: "Broadcast", to: "/docs/patterns/broadcast" },
-  { section: "Patterns", kind: "doc", label: "Ordered delivery", to: "/docs/patterns/ordered-events" },
-  { section: "Production", kind: "doc", label: "Module config", to: "/docs/reference/module-configuration" },
-  { section: "Production", kind: "doc", label: "Dead-letter queue", to: "/docs/guides/dead-letter-queue" },
-  { section: "Production", kind: "doc", label: "Health checks", to: "/docs/guides/health-checks" },
-  { section: "External", kind: "link", label: "GitHub repository", to: "https://github.com/HorizonRepublic/nestjs-jetstream" },
-  { section: "External", kind: "link", label: "npm package", to: "https://www.npmjs.com/package/@horizon-republic/nestjs-jetstream" },
+  { section: "Start", kind: "doc", label: "Quick start", to: "/docs/getting-started/quick-start" },
+  { section: "Start", kind: "doc", label: "Why JetStream?", to: "/docs/getting-started/why-jetstream" },
+  { section: "Start", kind: "doc", label: "Installation", to: "/docs/getting-started/installation" },
+  { section: "Start", kind: "doc", label: "Migrate from built-in NATS", to: "/docs/guides/migration" },
+
+  { section: "Delivery patterns", kind: "doc", label: "Events (workqueue)", to: "/docs/patterns/events" },
+  { section: "Delivery patterns", kind: "doc", label: "RPC (request/reply)", to: "/docs/patterns/rpc" },
+  { section: "Delivery patterns", kind: "doc", label: "Broadcast", to: "/docs/patterns/broadcast" },
+  { section: "Delivery patterns", kind: "doc", label: "Ordered events", to: "/docs/patterns/ordered-events" },
+  { section: "Delivery patterns", kind: "doc", label: "Handler metadata", to: "/docs/patterns/handler-metadata" },
+
+  { section: "When it fails", kind: "doc", label: "Dead letter queue", to: "/docs/guides/dead-letter-queue" },
+  { section: "When it fails", kind: "doc", label: "Troubleshooting", to: "/docs/guides/troubleshooting" },
+  { section: "When it fails", kind: "doc", label: "Edge cases", to: "/docs/reference/edge-cases" },
+  { section: "When it fails", kind: "doc", label: "Graceful shutdown", to: "/docs/guides/graceful-shutdown" },
+  { section: "When it fails", kind: "doc", label: "Health checks", to: "/docs/guides/health-checks" },
+
+  { section: "Operations", kind: "doc", label: "Scheduling", to: "/docs/guides/scheduling" },
+  { section: "Operations", kind: "doc", label: "Per-message TTL", to: "/docs/guides/per-message-ttl" },
+  { section: "Operations", kind: "doc", label: "Storage budgeting", to: "/docs/guides/storage-budgeting" },
+  { section: "Operations", kind: "doc", label: "Stream migration", to: "/docs/guides/stream-migration" },
+  { section: "Operations", kind: "doc", label: "External infrastructure", to: "/docs/guides/external-infrastructure" },
+  { section: "Operations", kind: "doc", label: "Performance", to: "/docs/guides/performance" },
+
+  { section: "Observability", kind: "doc", label: "Tracing", to: "/docs/observability/tracing" },
+  { section: "Observability", kind: "doc", label: "Metrics", to: "/docs/observability/metrics" },
+
+  { section: "Extending", kind: "doc", label: "Record builder", to: "/docs/guides/record-builder" },
+  { section: "Extending", kind: "doc", label: "Handler context", to: "/docs/guides/handler-context" },
+  { section: "Extending", kind: "doc", label: "Custom codec", to: "/docs/guides/custom-codec" },
+  { section: "Extending", kind: "doc", label: "Lifecycle hooks", to: "/docs/guides/lifecycle-hooks" },
+
+  { section: "Reference", kind: "ref", label: "Module configuration", to: "/docs/reference/module-configuration" },
+  { section: "Reference", kind: "ref", label: "Default configs", to: "/docs/reference/default-configs" },
+  { section: "Reference", kind: "ref", label: "Header contract", to: "/docs/reference/header-contract" },
+  { section: "Reference", kind: "ref", label: "Naming conventions", to: "/docs/reference/naming-conventions" },
+  { section: "Reference", kind: "ref", label: "Release notes", to: "/docs/reference/release-notes" },
+  { section: "Reference", kind: "api", label: "API reference", to: "/docs/reference/api" },
+
+  { section: "Project", kind: "doc", label: "Testing", to: "/docs/development/testing" },
+  { section: "Project", kind: "doc", label: "Contributing", to: "/docs/development/contributing" },
+  { section: "Project", kind: "link", label: "GitHub repository", to: "https://github.com/HorizonRepublic/nestjs-jetstream" },
+  { section: "Project", kind: "link", label: "npm package", to: "https://www.npmjs.com/package/@horizon-republic/nestjs-jetstream" },
 ];
 
 export default function CommandPalette({ items = DEFAULT_ITEMS }) {
@@ -121,7 +152,15 @@ export default function CommandPalette({ items = DEFAULT_ITEMS }) {
         </div>
 
         <div className={styles.results}>
-          {flat.length === 0 && <div className={styles.empty}>No results for &ldquo;{query}&rdquo;</div>}
+          {query.trim() === "" && flat.length === 0 && (
+            <div className={styles.empty}>Type to search {items.length} entries.</div>
+          )}
+          {query.trim() !== "" && flat.length === 0 && (
+            <div className={styles.empty}>
+              Nothing for &ldquo;{query}&rdquo;. Try a header name, or open{" "}
+              <a href={`${baseUrlNoSlash}/docs/guides/troubleshooting`}>troubleshooting</a>.
+            </div>
+          )}
           {(() => {
             let runningIdx = 0;
 
@@ -149,9 +188,10 @@ export default function CommandPalette({ items = DEFAULT_ITEMS }) {
         </div>
 
         <div className={styles.foot}>
-          <span><kbd>↑↓</kbd>navigate</span>
-          <span><kbd>↵</kbd>select</span>
+          <span><kbd>↑↓</kbd>move</span>
+          <span><kbd>↵</kbd>open</span>
           <span><kbd>esc</kbd>close</span>
+          <span className={styles.footCount}>{items.length} entries</span>
         </div>
       </div>
     </div>
