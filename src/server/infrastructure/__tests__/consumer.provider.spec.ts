@@ -1,15 +1,15 @@
-import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
-import { createMock } from '@golevelup/ts-vitest';
-import { faker } from '@faker-js/faker';
 import type { ConsumerInfo, StreamInfo } from '@nats-io/jetstream';
 import { JetStreamApiError } from '@nats-io/jetstream';
+
+import { faker } from '@faker-js/faker';
+import { createMock } from '@golevelup/ts-vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 
 import { ConnectionProvider } from '../../../connection';
 import { ManagementMode, StreamKind } from '../../../interfaces';
 import type { JetstreamModuleOptions } from '../../../interfaces';
 import { internalName } from '../../../jetstream.constants';
 import { PatternRegistry } from '../../routing';
-
 import { ConsumerProvider } from '../consumer.provider';
 import { InfrastructureBinder } from '../infrastructure-binder';
 import { NameResolver } from '../name-resolver';

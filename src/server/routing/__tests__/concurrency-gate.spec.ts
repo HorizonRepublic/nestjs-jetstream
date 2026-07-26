@@ -1,7 +1,9 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createMock } from '@golevelup/ts-vitest';
 import { Logger } from '@nestjs/common';
+
 import type { JsMsg } from '@nats-io/jetstream';
+
+import { createMock } from '@golevelup/ts-vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ConcurrencyGate } from '../concurrency-gate';
 

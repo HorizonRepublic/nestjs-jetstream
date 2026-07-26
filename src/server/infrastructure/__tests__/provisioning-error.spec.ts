@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
 import { JetStreamApiError } from '@nats-io/jetstream';
+
+import { describe, expect, it } from 'vitest';
 
 import { NatsErrorCode } from '../nats-error-codes';
 import {

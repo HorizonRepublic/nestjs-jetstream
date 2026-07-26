@@ -1,13 +1,14 @@
 import { FactoryProvider, ModuleMetadata, Type } from '@nestjs/common';
-import type { ConnectionOptions } from '@nats-io/transport-node';
+
 import { DeliverPolicy, ReplayPolicy } from '@nats-io/jetstream';
 import type { ConsumerConfig, ConsumeOptions, StreamConfig } from '@nats-io/jetstream';
+import type { ConnectionOptions } from '@nats-io/transport-node';
 
+import type { MetricsOption } from '../metrics/metrics.config';
+import type { OtelOptions } from '../otel';
 import { Codec } from './codec.interface';
 import type { DeadLetterInfo } from './hooks.interface';
 import { TransportHooks } from './hooks.interface';
-import type { MetricsOption } from '../metrics/metrics.config';
-import type { OtelOptions } from '../otel';
 
 /** How the library provisions a JetStream entity. */
 export enum ManagementMode {

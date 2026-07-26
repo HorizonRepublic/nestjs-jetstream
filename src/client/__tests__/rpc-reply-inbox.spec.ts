@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createMock } from '@golevelup/ts-vitest';
 import { faker } from '@faker-js/faker';
+import { createMock } from '@golevelup/ts-vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Codec } from '../../interfaces';
 import { RpcReplyInbox } from '../rpc-reply-inbox';

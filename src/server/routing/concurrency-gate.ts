@@ -1,4 +1,5 @@
 import type { Logger } from '@nestjs/common';
+
 import type { JsMsg } from '@nats-io/jetstream';
 
 import type { ParkTimerFn, RouteFn } from './routing.types';

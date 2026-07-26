@@ -1,7 +1,6 @@
 import type { Counter, Histogram, Gauge, Registry } from 'prom-client';
 
 import type { StreamKind } from '../interfaces';
-
 import type { HistogramBuckets } from './metrics.config';
 
 /**

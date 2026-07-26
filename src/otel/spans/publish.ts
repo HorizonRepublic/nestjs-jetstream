@@ -1,6 +1,8 @@
 import { Logger } from '@nestjs/common';
-import { SpanKind, SpanStatusCode, context, trace } from '@opentelemetry/api';
+
 import type { MsgHdrs } from '@nats-io/transport-node';
+
+import { SpanKind, SpanStatusCode, context, trace } from '@opentelemetry/api';
 
 import type { JetstreamRecord } from '../../client';
 import {
@@ -15,8 +17,8 @@ import { hdrsSetter } from '../carrier';
 import type { PublishKind, ResolvedOtelOptions, ServerEndpoint } from '../config';
 import { safelyInvokeHook } from '../internal-utils';
 import { injectContext } from '../propagator';
-import { getTracer } from '../tracer';
 import { JetstreamTrace } from '../trace-kinds';
+import { getTracer } from '../tracer';
 
 const logger = new Logger('Jetstream:Otel');
 

@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { faker } from '@faker-js/faker';
 import { headers as natsHeaders } from '@nats-io/transport-node';
+
+import { faker } from '@faker-js/faker';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   captureBodyAttribute,

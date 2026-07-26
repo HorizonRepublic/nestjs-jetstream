@@ -1,13 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createMock } from '@golevelup/ts-vitest';
-import { Counter, Gauge, Histogram, Registry } from 'prom-client';
 import type { ConsumerInfo, JetStreamManager, StreamInfo } from '@nats-io/jetstream';
 
-import { StreamKind } from '../../interfaces';
+import { createMock } from '@golevelup/ts-vitest';
+import { Counter, Gauge, Histogram, Registry } from 'prom-client';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { StreamKind } from '../../interfaces';
 import { createMetrics } from '../metrics.factory';
-import { PollRunner } from '../poll-runner';
 import type { ConsumerPollTarget, JetstreamMetrics } from '../metrics.types';
+import { PollRunner } from '../poll-runner';
 
 const consumerInfo = (overrides: Partial<ConsumerInfo> = {}): ConsumerInfo =>
   ({

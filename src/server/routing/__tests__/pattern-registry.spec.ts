@@ -1,12 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MessageHandler } from '@nestjs/microservices';
+
 import { faker } from '@faker-js/faker';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { StreamKind } from '../../../interfaces';
 import type { JetstreamModuleOptions } from '../../../interfaces';
 import { metadataKey } from '../../../jetstream.constants';
 import { NameResolver } from '../../infrastructure/name-resolver';
-
 import { PatternRegistry } from '../pattern-registry';
 
 const createHandler = (

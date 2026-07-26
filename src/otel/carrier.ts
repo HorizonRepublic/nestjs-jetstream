@@ -1,5 +1,6 @@
-import type { TextMapGetter, TextMapSetter } from '@opentelemetry/api';
 import type { MsgHdrs } from '@nats-io/transport-node';
+
+import type { TextMapGetter, TextMapSetter } from '@opentelemetry/api';
 
 /**
  * `TextMapSetter` that writes propagation keys (`traceparent`, `tracestate`,

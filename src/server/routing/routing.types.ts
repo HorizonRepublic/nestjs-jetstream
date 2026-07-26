@@ -1,11 +1,11 @@
 import type { Logger } from '@nestjs/common';
+
 import type { JsMsg } from '@nats-io/jetstream';
 
 import type { RpcContext } from '../../context';
 import type { EventBus } from '../../hooks';
 import type { Codec, HandlerStatus, StreamKind } from '../../interfaces';
 import type { ConsumeKind, ResolvedOtelOptions, ServerEndpoint } from '../../otel';
-
 import type { DeadLetterCapture } from './dead-letter-capture';
 import type { PatternRegistry } from './pattern-registry';
 

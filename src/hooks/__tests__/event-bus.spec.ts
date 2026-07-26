@@ -1,10 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
-import { createMock } from '@golevelup/ts-vitest';
 import { Logger } from '@nestjs/common';
+
 import { faker } from '@faker-js/faker';
+import { createMock } from '@golevelup/ts-vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 
 import { TransportEvent } from '../../interfaces';
-
 import { EventBus } from '../event-bus';
 
 describe(EventBus, () => {

@@ -1,8 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { faker } from '@faker-js/faker';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { JetstreamHeader, RESERVED_HEADERS } from '../../jetstream.constants';
-
 import { JetstreamRecord, JetstreamRecordBuilder } from '../jetstream.record';
 
 describe(JetstreamRecord, () => {

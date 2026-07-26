@@ -1,8 +1,9 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createMock } from '@golevelup/ts-vitest';
-import { faker } from '@faker-js/faker';
 import type { JetStreamManager, StreamConfig, StreamInfo } from '@nats-io/jetstream';
 import { JetStreamApiError, StorageType, RetentionPolicy } from '@nats-io/jetstream';
+
+import { faker } from '@faker-js/faker';
+import { createMock } from '@golevelup/ts-vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { MIGRATION_BACKUP_SUFFIX, StreamMigration } from '../stream-migration';
 

@@ -1,13 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
-import { createMock } from '@golevelup/ts-vitest';
-import { faker } from '@faker-js/faker';
 import type { Msg, NatsConnection, Subscription } from '@nats-io/transport-node';
+
+import { faker } from '@faker-js/faker';
+import { createMock } from '@golevelup/ts-vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 
 import { ConnectionProvider } from '../../connection';
 import { EventBus } from '../../hooks';
 import type { Codec, JetstreamModuleOptions } from '../../interfaces';
 import { StreamKind, TransportEvent } from '../../interfaces';
-
 import { CoreRpcServer } from '../core-rpc.server';
 import { PatternRegistry } from '../routing/pattern-registry';
 

@@ -1,14 +1,15 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { Controller, INestApplication } from '@nestjs/common';
 import { ClientProxy, EventPattern, MessagePattern, Payload } from '@nestjs/microservices';
 import { TestingModule } from '@nestjs/testing';
+
 import type { NatsConnection } from '@nats-io/transport-node';
+
+import { Registry } from 'prom-client';
 import { firstValueFrom } from 'rxjs';
 import type { StartedTestContainer } from 'testcontainers';
-import { Registry } from 'prom-client';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { getClientToken, StreamKind, streamName, toNanos } from '../../src';
-
 import {
   cleanupStreams,
   createNatsConnection,

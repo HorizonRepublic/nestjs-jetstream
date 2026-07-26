@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+
 import { JetStreamApiError, RetentionPolicy } from '@nats-io/jetstream';
 import type { ConsumerInfo, StreamInfo } from '@nats-io/jetstream';
 
@@ -7,13 +8,12 @@ import type { AckExtensionConfig, JetstreamModuleOptions } from '../../interface
 import type { ProvisioningEntity } from '../../otel';
 import { resolveAckExtensionInterval } from '../../utils/ack-extension';
 import { PatternRegistry } from '../routing';
-
-import { JetstreamProvisioningError } from './provisioning-error';
 import { kindOptionsBlock, type ManagedKind } from './management';
 import { NameResolver } from './name-resolver';
 import { NatsErrorCode } from './nats-error-codes';
-import { coversOrEquals } from './subject-utils';
+import { JetstreamProvisioningError } from './provisioning-error';
 import { MIGRATION_BACKUP_SUFFIX } from './stream-migration';
+import { coversOrEquals } from './subject-utils';
 
 /** Minimal JetStreamManager surface used by the binder. */
 interface BinderJsm {

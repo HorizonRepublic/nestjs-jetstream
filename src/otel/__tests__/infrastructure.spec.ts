@@ -1,4 +1,3 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { faker } from '@faker-js/faker';
 import { SpanStatusCode, trace } from '@opentelemetry/api';
 import {
@@ -6,6 +5,7 @@ import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
 } from '@opentelemetry/sdk-trace-base';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { resolveOtelOptions } from '../config';
 import {

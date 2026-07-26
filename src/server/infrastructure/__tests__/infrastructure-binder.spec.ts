@@ -1,7 +1,5 @@
 import { Logger } from '@nestjs/common';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createMock } from '@golevelup/ts-vitest';
-import { faker } from '@faker-js/faker';
+
 import {
   JetStreamApiError,
   RetentionPolicy,
@@ -12,13 +10,16 @@ import {
   type StreamInfo,
 } from '@nats-io/jetstream';
 
+import { faker } from '@faker-js/faker';
+import { createMock } from '@golevelup/ts-vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { ManagementMode, StreamKind } from '../../../interfaces';
 import type { JetstreamModuleOptions } from '../../../interfaces';
 import { PatternRegistry } from '../../routing';
-
 import { InfrastructureBinder } from '../infrastructure-binder';
-import { JetstreamProvisioningError } from '../provisioning-error';
 import { NameResolver } from '../name-resolver';
+import { JetstreamProvisioningError } from '../provisioning-error';
 import { MIGRATION_BACKUP_SUFFIX } from '../stream-migration';
 
 const streamNotFound = (): JetStreamApiError =>

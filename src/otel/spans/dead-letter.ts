@@ -1,5 +1,6 @@
-import { ROOT_CONTEXT, SpanKind, SpanStatusCode, context, trace } from '@opentelemetry/api';
 import type { JsMsg } from '@nats-io/jetstream';
+
+import { ROOT_CONTEXT, SpanKind, SpanStatusCode, context, trace } from '@opentelemetry/api';
 
 import { HOOK_RESPONSE, SPAN_NAME_DEAD_LETTER } from '../attribute-keys';
 import { buildDeadLetterAttributes } from '../attributes';
@@ -7,8 +8,8 @@ import { hdrsGetter } from '../carrier';
 import type { ResolvedOtelOptions, ServerEndpoint } from '../config';
 import { safelyInvokeHook } from '../internal-utils';
 import { extractContext } from '../propagator';
-import { getTracer } from '../tracer';
 import { JetstreamTrace } from '../trace-kinds';
+import { getTracer } from '../tracer';
 
 export interface DeadLetterSpanContext {
   readonly msg: JsMsg;

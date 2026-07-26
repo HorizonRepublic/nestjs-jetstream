@@ -1,5 +1,7 @@
 import { Logger } from '@nestjs/common';
+
 import type { JsMsg } from '@nats-io/jetstream';
+
 import { Observable, Subscription } from 'rxjs';
 
 import { ConnectionProvider } from '../../connection';
@@ -12,7 +14,6 @@ import type {
   EventProcessingConfig,
   JetstreamModuleOptions,
 } from '../../interfaces';
-import { resolveAckExtensionInterval, startAckExtensionTimer } from '../../utils';
 import {
   ConsumeKind,
   deriveOtelAttrs,
@@ -20,7 +21,7 @@ import {
   type ResolvedOtelOptions,
   type ServerEndpoint,
 } from '../../otel';
-
+import { resolveAckExtensionInterval, startAckExtensionTimer } from '../../utils';
 import { MessageProvider } from '../infrastructure';
 import { NameResolver } from '../infrastructure/name-resolver';
 import { ConcurrencyGate } from './concurrency-gate';

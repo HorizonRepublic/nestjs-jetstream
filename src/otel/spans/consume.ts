@@ -1,3 +1,5 @@
+import type { DeliveryInfo } from '@nats-io/jetstream';
+
 import {
   ROOT_CONTEXT,
   SpanKind,
@@ -6,7 +8,6 @@ import {
   trace,
   type Span,
 } from '@opentelemetry/api';
-import type { DeliveryInfo } from '@nats-io/jetstream';
 
 import { HOOK_CONSUME, HOOK_RESPONSE, SPAN_NAME_PROCESS } from '../attribute-keys';
 import { applyExpectedErrorAttributes, buildConsumeAttributes } from '../attributes';
@@ -21,8 +22,8 @@ import type {
 } from '../config';
 import { safelyInvokeHook } from '../internal-utils';
 import { extractContext } from '../propagator';
-import { getTracer } from '../tracer';
 import { JetstreamTrace } from '../trace-kinds';
+import { getTracer } from '../tracer';
 
 const isPromiseLike = <T>(value: unknown): value is PromiseLike<T> =>
   typeof value === 'object' &&

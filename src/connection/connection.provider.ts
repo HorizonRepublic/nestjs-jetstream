@@ -1,16 +1,18 @@
 import { Logger } from '@nestjs/common';
-import {
-  connect,
-  type ConnectionOptions,
-  type NatsConnection,
-  type Status,
-} from '@nats-io/transport-node';
+
 import {
   jetstream,
   jetstreamManager,
   type JetStreamClient,
   type JetStreamManager,
 } from '@nats-io/jetstream';
+import {
+  connect,
+  type ConnectionOptions,
+  type NatsConnection,
+  type Status,
+} from '@nats-io/transport-node';
+
 import { defer, from, Observable, share, shareReplay, switchMap } from 'rxjs';
 
 import { EventBus } from '../hooks';

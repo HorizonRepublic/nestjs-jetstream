@@ -1,7 +1,6 @@
 import { Logger } from '@nestjs/common';
 
 import { internalName } from '../jetstream.constants';
-
 import {
   resolveOtelOptions,
   type OtelOptions,

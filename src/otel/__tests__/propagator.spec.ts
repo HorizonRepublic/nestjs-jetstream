@@ -1,4 +1,3 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ROOT_CONTEXT,
   propagation,
@@ -7,6 +6,7 @@ import {
   type TextMapPropagator,
   type TextMapSetter,
 } from '@opentelemetry/api';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { extractContext, injectContext } from '../propagator';
 

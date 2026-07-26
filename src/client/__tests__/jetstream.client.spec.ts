@@ -1,10 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
-import { createMock } from '@golevelup/ts-vitest';
-import { faker } from '@faker-js/faker';
+import type { JetStreamClient as NatsJsClient, PubAck } from '@nats-io/jetstream';
 import type { Msg, MsgHdrs, NatsConnection, Status, Subscription } from '@nats-io/transport-node';
 import { headers as natsHeaders } from '@nats-io/transport-node';
-import type { JetStreamClient as NatsJsClient, PubAck } from '@nats-io/jetstream';
+
+import { faker } from '@faker-js/faker';
+import { createMock } from '@golevelup/ts-vitest';
 import { firstValueFrom, Subject } from 'rxjs';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 
 import { ConnectionProvider } from '../../connection';
 import { EventBus } from '../../hooks';
@@ -15,11 +16,10 @@ import {
   DEFAULT_RPC_TIMEOUT,
   JetstreamHeader,
 } from '../../jetstream.constants';
-
 import { NameResolver } from '../../server/infrastructure/name-resolver';
 import { JetstreamClient } from '../jetstream.client';
-import { RpcReplyInbox } from '../rpc-reply-inbox';
 import { JetstreamRecordBuilder } from '../jetstream.record';
+import { RpcReplyInbox } from '../rpc-reply-inbox';
 
 describe(JetstreamClient, () => {
   let sut: JetstreamClient;

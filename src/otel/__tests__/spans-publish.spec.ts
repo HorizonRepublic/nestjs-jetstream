@@ -1,4 +1,5 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { headers } from '@nats-io/transport-node';
+
 import { faker } from '@faker-js/faker';
 import { SpanKind, SpanStatusCode, context, propagation, trace } from '@opentelemetry/api';
 import { AsyncLocalStorageContextManager } from '@opentelemetry/context-async-hooks';
@@ -8,7 +9,7 @@ import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
 } from '@opentelemetry/sdk-trace-base';
-import { headers } from '@nats-io/transport-node';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { JetstreamRecord } from '../../client';
 import { PublishKind, resolveOtelOptions, type OtelOptions } from '../config';

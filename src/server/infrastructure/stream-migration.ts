@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+
 import {
   JetStreamApiError,
   type JetStreamManager,
@@ -6,8 +7,8 @@ import {
   type StreamInfo,
 } from '@nats-io/jetstream';
 
-import { compareStreamConfig } from './stream-config-diff';
 import { NatsErrorCode } from './nats-error-codes';
+import { compareStreamConfig } from './stream-config-diff';
 
 export const MIGRATION_BACKUP_SUFFIX = '__migration_backup';
 const DEFAULT_SOURCING_TIMEOUT_MS = 30_000;

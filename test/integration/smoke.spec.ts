@@ -1,7 +1,8 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { connect } from '@nats-io/transport-node';
 import { jetstreamManager } from '@nats-io/jetstream';
+import { connect } from '@nats-io/transport-node';
+
 import type { StartedTestContainer } from 'testcontainers';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { startNatsContainer } from './nats-container';
 

@@ -1,5 +1,6 @@
 import { Controller, Get, Inject, Logger, Module } from '@nestjs/common';
 import { EventPattern, Payload } from '@nestjs/microservices';
+
 import { Observable } from 'rxjs';
 
 import { getClientToken, JetstreamClient, JetstreamModule, toNanos } from '../../src';

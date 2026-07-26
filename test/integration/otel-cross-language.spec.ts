@@ -1,9 +1,10 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { Controller, INestApplication } from '@nestjs/common';
 import { EventPattern, MessagePattern, Payload } from '@nestjs/microservices';
-import { TestingModule } from '@nestjs/testing';
 import { ClientProxy } from '@nestjs/microservices';
-import { firstValueFrom } from 'rxjs';
+import { TestingModule } from '@nestjs/testing';
+
+import { jetstream } from '@nats-io/jetstream';
+import { headers as natsHeaders, type NatsConnection } from '@nats-io/transport-node';
 
 import { context, propagation, SpanKind, trace } from '@opentelemetry/api';
 import { AsyncLocalStorageContextManager } from '@opentelemetry/context-async-hooks';
@@ -13,12 +14,11 @@ import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
 } from '@opentelemetry/sdk-trace-base';
-import { headers as natsHeaders, type NatsConnection } from '@nats-io/transport-node';
-import { jetstream } from '@nats-io/jetstream';
+import { firstValueFrom } from 'rxjs';
 import type { StartedTestContainer } from 'testcontainers';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { getClientToken, internalName, StreamKind } from '../../src';
-
 import {
   cleanupStreams,
   createNatsConnection,

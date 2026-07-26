@@ -1,8 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
+import type { NatsConnection } from '@nats-io/transport-node';
+
+import { faker } from '@faker-js/faker';
 import { createMock } from '@golevelup/ts-vitest';
 import { Counter, Gauge, Histogram, Registry } from 'prom-client';
-import { faker } from '@faker-js/faker';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 
+import { ConnectionProvider } from '../../connection';
 import { EventBus } from '../../hooks';
 import type {
   DeadLetterInfo,
@@ -12,14 +15,11 @@ import type {
 } from '../../interfaces';
 import { MessageKind, StreamKind, TransportEvent } from '../../interfaces';
 import { streamName } from '../../jetstream.constants';
-import { PatternRegistry } from '../../server/routing/pattern-registry';
-
 import { NameResolver } from '../../server/infrastructure/name-resolver';
+import { PatternRegistry } from '../../server/routing/pattern-registry';
 import { DEFAULT_POLL_INTERVAL_MS, UNMATCHED_SUBJECT_LABEL } from '../metrics.constants';
 import { JetstreamMetricsService } from '../metrics.service';
 import type { ConsumerPollTarget, PromClientRuntime } from '../metrics.types';
-import { ConnectionProvider } from '../../connection';
-import type { NatsConnection } from '@nats-io/transport-node';
 
 type Subscribers = Map<string, ((...args: unknown[]) => void)[]>;
 

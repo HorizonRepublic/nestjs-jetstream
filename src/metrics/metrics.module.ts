@@ -10,7 +10,6 @@ import {
 } from '../jetstream.constants';
 import { NameResolver } from '../server/infrastructure/name-resolver';
 import { PatternRegistry } from '../server/routing/pattern-registry';
-
 import type { MetricsConfig, MetricsOption } from './metrics.config';
 import {
   DEFAULT_METRICS_PREFIX,
@@ -19,8 +18,8 @@ import {
   JETSTREAM_METRICS_PROM_CLIENT,
   JETSTREAM_METRICS_REGISTRY,
 } from './metrics.constants';
-import type { PromClientRuntime } from './metrics.types';
 import { JetstreamMetricsService } from './metrics.service';
+import type { PromClientRuntime } from './metrics.types';
 
 const PROM_CLIENT_INSTALL_MESSAGE =
   'prom-client is required when JetstreamModule.forRoot({ metrics: ... }) is enabled. Install it with: pnpm add prom-client';

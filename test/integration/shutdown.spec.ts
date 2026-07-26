@@ -1,13 +1,14 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Controller } from '@nestjs/common';
 import { EventPattern, MessagePattern, Payload } from '@nestjs/microservices';
-import type { NatsConnection } from '@nats-io/transport-node';
+
 import { jetstreamManager } from '@nats-io/jetstream';
+import type { NatsConnection } from '@nats-io/transport-node';
+
 import type { StartedTestContainer } from 'testcontainers';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { JETSTREAM_CONNECTION } from '../../src';
 import { ConnectionProvider } from '../../src/connection';
-
 import { cleanupStreams, createNatsConnection, createTestApp, uniqueServiceName } from './helpers';
 import {
   restartNatsContainer,

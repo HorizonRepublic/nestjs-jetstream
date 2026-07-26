@@ -14,5 +14,33 @@
   "htmlWhitespaceSensitivity": "css",
   "embeddedLanguageFormatting": "auto",
   "sortPackageJson": false,
-  "ignorePatterns": []
+  "ignorePatterns": [],
+  "sortImports": {
+    "customGroups": [
+      {
+        "groupName": "nest",
+        "elementNamePattern": [
+          "@nestjs/**"
+        ]
+      },
+      {
+        "groupName": "nats",
+        "elementNamePattern": [
+          "@nats-io/**"
+        ]
+      }
+    ],
+    "groups": [
+      "builtin",
+      "nest",
+      "nats",
+      "external",
+      [
+        "parent",
+        "sibling",
+        "index"
+      ],
+      "unknown"
+    ]
+  }
 }

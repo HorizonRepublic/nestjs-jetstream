@@ -1,12 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
-import { createMock } from '@golevelup/ts-vitest';
-import { faker } from '@faker-js/faker';
 import type { Consumer, ConsumerInfo, ConsumerMessages, JsMsg } from '@nats-io/jetstream';
+
+import { faker } from '@faker-js/faker';
+import { createMock } from '@golevelup/ts-vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 
 import { ConnectionProvider } from '../../../connection';
 import { EventBus } from '../../../hooks';
 import { StreamKind, TransportEvent } from '../../../interfaces';
-
 import { MessageProvider } from '../message.provider';
 
 /** Status-event iterator next(): yields the given events, then blocks until stopped. */

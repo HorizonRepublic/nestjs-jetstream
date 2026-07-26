@@ -1,8 +1,8 @@
-import type { Span } from '@opentelemetry/api';
 import type { MsgHdrs } from '@nats-io/transport-node';
 
-import type { JetstreamRecord } from '../client';
+import type { Span } from '@opentelemetry/api';
 
+import type { JetstreamRecord } from '../client';
 import { compileHeaderAllowlist } from './capture';
 import { DEFAULT_TRACES, JetstreamTrace } from './trace-kinds';
 

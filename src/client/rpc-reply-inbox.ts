@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+
 import {
   createInbox,
   type Msg,
@@ -8,7 +9,6 @@ import {
 
 import type { Codec } from '../interfaces';
 import { JetstreamHeader } from '../jetstream.constants';
-
 import type { RpcReplyCallback } from './client.types';
 
 /**

@@ -29,7 +29,6 @@ import {
 } from '../jetstream.constants';
 import { NameResolver } from '../server/infrastructure/name-resolver';
 import { PatternRegistry } from '../server/routing/pattern-registry';
-
 import { mapErrorContext } from './error-context-mapper';
 import type { MetricsConfig } from './metrics.config';
 import {
@@ -41,7 +40,6 @@ import {
   UNMATCHED_SUBJECT_LABEL,
 } from './metrics.constants';
 import { createMetrics } from './metrics.factory';
-import { PollRunner } from './poll-runner';
 import type {
   ConsumerPollTarget,
   JetstreamMetrics,
@@ -49,6 +47,7 @@ import type {
   RecoveredKindLabel,
   ResolvedSubjectLabels,
 } from './metrics.types';
+import { PollRunner } from './poll-runner';
 
 /**
  * Built-in Prometheus metrics service. On bootstrap, instantiates the metric

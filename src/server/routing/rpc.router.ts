@@ -1,7 +1,9 @@
 import { Logger } from '@nestjs/common';
 import { MessageHandler } from '@nestjs/microservices';
-import { headers, type NatsConnection } from '@nats-io/transport-node';
+
 import type { JsMsg } from '@nats-io/jetstream';
+import { headers, type NatsConnection } from '@nats-io/transport-node';
+
 import { Subscription } from 'rxjs';
 
 import { ConnectionProvider } from '../../connection';
@@ -31,7 +33,6 @@ import {
   startAckExtensionTimer,
   unwrapResult,
 } from '../../utils';
-
 import { MessageProvider } from '../infrastructure';
 import { ConcurrencyGate } from './concurrency-gate';
 import { PatternRegistry } from './pattern-registry';

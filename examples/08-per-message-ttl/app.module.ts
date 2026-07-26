@@ -1,5 +1,6 @@
 import { Controller, Get, Inject, Logger, Module } from '@nestjs/common';
 import { EventPattern, Payload } from '@nestjs/microservices';
+
 import { lastValueFrom } from 'rxjs';
 
 import {

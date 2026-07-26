@@ -1,3 +1,6 @@
+import { jetstreamManager } from '@nats-io/jetstream';
+import { connect } from '@nats-io/transport-node';
+
 import {
   GenericContainer,
   Network,
@@ -5,8 +8,6 @@ import {
   StartedTestContainer,
   Wait,
 } from 'testcontainers';
-import { connect } from '@nats-io/transport-node';
-import { jetstreamManager } from '@nats-io/jetstream';
 
 export const NATS_IMAGE = 'nats:2.14.1';
 

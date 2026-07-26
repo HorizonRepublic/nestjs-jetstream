@@ -9,7 +9,6 @@ import {
   streamName,
   subjectPrefix,
 } from '../../jetstream.constants';
-
 import { kindOptionsBlock } from './management';
 
 interface KindNames {
