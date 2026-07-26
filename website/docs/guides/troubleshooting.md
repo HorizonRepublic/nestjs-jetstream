@@ -60,11 +60,13 @@ The transport defaults to unlimited reconnection (`maxReconnectAttempts: -1`). I
 **Diagnosis:**
 
 1. Register a `Reconnect` hook to see when reconnections happen:
+
    ```typescript
    hooks: {
      [TransportEvent.Reconnect]: (server) => console.log(`Reconnected to ${server}`),
    }
    ```
+
 2. Check NATS server logs for client disconnect reasons.
 3. Verify TLS certificates haven't expired.
 

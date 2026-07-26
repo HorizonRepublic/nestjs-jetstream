@@ -74,7 +74,7 @@ JetStream has built-in **server-side deduplication**. When a message is publishe
 
 Each JetStream stream has a `duplicate_window` setting that controls how long the server remembers message IDs. The default window is **2 minutes** for event, broadcast, and ordered streams, and **30 seconds** for command (RPC) streams.
 
-If you do not set a message ID, the transport generates a random UUID for every publish. Deduplication is so off by default: each publish counts as a unique message.
+If you do not set a message ID, the transport generates a random UUID for every publish. Deduplication is off by default: each publish counts as a unique message.
 
 ### Setting a deterministic message ID
 

@@ -119,7 +119,7 @@ When a custom `subjectPrefix` is configured for an event or broadcast kind, the 
 
 If the stream is **externally managed** (`ManagementMode.Manual`), it must cover this prefix in its `subjects` list. Boot fails with an explicit error if the coverage is missing:
 
-```
+```text
 Stream "…" has scheduling enabled (allow_msg_schedules=true) but its subjects do not cover the schedule prefix "…". Add "…>" to the stream's subjects.
 ```
 

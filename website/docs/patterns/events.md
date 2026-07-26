@@ -384,7 +384,7 @@ When a message is `nak`'d repeatedly and reaches the `max_deliver` limit (defaul
 1. The `onDeadLetter` callback is invoked (if configured) with full message context.
 2. The message is terminated with `term()`.
 
-`ctx.terminate()` is so for errors you **know** will never succeed (validation failures, schema mismatches), while `throw` is for errors that **might** succeed on retry (timeouts, temporary unavailability). For messages that exhaust all retries, the dead letter mechanism provides a safety net.
+`ctx.terminate()` is for errors you **know** will never succeed (validation failures, schema mismatches), while `throw` is for errors that **might** succeed on retry (timeouts, temporary unavailability). For messages that exhaust all retries, the dead letter mechanism provides a safety net.
 
 See the [Dead Letter Queue](/docs/guides/dead-letter-queue) guide for how to configure and handle dead letters.
 

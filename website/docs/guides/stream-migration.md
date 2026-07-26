@@ -124,9 +124,9 @@ Expect migration time to scale roughly linearly with message count. For small st
 
 Streams managed in `ManagementMode.Manual` (externally provisioned) are never created, updated, or migrated by the library; regardless of `allowDestructiveMigration`. The library only binds to them and validates their configuration at boot.
 
-Setting `allowDestructiveMigration: true` together with a global `provisioning.management: ManagementMode.Manual` is so a no-op for all streams. The library logs a warning at boot when this combination is detected:
+Setting `allowDestructiveMigration: true` together with a global `provisioning.management: ManagementMode.Manual` is a no-op for all streams. The library logs a warning at boot when this combination is detected:
 
-```
+```text
 allowDestructiveMigration has no effect under provisioning.management: Manual, the library never migrates externally managed streams.
 ```
 
