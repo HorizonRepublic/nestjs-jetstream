@@ -494,7 +494,7 @@ describe('Stream sourcing behavior (NATS verification)', () => {
           let i = 0;
 
           // mutated outside the closure
-          // oxlint-disable-next-line typescript/no-unnecessary-condition
+          // oxlint-disable-next-line typescript/no-unnecessary-condition, eslint/no-unmodified-loop-condition
           while (!stop) {
             try {
               await js.publish(subject, encoder.encode(JSON.stringify({ live: i++ })));

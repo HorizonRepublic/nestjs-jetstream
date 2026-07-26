@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["typescript", "unicorn", "oxc", "import"],
+  "plugins": ["typescript", "unicorn", "oxc", "import", "promise", "node", "vitest"],
   "jsPlugins": [
     "./tools/oxlint/local-plugin.mjs",
     "@stylistic/eslint-plugin",
@@ -117,7 +117,18 @@
     ],
 
     "local/type-pascal-case": "error",
-    "local/no-nested-conditional": "error"
+    "local/no-nested-conditional": "error",
+
+    "eslint/no-shadow": "error",
+    "eslint/no-unmodified-loop-condition": "error",
+    "eslint/preserve-caught-error": "error",
+    "unicorn/no-array-sort": "error",
+
+    "vitest/expect-expect": "error",
+    "vitest/require-to-throw-message": "error",
+    "vitest/valid-expect": "error",
+    "vitest/require-mock-type-parameters": "off",
+    "vitest/valid-title": "off"
   },
   "overrides": [
     {
@@ -125,7 +136,14 @@
       "rules": {
         "typescript/no-non-null-assertion": "off",
         "typescript/explicit-member-accessibility": "off",
-        "local/type-pascal-case": "off"
+        "local/type-pascal-case": "off",
+        "eslint/no-shadow": "off"
+      }
+    },
+    {
+      "files": ["test/integration/**/*.ts"],
+      "rules": {
+        "vitest/require-to-throw-message": "off"
       }
     },
     {

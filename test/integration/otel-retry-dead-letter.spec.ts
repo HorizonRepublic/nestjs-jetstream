@@ -124,7 +124,7 @@ describe('OTel retry + dead letter integration', () => {
       const consumeSpans = exporter
         .getFinishedSpans()
         .filter((s) => s.kind === SpanKind.CONSUMER)
-        .sort(
+        .toSorted(
           (a, b) =>
             (a.attributes['messaging.nats.message.delivery_count'] as number) -
             (b.attributes['messaging.nats.message.delivery_count'] as number),
@@ -146,7 +146,7 @@ describe('OTel retry + dead letter integration', () => {
       const consumeSpans = exporter
         .getFinishedSpans()
         .filter((s) => s.kind === SpanKind.CONSUMER)
-        .sort(
+        .toSorted(
           (a, b) =>
             (a.attributes['messaging.nats.message.delivery_count'] as number) -
             (b.attributes['messaging.nats.message.delivery_count'] as number),

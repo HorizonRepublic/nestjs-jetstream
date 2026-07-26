@@ -134,7 +134,7 @@ describe('Graceful Shutdown', () => {
       await restartNatsContainer(reconnectContainer);
 
       // Closing during reconnection must not throw or hang
-      await app.close();
+      await expect(app.close()).resolves.toBeUndefined();
     });
   });
 });
