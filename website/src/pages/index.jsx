@@ -61,62 +61,65 @@ const CopyInstall = () => {
   );
 };
 
+const RECORD_FIELDS = [
+  { key: 'subject', value: 'orders.created' },
+  { key: 'msg-id', value: 'ord_9f21' },
+  { key: 'traceparent', value: '00-4bf92f35a8…-01' },
+];
+
+const RECORD_LOG = [
+  { state: 'deliver', time: '19:04:02.118', event: 'deliver', note: 'attempt 1/5' },
+  { state: 'nak', time: '19:04:02.204', event: 'nak', note: 'handler threw · backoff 1s' },
+  { state: 'seam', time: '', event: 'pod restart', note: 'in flight, not lost' },
+  { state: 'redeliver', time: '19:04:03.336', event: 'redeliver', note: 'attempt 2/5 · new pod' },
+  { state: 'ack', time: '19:04:03.402', event: 'ack', note: 'handled in 66 ms' },
+];
+
 /**
- * The signature: one message's life, end to end. Publish, a failed attempt, a
- * pod restart it survives, redelivery on a new pod, ack. Every colour used
- * anywhere on the site is defined by what it means here.
+ * The signature: the receipt one message leaves behind. A stub torn off the
+ * stream, showing the attempt that failed, the deploy it crossed and the ack
+ * that closed it. Every colour used anywhere on the site is defined by what it
+ * means on this card.
  */
 const DeliveryRecord = () => (
   <figure className="lp-record">
-    <div className="lp-record-trace" aria-hidden="true">
-      <span>traceparent: 00-4bf92f35…-01 · one trace, every hop</span>
+    <div className="lp-record-card">
+      <div className="lp-record-head">
+        <span className="lp-record-kind">delivery record</span>
+        <span className="lp-record-seq">seq 4,832,107</span>
+      </div>
+
+      <dl className="lp-record-fields">
+        {RECORD_FIELDS.map((field) => (
+          <div key={field.key}>
+            <dt>{field.key}</dt>
+            <dd>{field.value}</dd>
+          </div>
+        ))}
+      </dl>
+
+      <ol className="lp-record-log">
+        {RECORD_LOG.map((entry, index) => (
+          <li
+            key={entry.event}
+            data-state={entry.state}
+            style={{ '--lp-row': String(index) }}
+          >
+            <span className="lp-log-time">{entry.time}</span>
+            <span className="lp-log-event">{entry.event}</span>
+            <span className="lp-log-note">{entry.note}</span>
+          </li>
+        ))}
+      </ol>
+
+      <div className="lp-record-stamp" aria-hidden="true">
+        <span>acked</span>
+      </div>
     </div>
 
-    <ol className="lp-record-track">
-      <li className="lp-step" data-state="publish">
-        <span className="lp-step-mark" aria-hidden="true" />
-        <span className="lp-step-label">publish</span>
-        <span className="lp-step-meta">
-          orders.created
-          <br />
-          Nats-Msg-Id: ord_9f21
-        </span>
-      </li>
-
-      <li className="lp-step" data-state="deliver">
-        <span className="lp-step-mark" aria-hidden="true" />
-        <span className="lp-step-label">deliver #1</span>
-        <span className="lp-step-meta">attempt 1/5</span>
-      </li>
-
-      <li className="lp-step" data-state="throw">
-        <span className="lp-step-mark" aria-hidden="true" />
-        <span className="lp-step-label">handler throws</span>
-        <span className="lp-step-meta">nak · backoff 1s</span>
-      </li>
-
-      <li className="lp-step lp-step--restart" data-state="restart">
-        <span className="lp-step-mark" aria-hidden="true" />
-        <span className="lp-step-label">pod restart</span>
-        <span className="lp-step-meta">in flight, not lost</span>
-      </li>
-
-      <li className="lp-step" data-state="redeliver">
-        <span className="lp-step-mark" aria-hidden="true" />
-        <span className="lp-step-label">redeliver #2</span>
-        <span className="lp-step-meta">attempt 2/5 · new pod</span>
-      </li>
-
-      <li className="lp-step" data-state="ack">
-        <span className="lp-step-mark" aria-hidden="true" />
-        <span className="lp-step-label">ack</span>
-        <span className="lp-step-meta">seq 4,832,107</span>
-      </li>
-    </ol>
-
     <figcaption className="lp-record-caption">
-      One message, from publish to ack, across a deploy that restarts the pod holding it.
-      Attempts run out and the message is routed to <code>dlq.orders</code>, headers intact.
+      One message across a deploy that restarts the pod holding it. When the attempts run out
+      instead, the message lands in <code>dlq.orders</code> with its headers intact.
     </figcaption>
   </figure>
 );
@@ -189,29 +192,32 @@ export default function Home() {
     >
       <main className="landingRoot">
         <section className="lp-hero">
-          <h1 className="lp-hero-title">Messages that survive the deploy.</h1>
-          <p className="lp-hero-sub">
-            A NATS JetStream transport for NestJS microservices. Same <code>@EventPattern</code>,
-            same <code>client.emit()</code>, with durability, bounded retries, dead letters and
-            tracing underneath.
-          </p>
-        </section>
+          <div className="lp-hero-lead">
+            <h1 className="lp-hero-title">Messages that survive the deploy.</h1>
+            <p className="lp-hero-sub">
+              A NATS JetStream transport for NestJS microservices. Same <code>@EventPattern</code>,
+              same <code>client.emit()</code>, with durability, bounded retries, dead letters and
+              tracing underneath.
+            </p>
 
-        <section className="lp-signature">
-          <DeliveryRecord />
+            <div className="lp-actions">
+              <CopyInstall />
+              <span className="lp-links">
+                <Link className="lp-cta" to="/docs/getting-started/quick-start">
+                  Quick start
+                </Link>
+                <Link className="lp-cta lp-cta--quiet" to="/docs/getting-started/why-jetstream">
+                  Compare with the built-in transport
+                </Link>
+              </span>
+            </div>
 
-          <div className="lp-actions">
-            <CopyInstall />
-            <Link className="lp-cta" to="/docs/getting-started/quick-start">
-              Quick start
-            </Link>
-            <Link className="lp-cta lp-cta--quiet" to="/docs/getting-started/why-jetstream">
-              Compare with the built-in transport
-            </Link>
             <span className="lp-facts">
               MIT · v{version} · Node ≥ {NODE_MAJOR} · NestJS 10 to 12 · NATS ≥ 2.10
             </span>
           </div>
+
+          <DeliveryRecord />
         </section>
 
         <section className="lp-swap">

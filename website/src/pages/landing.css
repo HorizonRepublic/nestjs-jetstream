@@ -7,7 +7,6 @@
 
 .landingRoot {
   --lp-gutter: clamp(20px, 5vw, 72px);
-  --lp-measure: 46ch;
 
   background: var(--jt-bg-0);
   color: var(--jt-fg-0);
@@ -24,14 +23,37 @@
 }
 
 /* ---- hero ---------------------------------------------------------------
-   Title and subtitle share one baseline band instead of stacking centred. The
-   asymmetry is the point: the claim leads, the qualification follows it. */
+   The claim leads on the left and the record it describes sits beside it, so
+   the first screen shows the artefact rather than a promise about it. */
 .lp-hero {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
-  gap: clamp(24px, 4vw, 56px);
-  align-items: end;
-  padding: clamp(44px, 6vw, 80px) var(--lp-gutter) clamp(28px, 4vw, 44px);
+  grid-template-columns: minmax(0, 1.04fr) minmax(0, 0.96fr);
+  gap: clamp(32px, 5vw, 72px);
+  align-items: center;
+  padding: clamp(44px, 6vw, 84px) var(--lp-gutter) clamp(48px, 6vw, 76px);
+  border-bottom: 1px solid var(--jt-line-1);
+  overflow: hidden;
+}
+
+/* One lit spot, under the card and nowhere else. The page is otherwise flat
+   stock, and a second glow would turn a document into a product shot. */
+.lp-hero::before {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  inset-block-start: -30%;
+  inset-inline-end: -12%;
+  width: 62%;
+  aspect-ratio: 1;
+  background: radial-gradient(circle, var(--jt-accent-soft), transparent 62%);
+  pointer-events: none;
+}
+
+.lp-hero-lead,
+.lp-record {
+  position: relative;
+  z-index: 1;
 }
 
 .lp-hero-title {
@@ -48,167 +70,190 @@
 }
 
 .lp-hero-sub {
-  margin: 0 0 0.35rem;
-  max-width: var(--lp-measure);
+  margin: 18px 0 0;
+  max-width: 52ch;
   font-size: clamp(0.98rem, 1.25vw, var(--jt-step-1));
   line-height: 1.55;
   color: var(--jt-fg-1);
 }
 
-/* ---- signature ----------------------------------------------------------
-   The record sits on its own stock, bounded by rules top and bottom. Ruling
-   the whole band was tried and cut straight through the labels. */
-.lp-signature {
-  padding: clamp(30px, 4vw, 46px) var(--lp-gutter) clamp(28px, 4vw, 40px);
-  border-block: 1px solid var(--jt-line-1);
-  background: var(--jt-bg-1);
-}
-
+/* ---- the record ---------------------------------------------------------
+   A stub torn off the stream: header, fields, the log of what happened to one
+   message, and the stamp that closed it. The six-node timeline this replaces
+   was accurate and unreadable - it asked for six labels before it said one
+   thing. */
 .lp-record {
   margin: 0;
-  position: relative;
 }
 
-/* the trace spans the whole life: one trace, every hop */
-.lp-record-trace {
-  border-top: 1px solid var(--jt-line-2);
-  height: 0;
+.lp-record-card {
   position: relative;
-  margin-bottom: 30px;
-}
-
-.lp-record-trace span {
-  position: absolute;
-  top: -0.66em;
-  left: 50%;
-  transform: translateX(-50%);
-  max-width: calc(100% - 24px);
-  padding: 0 12px;
+  padding: 16px 20px 26px;
   background: var(--jt-bg-1);
-  font-variation-settings: var(--jt-vf-struct);
-  font-size: var(--jt-step--1);
-  color: var(--jt-fg-2);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.lp-record-track {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 16px;
-  position: relative;
-}
-
-/* the line every message travels */
-.lp-record-track::before {
-  content: '';
-  position: absolute;
-  inset-inline: 0;
-  top: 7px;
-  height: 2px;
-  background: var(--jt-line-2);
-}
-
-.lp-step {
-  position: relative;
-  padding-top: 26px;
+  border: 1px solid var(--jt-line-1);
+  border-radius: var(--jt-radius-lg);
+  box-shadow: var(--jt-shadow-raised);
   font-variation-settings: var(--jt-vf-struct);
   font-size: var(--jt-step--1);
 }
 
-.lp-step-mark {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--jt-fg-0);
-  box-shadow: 0 0 0 4px var(--jt-bg-1);
-}
-
-.lp-step-label {
-  display: block;
-  color: var(--jt-fg-0);
-  font-weight: 550;
-}
-
-.lp-step-meta {
-  display: block;
-  margin-top: 3px;
+.lp-record-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--jt-line-2);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
   color: var(--jt-fg-3);
-  line-height: 1.45;
 }
 
-.lp-step[data-state='deliver'] .lp-step-mark {
-  background: var(--jt-state-deliver);
+.lp-record-kind {
+  color: var(--jt-fg-2);
 }
 
-.lp-step[data-state='deliver'] .lp-step-label {
+.lp-record-fields {
+  display: grid;
+  gap: 6px;
+  margin: 14px 0 0;
+}
+
+.lp-record-fields > div {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: 12px;
+}
+
+.lp-record-fields dt {
+  color: var(--jt-fg-3);
+}
+
+.lp-record-fields dd {
+  margin: 0;
+  color: var(--jt-fg-0);
+  overflow-wrap: anywhere;
+}
+
+/* the log: what actually happened, in the order it happened */
+.lp-record-log {
+  display: grid;
+  gap: 9px;
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 14px 0 0;
+  border-top: 1px dashed var(--jt-line-2);
+}
+
+.lp-record-log li {
+  display: grid;
+  grid-template-columns: 6.4rem minmax(0, 6.8rem) minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+  animation: lp-row-in 300ms cubic-bezier(0.2, 0, 0, 1) both;
+  animation-delay: calc(120ms + var(--lp-row) * 130ms);
+}
+
+.lp-log-time {
+  color: var(--jt-fg-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.lp-log-event {
+  font-weight: 600;
+  color: var(--jt-fg-0);
+}
+
+.lp-log-note {
+  color: var(--jt-fg-2);
+}
+
+.lp-record-log li[data-state='deliver'] .lp-log-event,
+.lp-record-log li[data-state='ack'] .lp-log-event {
   color: var(--jt-state-deliver);
 }
 
-.lp-step[data-state='redeliver'] .lp-step-mark {
-  background: var(--jt-state-redeliver);
-}
-
-.lp-step[data-state='throw'] .lp-step-label,
-.lp-step[data-state='redeliver'] .lp-step-label {
+.lp-record-log li[data-state='nak'] .lp-log-event,
+.lp-record-log li[data-state='redeliver'] .lp-log-event {
   color: var(--jt-state-redeliver);
 }
 
-/* the throw is a break in the line, not another dot on it */
-.lp-step[data-state='throw'] .lp-step-mark {
-  background: var(--jt-bg-1);
-  border: 2px solid var(--jt-state-redeliver);
+/* The restart is a break in the record, not an entry in it: the message
+   crosses it without noticing, which is the whole claim. */
+.lp-record-log li[data-state='seam'] {
+  padding-block: 8px;
+  border-block: 1px dashed var(--jt-line-2);
 }
 
-/* ack closes the record: the only open ring */
-.lp-step[data-state='ack'] .lp-step-mark {
-  background: var(--jt-bg-1);
-  border: 3px solid var(--jt-state-deliver);
+.lp-record-log li[data-state='seam'] .lp-log-event {
+  font-weight: 500;
+  color: var(--jt-fg-2);
 }
 
-.lp-step[data-state='ack'] .lp-step-label {
-  color: var(--jt-state-deliver);
-}
-
-/* the restart the message survives */
-.lp-step--restart .lp-step-mark {
-  background: var(--jt-bg-1);
-  border: 1px dashed var(--jt-line-3);
-}
-
-.lp-step--restart::before {
-  content: '';
-  position: absolute;
-  inset-block: -6px auto;
-  height: 20px;
-  inset-inline-start: -10px;
-  width: 1px;
-  border-inline-start: 1px dashed var(--jt-line-3);
-}
-
-/* The restart is the quietest mark on the record: the message crosses it
-   without noticing, which is the whole claim. */
-.lp-step--restart .lp-step-meta {
+.lp-record-log li[data-state='seam'] .lp-log-note {
   color: var(--jt-fg-3);
 }
 
-.lp-step--restart .lp-step-label {
-  color: var(--jt-fg-2);
+/* the one loud thing on the page */
+.lp-record-stamp {
+  position: absolute;
+  inset-block-end: -18px;
+  inset-inline-end: 20px;
+  animation: lp-stamp-in 420ms cubic-bezier(0.2, 0, 0, 1) both;
+  animation-delay: 900ms;
+}
+
+.lp-record-stamp span {
+  display: block;
+  padding: 7px 16px;
+  background: var(--jt-bg-1);
+  border: 2px solid var(--jt-state-deliver);
+  border-radius: var(--jt-radius-md);
+  box-shadow: 0 0 0 3px var(--jt-bg-1), 0 0 0 4px var(--jt-accent-line);
+  font-variation-settings: var(--jt-vf-struct);
+  font-size: var(--jt-step-1);
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--jt-state-deliver);
 }
 
 .lp-record-caption {
-  margin: 30px 0 0;
-  max-width: 74ch;
+  margin: 32px 0 0;
+  max-width: 58ch;
   font-size: var(--jt-step--1);
   line-height: 1.6;
   color: var(--jt-fg-2);
+}
+
+@keyframes lp-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes lp-stamp-in {
+  from {
+    opacity: 0;
+    transform: rotate(-16deg) scale(1.45);
+  }
+
+  60% {
+    opacity: 1;
+    transform: rotate(-4deg) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: rotate(-6deg) scale(1);
+  }
 }
 
 /* ---- actions ------------------------------------------------------------ */
@@ -216,8 +261,8 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 14px 26px;
-  margin-top: 30px;
+  gap: 14px 24px;
+  margin-top: 28px;
 }
 
 .lp-install {
@@ -254,6 +299,15 @@
   color: var(--jt-fg-3);
 }
 
+/* The two links wrap as a pair, so a narrow column never strands the second
+   one on a line of its own. */
+.lp-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 24px;
+}
+
 .lp-cta {
   font-weight: 550;
   color: var(--jt-accent);
@@ -278,7 +332,8 @@
 }
 
 .lp-facts {
-  margin-inline-start: auto;
+  display: block;
+  margin-top: 24px;
   font-variation-settings: var(--jt-vf-struct);
   font-size: var(--jt-step--1);
   color: var(--jt-fg-3);
@@ -466,12 +521,16 @@
   color: var(--jt-fg-3);
 }
 
-/* ---- narrow -------------------------------------------------------------
-   The record rotates rather than shrinking: nothing is cropped away. */
+/* ---- narrow ------------------------------------------------------------- */
 @media (max-width: 996px) {
   .lp-hero {
     grid-template-columns: minmax(0, 1fr);
     align-items: start;
+  }
+
+  .lp-hero::before {
+    inset-block-start: -18%;
+    width: 90%;
   }
 
   .lp-swap {
@@ -483,36 +542,6 @@
     border-top: 1px solid var(--jt-line-1);
   }
 
-  .lp-record-track {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 26px;
-    padding-inline-start: 30px;
-  }
-
-  .lp-record-track::before {
-    inset-inline-start: 7px;
-    inset-inline-end: auto;
-    inset-block: 10px;
-    top: auto;
-    width: 2px;
-    height: auto;
-  }
-
-  .lp-step {
-    padding-top: 0;
-  }
-
-  .lp-step-mark {
-    inset-inline-start: -30px;
-    top: 2px;
-  }
-
-  .lp-step--restart::before {
-    inset-inline-start: -23px;
-    inset-block: -10px auto;
-    height: 26px;
-  }
-
   .lp-ledger-row {
     grid-template-columns: minmax(0, 1fr);
     gap: 6px;
@@ -521,9 +550,23 @@
   .lp-ledger-path {
     justify-self: start;
   }
+}
 
-  .lp-facts {
-    margin-inline-start: 0;
+/* The log stacks rather than shrinking its columns: a timestamp that wraps
+   mid-value stops reading as a timestamp. */
+@media (max-width: 540px) {
+  .lp-record-fields > div,
+  .lp-record-log li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+
+  .lp-record-stamp {
+    inset-inline-end: 12px;
+  }
+
+  .lp-record-stamp span {
+    font-size: var(--jt-step-0);
   }
 }
 
@@ -531,5 +574,16 @@
   .lp-install,
   .lp-ledger-row {
     transition: none;
+  }
+
+  /* The record arrives already settled. The rotation is part of the drawing,
+     so it is restated here rather than lost with the animation. */
+  .lp-record-log li,
+  .lp-record-stamp {
+    animation: none;
+  }
+
+  .lp-record-stamp {
+    transform: rotate(-6deg);
   }
 }
