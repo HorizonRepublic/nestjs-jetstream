@@ -240,6 +240,7 @@ export enum JetstreamHeader {
   Error = 'x-error',
 }
 
+/** Headers the transport attaches to a message when it is routed to the DLQ. */
 export enum JetstreamDlqHeader {
   /** Reason the message was sent to the DLQ: the last handler error message. */
   DeadLetterReason = 'x-dead-letter-reason',
