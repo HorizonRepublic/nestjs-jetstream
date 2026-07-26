@@ -4,7 +4,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
   title: '@horizon-republic/nestjs-jetstream',
-  tagline: 'The NestJS NATS transport backed by JetStream — durable events, broadcast, ordered delivery, and RPC',
+  tagline: 'Durable events, broadcast, ordered delivery and RPC for NestJS, backed by NATS JetStream',
   favicon: 'img/favicon.svg',
   url: 'https://nestjs-jetstream.horizon-republic.dev',
   baseUrl: '/',
@@ -33,11 +33,14 @@ const config: Config = {
         theme: { customCss: './src/css/custom.css' },
         sitemap: {
           // priority/changefreq are mostly ignored by Google. lastmod is the
-          // signal that actually moves the needle — pulled from git for each doc.
+          // signal that actually moves the needle, pulled from git for each doc.
           lastmod: 'date',
           changefreq: 'weekly',
           priority: 0.5,
           filename: 'sitemap.xml',
+          // The generated API reference carries `noindex` and the plugin drops
+          // those on its own; /404 has no such tag and has to be named.
+          ignorePatterns: ['/404'],
         },
       } satisfies Preset.Options,
     ],
@@ -93,7 +96,7 @@ const config: Config = {
         name: '@horizon-republic/nestjs-jetstream',
         alternateName: 'NestJS NATS Transport',
         description:
-          'NestJS NATS transport powered by JetStream — durable events, broadcast, ordered delivery, RPC, and dead letter queues for production microservices.',
+          'NestJS NATS transport powered by JetStream: durable events, broadcast, ordered delivery, RPC and dead letter queues for production microservices.',
         programmingLanguage: 'TypeScript',
         runtimePlatform: 'Node.js',
         codeRepository: 'https://github.com/HorizonRepublic/nestjs-jetstream',
@@ -107,14 +110,14 @@ const config: Config = {
     image: 'img/og-image.png',
     metadata: [
       { name: 'google-site-verification', content: 'wuC1grxtPowMVSi5W2hFEB2W_rRe4bhOA-xaynJNKbg' },
-      { name: 'description', content: 'NestJS NATS transport powered by JetStream — durable events, broadcast, ordered delivery, RPC, and dead letter queues for production microservices.' },
+      { name: 'description', content: 'NestJS NATS transport powered by JetStream: durable events, broadcast, ordered delivery, RPC and dead letter queues for production microservices.' },
       { property: 'og:type', content: 'website' },
-      { property: 'og:title', content: 'nestjs-jetstream — Production NATS JetStream transport for NestJS' },
-      { property: 'og:description', content: 'The NATS JetStream transport NestJS microservices need — durable, retried, traced — under the same @EventPattern decorators.' },
+      { property: 'og:title', content: 'nestjs-jetstream: production NATS JetStream transport for NestJS' },
+      { property: 'og:description', content: 'Durable, retried and traced NATS JetStream transport for NestJS, under the same @EventPattern decorators you already use.' },
       { property: 'og:site_name', content: 'nestjs-jetstream' },
       { name: 'twitter:card', content: 'summary_large_image' },
-      { name: 'twitter:title', content: 'nestjs-jetstream — Production NATS JetStream transport for NestJS' },
-      { name: 'twitter:description', content: 'The NATS JetStream transport NestJS microservices need — durable, retried, traced — under the same @EventPattern decorators.' },
+      { name: 'twitter:title', content: 'nestjs-jetstream: production NATS JetStream transport for NestJS' },
+      { name: 'twitter:description', content: 'Durable, retried and traced NATS JetStream transport for NestJS, under the same @EventPattern decorators you already use.' },
     ],
     mermaid: {
       theme: { light: 'dark', dark: 'dark' },

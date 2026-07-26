@@ -25,6 +25,7 @@ export type PublishStatus = 'success' | 'error';
  */
 export type RpcOutcomeStatus = 'success' | 'error' | 'timeout';
 
+/** Lifecycle and operational events the transport emits to registered hooks. */
 export enum TransportEvent {
   Connect = 'connect',
   Disconnect = 'disconnect',
