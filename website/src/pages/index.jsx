@@ -271,11 +271,10 @@ export default function Home() {
             ))}
           </ul>
           <p className="lp-ledger-note">
-            Maintained by one person who runs it in production. Integration suite against a real
-            NATS server, a{' '}
+            The integration suite executes against a real NATS server, the{' '}
             <a href="https://codecov.io/github/HorizonRepublic/nestjs-jetstream">coverage report</a>{' '}
-            you can read, a header contract stable across minors, and breaking changes only on
-            majors.
+            is public, the header contract stays stable across minors, and breaking changes land
+            only on majors.
           </p>
         </section>
 

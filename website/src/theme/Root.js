@@ -148,7 +148,7 @@ export default function Root({ children }) {
   "headline": "Performance Tuning",
   "description": "Tune ackWait, maxAckPending, batch sizes, and ack extension for high-throughput workloads.",
   "datePublished": "2026-03-26",
-  "dateModified": "2026-07-26"
+  "dateModified": "2026-07-27"
 },
       
     '/docs/guides/record-builder/': {
@@ -210,9 +210,9 @@ export default function Root({ children }) {
     '/docs/observability/metrics/': {
   "@type": "Article",
   "headline": "Prometheus Metrics: NestJS JetStream Transport",
-  "description": "Production-ready Prometheus metrics for NATS JetStream transport: throughput, handler latency, consumer lag, dead letters, and publish errors.",
+  "description": "Built-in Prometheus metrics for NATS JetStream transport: throughput, handler latency, consumer lag, dead letters, and publish errors.",
   "datePublished": "2026-05-27",
-  "dateModified": "2026-07-26"
+  "dateModified": "2026-07-27"
 },
       
     '/docs/observability/tracing/': {
@@ -266,9 +266,9 @@ export default function Root({ children }) {
     '/docs/reference/default-configs/': {
   "@type": "Article",
   "headline": "Default Stream & Consumer Configs for NATS JetStream",
-  "description": "Production-ready default stream, consumer, and connection settings for every NestJS JetStream StreamKind (event, broadcast, ordered, command, DLQ).",
+  "description": "Default stream, consumer, and connection settings for every NestJS JetStream StreamKind (event, broadcast, ordered, command, DLQ).",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-07-26"
+  "dateModified": "2026-07-27"
 },
       
     '/docs/reference/edge-cases/': {
@@ -292,7 +292,7 @@ export default function Root({ children }) {
   "headline": "Module Configuration Reference",
   "description": "Reference for forRoot(), forRootAsync(), and forFeature() registration methods with stream, consumer, and connection options.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-07-26"
+  "dateModified": "2026-07-27"
 },
       
     '/docs/reference/naming-conventions/': {
@@ -308,7 +308,7 @@ export default function Root({ children }) {
   "headline": "Release Notes: NestJS JetStream Transport",
   "description": "Version-by-version changelog covering new features, behavior changes, and breaking changes.",
   "datePublished": "2026-03-26",
-  "dateModified": "2026-07-26"
+  "dateModified": "2026-07-27"
 },
       
 

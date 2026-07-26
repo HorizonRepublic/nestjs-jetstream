@@ -2,13 +2,13 @@
 sidebar_position: 2
 sidebar_label: "Prometheus Metrics"
 title: "Prometheus Metrics: NestJS JetStream Transport"
-description: "Production-ready Prometheus metrics for NATS JetStream transport: throughput, handler latency, consumer lag, dead letters, and publish errors. Zero-config integration with @willsoto/nestjs-prometheus."
+description: "Built-in Prometheus metrics for NATS JetStream transport: throughput, handler latency, consumer lag, dead letters, and publish errors. Zero-config integration with @willsoto/nestjs-prometheus."
 schema:
   type: Article
   headline: "Prometheus Metrics: NestJS JetStream Transport"
-  description: "Production-ready Prometheus metrics for NATS JetStream transport: throughput, handler latency, consumer lag, dead letters, and publish errors."
+  description: "Built-in Prometheus metrics for NATS JetStream transport: throughput, handler latency, consumer lag, dead letters, and publish errors."
   datePublished: "2026-05-27"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
 # Prometheus Metrics

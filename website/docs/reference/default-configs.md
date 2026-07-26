@@ -2,18 +2,18 @@
 sidebar_position: 2
 sidebar_label: "Default Configs"
 title: "Default Stream & Consumer Configs for NATS JetStream"
-description: "Production-ready default stream, consumer, and connection settings for every NestJS JetStream StreamKind (event, broadcast, ordered, command, DLQ)."
+description: "Default stream, consumer, and connection settings for every NestJS JetStream StreamKind (event, broadcast, ordered, command, DLQ)."
 schema:
   type: Article
   headline: "Default Stream & Consumer Configs for NATS JetStream"
-  description: "Production-ready default stream, consumer, and connection settings for every NestJS JetStream StreamKind (event, broadcast, ordered, command, DLQ)."
+  description: "Default stream, consumer, and connection settings for every NestJS JetStream StreamKind (event, broadcast, ordered, command, DLQ)."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
 # Default Configs
 
-The transport ships with production-ready defaults for every stream and consumer type. This page lists the exact values from the source code. All defaults can be overridden via [module configuration](/docs/reference/module-configuration).
+The transport ships defaults for every stream and consumer type. This page lists the exact values from the source code. All defaults can be overridden via [module configuration](/docs/reference/module-configuration).
 
 ## Stream Defaults
 

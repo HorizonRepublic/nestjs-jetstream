@@ -28,17 +28,19 @@
    asymmetry is the point: the claim leads, the qualification follows it. */
 .lp-hero {
   display: grid;
-  grid-template-columns: minmax(0, 15ch) minmax(0, var(--lp-measure));
-  gap: clamp(24px, 5vw, 64px);
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  gap: clamp(24px, 4vw, 56px);
   align-items: end;
-  justify-content: space-between;
-  padding: clamp(48px, 8vw, 96px) var(--lp-gutter) 0;
+  padding: clamp(44px, 6vw, 80px) var(--lp-gutter) clamp(28px, 4vw, 44px);
 }
 
 .lp-hero-title {
   margin: 0;
-  font-size: clamp(2rem, 5.2vw, var(--jt-step-5));
-  line-height: 1.06;
+  /* The cap is in ch of its own size, which only works as max-width: as a
+     grid track, ch resolves against the container font and collapses. */
+  max-width: 16ch;
+  font-size: clamp(1.9rem, 4.4vw, var(--jt-step-5));
+  line-height: 1.08;
   font-weight: 620;
   letter-spacing: -0.018em;
   font-variation-settings: var(--jt-vf-display);
@@ -46,26 +48,20 @@
 }
 
 .lp-hero-sub {
-  margin: 0 0 0.4rem;
-  font-size: clamp(0.98rem, 1.4vw, var(--jt-step-1));
+  margin: 0 0 0.35rem;
+  max-width: var(--lp-measure);
+  font-size: clamp(0.98rem, 1.25vw, var(--jt-step-1));
   line-height: 1.55;
   color: var(--jt-fg-1);
 }
 
 /* ---- signature ----------------------------------------------------------
-   Ruled stock under the record. The rules are why this reads as a page torn
-   from a log book rather than as an empty panel. */
+   The record sits on its own stock, bounded by rules top and bottom. Ruling
+   the whole band was tried and cut straight through the labels. */
 .lp-signature {
-  margin-top: clamp(40px, 6vw, 72px);
-  padding: clamp(28px, 4vw, 44px) var(--lp-gutter) clamp(28px, 4vw, 40px);
+  padding: clamp(30px, 4vw, 46px) var(--lp-gutter) clamp(28px, 4vw, 40px);
   border-block: 1px solid var(--jt-line-1);
-  background-color: var(--jt-bg-1);
-  background-image: repeating-linear-gradient(
-    to bottom,
-    transparent 0 31px,
-    var(--jt-line-1) 31px 32px
-  );
-  background-position: 0 6px;
+  background: var(--jt-bg-1);
 }
 
 .lp-record {
@@ -75,25 +71,26 @@
 
 /* the trace spans the whole life: one trace, every hop */
 .lp-record-trace {
-  border: 1px solid var(--jt-line-2);
-  border-bottom: none;
-  border-radius: var(--jt-radius-sm) var(--jt-radius-sm) 0 0;
-  height: 14px;
+  border-top: 1px solid var(--jt-line-2);
+  height: 0;
   position: relative;
-  margin-bottom: 26px;
+  margin-bottom: 30px;
 }
 
 .lp-record-trace span {
   position: absolute;
-  top: -0.62em;
+  top: -0.66em;
   left: 50%;
   transform: translateX(-50%);
-  white-space: nowrap;
+  max-width: calc(100% - 24px);
   padding: 0 12px;
   background: var(--jt-bg-1);
   font-variation-settings: var(--jt-vf-struct);
   font-size: var(--jt-step--1);
   color: var(--jt-fg-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .lp-record-track {
@@ -189,11 +186,17 @@
 .lp-step--restart::before {
   content: '';
   position: absolute;
-  inset-block: -10px -16px;
-  inset-inline: -14px;
-  background: repeating-linear-gradient(-55deg, var(--jt-bg-2) 0 6px, transparent 6px 12px);
-  border-inline: 1px dashed var(--jt-line-2);
-  z-index: -1;
+  inset-block: -6px auto;
+  height: 20px;
+  inset-inline-start: -10px;
+  width: 1px;
+  border-inline-start: 1px dashed var(--jt-line-3);
+}
+
+/* The restart is the quietest mark on the record: the message crosses it
+   without noticing, which is the whole claim. */
+.lp-step--restart .lp-step-meta {
+  color: var(--jt-fg-3);
 }
 
 .lp-step--restart .lp-step-label {
@@ -221,6 +224,7 @@
   display: inline-flex;
   align-items: center;
   gap: 14px;
+  min-width: 0;
   font: inherit;
   font-variation-settings: var(--jt-vf-struct);
   font-size: var(--jt-step-0);
@@ -229,6 +233,7 @@
   border: 1px solid var(--jt-line-1);
   border-radius: var(--jt-radius-md);
   padding: 11px 14px;
+  max-width: 100%;
   cursor: pointer;
   transition: border-color var(--jt-m-fast), background var(--jt-m-fast);
 }
@@ -236,6 +241,12 @@
 .lp-install:hover {
   border-color: var(--jt-line-2);
   background: var(--jt-bg-3);
+}
+
+.lp-install-text {
+  overflow-x: auto;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .lp-install-state {
@@ -479,8 +490,9 @@
   }
 
   .lp-record-track::before {
-    inset-inline: 7px auto;
-    inset-block: 8px;
+    inset-inline-start: 7px;
+    inset-inline-end: auto;
+    inset-block: 10px;
     top: auto;
     width: 2px;
     height: auto;
@@ -496,7 +508,9 @@
   }
 
   .lp-step--restart::before {
-    inset-inline: -30px 0;
+    inset-inline-start: -23px;
+    inset-block: -10px auto;
+    height: 26px;
   }
 
   .lp-ledger-row {

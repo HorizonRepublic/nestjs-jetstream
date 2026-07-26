@@ -8,7 +8,7 @@ schema:
   headline: "Module Configuration Reference"
   description: "Reference for forRoot(), forRootAsync(), and forFeature() registration methods with stream, consumer, and connection options."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
 import Since from '@site/src/components/Since';
@@ -555,4 +555,4 @@ void bootstrap();
 - [**Events & Broadcast**](/docs/patterns/events): workqueue events and fan-out delivery
 - [**Scheduling (Delayed Jobs)**](/docs/guides/scheduling): one-shot delayed delivery via NATS 2.12
 - [**Lifecycle Hooks**](/docs/guides/lifecycle-hooks): monitor connection state and transport events
-- [**Default Configs**](/docs/reference/default-configs): full list of production-ready stream and consumer defaults
+- [**Default Configs**](/docs/reference/default-configs): full list of the stream and consumer defaults

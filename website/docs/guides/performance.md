@@ -6,7 +6,7 @@ schema:
   headline: "Performance Tuning"
   description: "Tune ackWait, maxAckPending, batch sizes, and ack extension for high-throughput workloads."
   datePublished: "2026-03-26"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
 # Performance Tuning
@@ -106,7 +106,7 @@ See [Default Configs, Connection Defaults](/docs/reference/default-configs#conne
 
 ## Complete example
 
-A production-ready configuration tuned for high throughput:
+A configuration tuned for high throughput:
 
 ```typescript
 import { toNanos } from '@horizon-republic/nestjs-jetstream';

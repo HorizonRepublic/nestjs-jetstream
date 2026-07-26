@@ -8,7 +8,7 @@ schema:
   headline: "Release Notes: NestJS JetStream Transport"
   description: "Version-by-version changelog covering new features, behavior changes, and breaking changes."
   datePublished: "2026-03-26"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
 # Release Notes
@@ -104,7 +104,7 @@ No breaking changes.
 
 ## v2.5 → v2.6
 
-v2.6 was the performance release, concurrency control, ack extension, and production-ready defaults for reconnection and compression.
+v2.6 was the performance release, concurrency control, ack extension, and reworked defaults for reconnection and compression.
 
 **New features**
 
