@@ -8,7 +8,7 @@ schema:
   headline: "Observability: NestJS JetStream Transport"
   description: "Distributed tracing and Prometheus metrics built into the transport. Zero-config integration with OpenTelemetry SDKs and prom-client-based exporters."
   datePublished: "2026-05-27"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
 # Observability
@@ -32,7 +32,7 @@ Both surfaces complement each other. Most production deployments enable both: tr
 Neither surface costs anything when off:
 
 - **Tracing**: with no OpenTelemetry SDK registered in the host application, every tracer call inside the transport short-circuits to a no-op. `@opentelemetry/api` is an optional peer; nothing in the library forces it into your bundle.
-- **Metrics**: with `metrics` omitted from `forRoot`, the metrics module is never registered. `prom-client` is never imported; not even dynamically. Per-message overhead drops to a single `Map.get` (~30 nanoseconds) that checks whether anyone is listening.
+- **Metrics**: with `metrics` omitted from `forRoot`, the metrics module is never registered. `prom-client` is never imported; not even at runtime. Per-message overhead drops to a single `Map.get` (~30 nanoseconds) that checks whether anyone is listening.
 
 You can enable either independently, or both. They share the same `EventBus` for transport events but are otherwise isolated.
 

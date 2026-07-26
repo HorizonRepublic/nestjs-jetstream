@@ -8,7 +8,7 @@ schema:
   headline: "Bring Your Own Infrastructure (bind-only mode)"
   description: "Bind NestJS JetStream to externally managed NATS streams and consumers provisioned by Terraform, ArgoCD, or a platform team."
   datePublished: "2026-06-12"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
 import Since from '@site/src/components/Since';
@@ -346,7 +346,7 @@ If the default naming convention is used (no `subjectPrefix`), the schedule wild
 ## Interaction with allowDestructiveMigration
 
 :::warning
-Setting `allowDestructiveMigration: true` at the same time as a global `provisioning.management: Manual` is contradictory, Manual streams are never migrated regardless of the flag. The library logs a warning at boot:
+Setting `allowDestructiveMigration: true` in the same run as a global `provisioning.management: Manual` is contradictory, Manual streams are never migrated regardless of the flag. The library logs a warning at boot:
 
 ```text
 allowDestructiveMigration has no effect under provisioning.management: Manual; the library never migrates externally managed streams.

@@ -23,7 +23,7 @@ Version-by-version changelog. New features, peer-dependency requirements, behavi
 
 **Peer dependency (optional)**
 
-- **`prom-client`** is now declared as an **optional peer dependency** (`^15.0.0`). Required only when `metrics` is enabled. The transport never imports it when `metrics` is omitted or `false`, so applications that do not use the metrics feature pay nothing: no bundle weight, no runtime cost.
+- **`prom-client`** is now declared as an **optional peer dependency** (`^15.0.0`). Required only when `metrics` is enabled. The transport never imports it when `metrics` is omitted or `false`, so applications that do not use the metrics feature pay nothing: zero bundle weight and zero runtime cost.
 
 **Documentation reorganization**
 

@@ -8,7 +8,7 @@ schema:
   headline: "Broadcast Events: NestJS JetStream Fan-Out Delivery"
   description: "Fan-out NATS JetStream events to every NestJS service instance via per-service durable consumers on a shared broadcast stream."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
 # Broadcast Events
@@ -20,7 +20,7 @@ Broadcast events implement **fan-out** delivery: every subscribing service recei
 
 ## When to use
 
-Imagine a multi-service platform where an admin updates a feature flag. Every service (orders, payments, notifications, analytics) must refresh its local cache immediately. You don't want to call each service individually, and you don't want only one instance to get the update.
+A feature flag changes, and every service (orders, payments, notifications, analytics) has to refresh its local cache. Calling each one individually does not scale, and a workqueue event would reach only a single instance.
 
 Broadcast events solve this. When you publish a broadcast event, every service that has registered a handler receives the message independently.
 
@@ -169,7 +169,7 @@ sequenceDiagram
     OC-->>OC: SUCCESS (ack)
 ```
 
-This means:
+Consumers are isolated from each other:
 
 - A bug in one service does not block message delivery to other services.
 - Dead letter tracking is per-consumer: the orders service can exhaust its retries while payments processes normally.

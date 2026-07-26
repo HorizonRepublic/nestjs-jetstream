@@ -8,7 +8,7 @@ schema:
   headline: "Header Contract: NATS Message Headers Used by the Transport"
   description: "Stable contract for NATS message headers the transport reads and writes."
   datePublished: "2026-04-24"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
 # Header Contract
@@ -50,7 +50,7 @@ User-defined headers should use a distinct prefix or name (`x-tenant-id`, `x-req
 
 ## NATS server-interpreted (`Nats-*` prefix)
 
-These are interpreted by the NATS server itself, not by this library:
+The NATS server interprets these itself:
 
 - **`Nats-Msg-Id`**; publisher-supplied deduplication key. Set via `JetstreamRecordBuilder.setMessageId()` (from this library) or directly on the headers map (external publishers). Do not set it both ways on the same publish.
 - **`Nats-TTL`, `Nats-Schedule`, `Nats-Expected-*`, `Nats-Rollup`, …**: set them per the [NATS docs](https://docs.nats.io/) when you need their semantics; otherwise leave them alone.

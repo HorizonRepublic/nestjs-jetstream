@@ -11,7 +11,7 @@ schema:
 
 # Performance Tuning
 
-This guide covers how to tune the transport for high-throughput workloads. The most impactful settings are backpressure controls and concurrency limits.
+Backpressure controls and concurrency limits move throughput the most.
 
 ## Backpressure & flow control
 
@@ -142,12 +142,12 @@ This configuration:
 
 ## Performance expectations
 
-Published benchmark numbers for this library don't exist yet, any figures you see elsewhere are guesses. A real benchmark suite is planned (see the project issues), and this section will be updated with reproducible results when it lands.
+Published benchmark numbers for this library don't exist yet, any figures you see elsewhere are guesses. A real benchmark suite is planned (see the project issues), and this section will be updated with reproducible results when it arrives.
 
 In the meantime, here is what you can rely on without numbers:
 
 - **The bottleneck is almost always the handler**, not the transport. Database writes, external API calls, and serialization dominate. Profile the handler first.
-- **Core NATS RPC is the lowest-latency path of the two RPC modes**: no stream write, no inbox routing. Use it when in-cluster latency is the priority.
+- **Core NATS RPC is the lowest-latency path of the two RPC modes**: skipping the stream write and the inbox routing. Use it when in-cluster latency is the priority.
 - **JetStream RPC adds a stream persist plus an inbox reply** on top of Core NATS. You trade a fixed amount of added latency for the guarantee that the command survives a server restart. Quantify the trade-off on your own workload before planning around it.
 - **Event handler throughput scales with [`concurrency`](/docs/guides/performance#concurrency-control)** up to the point where your downstream dependencies become the bottleneck. CPU-bound handlers generally scale with core count; I/O-bound handlers gain from higher concurrency and a larger `max_ack_pending`.
 - **Broadcast is not a throughput hit**: each instance processes its copy independently through its own consumer.

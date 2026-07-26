@@ -8,7 +8,7 @@ schema:
   headline: "How to register lifecycle hooks for NestJS JetStream"
   description: "Subscribe to transport events for monitoring, alerting, and logging integration."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
 import Since from '@site/src/components/Since';
@@ -171,7 +171,7 @@ JetstreamModule.forRoot({
 
 ## No hook = silence
 
-Events without a registered hook are silently ignored: no default logging, no warnings, no overhead. The `EventBus` checks if a hook is registered and returns immediately if not. This is intentional: the transport doesn't make assumptions about what you want to observe.
+Events without a registered hook are silently ignored: with default logging, warnings and overhead all absent. The `EventBus` checks if a hook is registered and returns immediately if not. This is intentional: the transport doesn't make assumptions about what you want to observe.
 
 If you want to log everything during development, register hooks for all events. In production, register only the ones that feed your monitoring stack.
 
@@ -182,7 +182,7 @@ Hooks can be synchronous or return a Promise. The `EventBus` handles both cases 
 - **Synchronous hooks** that throw: the error is caught and logged via the NestJS `Logger`. The transport continues normally.
 - **Async hooks** that reject: the rejection is caught via `.catch()` and logged. No `unhandledRejection` event is emitted.
 
-In either case, hook errors **never crash the application** and never affect message processing. Hooks are observability side-channels, not part of the message handling pipeline.
+In either case, hook errors **never crash the application** and never affect message processing. Hooks are observability side-channels alongside the message handling pipeline.
 
 ```typescript
 hooks: {

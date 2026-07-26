@@ -8,7 +8,7 @@ schema:
   headline: "How to schedule delayed messages with NestJS JetStream"
   description: "One-shot delayed message delivery via the Nats-Schedule header (NATS 2.12, ADR-51)."
   datePublished: "2026-04-01"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
 import Since from '@site/src/components/Since';
@@ -71,7 +71,7 @@ handleReminder(@Payload() data: OrderReminder) {
 
 1. `scheduleAt(date)` stores the delivery time in the record
 2. On publish, the library routes to a per-message unique `_sch` subject within the event stream (a library convention to separate scheduled messages from regular events). The unique suffix matters: the server stores schedules as rollup messages: one active schedule per subject ([ADR-51](https://github.com/nats-io/nats-architecture-and-design/blob/main/adr/ADR-51.md)): so a shared subject would silently replace a pending schedule on every publish
-3. The publish includes `Nats-Schedule` and `Nats-Schedule-Target` headers (ADR-51): the server uses these headers, not the subject, to manage scheduling
+3. The publish includes `Nats-Schedule` and `Nats-Schedule-Target` headers (ADR-51), which the server reads instead of the subject when managing schedules
 4. NATS holds the message until the scheduled time, then publishes a **new message** to the target event subject and purges the fired schedule holder, so unique `_sch` subjects do not accumulate
 5. The event consumer processes it normally
 
@@ -91,7 +91,7 @@ flowchart LR
 
 ## Important: `max_age` consideration
 
-Scheduled messages are stored in the event stream like any other message. If the stream's `max_age` expires before the scheduled delivery time, **NATS silently purges the message**: no delivery, no error.
+Scheduled messages are stored in the event stream like any other message. If the stream's `max_age` expires before the scheduled delivery time, **NATS silently purges the message**: neither a delivery nor an error.
 
 The default event stream `max_age` is **7 days**. If you need to schedule messages further in the future, increase `max_age`:
 
@@ -123,7 +123,7 @@ If the stream is **externally managed** (`ManagementMode.Manual`), it must cover
 Stream "…" has scheduling enabled (allow_msg_schedules=true) but its subjects do not cover the schedule prefix "…". Add "…>" to the stream's subjects.
 ```
 
-For example, a stream with `subjects: ["company.orders.>"]` already covers `company.orders._sch.>` because the wildcard `>` matches any suffix. No extra entry is needed.
+A stream with `subjects: ["company.orders.>"]` already covers `company.orders._sch.>` because the wildcard `>` matches any suffix. No extra entry is needed.
 
 If you used a prefix like `company.orders.events.` (narrower wildcard), you must add `company.orders._sch.>` explicitly or widen the wildcard.
 

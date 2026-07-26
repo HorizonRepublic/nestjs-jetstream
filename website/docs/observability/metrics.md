@@ -13,7 +13,7 @@ schema:
 
 # Prometheus Metrics
 
-The transport ships built-in Prometheus metrics covering throughput, handler latency, consumer lag, publish errors, dead letters, and connection health. Metrics are written to a `prom-client` registry; the de-facto standard in the NestJS ecosystem; so any `/metrics` endpoint exporter picks them up without extra wiring.
+The transport ships built-in Prometheus metrics covering throughput, handler latency, consumer lag, publish errors, dead letters, and connection health. Metrics are written to a `prom-client` registry, the de-facto standard in the NestJS ecosystem, which any `/metrics` exporter picks up without extra wiring.
 
 ## What it covers
 
@@ -114,7 +114,7 @@ JetstreamModule.forRoot({
 
 When the `metrics` option is omitted or set to `false`:
 
-- `prom-client` is never imported (the dynamic `import()` only runs when `metrics` is truthy).
+- `prom-client` is never imported (the lazy `import()` only runs when `metrics` is truthy).
 - The transport's hot paths add ~30 nanoseconds per message (a single `Map.get` to check if a listener exists): effectively free.
 
 Production deployments that don't need metrics pay nothing for the feature.
@@ -231,7 +231,7 @@ The polling loop pulls `consumer.info()` and `streams.info()` from the NATS serv
 - **Graceful shutdown**: `OnModuleDestroy` cancels the timer and awaits the in-flight tick before resolving, so the process exits cleanly.
 - **Connection-loss tolerance**: while NATS is disconnected, polling fails fast and increments the poll-error counter. Gauges become stale (not zero): which is the correct semantic: we do not know the values, so we do not lie about them.
 
-The Command (RPC) consumer is only polled in JetStream RPC mode. Core RPC mode does not create a JetStream stream for commands, so there is nothing to poll. Ordered consumers are ephemeral and do not have a stable durable name, so they are excluded from polling, use `jetstream_messages_processed_total{kind="ordered"}` to monitor ordered throughput instead.
+The Command (RPC) consumer is polled only in JetStream RPC mode, since Core RPC mode creates no JetStream stream for commands. Ordered consumers are ephemeral and do not have a stable durable name, so they are excluded from polling, use `jetstream_messages_processed_total{kind="ordered"}` to monitor ordered throughput instead.
 
 ## Cardinality safety
 

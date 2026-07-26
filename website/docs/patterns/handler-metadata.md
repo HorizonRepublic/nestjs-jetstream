@@ -2,13 +2,13 @@
 sidebar_position: 5
 sidebar_label: "Handler Metadata"
 title: "Handler Metadata Registry: NATS KV Service Discovery for NestJS"
-description: "Publish NestJS handler metadata to a NATS KV bucket for dynamic service discovery, API gateway routing, and automatic catalog generation."
+description: "Publish NestJS handler metadata to a NATS KV bucket for service discovery at runtime, API gateway routing, and automatic catalog generation."
 schema:
   type: Article
   headline: "Handler Metadata Registry: NATS KV Service Discovery for NestJS"
   description: "Publish NestJS handler metadata to a NATS KV bucket for dynamic service discovery, API gateway routing, and automatic catalog generation."
   datePublished: "2026-04-02"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
 import Since from '@site/src/components/Since';

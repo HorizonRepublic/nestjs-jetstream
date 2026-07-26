@@ -8,7 +8,7 @@ schema:
   headline: "Workqueue Events: NestJS JetStream At-Least-Once Delivery"
   description: "NestJS NATS JetStream workqueue events with at-least-once delivery, automatic retry, publish-side deduplication, and dead letter handling."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
 # Events (Workqueue)
@@ -20,9 +20,9 @@ Workqueue events are fire-and-forget messages where **exactly one** handler inst
 
 ## When to use
 
-Imagine an e-commerce system: an order is created, and you need to send a confirmation email, update inventory, and notify the warehouse. Each of these tasks should happen **once**: you don't want three instances of the email service each sending the same confirmation.
+An order is created and exactly one confirmation email should go out, even with three replicas of the email service running.
 
-Workqueue events solve this. When you publish an event, NATS JetStream delivers it to a single consumer in the group. If that consumer fails, the message is redelivered to another instance. If all retries are exhausted, the message is routed to a dead letter queue for investigation.
+JetStream delivers a workqueue event to a single consumer in the group. A failed consumer means redelivery to another instance, and exhausted retries route the message to a dead letter queue.
 
 ## How it works
 
@@ -143,7 +143,7 @@ async onSettingsChanged(@Payload() s: Settings) { /* ... */ }
 
 **`meta: Record<string, unknown>`**, free-form metadata published to the [handler metadata registry](/docs/patterns/handler-metadata).
 
-There is no `durable`, `ackWait`, or `maxDeliver` on the decorator: those are stream-and-consumer-level concerns, configured once on the module under [Custom configuration](#custom-configuration) below.
+The decorator takes no `durable`, `ackWait` or `maxDeliver`: those are stream-and-consumer-level concerns, configured once on the module under [Custom configuration](#custom-configuration) below.
 
 ## Delivery semantics
 
@@ -198,7 +198,7 @@ For full details on dead letter handling, see the [Dead Letter Queue](/docs/guid
 
 ## Idempotency
 
-Because the transport provides **at-least-once** delivery, a handler may receive the same message more than once, for example, if the service crashes after processing but before acknowledging. Your handlers must be **idempotent**: processing the same message twice should produce the same result.
+Because the transport provides **at-least-once** delivery, a handler may receive the same message more than once, say the service crashes after processing but before acknowledging. Your handlers must be **idempotent**: processing the same message twice should produce the same result.
 
 ### Practical patterns
 

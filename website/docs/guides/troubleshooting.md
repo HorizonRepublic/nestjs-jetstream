@@ -8,7 +8,7 @@ schema:
   headline: "Troubleshooting: NestJS JetStream Transport"
   description: "Fix common NestJS JetStream issues: NATS connection errors, consumer lag, RPC timeouts, DLQ publish failures, and stream migration recovery."
   datePublished: "2026-03-26"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
 # Troubleshooting
@@ -78,7 +78,7 @@ The transport defaults to unlimited reconnection (`maxReconnectAttempts: -1`). I
 2. **Stream exists?**: The transport creates streams on startup. Check with `nats stream ls`.
 3. **Consumer exists?**: Check with `nats consumer ls <stream-name>`.
 4. **Subject matches?**: Use `nats sub "servicename__microservice.ev.>"` to see if messages arrive on the expected subject.
-5. **Publisher-only mode?**: If `consumer: false` is set, no handlers are registered.
+5. **Publisher-only mode?**: If `consumer: false` is set, the handler list is empty.
 
 ### Messages redelivered unexpectedly
 

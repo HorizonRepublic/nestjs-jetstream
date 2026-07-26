@@ -8,7 +8,7 @@ schema:
   headline: "NestJS NATS RPC: Core vs JetStream Request/Reply"
   description: "Synchronous NestJS NATS request-reply in Core NATS or JetStream mode, with timeout handling, error serialization, and per-request overrides."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
 # RPC (Request/Reply)
@@ -283,7 +283,7 @@ handleStream(): Observable<string> {
 
 ### Double-settlement protection (JetStream mode)
 
-The JetStream RPC router uses a `settled` flag to prevent race conditions between the handler completing and the timeout firing. Once the message is settled (ack'd, term'd, or timed out), any later settlement attempt is a no-op. This means:
+The JetStream RPC router uses a `settled` flag to prevent race conditions between the handler completing and the timeout firing. Once the message is settled (ack'd, term'd, or timed out), any later settlement attempt is a no-op:
 
 - If the handler completes just as the timeout fires, only one path executes.
 - No duplicate responses are published to the client's inbox.

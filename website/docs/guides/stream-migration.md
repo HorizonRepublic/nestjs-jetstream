@@ -8,7 +8,7 @@ schema:
   headline: "How to migrate immutable stream properties"
   description: "Safely change immutable stream properties without losing messages via blue-green sourcing."
   datePublished: "2026-04-02"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
 import Since from '@site/src/components/Since';
@@ -21,7 +21,7 @@ Safely change immutable stream properties (like `storage`) without losing messag
 
 ## When is migration needed?
 
-Most stream config changes are **mutable**: the transport applies them on startup via a simple update. No downtime, no message loss. See the [full property classification](/docs/reference/default-configs#immutable-vs-mutable-stream-properties).
+Most stream config changes are **mutable**: the transport applies them on startup via a simple update. Uptime and messages both survive. See the [full property classification](/docs/reference/default-configs#immutable-vs-mutable-stream-properties).
 
 Migration is only needed for **immutable** properties that NATS locks after stream creation:
 
@@ -118,7 +118,7 @@ Expect migration time to scale roughly linearly with message count. For small st
 - **Failure after the original is deleted.** The backup is the only copy of the data and is always preserved. Restoration resumes automatically on the next application startup.
 - **Sourcing timeout (30s default).** Same as above: the backup is preserved and the restore resumes on the next startup. Nothing is lost.
 - **Process killed mid-migration.** Detected on the next startup: a stranded backup is restored into the stream (recreating it first if the crash happened between delete and create), then cleaned up.
-- **Two instances migrating concurrently (rolling deploy).** Backups carry a freshness stamp. An instance that finds another instance's live backup waits for that migration to finish instead of interfering; only stale leftovers are recovered.
+- **Instances migrating concurrently (rolling deploy).** Backups carry a freshness stamp. An instance that finds another instance's live backup waits for that migration to finish instead of interfering; only stale leftovers are recovered.
 
 ## Manual streams are never migrated
 

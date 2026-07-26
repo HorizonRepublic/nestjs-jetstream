@@ -15,7 +15,7 @@ import Since from '@site/src/components/Since';
 
 # Module Configuration
 
-Reference for the three registration methods exposed by `JetstreamModule`: `forRoot()` for global setup, `forRootAsync()` for async/dynamic configuration, and `forFeature()` for per-module client registration. Every option is listed below with its type and default. For a guided introduction see the [Quick Start](/docs/getting-started/quick-start).
+Reference for the three registration methods exposed by `JetstreamModule`: `forRoot()` for global setup, `forRootAsync()` for async/runtime configuration, and `forFeature()` for per-module client registration. Every option is listed below with its type and default. For a guided introduction see the [Quick Start](/docs/getting-started/quick-start).
 
 ## forRoot()
 
@@ -314,7 +314,7 @@ Default: enabled with sensible defaults. OpenTelemetry tracing configuration. Se
 
 RPC configuration is a discriminated union on `mode`. Pick the mode based on whether commands must survive handler downtime:
 
-**`mode: 'core'`**, default. NATS native request/reply, no persistence. Lowest latency. Default timeout `30_000` ms (30 s). Best for low-latency queries and lookups where in-flight requests can simply error on failure.
+**`mode: 'core'`**, default. NATS native request/reply, leaving the message unpersisted. Lowest latency. Default timeout `30_000` ms (30 s). Best for low-latency queries and lookups where in-flight requests can simply error on failure.
 
 **`mode: 'jetstream'`**, commands persisted in a JetStream stream before delivery. Default timeout `180_000` ms (3 min). Best for commands that must survive a handler restart (payments, state changes).
 
@@ -423,7 +423,7 @@ See [Bring Your Own Infrastructure](/docs/guides/external-infrastructure#custom-
 
 <Since version="2.4.0" />
 
-Ordered events use a separate stream with Limits retention and deliver messages in strict sequential order. The configuration is simpler than workqueue/broadcast because ordered consumers are ephemeral and auto-managed by the `@nats-io/jetstream` client.
+Ordered events use a separate stream with Limits retention and deliver messages in strict sequential order. Ordered consumers are ephemeral, so the configuration is smaller than workqueue or broadcast and auto-managed by the `@nats-io/jetstream` client.
 
 ```typescript
 import { DeliverPolicy } from '@nats-io/jetstream';

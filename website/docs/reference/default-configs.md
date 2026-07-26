@@ -258,7 +258,7 @@ These properties can be **enabled** on an existing stream via a normal update, b
 | `deny_purge`          | `false` | Prevent stream purging via API                                                        |
 
 :::tip Enabling scheduling on existing streams
-You can safely add `allow_msg_schedules: true` to an existing stream config; NATS applies this as a regular update. No downtime, no message loss, no stream recreation. Just update `forRoot()` and restart.
+You can safely add `allow_msg_schedules: true` to an existing stream config; NATS applies this as a regular update. Uptime, messages and the stream itself all survive. Just update `forRoot()` and restart.
 :::
 
 ### Immutable (locked after creation)

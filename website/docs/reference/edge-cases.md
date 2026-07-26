@@ -8,7 +8,7 @@ schema:
   headline: "Edge Cases & FAQ: NestJS JetStream Transport"
   description: "NestJS JetStream transport FAQ: publisher-only mode, consumer self-healing, NATS header limits, fire-and-forget messaging, and DeliverPolicy edge cases."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
 # Edge Cases & FAQ
@@ -25,7 +25,7 @@ Use `client.emit()`. This publishes an event to the event stream (JetStream-back
 await lastValueFrom(this.client.emit('order.created', { orderId: '123' }));
 ```
 
-If you specifically need non-durable Core NATS `publish()` (truly ephemeral pub/sub), use the standard `@nestjs/microservices` NATS transport alongside this library, both can share the same NATS cluster.
+If you in detail need non-durable Core NATS `publish()` (truly ephemeral pub/sub), use the standard `@nestjs/microservices` NATS transport alongside this library, both can share the same NATS cluster.
 
 ## Publisher-Only Mode
 
@@ -47,9 +47,7 @@ This is ideal for API gateways and services that act purely as event producers.
 
 **Q: Why does the broadcast stream name have no service prefix?**
 
-The broadcast stream is named `broadcast-stream` (no service prefix) because it is **shared across all services** in the cluster. Every service that registers `@EventPattern('...', { broadcast: true })` handlers creates its own durable consumer on this same stream.
-
-This means:
+The broadcast stream is named `broadcast-stream` (no service prefix) because it is **shared across all services** in the cluster. Every service that registers `@EventPattern('...', { broadcast: true })` handlers creates its own durable consumer on this same stream, so:
 
 - Any service can publish to `broadcast.{pattern}`
 - Every service with a matching handler receives its own copy of the message
@@ -83,7 +81,7 @@ handleOrderCreated(@Payload() data: OrderCreatedDto): Observable<void> {
 }
 ```
 
-Specifically:
+In detail:
 
 - If the handler returns an `Observable`, the transport subscribes and resolves with the first `next` emission
 - If the handler returns a `Promise<Observable>` (common when NestJS exception filters wrap errors), the Promise is awaited first, then the Observable is subscribed
