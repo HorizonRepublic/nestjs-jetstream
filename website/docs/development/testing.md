@@ -140,7 +140,7 @@ import { createMock } from '@golevelup/ts-vitest';
 const mockConnection = createMock<ConnectionProvider>();
 ```
 
-:::caution
+:::warning
 `createMock<JsMsg>()` creates a Proxy where `'ack' in proxy` returns `false` unless you explicitly provide the `ack` property. If your code checks for property existence on `JsMsg`, provide it in the mock setup.
 :::
 

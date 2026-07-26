@@ -60,7 +60,7 @@ Given `name: 'orders'`, the transport generates the following names:
 Ordered consumers are **ephemeral**: they are created and managed by the `@nats-io/jetstream` client at consumption time and do not have a durable consumer name.
 :::
 
-:::info
+:::note
 The broadcast stream (`broadcast-stream`) is **shared** across all services. Each service creates its own durable consumer on this shared stream, named with the service-specific prefix (e.g., `orders__microservice_broadcast-consumer`).
 :::
 

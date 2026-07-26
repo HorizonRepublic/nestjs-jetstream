@@ -193,7 +193,10 @@ body {
   letter-spacing: -0.005em;
 }
 
-::selection { background: var(--jt-accent-soft); color: var(--jt-fg-0); }
+::selection {
+  background: color-mix(in oklab, var(--jt-accent) 22%, transparent);
+  color: var(--jt-fg-0);
+}
 
 *:focus-visible {
   outline: 2px solid var(--jt-accent);
@@ -489,33 +492,71 @@ button[class*="copyButton"]:hover {
   margin-right: 6px;
 }
 
+/* Four kinds, and colour only where a message state justifies it.
+   note absorbed info, warning absorbed caution: neither distinction ever
+   meant anything to a reader. */
 .theme-admonition-note,
-.theme-admonition-info { background: var(--jt-bg-1); }
+.theme-admonition-info {
+  background: var(--jt-bg-1);
+}
+
 .theme-admonition-note::before,
-.theme-admonition-info::before { background: var(--jt-info); }
+.theme-admonition-info::before {
+  background: var(--jt-line-2);
+}
+
 .theme-admonition-note [class*="admonitionHeading"],
 .theme-admonition-info [class*="admonitionHeading"],
 .theme-admonition-note [class*="admonitionIcon"] svg,
-.theme-admonition-info [class*="admonitionIcon"] svg { color: var(--jt-info); }
+.theme-admonition-info [class*="admonitionIcon"] svg {
+  color: var(--jt-fg-2);
+}
 
-.theme-admonition-tip { background: var(--jt-bg-1); }
-.theme-admonition-tip::before { background: var(--jt-accent); }
+/* tip carries "deliver": this route gets you there */
+.theme-admonition-tip {
+  background: var(--jt-bg-1);
+}
+
+.theme-admonition-tip::before {
+  background: var(--jt-state-deliver);
+}
+
 .theme-admonition-tip [class*="admonitionHeading"],
-.theme-admonition-tip [class*="admonitionIcon"] svg { color: var(--jt-accent); }
+.theme-admonition-tip [class*="admonitionIcon"] svg {
+  color: var(--jt-state-deliver);
+}
 
+/* warning carries "redeliver": you will be retried */
 .theme-admonition-warning,
-.theme-admonition-caution { background: var(--jt-bg-1); }
+.theme-admonition-caution {
+  background: var(--jt-bg-1);
+}
+
 .theme-admonition-warning::before,
-.theme-admonition-caution::before { background: var(--jt-warn); }
+.theme-admonition-caution::before {
+  background: var(--jt-state-redeliver);
+}
+
 .theme-admonition-warning [class*="admonitionHeading"],
 .theme-admonition-caution [class*="admonitionHeading"],
 .theme-admonition-warning [class*="admonitionIcon"] svg,
-.theme-admonition-caution [class*="admonitionIcon"] svg { color: var(--jt-warn); }
+.theme-admonition-caution [class*="admonitionIcon"] svg {
+  color: var(--jt-state-redeliver);
+}
 
-.theme-admonition-danger { background: var(--jt-bg-1); }
-.theme-admonition-danger::before { background: var(--jt-danger); }
+/* danger carries "dead letter": data loss or an unrecoverable state */
+.theme-admonition-danger {
+  background: var(--jt-bg-1);
+}
+
+.theme-admonition-danger::before {
+  background: var(--jt-state-dlq);
+}
+
 .theme-admonition-danger [class*="admonitionHeading"],
-.theme-admonition-danger [class*="admonitionIcon"] svg { color: var(--jt-danger); }
+.theme-admonition-danger [class*="admonitionIcon"] svg {
+  color: var(--jt-state-dlq);
+}
 
 
 .markdown-table-wrapper {

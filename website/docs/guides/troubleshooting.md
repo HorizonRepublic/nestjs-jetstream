@@ -259,7 +259,7 @@ NATS returns an error when you try to update a stream with incompatible changes 
 nats stream rm <stream-name>
 ```
 
-:::caution
+:::warning
 Deleting a stream destroys all messages in it. Only do this in development or when data loss is acceptable.
 :::
 

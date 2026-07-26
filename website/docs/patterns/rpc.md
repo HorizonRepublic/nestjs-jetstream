@@ -156,7 +156,7 @@ const order = await firstValueFrom(
 
 **Response publish failure.** The message is still `ack()`'d (the handler succeeded), but the client times out because the reply never arrived on the inbox.
 
-:::info Why `term()` instead of `nak()`?
+:::note Why `term()` instead of `nak()`?
 RPC commands are **never** redelivered via `nak()`. Retrying a command could cause duplicate side effects (double charges, duplicate records). If the handler fails, the message is terminated and the error is returned to the caller, who can decide whether to retry.
 :::
 
@@ -251,7 +251,7 @@ const order = await firstValueFrom(
 );
 ```
 
-:::info
+:::note
 The per-request timeout overrides the client-side wait time. In JetStream mode, the server-side handler timeout is still governed by the global `rpc.timeout` configuration.
 :::
 
@@ -299,7 +299,7 @@ When the NATS connection drops, **all pending JetStream-mode RPC callbacks** are
 
 This fail-fast behavior prevents the client from hanging indefinitely when the network is down.
 
-:::info Core mode disconnect
+:::note Core mode disconnect
 In Core mode, NATS handles disconnect behavior natively. Pending `nc.request()` calls are rejected by the NATS client library when the connection is lost.
 :::
 

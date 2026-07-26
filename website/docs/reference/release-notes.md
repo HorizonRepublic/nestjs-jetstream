@@ -55,7 +55,7 @@ No breaking API changes. Existing applications upgrade by bumping the dependency
 
 **Notable change**
 
-:::caution Broadcast `max_age` reduced: 1 day → 1 hour
+:::warning Broadcast `max_age` reduced: 1 day → 1 hour
 Broadcast messages (config propagation, cache invalidation, feature flags) are relevant for minutes, not days. The new default provides a enough catch-up window while reducing storage. This is a mutable property, **existing streams update automatically on next application startup**. If you need a longer retention window, override it explicitly:
 
 ```typescript

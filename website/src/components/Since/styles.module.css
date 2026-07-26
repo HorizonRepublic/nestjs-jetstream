@@ -1,0 +1,31 @@
+/* Version metadata, not a button: it sits beside a heading and stays out of
+   the way of running prose. */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 1rem;
+  padding: 3px 9px;
+  vertical-align: baseline;
+
+  font-family: var(--jt-font-mono);
+  font-variation-settings: var(--jt-vf-struct);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+
+  color: var(--jt-state-deliver);
+  background: var(--jt-accent-soft);
+  border: 1px solid var(--jt-accent-line);
+  border-radius: var(--jt-radius-md);
+}
+
+/* The mark reads as an arrival: this landed in that release. */
+.mark {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--jt-state-deliver);
+  box-shadow: 0 0 0 3px var(--jt-accent-soft);
+}

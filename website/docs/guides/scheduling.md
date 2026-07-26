@@ -104,7 +104,7 @@ events: {
 },
 ```
 
-:::caution
+:::warning
 Setting `max_age: 0` disables automatic cleanup for **all** messages in the event stream, not just scheduled ones. Consider the storage implications for high-throughput streams.
 :::
 

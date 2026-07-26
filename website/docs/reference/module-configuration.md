@@ -99,7 +99,7 @@ import { JetstreamModule } from '@horizon-republic/nestjs-jetstream';
 export class AppModule {}
 ```
 
-:::info The `name` lives outside the factory
+:::note The `name` lives outside the factory
 The `name` property is defined at the top level of `forRootAsync()`, not inside the factory return value. This is by design: the name is needed upfront for DI token generation before the factory runs.
 :::
 
@@ -335,7 +335,7 @@ rpc: {
 }
 ```
 
-:::info Timeout applies to both sides
+:::note Timeout applies to both sides
 The `timeout` value controls both the **client-side wait** (how long the caller waits for a response) and the **server-side handler limit** (how long the handler is allowed to run before being terminated). Both sides use the value from their own `forRoot()` configuration.
 :::
 

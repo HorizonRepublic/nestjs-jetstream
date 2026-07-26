@@ -137,7 +137,7 @@ return this.health.check([
 ]);
 ```
 
-:::caution Terminus error details
+:::warning Terminus error details
 The `isHealthy()` method throws a plain `Error` with structured details attached as a property; not a Terminus `HealthCheckError`. Terminus still picks up the details correctly because it reads the error properties, but be aware of this if you catch the error directly in custom code.
 :::
 

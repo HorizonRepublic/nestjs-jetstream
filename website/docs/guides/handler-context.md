@@ -198,7 +198,7 @@ flowchart TD
 `retry()` and `terminate()` cannot both be called in the same handler; the second call throws an `Error`. Choose one intent per message.
 :::
 
-:::info Scope
+:::note Scope
 Settlement actions only affect **JetStream event handlers** ([workqueue](/docs/patterns/events) and [broadcast](/docs/patterns/broadcast)). They have no effect on [ordered events](/docs/patterns/ordered-events) (auto-acknowledged) or [RPC handlers](/docs/patterns/rpc) (separate settlement logic).
 :::
 
@@ -235,7 +235,7 @@ if (ctx.isJetStream()) {
 }
 ```
 
-:::info When is it not JetStream?
+:::note When is it not JetStream?
 This check is useful when writing code that works across both Core RPC mode (`Msg`) and JetStream mode (`JsMsg`). The new metadata getters (`getDeliveryCount()`, etc.) already handle this internally; they return `undefined` for Core messages.
 :::
 

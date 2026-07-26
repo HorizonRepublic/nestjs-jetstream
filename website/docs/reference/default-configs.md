@@ -28,7 +28,7 @@ All streams share a common base configuration:
 | `allow_direct` | `true`                                                               |
 | `compression`  | `S2`                                                                 |
 
-:::info S2 Compression
+:::note S2 Compression
 All streams default to [S2 compression](https://github.com/klauspost/compress/tree/master/s2), a Snappy-compatible codec with better ratios. This reduces disk I/O and storage with modest CPU overhead that varies with payload entropy and size. Requires NATS Server >= 2.10 (see [runtime requirements](/docs/getting-started/installation#runtime-requirements)). Override per stream kind:
 
 ```typescript
@@ -99,7 +99,7 @@ Limits retention, messages persist until the configured limits are reached. Shar
 | `max_age`              | `1 hour`     | `toNanos(1, 'hours')`   |
 | `duplicate_window`     | `2 minutes`  | `toNanos(2, 'minutes')` |
 
-:::info Changed in v2.9.0
+:::note Changed in v2.9.0
 `max_age` reduced from 1 day to 1 hour. Broadcast messages (config propagation, cache invalidation, feature flags) are relevant for minutes, not days. 1 hour provides enough catch-up window for new instances while reducing unnecessary storage. This is a mutable property, existing streams update automatically on next startup.
 :::
 
@@ -271,7 +271,7 @@ You can safely add `allow_msg_schedules: true` to an existing stream config; NAT
 
 The transport can automatically migrate `storage` via blue-green stream recreation. See the full **[Stream Migration guide](/docs/guides/stream-migration)** for how it works, rolling update behavior, performance benchmarks, and limitations.
 
-:::caution retention is never migratable
+:::warning retention is never migratable
 `retention` is controlled by the transport (`Workqueue` for events/commands, `Limits` for broadcast/ordered). A mismatch between the running stream and the expected retention policy always throws an error on startup, regardless of `allowDestructiveMigration`.
 :::
 
