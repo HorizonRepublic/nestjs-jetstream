@@ -1,11 +1,6 @@
 import type { SidebarsConfig } from '@docusaurus/plugin-content-docs';
 
-/**
- * Grouped by what the reader is doing, not by what the code is called.
- * "When it fails" exists because the reader who arrives at 3am is the one
- * the old structure served worst: recovery pages were spread across
- * Production Basics, Operations and a loose Troubleshooting entry.
- */
+/** Grouped by reader task, not by code structure. */
 const sidebars: SidebarsConfig = {
   docsSidebar: [
     'intro',

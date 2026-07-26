@@ -1,33 +1,16 @@
-/* ============================================================================
-   nestjs-jetstream - design tokens
-
-   Direction: the delivery record. Colour appears only where a message changes
-   state - deliver (cobalt), redeliver (amber), dead-letter (red) - and the
-   interactive accent reuses "deliver" cobalt, so a link means "this takes you
-   somewhere" in the same voice a message means "this arrived".
-
-   Recursive carries both voices through one variable family: MONO 0 for prose,
-   MONO 1 for structure. CASL adds warmth to display sizes without a second face.
-
-   Single source of truth. Imported by custom.css. Don't reference these directly
-   in app code - reference the Infima vars in custom.css that map to them.
-   ============================================================================ */
+/* Design tokens. Imported by custom.css; app code references the Infima vars
+   defined there, not these. */
 
 :root {
   /* ---- type ----------------------------------------------------------- */
   --jt-font-sans: "Recursive", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --jt-font-mono: "Recursive", ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 
-  /* Variation settings, the two voices. Structure reads as mono; prose does
-     not. Display picks up a little CASL so headings carry warmth that a
-     neutral grotesk cannot. */
   --jt-vf-prose: "MONO" 0, "CASL" 0;
   --jt-vf-struct: "MONO" 1, "CASL" 0;
   --jt-vf-display: "MONO" 0, "CASL" 0.32;
 
-  /* ---- type scale ------------------------------------------------------
-     Wider than a docs-default scale on purpose: the flat rhythm is what read
-     as dry. Display steps away from body decisively. */
+  /* ---- type scale ------------------------------------------------------ */
   --jt-step--1: 0.8125rem;
   --jt-step-0: 1rem;
   --jt-step-1: 1.1875rem;
@@ -36,26 +19,20 @@
   --jt-step-4: 2.375rem;
   --jt-step-5: 3.25rem;
 
-  /* ---- radii -----------------------------------------------------------
-     A record has corners. Nothing here is a pill. */
+  /* ---- radii ------------------------------------------------------------ */
   --jt-radius-sm: 2px;
   --jt-radius-md: 3px;
   --jt-radius-lg: 4px;
   --jt-radius-xl: 6px;
 
-  /* ---- motion ----------------------------------------------------------
-     Only state changes move, and only briefly. */
+  /* ---- motion ----------------------------------------------------------- */
   --jt-m-fast: 110ms cubic-bezier(0.2, 0, 0, 1);
   --jt-m-base: 180ms cubic-bezier(0.2, 0, 0, 1);
 }
 
-/* ---- LIGHT (default) --------------------------------------------------
-   Paper carries a trace of warmth so the page reads as stock, not as a
-   clinical panel. */
+/* ---- LIGHT (default) --------------------------------------------------- */
 [data-theme="light"] {
-  /* Native widgets - scrollbars, form controls, the canvas behind the page -
-     follow the theme too, otherwise a dark page keeps a light scrollbar. */
-  color-scheme: light;
+  color-scheme: light; /* native scrollbars and form controls */
 
   --jt-bg-0: #f8f8fa; /* page */
   --jt-bg-1: #ffffff; /* cards, navbar, code surfaces */
@@ -101,8 +78,7 @@
   --jt-shadow-raised: 0 2px 8px rgb(33 38 47 / 0.08);
 }
 
-/* ---- DARK ---------------------------------------------------------------
-   The 3am shift. Same drawing, state colours lifted to hold contrast. */
+/* ---- DARK -------------------------------------------------------------- */
 [data-theme="dark"] {
   color-scheme: dark;
 

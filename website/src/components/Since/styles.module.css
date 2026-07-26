@@ -1,5 +1,3 @@
-/* Version metadata, not a button: it sits beside a heading and stays out of
-   the way of running prose. */
 .badge {
   display: inline-flex;
   align-items: center;
@@ -21,7 +19,6 @@
   border-radius: var(--jt-radius-md);
 }
 
-/* The mark reads as an arrival: this landed in that release. */
 .mark {
   width: 5px;
   height: 5px;

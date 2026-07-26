@@ -1,9 +1,5 @@
-/* ============================================================================
-   Landing page - "the delivery record"
-
-   Every value maps to a global token: the landing page and the docs are one
-   document, and the theme switch has to reach both.
-   ============================================================================ */
+/* Landing page. Every value maps to a global token so the theme switch reaches
+   the landing and the docs alike. */
 
 .landingRoot {
   --lp-gutter: clamp(20px, 5vw, 72px);
@@ -22,9 +18,7 @@
   color: inherit;
 }
 
-/* ---- hero ---------------------------------------------------------------
-   The claim leads on the left and the record it describes sits beside it, so
-   the first screen shows the artefact rather than a promise about it. */
+/* ---- hero --------------------------------------------------------------- */
 .lp-hero {
   position: relative;
   display: grid;
@@ -36,8 +30,7 @@
   overflow: hidden;
 }
 
-/* One lit spot, under the card and nowhere else. The page is otherwise flat
-   stock, and a second glow would turn a document into a product shot. */
+
 .lp-hero::before {
   content: '';
   position: absolute;
@@ -58,8 +51,8 @@
 
 .lp-hero-title {
   margin: 0;
-  /* The cap is in ch of its own size, which only works as max-width: as a
-     grid track, ch resolves against the container font and collapses. */
+  /* ch must stay on max-width: as a grid track it resolves against the
+     container font and collapses. */
   max-width: 16ch;
   font-size: clamp(1.9rem, 4.4vw, var(--jt-step-5));
   line-height: 1.08;
@@ -77,11 +70,7 @@
   color: var(--jt-fg-1);
 }
 
-/* ---- the record ---------------------------------------------------------
-   A stub torn off the stream: header, fields, the log of what happened to one
-   message, and the stamp that closed it. The six-node timeline this replaces
-   was accurate and unreadable - it asked for six labels before it said one
-   thing. */
+/* ---- the record --------------------------------------------------------- */
 .lp-record {
   margin: 0;
 }
@@ -136,7 +125,6 @@
   overflow-wrap: anywhere;
 }
 
-/* the log: what actually happened, in the order it happened */
 .lp-record-log {
   display: grid;
   gap: 9px;
@@ -179,8 +167,7 @@
   color: var(--jt-state-redeliver);
 }
 
-/* The restart is a break in the record, not an entry in it: the message
-   crosses it without noticing, which is the whole claim. */
+
 .lp-record-log li[data-state='seam'] {
   padding-block: 8px;
   border-block: 1px dashed var(--jt-line-2);
@@ -195,7 +182,6 @@
   color: var(--jt-fg-3);
 }
 
-/* the one loud thing on the page */
 .lp-record-stamp {
   position: absolute;
   inset-block-end: -18px;
@@ -299,8 +285,7 @@
   color: var(--jt-fg-3);
 }
 
-/* The two links wrap as a pair, so a narrow column never strands the second
-   one on a line of its own. */
+/* Wraps as a pair so a narrow column never strands the second link. */
 .lp-links {
   display: flex;
   flex-wrap: wrap;
@@ -552,8 +537,7 @@
   }
 }
 
-/* The log stacks rather than shrinking its columns: a timestamp that wraps
-   mid-value stops reading as a timestamp. */
+/* Stack rather than shrink: a timestamp wrapping mid-value stops reading as one. */
 @media (max-width: 540px) {
   .lp-record-fields > div,
   .lp-record-log li {
@@ -576,8 +560,7 @@
     transition: none;
   }
 
-  /* The record arrives already settled. The rotation is part of the drawing,
-     so it is restated here rather than lost with the animation. */
+  /* Rotation is part of the drawing, so restate it when the animation goes. */
   .lp-record-log li,
   .lp-record-stamp {
     animation: none;

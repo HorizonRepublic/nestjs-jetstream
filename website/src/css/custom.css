@@ -73,9 +73,7 @@
   --ifm-blockquote-border-color: var(--jt-line-2);
 }
 
-/* ---- Recursive: two voices from one family ---------------------------
-   The family alone is not enough. MONO 1 is what makes structure read as
-   structure; without it every code span renders proportional. */
+/* ---- Recursive ------------------------------------------------------- */
 body {
   font-variation-settings: var(--jt-vf-prose);
 }
@@ -103,7 +101,6 @@ h6 {
   font-variation-settings: var(--jt-vf-prose);
 }
 
-/* Tabular figures wherever numbers are compared down a column. */
 table td,
 table th,
 .jt-num {
@@ -492,9 +489,7 @@ button[class*="copyButton"]:hover {
   margin-right: 6px;
 }
 
-/* Four kinds, and colour only where a message state justifies it.
-   note absorbed info, warning absorbed caution: neither distinction ever
-   meant anything to a reader. */
+/* Admonitions: note/info and warning/caution share styling. */
 .theme-admonition-note,
 .theme-admonition-info {
   background: var(--jt-bg-1);
@@ -512,7 +507,6 @@ button[class*="copyButton"]:hover {
   color: var(--jt-fg-2);
 }
 
-/* tip carries "deliver": this route gets you there */
 .theme-admonition-tip {
   background: var(--jt-bg-1);
 }
@@ -526,7 +520,6 @@ button[class*="copyButton"]:hover {
   color: var(--jt-state-deliver);
 }
 
-/* warning carries "redeliver": you will be retried */
 .theme-admonition-warning,
 .theme-admonition-caution {
   background: var(--jt-bg-1);
@@ -544,7 +537,6 @@ button[class*="copyButton"]:hover {
   color: var(--jt-state-redeliver);
 }
 
-/* danger carries "dead letter": data loss or an unrecoverable state */
 .theme-admonition-danger {
   background: var(--jt-bg-1);
 }

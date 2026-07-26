@@ -65,14 +65,12 @@ const config: Config = {
         baseSchema: {
           organization: {
             '@type': 'Organization',
-            // publisher references resolve against this @id; without it every
-            // Article on the site points at a node that is not in the graph.
+            // Article.publisher and WebPage.publisher reference this @id.
             '@id': '${DOCUSAURUS_CONFIG_URL}/#organization',
             name: 'Horizon Republic',
             url: '${DOCUSAURUS_CONFIG_URL}',
           },
-          // Every WebPage declares isPartOf this node, so it has to be in the
-          // graph on every page, not only on the home page.
+          // WebPage.isPartOf references this @id on every route.
           website: {
             '@type': 'WebSite',
             '@id': '${DOCUSAURUS_CONFIG_URL}/#website',
@@ -197,8 +195,6 @@ const config: Config = {
       },
     },
     colorMode: {
-      // First visit follows the OS setting; the switch still wins and its
-      // choice is remembered from then on.
       defaultMode: 'light',
       disableSwitch: false,
       respectPrefersColorScheme: true,

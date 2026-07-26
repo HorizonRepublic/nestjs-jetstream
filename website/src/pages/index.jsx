@@ -12,7 +12,7 @@ const parseNodeMajor = (range) => String(range || '').match(/(\d+)/)?.[1] ?? nul
 
 const NODE_MAJOR = parseNodeMajor(rootPkg.engines?.node);
 
-/** The published version, so the page never claims a release that isn't out. */
+/** Published version, so the page never claims a release that isn't out. */
 const useLiveVersion = (initial) => {
   const [version, setVersion] = useState(initial);
 
@@ -75,12 +75,6 @@ const RECORD_LOG = [
   { state: 'ack', time: '19:04:03.402', event: 'ack', note: 'handled in 66 ms' },
 ];
 
-/**
- * The signature: the receipt one message leaves behind. A stub torn off the
- * stream, showing the attempt that failed, the deploy it crossed and the ack
- * that closed it. Every colour used anywhere on the site is defined by what it
- * means on this card.
- */
 const DeliveryRecord = () => (
   <figure className="lp-record">
     <div className="lp-record-card">
