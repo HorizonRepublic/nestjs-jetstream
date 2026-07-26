@@ -1,14 +1,14 @@
 ---
 sidebar_position: 4
 sidebar_label: "Custom Codec"
-title: "How to use a custom codec — NestJS JetStream"
+title: "How to use a custom codec: NestJS JetStream"
 description: "Replace the default JSON codec with the built-in MessagePack codec, Protobuf, or any custom binary format for NATS message serialization."
 schema:
   type: Article
   headline: "How to use a custom codec with NestJS JetStream"
   description: "Replace JSON with MessagePack, Protobuf, or a custom binary codec for NATS message serialization."
   datePublished: "2026-03-21"
-  dateModified: "2026-06-12"
+  dateModified: "2026-07-26"
 ---
 
 # How to use a custom codec
@@ -29,7 +29,7 @@ interface Codec {
 }
 ```
 
-Both methods work with `Uint8Array` — the binary format that NATS uses on the wire.
+Both methods work with `Uint8Array`: the binary format that NATS uses on the wire.
 
 ## Default: JsonCodec
 
@@ -43,11 +43,11 @@ const bytes = codec.encode({ hello: 'world' });   // Uint8Array
 const data = codec.decode(bytes);                  // { hello: 'world' }
 ```
 
-Rule of thumb: stick with JSON until serialization shows up in CPU profiles or your p95 payload exceeds ~1-2 KB on the wire. Below that size, `JsonCodec` wins on constant per-call overhead. Above it, a binary codec like MessagePack starts paying for itself — and the gap widens dramatically as payloads grow.
+Rule of thumb: stick with JSON until serialization shows up in CPU profiles or your p95 payload exceeds ~1-2 KB on the wire. Below that size, `JsonCodec` wins on constant per-call overhead. Above it, a binary codec like MessagePack starts paying for itself, and the gap widens dramatically as payloads grow.
 
 ## Built-in: MsgpackCodec
 
-The library ships a ready-to-use [MessagePack](https://msgpack.org/) codec powered by [`msgpackr`](https://www.npmjs.com/package/msgpackr). MessagePack produces a smaller wire frame than JSON and decodes much faster on structured payloads, while staying cross-language — Python, Go, Java, Rust, and other runtimes all have MessagePack libraries.
+The library ships a ready-to-use [MessagePack](https://msgpack.org/) codec powered by [`msgpackr`](https://www.npmjs.com/package/msgpackr). MessagePack produces a smaller wire frame than JSON and decodes much faster on structured payloads, while staying cross-language, Python, Go, Java, Rust, and other runtimes all have MessagePack libraries.
 
 ### When to use it
 
@@ -60,7 +60,7 @@ The library ships a ready-to-use [MessagePack](https://msgpack.org/) codec power
 
 Stick with `JsonCodec` when:
 
-- Payloads are mostly small (`< 1 KB`) flat objects — JSON is faster there
+- Payloads are small (`< 1 KB`) flat objects: JSON is faster there
 - You need a JSON-compatible wire format for tooling (`nats sub`, log aggregators parsing payloads, etc.)
 - A non-Node language in your fleet does not have a maintained MessagePack library
 
@@ -70,7 +70,7 @@ Measured on the library's own codec bench, sync `decode` throughput. Payload buc
 
 | Payload         | Shape          | vs JSON  |
 |-----------------|----------------|----------|
-| tiny (~64 B)    | flat / nested  | JSON wins by 15-34% |
+| ~64 B           | flat / nested  | JSON wins by 15-34% |
 | small (~1 KB)   | flat / nested  | JSON wins by ~12%   |
 | small (~1 KB)   | string-heavy   | **msgpack +18%**    |
 | medium (~10 KB) | flat           | **msgpack +193%**   |
@@ -78,11 +78,11 @@ Measured on the library's own codec bench, sync `decode` throughput. Payload buc
 | medium (~10 KB) | string-heavy   | **msgpack +264%**   |
 | large (~100 KB) | flat           | **msgpack +478%**   |
 | large (~100 KB) | string-heavy   | **msgpack +490%**   |
-| huge (~1 MB)    | string-heavy   | **msgpack +325%**   |
+| ~1 MB           | string-heavy   | **msgpack +325%**   |
 
 ### Installation
 
-`msgpackr` is an **optional** peer dependency — install it only if you opt into this codec:
+`msgpackr` is an **optional** peer dependency, install it only if you opt into this codec:
 
 ```bash
 npm install msgpackr
@@ -130,7 +130,7 @@ For strongly-typed schemas and cross-language compatibility, Protocol Buffers ar
 import type { Codec } from '@horizon-republic/nestjs-jetstream';
 
 /**
- * Conceptual example — adapt to your Protobuf library
+ * Conceptual example, adapt to your Protobuf library
  * (protobufjs, ts-proto, google-protobuf, etc.)
  */
 export class ProtobufCodec implements Codec {
@@ -212,7 +212,7 @@ When omitted, `forFeature()` inherits the global codec from `forRoot()`.
 ## Codec consistency rule
 
 :::danger All communicating services must use the same codec
-The codec determines the wire format. If the publisher encodes with MsgPack but the consumer expects JSON, deserialization will fail. Ensure every service that publishes to or consumes from a given stream uses the same codec.
+The codec determines the wire format. If the publisher encodes with MsgPack but the consumer expects JSON, deserialization will fail. Ensure every service that publishes to or consumes from one stream uses the same codec.
 
 This applies across service boundaries: if `orders-service` publishes events that `notifications-service` consumes, both must use the same codec.
 :::
@@ -221,7 +221,7 @@ This applies across service boundaries: if `orders-service` publishes events tha
 
 When `codec.decode()` throws (e.g., a MsgPack consumer receives a JSON-encoded message), the transport handles it safely:
 
-- **Workqueue and RPC messages**: the message is **terminated** (`msg.term()`) — it will not be redelivered. Retrying a message that cannot be decoded would cause an infinite failure loop.
+- **Workqueue and RPC messages**: the message is **terminated** (`msg.term()`): it will not be redelivered. Retrying a message that cannot be decoded would cause an infinite failure loop.
 - **Ordered events**: the message is **skipped** (logged and dropped) since ordered consumers do not support `term()`.
 
 In both cases, the error is logged with the full subject and error details.
@@ -237,6 +237,6 @@ To switch codecs without downtime, deploy consumers that can handle both formats
 
 ## Next steps
 
-- [Record Builder & Deduplication](./record-builder.md) — attach headers and dedup IDs to outbound messages
-- [Handler Context](./handler-context.md) — access decoded payloads and metadata in handlers
-- [Module Configuration](/docs/reference/module-configuration) — full reference for `forRoot()` and `forFeature()` options
+- [Record Builder & Deduplication](./record-builder.md): attach headers and dedup IDs to outbound messages
+- [Handler Context](./handler-context.md): access decoded payloads and metadata in handlers
+- [Module Configuration](/docs/reference/module-configuration): full reference for `forRoot()` and `forFeature()` options

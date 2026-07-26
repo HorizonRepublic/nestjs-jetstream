@@ -214,8 +214,8 @@ export class StreamMigration {
 
   /**
    * Lag-based drain check: live publishes cannot fake completion. A fresh
-   * source reports lag 0 / active -1 before its first sync (NATS 2.12.6),
-   * hence the active guard.
+   * source reports lag 0 / active -1 before its first sync (NATS 2.12.6), so
+   * the active guard covers that window.
    */
   private async waitForSourceDrained(
     jsm: JetStreamManager,

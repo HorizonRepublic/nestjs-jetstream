@@ -1,14 +1,14 @@
 ---
 sidebar_position: 6
 sidebar_label: "Storage budgeting"
-title: "Storage budgeting & provisioning — NestJS JetStream"
+title: "Storage budgeting & provisioning: NestJS JetStream"
 description: "How JetStream stream reservations relate to the server max_file_store, and how to read the boot-time provisioning summary."
 schema:
   type: Article
   headline: "Storage budgeting & provisioning"
   description: "How JetStream stream reservations relate to the server max_file_store, and how to read the boot-time provisioning summary."
   datePublished: "2026-06-02"
-  dateModified: "2026-06-12"
+  dateModified: "2026-07-26"
 ---
 
 # Storage budgeting & provisioning
@@ -51,12 +51,12 @@ from this service alone.
 
 If a stream cannot be created, the transport throws a `JetstreamProvisioningError` with the
 stream name, the requested `max_bytes`/`num_replicas`, the reservation, the NATS `err_code` and
-description, and a remediation hint — instead of crashing with an opaque API error. Two common
+description, and a remediation hint, instead of crashing with an opaque API error. Two common
 cases:
 
-- **Insufficient storage** — the aggregate reservation exceeds `max_file_store`. Lower
+- **Insufficient storage**: the aggregate reservation exceeds `max_file_store`. Lower
   `max_bytes`/`num_replicas` for the service, or raise `max_file_store` on the servers.
-- **No suitable peers** — fewer healthy peers than `num_replicas`, or no peer with enough
+- **No suitable peers**: fewer healthy peers than `num_replicas`, or no peer with enough
   headroom. Reduce replicas or add/repair nodes.
 
 ## Opt-in pre-flight check
@@ -75,11 +75,11 @@ JetstreamModule.forRoot({
 
 This is a best-effort heuristic, not a guarantee:
 
-- The server-side `max_file_store` is **not** exposed to clients. If the account has no explicit
+- The server-side `max_file_store` is not exposed to clients. If the account has no explicit
   `max_storage` limit, the check logs that it cannot verify the real ceiling.
 - Account info is an aggregate, not per-node, so a cluster with skewed placement can still fail.
 - It is subject to a check-then-act race with other services.
 
-Setting an **account-level** `max_storage` (in addition to, or instead of, the server
+Setting an **account-level** `max_storage` (besides, or instead of, the server
 `max_file_store`) makes the pre-flight accurate and admission control predictable. Either way, the
 `JetstreamProvisioningError` on the actual failure remains the source of truth.

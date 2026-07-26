@@ -1,14 +1,14 @@
 ---
 sidebar_position: 1
 sidebar_label: "Module Configuration"
-title: "Module Configuration — NestJS JetStream Transport"
+title: "Module Configuration: NestJS JetStream Transport"
 description: "Reference for forRoot(), forRootAsync(), and forFeature() registration methods, plus stream, consumer, RPC, and connection options."
 schema:
   type: Article
   headline: "Module Configuration Reference"
   description: "Reference for forRoot(), forRootAsync(), and forFeature() registration methods with stream, consumer, and connection options."
   datePublished: "2026-03-21"
-  dateModified: "2026-06-12"
+  dateModified: "2026-07-26"
 ---
 
 import Since from '@site/src/components/Since';
@@ -100,7 +100,7 @@ export class AppModule {}
 ```
 
 :::info The `name` lives outside the factory
-The `name` property is defined at the top level of `forRootAsync()`, not inside the factory return value. This is by design — the name is needed upfront for DI token generation before the factory runs.
+The `name` property is defined at the top level of `forRootAsync()`, not inside the factory return value. This is by design: the name is needed upfront for DI token generation before the factory runs.
 :::
 
 ### useExisting
@@ -115,11 +115,11 @@ JetstreamModule.forRootAsync({
 })
 ```
 
-The `NatsConfigService` must be a class-based provider that directly implements `Omit<JetstreamModuleOptions, 'name'>` — the instance itself is used as the options object (NestJS does not call a factory method on it).
+The `NatsConfigService` must be a class-based provider that directly implements `Omit<JetstreamModuleOptions, 'name'>`: the instance itself is used as the options object (NestJS does not call a factory method on it).
 
 ### useClass
 
-Similar to `useExisting`, but the class is instantiated by the module:
+Like `useExisting`, but the class is instantiated by the module:
 
 ```typescript
 JetstreamModule.forRootAsync({
@@ -130,7 +130,7 @@ JetstreamModule.forRootAsync({
 
 ## forFeature()
 
-`forFeature()` creates a lightweight `JetstreamClient` proxy for a target service. It reuses the shared NATS connection from `forRoot()` — no new connections are created.
+`forFeature()` creates a lightweight `JetstreamClient` proxy for a target service. It reuses the shared NATS connection from `forRoot()`: no new connections are created.
 
 Import it in each feature module that needs to communicate with a specific service:
 
@@ -215,53 +215,53 @@ Every field in `JetstreamModuleOptions` with its type, default, and guidance on 
 
 ### Required options
 
-#### `name` &mdash; `string`
+#### `name`, `string`
 
 Service name. Used for stream, consumer, and subject naming. Must be unique per service in your system.
 
-#### `servers` &mdash; `string[]`
+#### `servers`, `string[]`
 
 NATS server URLs (e.g., `['nats://localhost:4222']`).
 
 ### Optional options
 
-#### `codec` &mdash; `Codec`
+#### `codec`, `Codec`
 
 Default: `JsonCodec`. Global message serializer/deserializer. Swap for MessagePack, Protobuf, or any custom binary format. See [Custom Codec](/docs/guides/custom-codec).
 
-#### `rpc` &mdash; `RpcConfig`
+#### `rpc`, `RpcConfig`
 
 Default: `{ mode: 'core' }`. RPC transport mode and configuration. See [RpcConfig](#rpcconfig) below.
 
-#### `consumer` &mdash; `boolean`
+#### `consumer`, `boolean`
 
 Default: `true`. Enable consumer infrastructure. Set to `false` for publisher-only services (e.g., API gateways).
 
-#### `events` &mdash; `StreamConsumerOverrides`
+#### `events`, `StreamConsumerOverrides`
 
 Default: production defaults (see [Default Configs](/docs/reference/default-configs#stream-defaults)). Overrides for workqueue event stream and consumer config. To enable [message scheduling](/docs/guides/scheduling), set `events.stream.allow_msg_schedules: true` (requires NATS >= 2.12). <Since version="2.8.0" />
 
-#### `broadcast` &mdash; `StreamConsumerOverrides`
+#### `broadcast`, `StreamConsumerOverrides`
 
 Default: production defaults. Overrides for broadcast event stream and consumer config.
 
-#### `ordered` &mdash; `OrderedEventOverrides`
+#### `ordered`, `OrderedEventOverrides`
 
 Default: production defaults. Configuration for ordered event consumers. See [OrderedEventOverrides](#orderedeventoverrides) below. <Since version="2.4.0" />
 
-#### `hooks` &mdash; `Partial<TransportHooks>`
+#### `hooks`, `Partial<TransportHooks>`
 
 Default: none. Transport lifecycle hook handlers. Unset hooks are silently ignored. See [Lifecycle Hooks](/docs/guides/lifecycle-hooks).
 
-#### `onDeadLetter` &mdash; `(info: DeadLetterInfo) => Promise<void>`
+#### `onDeadLetter`, `(info: DeadLetterInfo) => Promise<void>`
 
 Default: none. Async callback for dead letter handling. Called and awaited when a message exhausts all delivery attempts. See [Dead Letter Queue](/docs/guides/dead-letter-queue). <Since version="2.2.0" />
 
-#### `dlq` &mdash; `{ stream?: StreamConfigOverrides; management?: EntityManagement }`
+#### `dlq`, `{ stream?: StreamConfigOverrides; management?: EntityManagement }`
 
 Default: none. Built-in Dead Letter Queue stream. When set, exhausted messages are automatically republished to a dedicated DLQ stream with tracking headers. The optional `management` field controls whether the DLQ stream is auto-provisioned (`Auto`, default) or externally managed (`Manual`). See [Built-in DLQ stream](/docs/guides/dead-letter-queue#built-in-dlq-stream) and [External DLQ](/docs/guides/external-infrastructure#external-dlq). <Since version="2.9.0" />
 
-#### `provisioning` &mdash; `ProvisioningOptions`
+#### `provisioning`, `ProvisioningOptions`
 
 Default: `{ management: ManagementMode.Auto }`. Controls global provisioning behavior. <Since version="2.10.0" />
 
@@ -286,27 +286,27 @@ JetstreamModule.forRoot({
 
 The global value can be overridden per entity via `events.management`, `broadcast.management`, etc. Resolution order: per-entity -> global -> `Auto`. See [Bring Your Own Infrastructure](/docs/guides/external-infrastructure) for a complete guide.
 
-#### `metadata` &mdash; `MetadataRegistryOptions`
+#### `metadata`, `MetadataRegistryOptions`
 
 Default: auto-enabled if any handler has `meta`. Handler metadata registry; publishes `@EventPattern` / `@MessagePattern` handler metadata to a NATS KV bucket for cross-service discovery. No-op when `consumer: false`. See [Handler Metadata](/docs/patterns/handler-metadata). <Since version="2.9.0" />
 
-#### `metrics` &mdash; `MetricsOption`
+#### `metrics`, `MetricsOption`
 
 Default: none. Built-in Prometheus metrics. Pass `true` for defaults or a `MetricsConfig` object for full control (custom registry, prefix, labels, polling interval, histogram buckets). Requires the optional `prom-client` peer dependency when enabled. See [Prometheus Metrics](/docs/observability/metrics). <Since version="2.11.0" />
 
-#### `allowDestructiveMigration` &mdash; `boolean`
+#### `allowDestructiveMigration`, `boolean`
 
 Default: `false`. Allow automatic blue-green stream recreation for immutable property changes (e.g., `storage`). Without this flag, the transport logs a warning and keeps the existing stream config. See [Stream Migration](/docs/guides/stream-migration). <Since version="2.9.0" />
 
-#### `shutdownTimeout` &mdash; `number`
+#### `shutdownTimeout`, `number`
 
 Default: `10_000` (10 s). Graceful shutdown timeout in milliseconds. Handlers exceeding this are abandoned.
 
-#### `connectionOptions` &mdash; `Partial<ConnectionOptions>`
+#### `connectionOptions`, `Partial<ConnectionOptions>`
 
 Default: none. Raw NATS `ConnectionOptions` pass-through for TLS, auth, reconnection, etc. See [connectionOptions](#connectionoptions) below.
 
-#### `otel` &mdash; `OtelOptions`
+#### `otel`, `OtelOptions`
 
 Default: enabled with sensible defaults. OpenTelemetry tracing configuration. See [Distributed Tracing](/docs/observability/tracing).
 
@@ -314,12 +314,12 @@ Default: enabled with sensible defaults. OpenTelemetry tracing configuration. Se
 
 RPC configuration is a discriminated union on `mode`. Pick the mode based on whether commands must survive handler downtime:
 
-**`mode: 'core'`** &mdash; default. NATS native request/reply, no persistence. Lowest latency. Default timeout `30_000` ms (30 s). Best for low-latency queries and lookups where in-flight requests can simply error on failure.
+**`mode: 'core'`**, default. NATS native request/reply, no persistence. Lowest latency. Default timeout `30_000` ms (30 s). Best for low-latency queries and lookups where in-flight requests can simply error on failure.
 
-**`mode: 'jetstream'`** &mdash; commands persisted in a JetStream stream before delivery. Default timeout `180_000` ms (3 min). Best for commands that must survive a handler restart (payments, state changes).
+**`mode: 'jetstream'`**, commands persisted in a JetStream stream before delivery. Default timeout `180_000` ms (3 min). Best for commands that must survive a handler restart (payments, state changes).
 
 :::note Timeout unit
-The `timeout` field is specified in **milliseconds**, not seconds. Writing `timeout: 30` means 30 ms; almost certainly a bug. Use `timeout: 30_000` for 30 seconds.
+The `timeout` field is specified in **milliseconds**, not seconds. Writing `timeout: 30` means 30 ms, which is a bug in almost every case. Use `timeout: 30_000` for 30 seconds.
 :::
 
 ```typescript
@@ -372,7 +372,7 @@ These overrides are merged with the [production defaults](/docs/reference/defaul
 NATS JetStream uses nanoseconds for all time-based configuration. The library exports a `toNanos(value, unit)` helper that converts human-readable durations to nanoseconds. Supported units: `'ms'`, `'seconds'`, `'minutes'`, `'hours'`, `'days'`.
 :::
 
-#### `stream.name` &mdash; `string`
+#### `stream.name`, `string`
 
 Default: derived from `name` + kind convention (e.g., `orders__microservice_ev-stream`). Set an explicit stream name to bind to an externally provisioned stream with a custom name. <Since version="2.10.0" />
 
@@ -382,7 +382,7 @@ events: {
 }
 ```
 
-#### `consumer.durable_name` &mdash; `string`
+#### `consumer.durable_name`, `string`
 
 Default: derived from `name` + kind convention (e.g., `orders__microservice_ev-consumer`). Set an explicit durable name to bind to an externally provisioned consumer. <Since version="2.10.0" />
 
@@ -392,7 +392,7 @@ events: {
 }
 ```
 
-#### `management` &mdash; `EntityManagement`
+#### `management`, `EntityManagement`
 
 Default: falls back to `provisioning.management`, then `ManagementMode.Auto`. Per-kind provisioning control with separate overrides for the stream and consumer: <Since version="2.10.0" />
 
@@ -407,7 +407,7 @@ events: {
 }
 ```
 
-#### `subjectPrefix` &mdash; `string`
+#### `subjectPrefix`, `string`
 
 Default: library convention (e.g., `orders__microservice.ev.`). Override the subject prefix for all subjects in this kind. The trailing dot is normalized automatically. When a custom prefix is set, subjects become `{prefix}{pattern}` and consumers use exact `filter_subjects` entries instead of a single wildcard filter. <Since version="2.10.0" />
 
@@ -440,31 +440,31 @@ JetstreamModule.forRoot({
 })
 ```
 
-#### `stream` &mdash; `Partial<StreamConfig>`
+#### `stream`, `Partial<StreamConfig>`
 
 Default: production defaults. Stream overrides (e.g., `max_age`, `max_bytes`).
 
-#### `deliverPolicy` &mdash; `DeliverPolicy`
+#### `deliverPolicy`, `DeliverPolicy`
 
 Default: `DeliverPolicy.All`. Where to start reading when the consumer is created.
 
-#### `optStartSeq` &mdash; `number`
+#### `optStartSeq`, `number`
 
 Default: none. Start sequence number. Only used with `DeliverPolicy.StartSequence`.
 
-#### `optStartTime` &mdash; `string`
+#### `optStartTime`, `string`
 
 Default: none. Start time as an ISO string. Only used with `DeliverPolicy.StartTime`.
 
-#### `replayPolicy` &mdash; `ReplayPolicy`
+#### `replayPolicy`, `ReplayPolicy`
 
 Default: `ReplayPolicy.Instant`. Replay policy for historical messages.
 
-#### `management` &mdash; `EntityManagement`
+#### `management`, `EntityManagement`
 
 Default: falls back to `provisioning.management`, then `ManagementMode.Auto`. Per-kind provisioning control for the ordered stream. Same semantics as `StreamConsumerOverrides.management`. <Since version="2.10.0" />
 
-#### `subjectPrefix` &mdash; `string`
+#### `subjectPrefix`, `string`
 
 Default: library convention. Custom subject prefix for ordered-event subjects. Same semantics as `StreamConsumerOverrides.subjectPrefix`. <Since version="2.10.0" />
 
@@ -497,7 +497,7 @@ JetstreamModule.forRoot({
 })
 ```
 
-For server-only TLS (no client certificate) against a publicly-trusted broker, `tls: {}` is enough — it tells the client to upgrade the connection without sending a client identity.
+For server-only TLS (no client certificate) against a publicly-trusted broker, `tls: {}` is enough: it tells the client to upgrade the connection without sending a client identity.
 
 ### Authentication
 
@@ -536,7 +536,7 @@ JetstreamModule.forRoot({
 })
 ```
 
-In publisher-only mode, the `JetstreamStrategy` provider resolves to `null`. Do **not** call `app.connectMicroservice()` or `app.get(JetstreamStrategy)`.
+In publisher-only mode, the `JetstreamStrategy` provider resolves to `null`. Do not call `app.connectMicroservice()` or `app.get(JetstreamStrategy)`.
 
 ```typescript title="src/main.ts"
 const bootstrap = async () => {
@@ -551,8 +551,8 @@ void bootstrap();
 
 ## What's next?
 
-- [**RPC Patterns**](/docs/patterns/rpc) — Core vs JetStream mode, error handling, and timeouts
-- [**Events & Broadcast**](/docs/patterns/events) — workqueue events and fan-out delivery
-- [**Scheduling (Delayed Jobs)**](/docs/guides/scheduling) — one-shot delayed delivery via NATS 2.12
-- [**Lifecycle Hooks**](/docs/guides/lifecycle-hooks) — monitor connection state and transport events
-- [**Default Configs**](/docs/reference/default-configs) — full list of production-ready stream and consumer defaults
+- [**RPC Patterns**](/docs/patterns/rpc): Core vs JetStream mode, error handling, and timeouts
+- [**Events & Broadcast**](/docs/patterns/events): workqueue events and fan-out delivery
+- [**Scheduling (Delayed Jobs)**](/docs/guides/scheduling): one-shot delayed delivery via NATS 2.12
+- [**Lifecycle Hooks**](/docs/guides/lifecycle-hooks): monitor connection state and transport events
+- [**Default Configs**](/docs/reference/default-configs): full list of production-ready stream and consumer defaults

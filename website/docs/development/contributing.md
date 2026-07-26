@@ -6,12 +6,12 @@ schema:
   headline: "Contributing"
   description: "How to contribute to the project."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-11"
+  dateModified: "2026-07-26"
 ---
 
 # Contributing
 
-We welcome contributions from the community. The full contribution guidelines live in the [`CONTRIBUTING.md`](https://github.com/HorizonRepublic/nestjs-jetstream/blob/main/CONTRIBUTING.md) file at the repository root. This page provides a quick overview.
+We welcome contributions from the community. The full contribution guidelines live in the [`CONTRIBUTING.md`](https://github.com/HorizonRepublic/nestjs-jetstream/blob/main/CONTRIBUTING.md) file at the repository root.
 
 ## Quick Start
 
@@ -88,7 +88,7 @@ docs: update module configuration examples
 ```
 
 :::tip
-Use a scope in parentheses (e.g., `feat(client):`, `fix(strategy):`) to indicate the area of the codebase affected. This shows up in the generated changelog.
+Use a scope in parentheses (e.g., `feat(client):`, `fix(strategy):`) to show the area of the codebase affected. This shows up in the generated changelog.
 :::
 
 ## Pull Request Guidelines
@@ -96,7 +96,7 @@ Use a scope in parentheses (e.g., `feat(client):`, `fix(strategy):`) to indicate
 - Ensure the build passes (`pnpm build`)
 - All linting checks must pass (`pnpm lint`)
 - All existing tests must pass, and new code should include tests
-- Use clear, descriptive PR titles — they become changelog entries via Release Please
+- Use clear, descriptive PR titles: they become changelog entries via Release Please
 - Keep PRs focused on a single concern
 
 ## Coding Standards

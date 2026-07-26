@@ -276,7 +276,7 @@ describe('Dead Letter Queue Hook', () => {
       // When: all delivery attempts are exhausted
       await waitForCondition(() => controller.attempts >= 2, 10_000);
 
-      // Then: the dead letter lands in the DLQ stream without any callback configured
+      // Then: the dead letter reaches the DLQ stream without any callback configured
       const jsm = await jetstreamManager(nc);
       const dlqName = dlqStreamName(serviceName);
 
@@ -332,7 +332,7 @@ describe('Dead Letter Queue Hook', () => {
       // Given: an event pattern no controller handles
       await firstValueFrom(client.emit('order.unknown', { orderId: 'orphan-1' }));
 
-      // Then: the message lands in the DLQ instead of being deleted
+      // Then: the message is stored in the DLQ instead of being deleted
       await waitForCondition(async () => (await dlqMessageCount()) === 1, 10_000);
 
       const jsm = await jetstreamManager(nc);
@@ -353,7 +353,7 @@ describe('Dead Letter Queue Hook', () => {
 
       await js.publish(subject, garbage);
 
-      // Then: the message lands in the DLQ with the original bytes intact
+      // Then: the message is stored in the DLQ with the original bytes intact
       await waitForCondition(async () => (await dlqMessageCount()) === 1, 10_000);
 
       const jsm = await jetstreamManager(nc);

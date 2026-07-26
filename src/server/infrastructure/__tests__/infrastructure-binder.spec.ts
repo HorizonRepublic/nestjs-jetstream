@@ -293,7 +293,7 @@ describe(InfrastructureBinder.name, () => {
 
   describe('bindStream(); unexpected lookup errors', () => {
     it('should rethrow non-NATS errors untouched', async () => {
-      // Given: streams.info fails with an infrastructure error, not a 404
+      // Given: streams.info fails with an infrastructure error while the stream exists
       const boom = new Error('connection reset');
       const jsm = makeJsm({ streamInfo: vi.fn().mockRejectedValue(boom) });
       const sut = makeSut();
@@ -305,7 +305,7 @@ describe(InfrastructureBinder.name, () => {
 
   describe('bindConsumer(); unexpected lookup errors', () => {
     it('should rethrow non-NATS errors untouched', async () => {
-      // Given: consumers.info fails with an infrastructure error, not a 404
+      // Given: consumers.info fails with an infrastructure error while the consumer exists
       const boom = new Error('connection reset');
       const jsm = makeJsm({ consumerInfo: vi.fn().mockRejectedValue(boom) });
       const sut = makeSut();

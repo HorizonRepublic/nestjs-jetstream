@@ -129,7 +129,7 @@ export class JetstreamRecordBuilder<TData = unknown> {
    * at the specified time. Requires NATS >= 2.12 and `allow_msg_schedules: true`
    * on the event stream (via `events: { stream: { allow_msg_schedules: true } }`).
    *
-   * Only meaningful for events (`client.emit()`). If used with RPC
+   * Applies to events (`client.emit()`) only. If used with RPC
    * (`client.send()`), a warning is logged and the schedule is ignored.
    *
    * @param date - Delivery time. Must be in the future.
@@ -158,7 +158,7 @@ export class JetstreamRecordBuilder<TData = unknown> {
    * independent of the stream's `max_age`. Requires NATS >= 2.11 and
    * `allow_msg_ttl: true` on the stream.
    *
-   * Only meaningful for events (`client.emit()`). If used with RPC
+   * Applies to events (`client.emit()`) only. If used with RPC
    * (`client.send()`), a warning is logged and the TTL is ignored.
    *
    * @param nanos - TTL in nanoseconds. Use {@link toNanos} for human-readable values.

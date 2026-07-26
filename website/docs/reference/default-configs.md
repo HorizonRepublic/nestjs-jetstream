@@ -8,7 +8,7 @@ schema:
   headline: "Default Stream & Consumer Configs for NATS JetStream"
   description: "Production-ready default stream, consumer, and connection settings for every NestJS JetStream StreamKind (event, broadcast, ordered, command, DLQ)."
   datePublished: "2026-03-21"
-  dateModified: "2026-06-12"
+  dateModified: "2026-07-26"
 ---
 
 # Default Configs
@@ -43,7 +43,7 @@ events: {
 
 ### Event Stream
 
-Workqueue retention — each message is removed after being acknowledged by a consumer.
+Workqueue retention: each message is removed after being acknowledged by a consumer.
 
 | Property | Value | Notes |
 |----------|-------|-------|
@@ -83,7 +83,7 @@ Short-lived RPC commands (JetStream RPC mode only).
 
 ### Broadcast Stream
 
-Limits retention — messages persist until the configured limits are reached. Shared across all services.
+Limits retention, messages persist until the configured limits are reached. Shared across all services.
 
 | Property | Value | Notes |
 |----------|-------|-------|
@@ -100,7 +100,7 @@ Limits retention — messages persist until the configured limits are reached. S
 | `duplicate_window` | `2 minutes` | `toNanos(2, 'minutes')` |
 
 :::info Changed in v2.9.0
-`max_age` reduced from 1 day to 1 hour. Broadcast messages (config propagation, cache invalidation, feature flags) are relevant for minutes, not days. 1 hour provides sufficient catch-up window for new instances while reducing unnecessary storage. This is a mutable property — existing streams update automatically on next startup.
+`max_age` reduced from 1 day to 1 hour. Broadcast messages (config propagation, cache invalidation, feature flags) are relevant for minutes, not days. 1 hour provides enough catch-up window for new instances while reducing unnecessary storage. This is a mutable property, existing streams update automatically on next startup.
 :::
 
 ### Ordered Stream
@@ -123,7 +123,7 @@ Limits retention for strict sequential delivery. Ordered consumers are ephemeral
 
 ### DLQ Stream
 
-Workqueue retention — dead letters are removed when a DLQ consumer acks them. Created on demand when `dlq: { stream }` is set in `forRoot()`. See [Dead Letter Queue — Built-in DLQ stream](/docs/guides/dead-letter-queue#built-in-dlq-stream).
+Workqueue retention, dead letters are removed when a DLQ consumer acks them. Created on demand when `dlq: { stream }` is set in `forRoot()`. See [Dead Letter Queue, Built-in DLQ stream](/docs/guides/dead-letter-queue#built-in-dlq-stream).
 
 | Property | Value | Notes |
 |----------|-------|-------|
@@ -157,7 +157,7 @@ Workqueue retention — dead letters are removed when a DLQ consumer acks them. 
 | Property | Value | Notes |
 |----------|-------|-------|
 | `ack_wait` | `5 minutes` | `toNanos(5, 'minutes')` |
-| `max_deliver` | `1` | No retries — RPC failures propagate immediately |
+| `max_deliver` | `1` | No retries: RPC failures propagate immediately |
 | `max_ack_pending` | `100` | |
 | `ack_policy` | `Explicit` | |
 | `deliver_policy` | `All` | |
@@ -233,7 +233,7 @@ JetstreamModule.forRoot({
 ```
 
 :::tip
-`num_replicas` can be changed on an existing stream — NATS will add or remove replicas automatically. No downtime or stream recreation required.
+`num_replicas` can be changed on an existing stream, NATS will add or remove replicas automatically. No downtime or stream recreation required.
 :::
 
 ## Immutable vs mutable stream properties
@@ -244,7 +244,7 @@ NATS JetStream divides stream configuration into properties that can be updated 
 
 `num_replicas`, `max_age`, `max_bytes`, `max_msgs`, `max_msg_size`, `max_msgs_per_subject`, `discard`, `duplicate_window`, `subjects`, `compression`, `description`, `allow_rollup_hdrs`, `allow_direct`
 
-The transport applies mutable changes automatically on startup — just update the value in `forRoot()` and restart the service.
+The transport applies mutable changes automatically on startup, just update the value in `forRoot()` and restart the service.
 
 ### Enable-only (can be turned on, but never off)
 
@@ -252,7 +252,7 @@ These properties can be **enabled** on an existing stream via a normal update, b
 
 | Property | Default | Notes |
 |----------|---------|-------|
-| `allow_msg_schedules` | `false` | Enable [message scheduling](/docs/guides/scheduling) — safe to add to existing streams |
+| `allow_msg_schedules` | `false` | Enable [message scheduling](/docs/guides/scheduling): safe to add to existing streams |
 | `allow_msg_ttl` | `false` | Enable per-message TTL |
 | `deny_delete` | `false` | Prevent message deletion via API |
 | `deny_purge` | `false` | Prevent stream purging via API |
@@ -266,7 +266,7 @@ You can safely add `allow_msg_schedules: true` to an existing stream config; NAT
 | Property | Default | Migratable | Notes |
 |----------|---------|-----------|-------|
 | `name` | derived from service name | No | Cannot be renamed |
-| `retention` | `Workqueue` or `Limits` | **No** | Controlled by the transport — a mismatch is always an error |
+| `retention` | `Workqueue` or `Limits` | **No** | Controlled by the transport: a mismatch is always an error |
 | `storage` | `File` | **Yes** | Can be migrated with `allowDestructiveMigration: true` |
 
 The transport can automatically migrate `storage` via blue-green stream recreation. See the full **[Stream Migration guide](/docs/guides/stream-migration)** for how it works, rolling update behavior, performance benchmarks, and limitations.
@@ -277,7 +277,7 @@ The transport can automatically migrate `storage` via blue-green stream recreati
 
 ## Overriding Defaults
 
-All stream and consumer defaults can be overridden in `forRoot()` options. User-provided values are merged on top of the defaults — you only need to specify the properties you want to change.
+All stream and consumer defaults can be overridden in `forRoot()` options. User-provided values are merged on top of the defaults: you only need to specify the properties you want to change.
 
 ```typescript
 import { RetentionPolicy, StorageType } from '@nats-io/jetstream';

@@ -622,7 +622,7 @@ describe('External Infrastructure (bind-only mode)', () => {
       // When: all delivery attempts are exhausted (max_deliver=2, ack_wait=2s)
       await waitForCondition(() => controller.attempts >= 2, 15_000);
 
-      // Then: the dead letter lands in the external DLQ stream
+      // Then: the dead letter reaches the external DLQ stream
       await waitForCondition(async () => {
         const info = await jsm.streams.info(dlqStreamName);
 

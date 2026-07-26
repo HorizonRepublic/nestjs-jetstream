@@ -1,14 +1,14 @@
 ---
 sidebar_position: 1
 sidebar_label: "Record Builder"
-title: "JetstreamRecordBuilder — Headers, Message IDs & Deduplication"
+title: "JetstreamRecordBuilder: Headers, Message IDs & Deduplication"
 description: "Build NestJS NATS messages with custom headers, deterministic message IDs for publish-side deduplication, and per-request RPC timeouts."
 schema:
   type: Article
-  headline: "JetstreamRecordBuilder — Headers, Message IDs & Deduplication"
+  headline: "JetstreamRecordBuilder: Headers, Message IDs & Deduplication"
   description: "Build NestJS NATS messages with custom headers, deterministic message IDs for publish-side deduplication, and per-request RPC timeouts."
   datePublished: "2026-03-21"
-  dateModified: "2026-06-12"
+  dateModified: "2026-07-26"
 ---
 
 import Since from '@site/src/components/Since';
@@ -68,13 +68,13 @@ const record = new JetstreamRecordBuilder(data)
 
 <Since version="2.4.0" />
 
-JetStream has built-in **server-side deduplication**. When a message is published with a message ID, the server remembers that ID for a configurable time window. If a second message with the same ID arrives within the window, it is silently dropped — no duplicate processing occurs.
+JetStream has built-in **server-side deduplication**. When a message is published with a message ID, the server remembers that ID for a configurable time window. If a second message with the same ID arrives within the window, it is silently dropped: no duplicate processing occurs.
 
 ### How the dedup window works
 
 Each JetStream stream has a `duplicate_window` setting that controls how long the server remembers message IDs. The default window is **2 minutes** for event, broadcast, and ordered streams, and **30 seconds** for command (RPC) streams.
 
-If you do **not** set a message ID, the transport generates a random UUID for every publish. This means no deduplication by default — each publish is treated as a unique message.
+If you do not set a message ID, the transport generates a random UUID for every publish. Deduplication is so off by default: each publish counts as a unique message.
 
 ### Setting a deterministic message ID
 
@@ -91,7 +91,7 @@ await lastValueFrom(this.client.emit('order.created', record));
 Now if a network retry or application restart causes the same event to be published twice, the JetStream server drops the duplicate automatically.
 
 :::tip Choose IDs carefully
-Good message IDs are derived from business identifiers: `order-${orderId}`, `payment-${paymentId}-refund`, `user-${userId}-email-changed`. Avoid timestamps or random values — they defeat the purpose of deduplication.
+Good message IDs are derived from business identifiers: `order-${orderId}`, `payment-${paymentId}-refund`, `user-${userId}-email-changed`. Avoid timestamps or random values: they defeat the purpose of deduplication.
 :::
 
 :::warning Window expiration
@@ -129,7 +129,7 @@ const record = new JetstreamRecordBuilder({ orderId: 42, type: 'reminder' })
 await lastValueFrom(this.client.emit('order.reminder', record));
 ```
 
-Scheduling requires NATS Server >= 2.12 and `allow_msg_schedules: true` on the event stream. The consumer handles scheduled messages like any normal event — no changes needed on the receiving side.
+Scheduling requires NATS Server >= 2.12 and `allow_msg_schedules: true` on the event stream. The consumer handles scheduled messages like any normal event: no changes needed on the receiving side.
 
 :::note Events only
 `scheduleAt()` only works with `client.emit()`. If used with `client.send()` (RPC), the schedule is silently ignored and a warning is logged.
@@ -158,19 +158,19 @@ new JetstreamRecordBuilder(data)
 ```
 
 :::note
-The error is thrown on `setHeader()`, not on `build()`. This gives you immediate feedback at the call site.
+The error is thrown on `setHeader()`, not on `build()`. The failure surfaces at the call site.
 :::
 
 ## Auto-set transport headers
 
-In addition to reserved headers, the transport automatically sets two informational headers on every outbound message:
+Also to reserved headers, the transport automatically sets two informational headers on every outbound message:
 
 | Header | Value | Description |
 |---|---|---|
 | `x-subject` | NATS subject | The original subject the message was published to |
 | `x-caller-name` | Service name | The internal name of the sending service |
 
-These headers are read-only from the handler's perspective — you can access them via `ctx.getHeader('x-subject')` but cannot override them via the builder.
+These headers are read-only from the handler's perspective: you can access them via `ctx.getHeader('x-subject')` but cannot override them via the builder.
 
 ## API summary
 
@@ -221,8 +221,8 @@ if (RESERVED_HEADERS.has(key)) {
 
 ## Next steps
 
-- [Per-Message TTL](/docs/guides/per-message-ttl) — set individual message lifetimes via `.ttl()`
-- [Scheduling (Delayed Jobs)](/docs/guides/scheduling) — delay message delivery to a future time
-- [Handler Context](/docs/guides/handler-context) — access headers and message metadata in your handlers
-- [Custom Codec](/docs/guides/custom-codec) — control how payloads are serialized
-- [Module Configuration](/docs/reference/module-configuration) — configure dedup windows via stream overrides
+- [Per-Message TTL](/docs/guides/per-message-ttl): set individual message lifetimes via `.ttl()`
+- [Scheduling (Delayed Jobs)](/docs/guides/scheduling): delay message delivery to a future time
+- [Handler Context](/docs/guides/handler-context): access headers and message metadata in your handlers
+- [Custom Codec](/docs/guides/custom-codec): control how payloads are serialized
+- [Module Configuration](/docs/reference/module-configuration): configure dedup windows via stream overrides

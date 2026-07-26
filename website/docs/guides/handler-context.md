@@ -1,14 +1,14 @@
 ---
 sidebar_position: 2
 sidebar_label: "Handler Context"
-title: "RpcContext — Handler Context & Message Settlement"
+title: "RpcContext: Handler Context & Message Settlement"
 description: "Access JetStream metadata and control ack, retry, and terminate actions in NestJS message handlers via RpcContext."
 schema:
   type: Article
-  headline: "RpcContext — Handler Context & Message Settlement"
+  headline: "RpcContext: Handler Context & Message Settlement"
   description: "Access JetStream metadata and control ack, retry, and terminate actions in NestJS message handlers via RpcContext."
   datePublished: "2026-03-21"
-  dateModified: "2026-06-12"
+  dateModified: "2026-07-26"
 ---
 
 import Since from '@site/src/components/Since';
@@ -55,7 +55,7 @@ class RpcContext {
   /** All NATS message headers (raw MsgHdrs from @nats-io/transport-node). */
   getHeaders(): MsgHdrs | undefined;
 
-  /** Type guard — true when the message is a JetStream message. */
+  /** Type guard, true when the message is a JetStream message. */
   isJetStream(): boolean;
 
   /**
@@ -70,7 +70,7 @@ class RpcContext {
 
 <Since version="2.7.0" />
 
-These return `undefined` for Core NATS messages — no type guard needed.
+These return `undefined` for Core NATS messages: no type guard needed.
 
 ```typescript
 class RpcContext {
@@ -95,7 +95,7 @@ class RpcContext {
 
 <Since version="2.7.0" />
 
-Control how the transport acknowledges the message — without throwing errors.
+Control how the transport acknowledges the message, without throwing errors.
 
 **`ctx.retry({ delayMs? })`** -> `msg.nak(delayMs)`, redelivering the message. Use for business-level retries (external service unavailable, resource locked). Each retry consumes a delivery attempt; a `retry()` on the final permitted delivery is routed through [dead-letter handling](/docs/guides/dead-letter-queue) just like a throwing handler, so the message is captured instead of stranded.
 
@@ -126,7 +126,7 @@ async handle(@Payload() data: PaymentDto, @Ctx() ctx: RpcContext) {
   const attempt = ctx.getDeliveryCount() ?? 0;
 
   if (attempt >= 3) {
-    // 3rd attempt — try a different payment provider
+    // 3rd attempt, try a different payment provider
     await this.fallbackProvider.process(data);
     return;
   }
@@ -152,7 +152,7 @@ async handle(@Payload() data: FulfillDto, @Ctx() ctx: RpcContext) {
   }
 
   await this.fulfillOrder(data);
-  // auto-ack — no flags set
+  // auto-ack, no flags set
 }
 ```
 
@@ -185,13 +185,13 @@ async handle(@Payload() data: OrderDto, @Ctx() ctx: RpcContext) {
 ```mermaid
 flowchart TD
     A[Handler returns] --> B{ctx.shouldTerminate?}
-    B -->|yes| C[msg.term — permanent reject]
+    B -->|yes| C[msg.term, permanent reject]
     B -->|no| D{ctx.shouldRetry?}
-    D -->|yes| E[msg.nak — redeliver]
-    D -->|no| F[msg.ack — done]
+    D -->|yes| E[msg.nak, redeliver]
+    D -->|no| F[msg.ack, done]
     G[Handler throws] --> H{Dead letter?}
     H -->|yes| I[onDeadLetter → msg.term]
-    H -->|no| J[msg.nak — retry]
+    H -->|no| J[msg.nak, retry]
 ```
 
 :::warning Mutual exclusivity
@@ -252,12 +252,12 @@ if (ctx.isJetStream()) {
 ```
 
 :::warning Manual acknowledgment
-Calling `msg.ack()`, `msg.nak()`, or `msg.term()` directly bypasses the transport's settlement logic. Use `ctx.retry()` and `ctx.terminate()` instead — they integrate with ack extension, dead letter handling, and observability hooks.
+Calling `msg.ack()`, `msg.nak()`, or `msg.term()` directly bypasses the transport's settlement logic. Use `ctx.retry()` and `ctx.terminate()` instead: they integrate with ack extension, dead letter handling, and observability hooks.
 :::
 
 ## See also
 
-- [Record Builder & Deduplication](./record-builder.md) — set custom headers and message IDs on the publisher side
-- [Custom Codec](./custom-codec.md) — control how the `@Payload()` data is serialized and deserialized
-- [Dead Letter Queue](./dead-letter-queue.md) — what happens when retries are exhausted
-- [Troubleshooting](./troubleshooting.md) — common issues with message delivery
+- [Record Builder & Deduplication](./record-builder.md): set custom headers and message IDs on the publisher side
+- [Custom Codec](./custom-codec.md): control how the `@Payload()` data is serialized and deserialized
+- [Dead Letter Queue](./dead-letter-queue.md): what happens when retries are exhausted
+- [Troubleshooting](./troubleshooting.md): common issues with message delivery

@@ -77,7 +77,7 @@ export interface RpcClientSpanHandle {
  * drop, publish reject) mark the span ERROR.
  *
  * Fast paths:
- * - `otel.enabled: false` -> no span, no propagation (full kill switch).
+ * - `otel.enabled: false` -> the tracer stays inert (full kill switch).
  * - `traces` excludes `RpcClientSend` -> no span, but the active context is
  *   still injected so downstream consumers keep the trace chain.
  */
@@ -125,7 +125,8 @@ export const beginRpcClientSpan = (
   const ctxWithSpan = trace.setSpan(context.active(), span);
 
   injectContext(ctxWithSpan, ctx.headers, hdrsSetter);
-  // publishHook deliberately skipped; this is a CLIENT round-trip span, not a PRODUCER span.
+  // publishHook deliberately skipped: the span covers a CLIENT round trip, where the
+  // caller waits for the reply.
   const start = Date.now();
   let finalized = false;
 

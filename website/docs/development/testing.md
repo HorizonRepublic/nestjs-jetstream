@@ -6,7 +6,7 @@ schema:
   headline: Testing
   description: "Running unit and integration tests with Vitest and Testcontainers."
   datePublished: "2026-03-21"
-  dateModified: "2026-06-12"
+  dateModified: "2026-07-26"
 ---
 
 # Testing
@@ -15,16 +15,16 @@ The project uses [Vitest](https://vitest.dev/) v4 with a dual-project configurat
 
 ## Philosophy
 
-This library handles real-time message delivery, consumer lifecycle, and self-healing reconnection — things that are notoriously hard to test with mocks alone. Our testing strategy reflects that:
+This library handles real-time message delivery, consumer lifecycle, and self-healing reconnection, things that are notoriously hard to test with mocks alone. Our testing strategy reflects that:
 
-- **Integration tests are first-class citizens.** Every message flow (events, RPC, broadcast, ordered) is tested against a real NATS server. No hand-waved "it works in production" — if it's not tested end-to-end, it's not done.
-- **Each test suite gets its own NATS container.** No shared state between suites. No "run tests in order". Suites execute in parallel — because if your tests can't run in parallel, your architecture has a problem.
+- **Integration tests are first-class citizens.** Every message flow (events, RPC, broadcast, ordered) is tested against a real NATS server. No hand-waved "it works in production": if it's not tested end-to-end, it's not done.
+- **Each test suite gets its own NATS container.** No shared state between suites. No "run tests in order". Suites execute in parallel: because if your tests can't run in parallel, your architecture has a problem.
 - **Self-healing is proven, not assumed.** We delete consumers via the JetStream Management API and verify the transport recovers. The self-healing flow is tested with real NATS, not mocked RxJS streams.
-- **Unit tests fill the gaps.** Infrastructure error paths (defensive throws, catch blocks, exponential backoff) that can't be triggered through integration get targeted unit tests. Coverage is a tool, not a target — but we track it to make sure we're not lying to ourselves.
+- **Unit tests fill the gaps.** Infrastructure error paths (defensive throws, catch blocks, exponential backoff) that can't be triggered through integration get targeted unit tests. Coverage is a tool, not a target: but we track it to make sure we're not lying to ourselves.
 
 ## Prerequisites
 
-- **Docker** — Testcontainers starts NATS containers automatically. No manual `docker compose up` needed for tests.
+- **Docker**: Testcontainers starts NATS containers automatically. No manual `docker compose up` needed for tests.
 - **Node.js >= 20** and **pnpm**
 
 ## Test Commands
@@ -54,7 +54,7 @@ Unit tests mock all external dependencies and test individual classes/functions 
 
 - **Location:** `test/**/*.spec.ts`
 - **Timeout:** 30 seconds per test (60s for self-healing scenarios)
-- **Parallelism:** Enabled — each suite starts its own NATS container
+- **Parallelism:** Enabled: each suite starts its own NATS container
 - **Container image:** `nats:2.12.6` with JetStream and persistent store
 
 Integration tests verify end-to-end behavior: stream/consumer provisioning, message delivery, RPC round-trips, broadcast fan-out, ordered delivery, dead-letter handling, graceful shutdown, and self-healing recovery.
@@ -114,7 +114,7 @@ The self-healing suite proves that the transport recovers from consumer failures
 4. Verify the self-healing flow (catchError → exponential backoff → retry) picks up the re-created consumer
 5. Deliver another event, confirm receipt
 
-The test uses a 1-second heartbeat interval (vs 5s production default) for faster failure detection. No `sleep(12s)` hacks — consumer deletion triggers the error path immediately.
+The test uses a 1-second heartbeat interval (vs 5s production default) for faster failure detection. No `sleep(12s)` hacks, consumer deletion triggers the error path immediately.
 
 ## Test Conventions
 
@@ -176,9 +176,9 @@ it('should create event stream when it does not exist', async () => {
 
 Tests within a `describe` block follow this order:
 
-1. **Happy path** — the expected successful behavior
-2. **Edge cases** — boundary conditions and unusual inputs
-3. **Error cases** — failure modes and error handling
+1. **Happy path**: the expected successful behavior
+2. **Edge cases**: boundary conditions and unusual inputs
+3. **Error cases**: failure modes and error handling
 
 ### Mock Reset
 
@@ -218,9 +218,9 @@ Run `pnpm test:cov` and open `coverage/index.html` for the HTML report.
 1. Create `test/integration/my-feature.spec.ts`
 2. Follow the container lifecycle pattern (see [How It Works](#how-it-works))
 3. Use `uniqueServiceName()` per test to avoid collisions
-4. Clean up streams in `afterEach` — even though each suite gets its own NATS, cleanup prevents intra-suite leaks
+4. Clean up streams in `afterEach`: even though each suite gets its own NATS, cleanup prevents intra-suite leaks
 5. Use `try/finally` in `afterAll` so `container.stop()` always runs even if `nc.drain()` fails
-6. Run `pnpm test` — your suite will execute in parallel with others
+6. Run `pnpm test`: your suite will execute in parallel with others
 
 ## Vitest Configuration
 

@@ -1,21 +1,21 @@
 ---
 sidebar_position: 4
 sidebar_label: "Lifecycle Hooks"
-title: "How to register lifecycle hooks — NestJS JetStream"
-description: "Subscribe to NATS JetStream transport events — connection, disconnect, reconnect, errors, RPC timeouts, message routing, dead letters, and shutdown — for monitoring and alerting."
+title: "How to register lifecycle hooks: NestJS JetStream"
+description: "Subscribe to NATS JetStream transport events: connection, disconnect, reconnect, errors, RPC timeouts, message routing, dead letters, and shutdown: for monitoring and alerting."
 schema:
   type: Article
   headline: "How to register lifecycle hooks for NestJS JetStream"
   description: "Subscribe to transport events for monitoring, alerting, and logging integration."
   datePublished: "2026-03-21"
-  dateModified: "2026-06-12"
+  dateModified: "2026-07-26"
 ---
 
 import Since from '@site/src/components/Since';
 
 # How to register lifecycle hooks
 
-The transport emits lifecycle events at key moments — connection changes, errors, message routing, shutdown, dead letters, and observability checkpoints. Register hook callbacks to integrate with your monitoring, alerting, or logging infrastructure.
+The transport emits lifecycle events at key moments, connection changes, errors, message routing, shutdown, dead letters, and observability checkpoints. Register hook callbacks to integrate with your monitoring, alerting, or logging infrastructure.
 
 ## Available events
 
@@ -41,7 +41,7 @@ The `MessageKind` enum on `MessageRouted` has two values; `Event` and `Rpc`; and
 
 ## Registering hooks
 
-Pass a `hooks` object in `forRoot()` or `forRootAsync()`. Only register the events you care about — unregistered events are silently ignored.
+Pass a `hooks` object in `forRoot()` or `forRootAsync()`. Only register the events you care about, unregistered events are silently ignored.
 
 ```typescript title="src/app.module.ts"
 import { Module } from '@nestjs/common';
@@ -171,7 +171,7 @@ JetstreamModule.forRoot({
 
 ## No hook = silence
 
-Events without a registered hook are silently ignored — no default logging, no warnings, no overhead. The `EventBus` checks if a hook is registered and returns immediately if not. This is intentional: the transport doesn't make assumptions about what you want to observe.
+Events without a registered hook are silently ignored: no default logging, no warnings, no overhead. The `EventBus` checks if a hook is registered and returns immediately if not. This is intentional: the transport doesn't make assumptions about what you want to observe.
 
 If you want to log everything during development, register hooks for all events. In production, register only the ones that feed your monitoring stack.
 
@@ -201,7 +201,7 @@ The transport has two dead letter mechanisms that serve different purposes:
 |---|---|---|
 | **Type** | Sync or async hook (fire-and-forget) | Async callback (awaited) |
 | **Fires** | Always, before the callback | Only if configured |
-| **Affects message fate?** | No | Yes — success = `term()`, failure = `nak()` |
+| **Affects message fate?** | No | Yes: success = `term()`, failure = `nak()` |
 | **Use case** | Metrics, logging, alerting | Persisting dead letters to a store |
 | **Error behavior** | Caught and logged | Causes message to be `nak`'d for retry |
 
@@ -228,7 +228,7 @@ The hook fires first, then the callback. If the callback fails and the message i
 
 ## What's next?
 
-- [**Dead Letter Queue**](/docs/guides/dead-letter-queue) — full guide on dead letter handling and the `onDeadLetter` callback
-- [**Health Checks**](/docs/guides/health-checks) — monitor connection health with RTT latency
-- [**Graceful Shutdown**](/docs/guides/graceful-shutdown) — `ShutdownStart` and `ShutdownComplete` events in context
-- [**Module Configuration**](/docs/reference/module-configuration) — `hooks` option in the full options reference
+- [**Dead Letter Queue**](/docs/guides/dead-letter-queue): full guide on dead letter handling and the `onDeadLetter` callback
+- [**Health Checks**](/docs/guides/health-checks): monitor connection health with RTT latency
+- [**Graceful Shutdown**](/docs/guides/graceful-shutdown): `ShutdownStart` and `ShutdownComplete` events in context
+- [**Module Configuration**](/docs/reference/module-configuration): `hooks` option in the full options reference

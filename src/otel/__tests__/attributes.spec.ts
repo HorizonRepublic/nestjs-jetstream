@@ -257,7 +257,7 @@ describe('buildExpectedErrorAttributes', () => {
   });
 
   it('should drop free-form RpcException messages to avoid high-cardinality error codes', () => {
-    // Given: free-form messages can contain PII and must not land on error.code
+    // Given: free-form messages can contain PII, so error.code must stay off them
     const err = new RpcException('User 42 is not authorised for this order');
 
     // When

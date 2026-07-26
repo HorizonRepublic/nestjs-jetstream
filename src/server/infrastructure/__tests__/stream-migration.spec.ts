@@ -369,7 +369,7 @@ describe(StreamMigration.name, () => {
         return createMock<StreamInfo>();
       });
 
-      // When/Then: the caller sees the migration failure, not the rollback one
+      // When/Then: the migration failure reaches the caller and the rollback one stays hidden
       await expect(sut.migrate(jsm, testStreamName, newConfig)).rejects.toThrow(
         'permission denied',
       );

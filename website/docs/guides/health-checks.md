@@ -1,14 +1,14 @@
 ---
 sidebar_position: 3
 sidebar_label: "Health Checks"
-title: "How to expose health checks — NestJS JetStream"
+title: "How to expose health checks: NestJS JetStream"
 description: "Expose NATS connection status and RTT latency as a Kubernetes readiness/liveness probe with the JetstreamHealthIndicator, with or without @nestjs/terminus."
 schema:
   type: Article
   headline: "How to expose health checks for NATS JetStream"
   description: "Expose NATS connection status and RTT latency as a Kubernetes readiness/liveness probe using JetstreamHealthIndicator."
   datePublished: "2026-03-21"
-  dateModified: "2026-06-12"
+  dateModified: "2026-07-26"
 ---
 
 import Since from '@site/src/components/Since';
@@ -17,14 +17,14 @@ import Since from '@site/src/components/Since';
 
 <Since version="2.1.0" />
 
-The library provides a `JetstreamHealthIndicator` that reports the NATS connection status and round-trip latency. It is auto-registered by [`forRoot()`](/docs/reference/module-configuration#forroot) and exported from the module — no additional setup required.
+The library provides a `JetstreamHealthIndicator` that reports the NATS connection status and round-trip latency. It is auto-registered by [`forRoot()`](/docs/reference/module-configuration#forroot) and exported from the module: no extra setup required.
 
 ## What it checks
 
 Every health check call performs two things:
 
-1. **Connection status** — is the NATS connection open?
-2. **RTT latency** — a round-trip ping to the NATS server via `nc.rtt()`, measuring actual network latency in milliseconds.
+1. **Connection status**: is the NATS connection open?
+2. **RTT latency**: a round-trip ping to the NATS server via `nc.rtt()`, measuring actual network latency in milliseconds.
 
 If the connection is closed or the RTT ping fails, the indicator reports the connection as unhealthy.
 
@@ -37,7 +37,7 @@ The health indicator exposes two methods for different use cases:
 | `check()` | No | Custom health endpoints, monitoring integrations |
 | `isHealthy(key?)` | Yes | @nestjs/terminus integration |
 
-### check() — plain status object
+### check(): plain status object
 
 `check()` returns a `JetstreamHealthStatus` object and **never throws**. Use it when you want to inspect the status programmatically without try/catch:
 
@@ -73,7 +73,7 @@ export class HealthController {
 }
 ```
 
-### isHealthy(key?) — Terminus-compatible
+### isHealthy(key?): Terminus-compatible
 
 `isHealthy()` follows the @nestjs/terminus convention: returns `{ [key]: { status: 'up', ... } }` on success, **throws** on failure. The `key` parameter defaults to `'jetstream'`.
 
@@ -172,7 +172,7 @@ export class HealthController {
 }
 ```
 
-This gives you full control over the response shape and HTTP status code without any additional dependency.
+The response shape and HTTP status code stay yours, with no extra dependency.
 
 ## Auto-registration
 
@@ -198,4 +198,4 @@ No need to add it to any `providers` array or re-import `JetstreamModule`; it's 
 
 ## See also
 
-If you want more than a point-in-time check, [lifecycle hooks](/docs/guides/lifecycle-hooks) give you push-based visibility into every `Connect`, `Disconnect`, and `Reconnect` event — useful for streaming connection state into your metrics pipeline alongside the health indicator.
+If you want more than a point-in-time check, [lifecycle hooks](/docs/guides/lifecycle-hooks) give you push-based visibility into every `Connect`, `Disconnect`, and `Reconnect` event, useful for streaming connection state into your metrics pipeline alongside the health indicator.

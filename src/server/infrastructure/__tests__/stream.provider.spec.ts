@@ -286,7 +286,7 @@ describe(StreamProvider, () => {
       );
 
       // When/Then: recreating broadcast-stream would delete every other
-      // service's durable consumers, so fail loudly instead
+      // service's durable consumers, so throw instead
       await expect(sut.ensureStreams([StreamKind.Broadcast])).rejects.toThrow(
         /broadcast-stream.*shared|shared.*broadcast-stream/i,
       );

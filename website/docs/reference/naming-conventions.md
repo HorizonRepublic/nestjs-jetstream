@@ -6,7 +6,7 @@ schema:
   headline: Naming Conventions
   description: "Stream, consumer, and subject naming patterns derived from the service name."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-11"
+  dateModified: "2026-07-26"
 ---
 
 # Naming Conventions
@@ -15,7 +15,7 @@ The transport derives all NATS subject names, stream names, and consumer names f
 
 ## The `__microservice` Suffix
 
-Every service name is suffixed with `__microservice` to create an **internal name**. This suffix provides namespace isolation — it ensures your application subjects never collide with other NATS clients sharing the same cluster that might use bare service names.
+Every service name is suffixed with `__microservice` to create an **internal name**. The suffix isolates the namespace, so your application subjects never collide with other NATS clients sharing the same cluster that might use bare service names.
 
 ```typescript
 JetstreamModule.forRoot({
@@ -57,7 +57,7 @@ Given `name: 'orders'`, the transport generates the following names:
 | Broadcast consumer | `{name}__microservice_broadcast-consumer` | `orders__microservice_broadcast-consumer` |
 
 :::note
-Ordered consumers are **ephemeral** — they are created and managed by the `@nats-io/jetstream` client at consumption time and do not have a durable consumer name.
+Ordered consumers are **ephemeral**: they are created and managed by the `@nats-io/jetstream` client at consumption time and do not have a durable consumer name.
 :::
 
 :::info
@@ -108,7 +108,7 @@ buildBroadcastSubject('config.updated');
 
 ### `streamName(serviceName, kind)`
 
-Builds the JetStream stream name for a given service and stream kind.
+Builds the JetStream stream name for one service and stream kind.
 
 ```typescript
 import { streamName, StreamKind } from '@horizon-republic/nestjs-jetstream';
@@ -121,7 +121,7 @@ streamName('orders', StreamKind.Broadcast); // 'broadcast-stream'
 
 ### `consumerName(serviceName, kind)`
 
-Builds the JetStream consumer name for a given service and stream kind.
+Builds the JetStream consumer name for one service and stream kind.
 
 ```typescript
 import { consumerName, StreamKind } from '@horizon-republic/nestjs-jetstream';
@@ -133,7 +133,7 @@ consumerName('orders', StreamKind.Broadcast); // 'orders__microservice_broadcast
 
 ### `dlqStreamName(serviceName)`
 
-Builds the [Dead Letter Queue stream](/docs/guides/dead-letter-queue#built-in-dlq-stream) name for a given service. Use it to subscribe to the DLQ stream from an external consumer without hardcoding the naming pattern.
+Builds the [Dead Letter Queue stream](/docs/guides/dead-letter-queue#built-in-dlq-stream) name for one service. Use it to subscribe to the DLQ stream from an external consumer without hardcoding the naming pattern.
 
 ```typescript
 import { dlqStreamName } from '@horizon-republic/nestjs-jetstream';
@@ -167,11 +167,11 @@ The `>` wildcard matches one or more tokens, so `orders__microservice.ev.>` will
 
 ### Scheduling subjects
 
-When [message scheduling](/docs/guides/scheduling) is enabled (`allow_msg_schedules: true`), the transport adds additional subject filters to capture scheduled messages:
+When [message scheduling](/docs/guides/scheduling) is enabled (`allow_msg_schedules: true`), the transport adds extra subject filters to capture scheduled messages:
 
-| Stream Kind | Additional Subject Filter |
+| Stream Kind | Extra Subject Filter |
 |------------|--------------------------|
 | Event | `{name}__microservice._sch.>` |
 | Broadcast | `broadcast._sch.>` |
 
-The `_sch` subjects are a library convention to separate scheduled messages from regular events within the same stream. NATS scheduling itself works via headers (`Nats-Schedule`, `Nats-Schedule-Target` per [ADR-51](https://github.com/nats-io/nats-architecture-and-design/blob/main/adr/ADR-51.md)), not special subjects. You don't interact with `_sch` subjects directly — the library manages them automatically.
+The `_sch` subjects are a library convention to separate scheduled messages from regular events within the same stream. NATS scheduling itself works via headers (`Nats-Schedule`, `Nats-Schedule-Target` per [ADR-51](https://github.com/nats-io/nats-architecture-and-design/blob/main/adr/ADR-51.md)), not special subjects. You don't interact with `_sch` subjects directly: the library manages them automatically.

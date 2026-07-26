@@ -1,19 +1,19 @@
 ---
 sidebar_position: 5
 sidebar_label: "Header Contract"
-title: "Header Contract — NATS Message Headers Used by the Transport"
-description: "Stable contract for NATS message headers the transport reads and writes — W3C Trace Context, JetStream metadata, and library-internal markers."
+title: "Header Contract: NATS Message Headers Used by the Transport"
+description: "Stable contract for NATS message headers the transport reads and writes: W3C Trace Context, JetStream metadata, and library-internal markers."
 schema:
   type: Article
-  headline: "Header Contract — NATS Message Headers Used by the Transport"
+  headline: "Header Contract: NATS Message Headers Used by the Transport"
   description: "Stable contract for NATS message headers the transport reads and writes."
   datePublished: "2026-04-24"
-  dateModified: "2026-06-12"
+  dateModified: "2026-07-26"
 ---
 
 # Header Contract
 
-Every NATS message header the transport touches — in one place. The contract is **stable across minor versions**; header names change only on major bumps. External publishers (Go, Python, Rust, …) only need to honour this page to interoperate with NestJS services using the library.
+Every NATS message header the transport touches, in one place. The contract is **stable across minor versions**; header names change only on major bumps. External publishers (Go, Python, Rust, …) only need to honour this page to interoperate with NestJS services using the library.
 
 ## At a glance
 
@@ -26,19 +26,19 @@ Every NATS message header the transport touches — in one place. The contract i
 | `x-correlation-id` | RPC | RPC | Library | Identifies the matching RPC reply. |
 | `x-reply-to` | RPC | RPC | Library | Inbox subject for the RPC reply. |
 | `x-error` | RPC reply | RPC reply | Library | Marks the reply payload as an error envelope. |
-| `x-subject` | — | ✓ | Library | Original subject the message was published to. |
-| `x-caller-name` | — | ✓ | Library | Internal name of the sending service. |
-| `x-dead-letter-reason` | — | DLQ | Library | DLQ tracking — exhausted-retry reason. |
-| `x-original-subject` | — | DLQ | Library | DLQ tracking — original target subject. |
-| `x-original-stream` | — | DLQ | Library | DLQ tracking — original stream name. |
-| `x-failed-at` | — | DLQ | Library | DLQ tracking — ISO 8601 failure timestamp. |
-| `x-delivery-count` | — | DLQ | Library | DLQ tracking — delivery attempt counter. |
+| `x-subject` | - | ✓ | Library | Original subject the message was published to. |
+| `x-caller-name` | - | ✓ | Library | Internal name of the sending service. |
+| `x-dead-letter-reason` | - | DLQ | Library | DLQ tracking: exhausted-retry reason. |
+| `x-original-subject` | - | DLQ | Library | DLQ tracking: original target subject. |
+| `x-original-stream` | - | DLQ | Library | DLQ tracking: original stream name. |
+| `x-failed-at` | - | DLQ | Library | DLQ tracking: ISO 8601 failure timestamp. |
+| `x-delivery-count` | - | DLQ | Library | DLQ tracking: delivery attempt counter. |
 
 Header names are matched **case-insensitively** per the W3C Trace Context specification.
 
 ## Reserved (you can't set these)
 
-Calling `JetstreamRecordBuilder.setHeader()` with any of these throws a reserved-header error — they are populated by the library at publish time:
+Calling `JetstreamRecordBuilder.setHeader()` with any of these throws a reserved-header error: they are populated by the library at publish time:
 
 - `x-correlation-id` · `x-reply-to` · `x-error`
 
@@ -53,7 +53,7 @@ User-defined headers should use a distinct prefix or name (`x-tenant-id`, `x-req
 These are interpreted by the NATS server itself, not by this library:
 
 - **`Nats-Msg-Id`**; publisher-supplied deduplication key. Set via `JetstreamRecordBuilder.setMessageId()` (from this library) or directly on the headers map (external publishers). Do not set it both ways on the same publish.
-- **`Nats-TTL`, `Nats-Schedule`, `Nats-Expected-*`, `Nats-Rollup`, …** — set them per the [NATS docs](https://docs.nats.io/) when you need their semantics; otherwise leave them alone.
+- **`Nats-TTL`, `Nats-Schedule`, `Nats-Expected-*`, `Nats-Rollup`, …**: set them per the [NATS docs](https://docs.nats.io/) when you need their semantics; otherwise leave them alone.
 
 ## Cross-language examples
 
@@ -121,7 +121,7 @@ Per the [W3C Trace Context specification](https://www.w3.org/TR/trace-context/),
 ## Compatibility
 
 - **NATS server:** `>= 2.11` (preserves W3C Trace Context headers across publish and consume per ADR-41).
-- **`@nats-io/nats-core`:** inherited transitively via `@nats-io/jetstream` and `@nats-io/transport-node` (both pinned to `^3.3.1`). You do not install `nats-core` directly — the resolved version is whatever those two pull in.
+- **`@nats-io/nats-core`:** inherited transitively via `@nats-io/jetstream` and `@nats-io/transport-node` (both pinned to `^3.3.1`). You do not install `nats-core` directly: the resolved version is whatever those two pull in.
 - **External publishers:** any NATS client capable of attaching headers.
 
-The library does **not** require a NestJS or TypeScript service on the other side of the wire. The header contract is the only coupling point.
+The library does not require a NestJS or TypeScript service on the other side of the wire. The header contract is the only coupling point.

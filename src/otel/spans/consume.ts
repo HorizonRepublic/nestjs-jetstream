@@ -81,7 +81,7 @@ const applyUnexpectedError = (span: Span, err: unknown): void => {
  * shape: sync handlers return sync, async handlers return a Promise.
  *
  * Fast paths:
- * - `otel.enabled: false` -> run `fn` directly, no span, no context extract
+ * - `otel.enabled: false` -> run `fn` directly, leaving headers unread
  *   (full kill switch).
  * - `traces` excludes `Consume` or `shouldTraceConsume` returns false ->
  *   still extract the parent from headers and run `fn` under that context
@@ -177,7 +177,7 @@ export const withConsumeSpan = <T>(
     try {
       classification = config.errorClassifier(err);
     } catch {
-      // Fall through with 'unexpected'.
+      // Keep 'unexpected'.
     }
 
     if (classification === 'expected') {
