@@ -56,8 +56,8 @@ Sentry auto-wire OTel with `Sentry.init({ tracesSampleRate: 1.0 })` and skip
 your own `NodeSDK` setup, or opt out of Sentry's wiring (`skipOpenTelemetrySetup: true`)
 and register Sentry's span processor, context manager, and propagator manually.
 Follow the [Sentry OpenTelemetry guide](https://docs.sentry.io/platforms/javascript/guides/node/opentelemetry/)
-for the exact wiring. The library's spans flow through once the OTel
-TracerProvider Sentry registers becomes the global one.
+for the exact wiring. The library's spans flow through once Sentry's
+registered OTel TracerProvider becomes the global provider.
 
 ### Datadog
 

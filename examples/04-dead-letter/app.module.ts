@@ -11,7 +11,7 @@ class FailingHandler {
 
   /**
    * This handler always throws. After max_deliver attempts (3) the message
-   * is routed to the dead letter callback.
+   * is republished to the DLQ stream, and the callback is notified afterwards.
    */
   @EventPattern('invoice.generate')
   handleInvoice(@Payload() data: { invoiceId: number }): void {
