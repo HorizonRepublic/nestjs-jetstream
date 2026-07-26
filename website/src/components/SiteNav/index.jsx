@@ -35,9 +35,11 @@ const useLiveVersion = (initial) => {
 };
 
 const BrandMark = () => (
-  <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-    <path d="M3 7 H10 a4 4 0 0 1 0 8 H3" stroke="currentColor" strokeWidth="1.5" />
-    <path d="M9 7 H16 a4 4 0 0 1 0 8 H9" stroke="var(--jt-state-deliver)" strokeWidth="1.5" />
+  <svg width="22" height="22" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+    <path d="M7 11 H21" stroke="currentColor" strokeWidth="2.6" strokeLinecap="square" />
+    <path d="M4 16 H21" stroke="currentColor" strokeWidth="2.6" strokeLinecap="square" />
+    <path d="M7 21 H17" stroke="currentColor" strokeWidth="2.6" strokeLinecap="square" />
+    <rect x="20.7" y="17.4" width="7.3" height="7.3" fill="var(--jt-state-deliver)" />
   </svg>
 );
 

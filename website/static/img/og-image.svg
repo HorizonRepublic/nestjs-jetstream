@@ -1,55 +1,35 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#1a1a1b"/>
-      <stop offset="100%" stop-color="#0f0f10"/>
-    </linearGradient>
-    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0%" stop-color="#5DE39C" stop-opacity="0.18"/>
-      <stop offset="100%" stop-color="#5DE39C" stop-opacity="0"/>
-    </radialGradient>
-    <pattern id="dots" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
-      <circle cx="1" cy="1" r="0.8" fill="#3c3936"/>
-    </pattern>
-  </defs>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#f8f8fa"></rect>
+  <rect x="0" y="0" width="1200" height="4" fill="#2c5fb3"></rect>
 
-  <rect width="1200" height="630" fill="url(#bg)"/>
-  <rect width="1200" height="630" fill="url(#dots)" opacity="0.5"/>
-  <ellipse cx="900" cy="500" rx="500" ry="320" fill="url(#glow)"/>
-
-  <g transform="translate(80, 90)">
-    <svg width="96" height="96" viewBox="0 0 64 64" fill="none">
-      <path d="M9 21 H29 a11 11 0 0 1 0 22 H9" stroke="#c2bfbb" stroke-width="4" stroke-linecap="round"/>
-      <path d="M27 21 H47 a11 11 0 0 1 0 22 H27" stroke="#5DE39C" stroke-width="4" stroke-linecap="round"/>
-    </svg>
+  <g stroke="#e2e5ec" stroke-width="1">
+    <line x1="80" y1="150" x2="1120" y2="150"></line>
+    <line x1="80" y1="480" x2="1120" y2="480"></line>
   </g>
 
-  <text x="80" y="320" font-family="Geist, system-ui, sans-serif" font-size="72" font-weight="500" fill="#f3f1ee" letter-spacing="-2">
-    nestjs-<tspan fill="#5DE39C">jetstream</tspan>
-  </text>
-
-  <text x="80" y="380" font-family="Geist, system-ui, sans-serif" font-size="28" font-weight="400" fill="#a3a09c" letter-spacing="-0.5">
-    The NATS JetStream transport NestJS microservices need.
-  </text>
-  <text x="80" y="418" font-family="Geist, system-ui, sans-serif" font-size="28" font-weight="400" fill="#a3a09c" letter-spacing="-0.5">
-    Durable, retried, traced — under the same @EventPattern decorators.
-  </text>
-
-  <g transform="translate(80, 510)">
-    <rect x="0" y="0" width="160" height="44" rx="8" fill="#2a2826" stroke="#3c3936" stroke-width="1"/>
-    <text x="80" y="28" font-family="Geist Mono, monospace" font-size="14" font-weight="500" fill="#5DE39C" text-anchor="middle">at-least-once</text>
-
-    <rect x="176" y="0" width="120" height="44" rx="8" fill="#2a2826" stroke="#3c3936" stroke-width="1"/>
-    <text x="236" y="28" font-family="Geist Mono, monospace" font-size="14" font-weight="500" fill="#7DD3FC" text-anchor="middle">retries</text>
-
-    <rect x="312" y="0" width="120" height="44" rx="8" fill="#2a2826" stroke="#3c3936" stroke-width="1"/>
-    <text x="372" y="28" font-family="Geist Mono, monospace" font-size="14" font-weight="500" fill="#FFB347" text-anchor="middle">DLQ</text>
-
-    <rect x="448" y="0" width="160" height="44" rx="8" fill="#2a2826" stroke="#3c3936" stroke-width="1"/>
-    <text x="528" y="28" font-family="Geist Mono, monospace" font-size="14" font-weight="500" fill="#c2bfbb" text-anchor="middle">tracing</text>
+  <g transform="translate(80,64) scale(1.9)">
+    <g fill="none" stroke="#21262f" stroke-linecap="square" stroke-width="2.6">
+      <path d="M7 11 H21"></path><path d="M4 16 H21"></path><path d="M7 21 H17"></path>
+    </g>
+    <rect x="20.7" y="17.4" width="7.3" height="7.3" fill="#2c5fb3"></rect>
   </g>
 
-  <text x="1120" y="590" font-family="Geist Mono, monospace" font-size="14" font-weight="500" fill="#787470" text-anchor="end">
-    @horizon-republic/nestjs-jetstream
-  </text>
+  <text x="170" y="105" font-family="ui-monospace,Menlo,monospace" font-size="30" fill="#5a6272">@horizon-republic/</text>
+  <text x="80" y="240" font-family="ui-monospace,Menlo,monospace" font-size="72" font-weight="600" fill="#21262f">nestjs-jetstream</text>
+  <text x="80" y="310" font-family="ui-monospace,Menlo,monospace" font-size="30" fill="#5a6272">Durable NATS JetStream transport for NestJS</text>
+
+  <g font-family="ui-monospace,Menlo,monospace" font-size="21">
+    <line x1="80" y1="400" x2="1120" y2="400" stroke="#c6cbd6" stroke-width="2"></line>
+    <circle cx="120" cy="400" r="7" fill="#21262f"></circle>
+    <text x="96" y="440" fill="#5a6272">publish</text>
+    <circle cx="380" cy="400" r="7" fill="#2c5fb3"></circle>
+    <text x="340" y="440" fill="#2c5fb3">deliver #1</text>
+    <circle cx="620" cy="400" r="7" fill="#9a660e"></circle>
+    <text x="560" y="440" fill="#9a660e">nak &#8594; redeliver</text>
+    <circle cx="920" cy="400" r="9" fill="none" stroke="#2c5fb3" stroke-width="3"></circle>
+    <text x="898" y="440" fill="#2c5fb3">ack</text>
+    <text x="898" y="371" fill="#5a6272" font-size="18">seq 4,832,107</text>
+  </g>
+
+  <text x="80" y="560" font-family="ui-monospace,Menlo,monospace" font-size="24" fill="#5a6272">npm i @horizon-republic/nestjs-jetstream</text>
 </svg>
