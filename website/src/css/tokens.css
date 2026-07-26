@@ -27,7 +27,6 @@
 
   /* ---- motion ----------------------------------------------------------- */
   --jt-m-fast: 110ms cubic-bezier(0.2, 0, 0, 1);
-  --jt-m-base: 180ms cubic-bezier(0.2, 0, 0, 1);
 }
 
 /* ---- LIGHT (default) --------------------------------------------------- */
@@ -56,9 +55,7 @@
   /* message state */
   --jt-state-deliver: #2c5fb3;
   --jt-state-redeliver: #9a660e;
-  --jt-state-redeliver-bg: #fdf6ea;
   --jt-state-dlq: #ad3728;
-  --jt-state-dlq-bg: #faeeec;
 
   /* docs callouts map onto the same three states */
   --jt-info: #2c5fb3;
@@ -102,9 +99,7 @@
 
   --jt-state-deliver: #7fa4e0;
   --jt-state-redeliver: #d9a24a;
-  --jt-state-redeliver-bg: rgb(217 162 74 / 0.10);
   --jt-state-dlq: #e08573;
-  --jt-state-dlq-bg: rgb(224 133 115 / 0.10);
 
   --jt-info: #7fa4e0;
   --jt-warn: #d9a24a;
