@@ -1,67 +1,141 @@
 /* ============================================================================
-   nestjs-jetstream — design tokens
-   The single source of truth for color, type, spacing, radii.
-   Imported by custom.css. Don't reference these directly in app code —
-   reference the Infima vars in custom.css that map to these.
+   nestjs-jetstream - design tokens
+
+   Direction: the delivery record. Colour appears only where a message changes
+   state - deliver (cobalt), redeliver (amber), dead-letter (red) - and the
+   interactive accent reuses "deliver" cobalt, so a link means "this takes you
+   somewhere" in the same voice a message means "this arrived".
+
+   Recursive carries both voices through one variable family: MONO 0 for prose,
+   MONO 1 for structure. CASL adds warmth to display sizes without a second face.
+
+   Single source of truth. Imported by custom.css. Don't reference these directly
+   in app code - reference the Infima vars in custom.css that map to them.
    ============================================================================ */
 
 :root {
-  /* ---- type ---------------------------------------------------------- */
-  --jt-font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --jt-font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  /* ---- type ----------------------------------------------------------- */
+  --jt-font-sans: "Recursive", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --jt-font-mono: "Recursive", ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 
-  /* ---- accent (shared light + dark) ---------------------------------- */
-  --jt-accent: oklch(0.86 0.19 145);          /* electric green */
-  --jt-accent-hover: oklch(0.82 0.21 145);
-  --jt-accent-soft: oklch(0.86 0.19 145 / 0.14);
-  --jt-accent-fg: oklch(0.20 0.05 145);       /* on accent */
+  /* Variation settings, the two voices. Structure reads as mono; prose does
+     not. Display picks up a little CASL so headings carry warmth that a
+     neutral grotesk cannot. */
+  --jt-vf-prose: "MONO" 0, "CASL" 0;
+  --jt-vf-struct: "MONO" 1, "CASL" 0;
+  --jt-vf-display: "MONO" 0, "CASL" 0.32;
 
-  /* ---- callouts ------------------------------------------------------ */
-  --jt-info: oklch(0.78 0.10 240);
-  --jt-warn: oklch(0.82 0.14 80);
-  --jt-danger: oklch(0.70 0.20 25);
+  /* ---- type scale ------------------------------------------------------
+     Wider than a docs-default scale on purpose: the flat rhythm is what read
+     as dry. Display steps away from body decisively. */
+  --jt-step--1: 0.8125rem;
+  --jt-step-0: 1rem;
+  --jt-step-1: 1.1875rem;
+  --jt-step-2: 1.4375rem;
+  --jt-step-3: 1.8125rem;
+  --jt-step-4: 2.375rem;
+  --jt-step-5: 3.25rem;
 
-  /* ---- radii --------------------------------------------------------- */
-  --jt-radius-sm: 4px;
-  --jt-radius-md: 6px;
-  --jt-radius-lg: 10px;
-  --jt-radius-xl: 14px;
+  /* ---- radii -----------------------------------------------------------
+     A record has corners. Nothing here is a pill. */
+  --jt-radius-sm: 2px;
+  --jt-radius-md: 3px;
+  --jt-radius-lg: 4px;
+  --jt-radius-xl: 6px;
+
+  /* ---- motion ----------------------------------------------------------
+     Only state changes move, and only briefly. */
+  --jt-m-fast: 110ms cubic-bezier(0.2, 0, 0, 1);
+  --jt-m-base: 180ms cubic-bezier(0.2, 0, 0, 1);
 }
 
-/* ---- DARK (default) -------------------------------------------------- */
-[data-theme="dark"] {
-  --jt-bg-0: oklch(0.155 0.007 60);   /* page background */
-  --jt-bg-1: oklch(0.185 0.007 60);   /* cards, navbar */
-  --jt-bg-2: oklch(0.215 0.007 60);   /* code blocks, inputs */
-  --jt-bg-3: oklch(0.245 0.007 60);   /* hover, raised */
-
-  --jt-line-1: oklch(0.28 0.006 60);  /* hairlines */
-  --jt-line-2: oklch(0.34 0.006 60);  /* stronger borders */
-
-  --jt-fg-0: oklch(0.96 0.005 90);    /* primary text */
-  --jt-fg-1: oklch(0.78 0.005 90);    /* body */
-  --jt-fg-2: oklch(0.60 0.005 90);    /* secondary */
-  --jt-fg-3: oklch(0.46 0.005 90);    /* muted, captions */
-}
-
-/* ---- LIGHT ----------------------------------------------------------- */
+/* ---- LIGHT (default) --------------------------------------------------
+   Paper carries a trace of warmth so the page reads as stock, not as a
+   clinical panel. */
 [data-theme="light"] {
-  --jt-bg-0: oklch(0.985 0.003 90);
-  --jt-bg-1: oklch(1.000 0 0);
-  --jt-bg-2: oklch(0.965 0.003 90);
-  --jt-bg-3: oklch(0.940 0.004 90);
+  --jt-bg-0: #f8f8fa; /* page */
+  --jt-bg-1: #ffffff; /* cards, navbar, code surfaces */
+  --jt-bg-2: #eef0f5; /* inline code, input wells */
+  --jt-bg-3: #e6e9f0; /* hover, raised */
 
-  --jt-line-1: oklch(0.91 0.004 90);
-  --jt-line-2: oklch(0.84 0.005 90);
+  --jt-line-1: #e2e5ec; /* hairlines */
+  --jt-line-2: #c6cbd6; /* stronger rules, table heads */
 
-  --jt-fg-0: oklch(0.18 0.006 60);
-  --jt-fg-1: oklch(0.30 0.006 60);
-  --jt-fg-2: oklch(0.46 0.005 90);
-  --jt-fg-3: oklch(0.58 0.005 90);
+  --jt-fg-0: #21262f; /* ink */
+  --jt-fg-1: #3c434f; /* body */
+  --jt-fg-2: #5a6272; /* secondary */
+  --jt-fg-3: #697181; /* muted, captions - AA at small sizes */
 
-  /* darker accent for AA on light */
-  --jt-accent: oklch(0.62 0.18 145);
-  --jt-accent-hover: oklch(0.56 0.20 145);
-  --jt-accent-soft: oklch(0.62 0.18 145 / 0.10);
-  --jt-accent-fg: oklch(0.99 0 0);
+  /* deliver, and every interactive affordance */
+  --jt-accent: #2c5fb3;
+  --jt-accent-hover: #234c92;
+  --jt-accent-soft: rgb(44 95 179 / 0.08);
+  --jt-accent-fg: #ffffff;
+
+  /* message state */
+  --jt-state-deliver: #2c5fb3;
+  --jt-state-redeliver: #9a660e;
+  --jt-state-redeliver-bg: #fdf6ea;
+  --jt-state-dlq: #ad3728;
+  --jt-state-dlq-bg: #faeeec;
+
+  /* docs callouts map onto the same three states */
+  --jt-info: #2c5fb3;
+  --jt-warn: #9a660e;
+  --jt-danger: #ad3728;
+
+  /* syntax */
+  --jt-code-string: #55684a;
+  --jt-code-keyword: #6b5ba8;
+  --jt-code-comment: #697181;
+
+  --jt-accent-line: rgb(44 95 179 / 0.28);
+  --jt-line-3: #b3b9c6;
+  --jt-bg-code: #ffffff;
+
+  --jt-shadow-card: 0 1px 2px rgb(33 38 47 / 0.05), 0 1px 3px rgb(33 38 47 / 0.04);
+  --jt-shadow-raised: 0 2px 8px rgb(33 38 47 / 0.08);
+}
+
+/* ---- DARK ---------------------------------------------------------------
+   The 3am shift. Same drawing, state colours lifted to hold contrast. */
+[data-theme="dark"] {
+  --jt-bg-0: #171a21;
+  --jt-bg-1: #1d212a;
+  --jt-bg-2: #232834;
+  --jt-bg-3: #2b313e;
+
+  --jt-line-1: #2f3542;
+  --jt-line-2: #3d4554;
+
+  --jt-fg-0: #e8ebf2;
+  --jt-fg-1: #c3c9d6;
+  --jt-fg-2: #8f97a8;
+  --jt-fg-3: #7a8294;
+
+  --jt-accent: #7fa4e0;
+  --jt-accent-hover: #9bb8e9;
+  --jt-accent-soft: rgb(127 164 224 / 0.14);
+  --jt-accent-fg: #11141a;
+
+  --jt-state-deliver: #7fa4e0;
+  --jt-state-redeliver: #d9a24a;
+  --jt-state-redeliver-bg: rgb(217 162 74 / 0.10);
+  --jt-state-dlq: #e08573;
+  --jt-state-dlq-bg: rgb(224 133 115 / 0.10);
+
+  --jt-info: #7fa4e0;
+  --jt-warn: #d9a24a;
+  --jt-danger: #e08573;
+
+  --jt-code-string: #9cb98a;
+  --jt-code-keyword: #b3a3e0;
+  --jt-code-comment: #7a8294;
+
+  --jt-accent-line: rgb(127 164 224 / 0.32);
+  --jt-line-3: #4a5364;
+  --jt-bg-code: #1b1f27;
+
+  --jt-shadow-card: 0 1px 2px rgb(0 0 0 / 0.28);
+  --jt-shadow-raised: 0 2px 10px rgb(0 0 0 / 0.34);
 }

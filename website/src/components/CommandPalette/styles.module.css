@@ -2,7 +2,7 @@
 .backdrop {
   position: fixed;
   inset: 0;
-  background: oklch(0 0 0 / 0.55);
+  background: rgb(0 0 0 / 0.42);
   backdrop-filter: blur(4px);
   z-index: 200;
   display: flex;
@@ -17,7 +17,7 @@
   background: var(--jt-bg-1);
   border: 1px solid var(--jt-line-1);
   border-radius: var(--jt-radius-xl);
-  box-shadow: 0 24px 60px oklch(0 0 0 / 0.5);
+  box-shadow: var(--jt-shadow-raised);
   overflow: hidden;
   animation: slideIn 160ms ease;
 }

@@ -73,6 +73,15 @@ const config: Config = {
     ],
   ],
   headTags: [
+    { tagName: 'link', attributes: { rel: 'preconnect', href: 'https://fonts.googleapis.com' } },
+    { tagName: 'link', attributes: { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: 'anonymous' } },
+    {
+      tagName: 'link',
+      attributes: {
+        rel: 'stylesheet',
+        href: 'https://fonts.googleapis.com/css2?family=Recursive:slnt,wght,CASL,MONO@-15..0,300..800,0..1,0..1&display=swap',
+      },
+    },
     { tagName: 'link', attributes: { rel: 'icon', type: 'image/png', sizes: '48x48', href: '/img/favicon-48.png' } },
     { tagName: 'link', attributes: { rel: 'icon', type: 'image/png', sizes: '96x96', href: '/img/favicon-96.png' } },
     { tagName: 'link', attributes: { rel: 'icon', type: 'image/png', sizes: '192x192', href: '/img/favicon-192.png' } },
@@ -123,7 +132,7 @@ const config: Config = {
       theme: { light: 'dark', dark: 'dark' },
       options: {
         securityLevel: 'loose',
-        fontFamily: '"Geist Mono", ui-monospace, monospace',
+        fontFamily: '"Recursive", ui-monospace, monospace',
         flowchart: {
           curve: 'basis',
           padding: 18,
@@ -169,14 +178,14 @@ const config: Config = {
           noteBkgColor: '#1f2823',
           noteBorderColor: '#52d68e80',
           noteTextColor: '#f3f1ee',
-          fontFamily: '"Geist Mono", ui-monospace, monospace',
+          fontFamily: '"Recursive", ui-monospace, monospace',
         },
       },
     },
     colorMode: {
-      defaultMode: 'dark',
-      disableSwitch: true,
-      respectPrefersColorScheme: false,
+      defaultMode: 'light',
+      disableSwitch: false,
+      respectPrefersColorScheme: true,
     },
     navbar: {
       title: 'nestjs-jetstream',

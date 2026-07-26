@@ -1,5 +1,4 @@
 
-@import url("https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap");
 @import "./tokens.css";
 
 /* ---- extra status / motion tokens ----------------------------------- */
@@ -73,6 +72,44 @@
   --ifm-toc-border-color: transparent;
   --ifm-blockquote-border-color: var(--jt-line-2);
 }
+
+/* ---- Recursive: two voices from one family ---------------------------
+   The family alone is not enough. MONO 1 is what makes structure read as
+   structure; without it every code span renders proportional. */
+body {
+  font-variation-settings: var(--jt-vf-prose);
+}
+
+code,
+kbd,
+samp,
+pre,
+.jt-struct,
+[class*="codeLine"],
+.token,
+.theme-code-block {
+  font-variation-settings: var(--jt-vf-struct);
+}
+
+h1,
+h2 {
+  font-variation-settings: var(--jt-vf-display);
+}
+
+h3,
+h4,
+h5,
+h6 {
+  font-variation-settings: var(--jt-vf-prose);
+}
+
+/* Tabular figures wherever numbers are compared down a column. */
+table td,
+table th,
+.jt-num {
+  font-variant-numeric: tabular-nums;
+}
+
 
 [data-theme="dark"] {
   --ifm-background-color: var(--jt-bg-0);
