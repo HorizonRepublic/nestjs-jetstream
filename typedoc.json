@@ -1,0 +1,19 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "plugin": ["typedoc-plugin-markdown"],
+  "entryPoints": ["src/index.ts"],
+  "tsconfig": "tsconfig.json",
+  "out": "website/docs/reference/api",
+  "readme": "none",
+  "entryFileName": "index.md",
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "excludeExternals": true,
+  "skipErrorChecking": true,
+  "useHTMLEncodedBrackets": true,
+  "pageTitleTemplates": {
+    "index": "{projectName}",
+    "member": "{name}",
+    "module": "{name}"
+  }
+}

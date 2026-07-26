@@ -53,25 +53,6 @@ const config: Config = {
     ],
   ],
   plugins: [
-    [
-      'docusaurus-plugin-typedoc',
-      {
-        entryPoints: ['../src/index.ts'],
-        tsconfig: '../tsconfig.json',
-        out: 'docs/reference/api',
-        readme: 'none',
-        excludePrivate: true,
-        excludeInternal: true,
-        excludeExternals: true,
-        skipErrorChecking: true,
-        useHTMLEncodedBrackets: true,
-        pageTitleTemplates: {
-          index: '{projectName}',
-          member: '{name}',
-          module: '{name}',
-        },
-      },
-    ],
     'docusaurus-plugin-llms',
     [
       '@coffeecup_tech/docusaurus-plugin-structured-data',
