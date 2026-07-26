@@ -8,7 +8,7 @@ schema:
   headline: "How to set per-message TTL on NATS JetStream messages"
   description: "Set individual message expiration via the Nats-TTL header (NATS 2.11, ADR-43)."
   datePublished: "2026-04-02"
-  dateModified: "2026-05-27"
+  dateModified: "2026-07-26"
 ---
 
 import Since from '@site/src/components/Since';

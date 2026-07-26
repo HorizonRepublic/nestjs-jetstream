@@ -8,7 +8,7 @@ schema:
   headline: "How to configure a Dead Letter Queue"
   description: "Capture NestJS NATS JetStream messages that exhaust all delivery attempts via a DLQ stream or onDeadLetter callback."
   datePublished: "2026-03-21"
-  dateModified: "2026-06-12"
+  dateModified: "2026-07-26"
 ---
 
 import Since from '@site/src/components/Since';

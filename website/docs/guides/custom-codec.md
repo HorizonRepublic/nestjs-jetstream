@@ -8,7 +8,7 @@ schema:
   headline: "How to use a custom codec with NestJS JetStream"
   description: "Replace JSON with MessagePack, Protobuf, or a custom binary codec for NATS message serialization."
   datePublished: "2026-03-21"
-  dateModified: "2026-06-12"
+  dateModified: "2026-07-26"
 ---
 
 # How to use a custom codec

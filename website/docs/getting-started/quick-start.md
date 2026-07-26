@@ -8,7 +8,7 @@ schema:
   headline: "Quick Start"
   description: "Complete working example in four steps: register the module, connect the transport, define handlers, and send messages."
   datePublished: "2026-03-21"
-  dateModified: "2026-06-12"
+  dateModified: "2026-07-26"
 ---
 
 # Quick Start

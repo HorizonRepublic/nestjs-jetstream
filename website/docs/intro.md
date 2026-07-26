@@ -9,7 +9,7 @@ schema:
   headline: "NestJS NATS Transport with JetStream: Introduction"
   description: "A NestJS NATS microservice transport backed by JetStream: durable events, broadcast, ordered delivery, RPC, and dead letter queues."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-11"
+  dateModified: "2026-07-26"
 ---
 
 # Introduction

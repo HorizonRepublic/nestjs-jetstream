@@ -8,7 +8,7 @@ schema:
   headline: "Handler Metadata Registry: NATS KV Service Discovery for NestJS"
   description: "Publish NestJS handler metadata to a NATS KV bucket for dynamic service discovery, API gateway routing, and automatic catalog generation."
   datePublished: "2026-04-02"
-  dateModified: "2026-06-12"
+  dateModified: "2026-07-26"
 ---
 
 import Since from '@site/src/components/Since';

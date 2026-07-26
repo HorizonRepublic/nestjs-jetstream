@@ -8,7 +8,7 @@ schema:
   headline: "Observability: NestJS JetStream Transport"
   description: "Distributed tracing and Prometheus metrics built into the transport. Zero-config integration with OpenTelemetry SDKs and prom-client-based exporters."
   datePublished: "2026-05-27"
-  dateModified: "2026-06-12"
+  dateModified: "2026-07-26"
 ---
 
 # Observability

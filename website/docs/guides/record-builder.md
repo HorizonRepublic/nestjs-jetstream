@@ -8,7 +8,7 @@ schema:
   headline: "JetstreamRecordBuilder: Headers, Message IDs & Deduplication"
   description: "Build NestJS NATS messages with custom headers, deterministic message IDs for publish-side deduplication, and per-request RPC timeouts."
   datePublished: "2026-03-21"
-  dateModified: "2026-06-12"
+  dateModified: "2026-07-26"
 ---
 
 import Since from '@site/src/components/Since';

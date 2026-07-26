@@ -8,7 +8,7 @@ schema:
   headline: "Header Contract: NATS Message Headers Used by the Transport"
   description: "Stable contract for NATS message headers the transport reads and writes."
   datePublished: "2026-04-24"
-  dateModified: "2026-06-12"
+  dateModified: "2026-07-26"
 ---
 
 # Header Contract

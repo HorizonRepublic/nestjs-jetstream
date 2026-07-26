@@ -8,7 +8,7 @@ schema:
   headline: "Broadcast Events: NestJS JetStream Fan-Out Delivery"
   description: "Fan-out NATS JetStream events to every NestJS service instance via per-service durable consumers on a shared broadcast stream."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-11"
+  dateModified: "2026-07-26"
 ---
 
 # Broadcast Events

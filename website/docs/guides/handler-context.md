@@ -8,7 +8,7 @@ schema:
   headline: "RpcContext: Handler Context & Message Settlement"
   description: "Access JetStream metadata and control ack, retry, and terminate actions in NestJS message handlers via RpcContext."
   datePublished: "2026-03-21"
-  dateModified: "2026-06-12"
+  dateModified: "2026-07-26"
 ---
 
 import Since from '@site/src/components/Since';

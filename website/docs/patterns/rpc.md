@@ -8,7 +8,7 @@ schema:
   headline: "NestJS NATS RPC: Core vs JetStream Request/Reply"
   description: "Synchronous NestJS NATS request-reply in Core NATS or JetStream mode, with timeout handling, error serialization, and per-request overrides."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-11"
+  dateModified: "2026-07-26"
 ---
 
 # RPC (Request/Reply)

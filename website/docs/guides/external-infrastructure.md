@@ -8,7 +8,7 @@ schema:
   headline: "Bring Your Own Infrastructure (bind-only mode)"
   description: "Bind NestJS JetStream to externally managed NATS streams and consumers provisioned by Terraform, ArgoCD, or a platform team."
   datePublished: "2026-06-12"
-  dateModified: "2026-06-12"
+  dateModified: "2026-07-26"
 ---
 
 import Since from '@site/src/components/Since';

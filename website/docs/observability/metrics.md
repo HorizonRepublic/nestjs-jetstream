@@ -8,7 +8,7 @@ schema:
   headline: "Prometheus Metrics: NestJS JetStream Transport"
   description: "Production-ready Prometheus metrics for NATS JetStream transport: throughput, handler latency, consumer lag, dead letters, and publish errors."
   datePublished: "2026-05-27"
-  dateModified: "2026-06-12"
+  dateModified: "2026-07-26"
 ---
 
 # Prometheus Metrics

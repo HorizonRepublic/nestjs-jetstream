@@ -8,7 +8,7 @@ schema:
   headline: "Why JetStream? NestJS NATS Transport Comparison"
   description: "When the built-in NestJS NATS transport is enough, and when your system outgrows Core NATS and needs JetStream for durable messaging."
   datePublished: "2026-04-11"
-  dateModified: "2026-04-11"
+  dateModified: "2026-07-26"
 ---
 
 # Why JetStream?

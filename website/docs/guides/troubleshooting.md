@@ -8,7 +8,7 @@ schema:
   headline: "Troubleshooting: NestJS JetStream Transport"
   description: "Fix common NestJS JetStream issues: NATS connection errors, consumer lag, RPC timeouts, DLQ publish failures, and stream migration recovery."
   datePublished: "2026-03-26"
-  dateModified: "2026-04-11"
+  dateModified: "2026-07-26"
 ---
 
 # Troubleshooting

@@ -8,7 +8,7 @@ schema:
   headline: "Distributed Tracing: NestJS JetStream Transport"
   description: "Built-in W3C Trace Context propagation and OpenTelemetry spans for every publish, consume, and RPC round-trip."
   datePublished: "2026-04-24"
-  dateModified: "2026-06-12"
+  dateModified: "2026-07-26"
 ---
 
 # Distributed Tracing
