@@ -2,7 +2,7 @@
 sidebar_position: 2
 sidebar_label: "Quick Start"
 title: Quick Start
-description: Complete working example in four steps — register, connect, handle, and send.
+description: "Complete working example in four steps: register, connect, handle, and send."
 schema:
   type: Article
   headline: "Quick Start"
@@ -13,7 +13,7 @@ schema:
 
 # Quick Start
 
-Five minutes from now you'll have a NestJS service that emits `order.created`, survives a restart without losing the message, and responds to `order.get` RPCs — all over NATS JetStream. Four steps: register the module, connect the transport, define handlers, send messages.
+Five minutes from now you'll have a NestJS service that emits `order.created`, survives a restart without losing the message, and responds to `order.get` RPCs, all over NATS JetStream. Four steps: register the module, connect the transport, define handlers, send messages.
 
 :::info Prerequisites
 Make sure you have [installed the library](/docs/getting-started/installation) and have a NATS server running with JetStream enabled.
@@ -34,7 +34,7 @@ import { GatewayController } from './gateway.controller';
 
 @Module({
   imports: [
-    // Global setup — creates NATS connection, streams, consumers
+    // Global setup, creates NATS connection, streams, consumers
     JetstreamModule.forRoot({
       name: 'orders',
       servers: ['nats://localhost:4222'],
@@ -72,7 +72,7 @@ const bootstrap = async () => {
 
   // Required so the JetStream transport drains in-flight handlers on SIGTERM.
   // Skip this and messages in flight when the pod dies will be redelivered
-  // only after `ack_wait` expires — slower recovery, noisier metrics.
+  // only after `ack_wait` expires, slower recovery, noisier metrics.
   app.enableShutdownHooks();
 
   await app.startAllMicroservices();
@@ -83,7 +83,7 @@ void bootstrap();
 ```
 
 :::warning Don't instantiate the strategy manually
-Unlike other NestJS transports, you must **not** create the strategy with `new JetstreamStrategy()`. The module creates it through DI with all required dependencies. Always use `app.get(JetstreamStrategy)` to retrieve it.
+Unlike other NestJS transports, you must not create the strategy with `new JetstreamStrategy()`. The module creates it through DI with all required dependencies. Always use `app.get(JetstreamStrategy)` to retrieve it.
 :::
 
 ## 3. Define handlers
@@ -107,7 +107,7 @@ export class OrdersController {
   @EventPattern('order.created')
   handleOrderCreated(@Payload() data: { orderId: number; total: number }): void {
     this.logger.log(`Processing order ${data.orderId}, total: $${data.total}`);
-    // If this throws, the message is nak'd and redelivered (up to max_deliver — default 3)
+    // If this throws, the message is nak'd and redelivered (up to max_deliver, default 3)
   }
 
   /**
@@ -134,7 +134,7 @@ export class OrdersController {
 }
 ```
 
-The decorators above cover the three handler shapes you'll meet first — workqueue events (one instance handles each message), broadcast events (all instances handle every message), and RPC commands (request/reply). Strict-order delivery uses `@EventPattern('...', { ordered: true })`. For the full picture of each, see [Events](/docs/patterns/events), [Broadcast](/docs/patterns/broadcast), [Ordered Events](/docs/patterns/ordered-events), and [RPC](/docs/patterns/rpc).
+The decorators above cover the three handler shapes you'll meet first, workqueue events (one instance handles each message), broadcast events (all instances handle every message), and RPC commands (request/reply). Strict-order delivery uses `@EventPattern('...', { ordered: true })`. For the full picture of each, see [Events](/docs/patterns/events), [Broadcast](/docs/patterns/broadcast), [Ordered Events](/docs/patterns/ordered-events), and [RPC](/docs/patterns/rpc).
 
 ## 4. Send messages
 
@@ -177,7 +177,7 @@ export class GatewayController {
 Use `client.emit()` for fire-and-forget events; at-least-once delivery through JetStream, no response. Use `client.send()` for request/reply RPC; it returns an `Observable<TResponse>` with the handler's reply.
 
 :::info Broadcast prefix
-To send a broadcast event, prefix the pattern with `broadcast:` when calling `emit()`. On the handler side, use `{ broadcast: true }` in the decorator extras — no prefix needed.
+To send a broadcast event, prefix the pattern with `broadcast:` when calling `emit()`. On the handler side, use `{ broadcast: true }` in the decorator extras: no prefix needed.
 :::
 
 ## Test it
@@ -200,7 +200,7 @@ curl http://localhost:3000/orders/42
 
 ## What's next?
 
-- [**Module Configuration**](/docs/reference/module-configuration) — learn about all configuration options, async setup, and advanced connection settings
-- [**RPC Patterns**](/docs/patterns/rpc) — deep dive into Core vs JetStream RPC modes
-- [**Events & Broadcast**](/docs/patterns/events) — workqueue events, broadcast fan-out, and ordered events
-- [**Record Builder & Deduplication**](/docs/guides/record-builder) — custom headers, deterministic message IDs, per-request RPC timeouts, and deduplication
+- [**Module Configuration**](/docs/reference/module-configuration): learn about all configuration options, async setup, and advanced connection settings
+- [**RPC Patterns**](/docs/patterns/rpc): deep dive into Core vs JetStream RPC modes
+- [**Events & Broadcast**](/docs/patterns/events): workqueue events, broadcast fan-out, and ordered events
+- [**Record Builder & Deduplication**](/docs/guides/record-builder): custom headers, deterministic message IDs, per-request RPC timeouts, and deduplication

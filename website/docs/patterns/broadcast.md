@@ -1,11 +1,11 @@
 ---
 sidebar_position: 1
 sidebar_label: "Broadcast Events"
-title: "Broadcast Events — NestJS JetStream Fan-Out Delivery"
+title: "Broadcast Events: NestJS JetStream Fan-Out Delivery"
 description: "Fan-out NATS JetStream events to every NestJS service instance via per-service durable consumers on a shared broadcast stream."
 schema:
   type: Article
-  headline: "Broadcast Events — NestJS JetStream Fan-Out Delivery"
+  headline: "Broadcast Events: NestJS JetStream Fan-Out Delivery"
   description: "Fan-out NATS JetStream events to every NestJS service instance via per-service durable consumers on a shared broadcast stream."
   datePublished: "2026-03-21"
   dateModified: "2026-04-11"
@@ -14,13 +14,13 @@ schema:
 # Broadcast Events
 
 > **Use when:** every running service must react to the same message (cache invalidation, feature-flag flips, config reload).
-> **You get:** per-service durable consumers on a shared stream — late-joining replicas catch up automatically.
+> **You get:** per-service durable consumers on a shared stream, late-joining replicas catch up automatically.
 
 Broadcast events implement **fan-out** delivery: every subscribing service receives a copy of each message. This is the opposite of [workqueue events](/docs/patterns/events) (one instance processes each message) and distinct from [ordered events](/docs/patterns/ordered-events) (every instance receives a full sequential replay).
 
 ## When to use
 
-Imagine a multi-service platform where an admin updates a feature flag. Every service — orders, payments, notifications, analytics — must refresh its local cache immediately. You don't want to call each service individually, and you don't want only one instance to get the update.
+Imagine a multi-service platform where an admin updates a feature flag. Every service (orders, payments, notifications, analytics) must refresh its local cache immediately. You don't want to call each service individually, and you don't want only one instance to get the update.
 
 Broadcast events solve this. When you publish a broadcast event, every service that has registered a handler receives the message independently.
 
@@ -28,12 +28,12 @@ Broadcast events solve this. When you publish a broadcast event, every service t
 
 The broadcast flow, step by step:
 
-1. **Publish** — a service calls `client.emit('broadcast:config.updated', data)`. The `broadcast:` prefix tells the transport this is a fan-out event.
-2. **Route** — the transport publishes to the subject `broadcast.config.updated` (a global subject, not scoped to any service).
-3. **Shared stream** — the message is persisted in a single **shared** `broadcast-stream` with **Limits** retention: messages stay in the stream until they exceed `max_age`, `max_msgs`, or `max_bytes`, even after every consumer acknowledges them. This is what lets new instances replay recent broadcasts on startup, unlike the Workqueue retention used for regular events.
-4. **Per-service consumers** — each service that registered a `{ broadcast: true }` handler has its own durable consumer on the shared stream. Every consumer independently receives the message.
-5. **Dispatch** — each service's `EventRouter` decodes the payload and invokes the matching handler.
-6. **Acknowledge** — each consumer acks or naks independently.
+1. **Publish**: a service calls `client.emit('broadcast:config.updated', data)`. The `broadcast:` prefix tells the transport this is a fan-out event.
+2. **Route**: the transport publishes to the subject `broadcast.config.updated` (a global subject, not scoped to any service).
+3. **Shared stream**: the message is persisted in a single **shared** `broadcast-stream` with **Limits** retention: messages stay in the stream until they exceed `max_age`, `max_msgs`, or `max_bytes`, even after every consumer acknowledges them. This is what lets new instances replay recent broadcasts on startup, unlike the Workqueue retention used for regular events.
+4. **Per-service consumers**: each service that registered a `{ broadcast: true }` handler has its own durable consumer on the shared stream. Every consumer independently receives the message.
+5. **Dispatch**: each service's `EventRouter` decodes the payload and invokes the matching handler.
+6. **Acknowledge**: each consumer acks or naks independently.
 
 ```mermaid
 flowchart TD
@@ -84,7 +84,7 @@ export class AdminService {
 
 ### Handling broadcast events
 
-Use `@EventPattern` with `{ broadcast: true }` in the extras object. The pattern itself does **not** include the `broadcast:` prefix — that's only for the sending side.
+Use `@EventPattern` with `{ broadcast: true }` in the extras object. The pattern itself does not include the `broadcast:` prefix: that's only for the sending side.
 
 ```typescript title="src/orders/orders.controller.ts"
 import { Controller, Logger } from '@nestjs/common';
@@ -125,31 +125,31 @@ export class PaymentsController {
 }
 ```
 
-Both `OrdersController` and `PaymentsController` receive the same `config.updated` message independently — each through their own durable consumer.
+Both `OrdersController` and `PaymentsController` receive the same `config.updated` message independently: each through their own durable consumer.
 
 :::warning Asymmetric prefixing
-The `broadcast:` prefix is used **only on the sending side** (`client.emit('broadcast:config.updated', ...)`). On the handler side, the pattern is just `'config.updated'` with `{ broadcast: true }` in extras. This asymmetry is intentional — the prefix controls routing, while the extras flag controls consumer registration.
+The `broadcast:` prefix is used **only on the sending side** (`client.emit('broadcast:config.updated', ...)`). On the handler side, the pattern is just `'config.updated'` with `{ broadcast: true }` in extras. This asymmetry is intentional: the prefix controls routing, while the extras flag controls consumer registration.
 :::
 
 ## Delivery semantics
 
 Each consumer processes broadcast messages with the same delivery guarantees as workqueue events:
 
-- **Handler succeeds** &mdash; `ack`. The consumer is marked as having processed the message.
-- **Handler throws an error** &mdash; `nak`. The message is redelivered to **that consumer only**.
-- **Payload cannot be decoded** &mdash; `term`. The message is terminated for that consumer.
-- **No handler for subject** &mdash; `term`. The message is terminated for that consumer.
-- **Max deliveries exhausted** &mdash; `term`. The dead letter callback is invoked for that consumer.
+- **Handler succeeds**, `ack`. The consumer is marked as having processed the message.
+- **Handler throws an error**, `nak`. The message is redelivered to **that consumer only**.
+- **Payload cannot be decoded**, `term`. The message is terminated for that consumer.
+- **No handler for subject**, `term`. The message is terminated for that consumer.
+- **Max deliveries exhausted**, `term`. The dead letter callback is invoked for that consumer.
 
 The key difference from workqueue events: broadcast delivery is **at-least-once per consumer**. Every subscribing service receives every message at least once.
 
 ## Per-service isolation
 
-This is the most important concept to understand about broadcast events: **each service's consumer is completely independent**.
+This is the most important concept to understand about broadcast events: **each service's consumer is independent**.
 
 If the orders service fails to process a broadcast message and the message is nak'd:
 - Only the orders service's consumer retries the message.
-- The payments service and analytics service are **completely unaffected**.
+- The payments service and analytics service are **unaffected**.
 - Each consumer tracks its own delivery count independently.
 
 ```mermaid
@@ -234,16 +234,16 @@ JetstreamModule.forRoot({
 Each consumer only subscribes to the broadcast subjects it has handlers for (via `filter_subject` or `filter_subjects`), so services only receive the broadcast events they care about.
 
 :::tip Broadcast scheduling
-To schedule delayed broadcasts, enable `broadcast.stream.allow_msg_schedules: true` — this is a separate opt-in from the event stream flag. See [Scheduling (Delayed Jobs)](/docs/guides/scheduling).
+To schedule delayed broadcasts, enable `broadcast.stream.allow_msg_schedules: true`: this is a separate opt-in from the event stream flag. See [Scheduling (Delayed Jobs)](/docs/guides/scheduling).
 :::
 
-### Default values — the ones you'll actually tune
+### Default values: the ones you'll actually tune
 
-- **`max_age`** (stream, shared) &mdash; 1 hour. New instances catch up on broadcasts within this window.
-- **`max_deliver`** (per-service) &mdash; `3`. Each service retries independently before dead letter.
-- **`ack_wait`** (per-service) &mdash; 10 seconds. Scoped to each service's broadcast consumer.
+- **`max_age`** (stream, shared), 1 hour. New instances catch up on broadcasts within this window.
+- **`max_deliver`** (per-service), `3`. Each service retries independently before dead letter.
+- **`ack_wait`** (per-service), 10 seconds. Scoped to each service's broadcast consumer.
 
-See [Default Configs — Broadcast Stream](/docs/reference/default-configs#broadcast-stream) and [Broadcast Consumer](/docs/reference/default-configs#broadcast-consumer) for the complete list.
+See [Default Configs, Broadcast Stream](/docs/reference/default-configs#broadcast-stream) and [Broadcast Consumer](/docs/reference/default-configs#broadcast-consumer) for the complete list.
 
 ## Common use cases
 
@@ -311,4 +311,4 @@ handleFeatureFlag(@Payload() data: FeatureFlagEvent): void {
 
 ## See also
 
-Broadcast consumers compete with regular event consumers for the same concurrency budget — tune both via [Performance Tuning](/docs/guides/performance#concurrency-control). If a broadcast handler keeps failing, only *that* service's consumer retries; see [Dead Letter Queue](/docs/guides/dead-letter-queue#scope) for per-consumer dead letter semantics.
+Broadcast consumers compete with regular event consumers for the same concurrency budget, tune both via [Performance Tuning](/docs/guides/performance#concurrency-control). If a broadcast handler keeps failing, only *that* service's consumer retries; see [Dead Letter Queue](/docs/guides/dead-letter-queue#scope) for per-consumer dead letter semantics.

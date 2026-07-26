@@ -17,11 +17,11 @@ The transport handles shutdown automatically through the NestJS application life
 
 The `JetstreamModule` implements NestJS's `OnApplicationShutdown` interface. When the application receives a termination signal (SIGTERM, SIGINT), NestJS calls the module's `onApplicationShutdown()` method, which triggers the following sequence:
 
-1. **Emit `ShutdownStart` hook** — notifies lifecycle hooks that shutdown has begun.
-2. **Stop consumers** — calls `strategy.close()`, which closes all RxJS subscriptions and stops JetStream consumer iterators. No new messages are accepted. In-flight handlers in the RxJS pipeline continue to run to completion.
-3. **Drain NATS connection** — calls `nc.drain()`, which flushes any pending publishes and waits for active subscriptions to finish, then closes the connection.
-4. **Safety timeout** — if drain doesn't complete within `shutdownTimeout` milliseconds, the transport proceeds with shutdown anyway. This prevents a stuck handler from blocking the process indefinitely.
-5. **Emit `ShutdownComplete` hook** — notifies lifecycle hooks that shutdown is finished.
+1. **Emit `ShutdownStart` hook**: notifies lifecycle hooks that shutdown has begun.
+2. **Stop consumers**: calls `strategy.close()`, which closes all RxJS subscriptions and stops JetStream consumer iterators. No new messages are accepted. In-flight handlers in the RxJS pipeline continue to run to completion.
+3. **Drain NATS connection**: calls `nc.drain()`, which flushes any pending publishes and waits for active subscriptions to finish, then closes the connection.
+4. **Safety timeout**: if drain doesn't complete within `shutdownTimeout` milliseconds, the transport proceeds with shutdown anyway. This prevents a stuck handler from blocking the process indefinitely.
+5. **Emit `ShutdownComplete` hook**: notifies lifecycle hooks that shutdown is finished.
 
 ```mermaid
 flowchart LR
@@ -43,7 +43,7 @@ NATS `drain()` is a graceful shutdown primitive. When you drain a connection:
 - The client waits for all pending message handlers to complete and send their ack/nak.
 - Once all in-flight work is done, the connection closes cleanly.
 
-This ensures that messages are not lost or left in an ambiguous state. A message that was being processed when shutdown started will either be acknowledged (if the handler succeeds) or nak'd (if it fails), so NATS can redeliver it to another instance.
+No message is dropped or left in an ambiguous state. A message that was being processed when shutdown started will either be acknowledged (if the handler succeeds) or nak'd (if it fails), so NATS can redeliver it to another instance.
 
 ## Configuring the timeout
 
@@ -69,7 +69,7 @@ export class AppModule {}
 Set `shutdownTimeout` to slightly more than your longest handler's expected duration. If your slowest handler takes 20 seconds, a timeout of 25-30 seconds gives it room to finish. Too short, and handlers may be abandoned mid-execution; too long, and your deployment pipeline will wait unnecessarily.
 :::
 
-If the timeout fires before drain completes, the transport closes the connection immediately. Any in-flight handlers that haven't finished will be interrupted — their messages will not be acknowledged, so NATS will redeliver them to another instance after the consumer's `ack_wait` expires.
+If the timeout fires before drain completes, the transport closes the connection immediately. Any in-flight handlers that haven't finished will be interrupted: their messages will not be acknowledged, so NATS will redeliver them to another instance after the consumer's `ack_wait` expires.
 
 ## Enabling shutdown hooks
 
@@ -88,7 +88,7 @@ async function bootstrap() {
     { inheritAppConfig: true },
   );
 
-  // Required for graceful shutdown to work — without this, SIGTERM
+  // Required for graceful shutdown to work, without this, SIGTERM
   // terminates the process before onApplicationShutdown() runs.
   app.enableShutdownHooks();
 
@@ -100,7 +100,7 @@ void bootstrap();
 ```
 
 :::warning Without enableShutdownHooks(), shutdown is not graceful
-If you skip `enableShutdownHooks()`, the process will terminate immediately on SIGTERM/SIGINT without calling `onApplicationShutdown()`. The NATS connection will drop abruptly, and in-flight messages will be redelivered after `ack_wait` expires — which works, but is not clean.
+If you skip `enableShutdownHooks()`, the process will terminate immediately on SIGTERM/SIGINT without calling `onApplicationShutdown()`. The NATS connection will drop abruptly, and in-flight messages will be redelivered after `ack_wait` expires, which works, but is not clean.
 :::
 
 ## No manual shutdown code needed

@@ -1,11 +1,11 @@
 ---
 sidebar_position: 5
 sidebar_label: "Handler Metadata"
-title: "Handler Metadata Registry — NATS KV Service Discovery for NestJS"
+title: "Handler Metadata Registry: NATS KV Service Discovery for NestJS"
 description: "Publish NestJS handler metadata to a NATS KV bucket for dynamic service discovery, API gateway routing, and automatic catalog generation."
 schema:
   type: Article
-  headline: "Handler Metadata Registry — NATS KV Service Discovery for NestJS"
+  headline: "Handler Metadata Registry: NATS KV Service Discovery for NestJS"
   description: "Publish NestJS handler metadata to a NATS KV bucket for dynamic service discovery, API gateway routing, and automatic catalog generation."
   datePublished: "2026-04-02"
   dateModified: "2026-06-12"
@@ -17,7 +17,7 @@ import Since from '@site/src/components/Since';
 
 <Since version="2.9.0" />
 
-Publish handler metadata to a NATS KV bucket at startup. External services — API gateways, dashboards, CLI tools — can read or watch the bucket for automatic service discovery.
+Publish handler metadata to a NATS KV bucket at startup. External services (API gateways, dashboards, CLI tools) can read or watch the bucket for automatic service discovery.
 
 **Requires:** NATS Server 2.10+ (KV support)
 
@@ -107,9 +107,9 @@ JetstreamModule.forRoot({
 })
 ```
 
-- **`bucket`** &mdash; `'handler_registry'`. KV bucket name.
-- **`replicas`** &mdash; `1`. Bucket replicas (1, 3, or 5).
-- **`ttl`** &mdash; `30_000`. Entry TTL in milliseconds; entries expire unless refreshed by heartbeat (minimum: `5_000` ms). Note: this field is in ms, not nanoseconds.
+- **`bucket`**, `'handler_registry'`. KV bucket name.
+- **`replicas`**, `1`. Bucket replicas (1, 3, or 5).
+- **`ttl`**, `30_000`. Entry TTL in milliseconds; entries expire unless refreshed by heartbeat (minimum: `5_000` ms). Note: this field is in ms, not nanoseconds.
 
 :::note Bucket configuration
 The KV bucket is created on first startup. Changing `ttl` or `replicas` after creation requires deleting the existing bucket; NATS KV does not update bucket config in place. Use the NATS CLI: `nats kv rm handler_registry`.
@@ -137,7 +137,7 @@ const key = metadataKey('orders', StreamKind.Event, 'order.created');
 
 ## Meta structure
 
-The `meta` field is `Record<string, unknown>` — the library serializes it as JSON and stores as-is with no schema enforcement. Values must be JSON-serializable. You decide the structure based on your use case.
+The `meta` field is `Record<string, unknown>`: the library serializes it as JSON and stores as-is with no schema enforcement. Values must be JSON-serializable. You decide the structure based on your use case.
 
 :::warning Security
 The `meta` object is stored in a shared NATS KV bucket readable by any connected service. Never include secrets, API keys, passwords, or personally identifiable information (PII) in handler metadata.
@@ -159,14 +159,14 @@ The `meta` object is stored in a shared NATS KV bucket readable by any connected
 
 ## Lifecycle
 
-Entries are managed via TTL + heartbeat — no explicit delete needed.
+Entries are managed via TTL + heartbeat: no explicit delete needed.
 
 - **Startup.** The transport writes all handler meta entries to KV and starts the heartbeat.
 - **Heartbeat.** Every `ttl / 2`, all entries are re-written to reset their TTL.
 - **Graceful shutdown.** Heartbeat stops; entries expire after TTL.
 - **Crash.** Heartbeat stops; entries expire after TTL (automatic cleanup).
 - **Rolling update.** The new pod writes entries immediately; old entries from removed handlers expire via TTL.
-- **Multi-pod.** All pods heartbeat the same keys — entries stay alive while any pod is running.
+- **Multi-pod.** All pods heartbeat the same keys: entries stay alive while any pod is running.
 
 ## Use cases
 
@@ -190,10 +190,10 @@ nats kv get handler_registry orders.ev.order.created
 nats kv watch handler_registry
 ```
 
-If entries are missing or the bucket fails to create, see [Troubleshooting — Handler metadata registry](/docs/guides/troubleshooting#handler-metadata-registry).
+If entries are missing or the bucket fails to create, see [Troubleshooting, Handler metadata registry](/docs/guides/troubleshooting#handler-metadata-registry).
 
 ## See also
 
-- [Naming Conventions — `metadataKey()`](/docs/reference/naming-conventions#metadatakeyservicename-kind-pattern) — programmatic key construction
-- [Module Configuration](/docs/reference/module-configuration) — the `metadata` option in the full options reference
-- [Events (Workqueue)](/docs/patterns/events), [RPC](/docs/patterns/rpc), [Broadcast](/docs/patterns/broadcast), [Ordered Events](/docs/patterns/ordered-events) — any handler type can attach `meta`
+- [Naming Conventions: `metadataKey()`](/docs/reference/naming-conventions#metadatakeyservicename-kind-pattern): programmatic key construction
+- [Module Configuration](/docs/reference/module-configuration): the `metadata` option in the full options reference
+- [Events (Workqueue)](/docs/patterns/events), [RPC](/docs/patterns/rpc), [Broadcast](/docs/patterns/broadcast), [Ordered Events](/docs/patterns/ordered-events): any handler type can attach `meta`

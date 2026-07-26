@@ -1,11 +1,11 @@
 ---
 sidebar_position: 1
 sidebar_label: "RPC (Request/Reply)"
-title: "NestJS NATS RPC — Core vs JetStream Request/Reply"
+title: "NestJS NATS RPC: Core vs JetStream Request/Reply"
 description: "Synchronous NestJS NATS request-reply in Core NATS or JetStream mode, with timeout handling, error serialization, and per-request overrides."
 schema:
   type: Article
-  headline: "NestJS NATS RPC — Core vs JetStream Request/Reply"
+  headline: "NestJS NATS RPC: Core vs JetStream Request/Reply"
   description: "Synchronous NestJS NATS request-reply in Core NATS or JetStream mode, with timeout handling, error serialization, and per-request overrides."
   datePublished: "2026-03-21"
   dateModified: "2026-04-11"
@@ -20,7 +20,7 @@ Your API gateway needs to fetch an order from the orders microservice. The clien
 
 ## Core Mode (Default)
 
-Core mode uses NATS native request/reply — the fastest path with no persistence overhead. It is the default when you do not configure `rpc` or set `rpc.mode` to `'core'`.
+Core mode uses NATS native request/reply: the fastest path with no persistence overhead. It is the default when you do not configure `rpc` or set `rpc.mode` to `'core'`.
 
 ### How it works
 
@@ -93,7 +93,7 @@ Handlers can return a plain value, a `Promise`, or an `Observable`. For an Obser
 
 **Decode failure.** An error response is returned to the caller; the handler is not invoked.
 
-**Timeout exceeded.** NATS returns a timeout error to the client — no response was produced in time.
+**Timeout exceeded.** NATS returns a timeout error to the client: no response was produced in time.
 
 ## JetStream Mode
 
@@ -129,10 +129,10 @@ sequenceDiagram
 
 ### Code example
 
-The application code is **identical** to Core mode — the transport handles the plumbing:
+The application code is **identical** to Core mode: the transport handles the plumbing:
 
 ```typescript
-// Same client code — mode is configured at module level, not per call
+// Same client code, mode is configured at module level, not per call
 const order = await firstValueFrom(
   this.ordersClient.send<Order>('get.order', { id }),
 );
@@ -140,7 +140,7 @@ const order = await firstValueFrom(
 
 ### Error behavior
 
-**Handler throws `RpcException`.** The error is published to the caller's inbox with the `x-error` header. The message is `term()`'d — no redelivery.
+**Handler throws `RpcException`.** The error is published to the caller's inbox with the `x-error` header. The message is `term()`'d: no redelivery.
 
 **Handler throws a generic `Error`.** `{ message }` is published to the inbox; the message is `term()`'d.
 
@@ -165,7 +165,7 @@ RPC commands are **never** redelivered via `nak()`. Retrying a command could cau
 | Aspect | Core Mode | JetStream Mode |
 |---|---|---|
 | **Latency** | Lowest (direct request/reply) | Slightly higher (stream persistence + inbox routing) |
-| **Persistence** | None — fire and forget | Commands persisted in stream before delivery |
+| **Persistence** | None: fire and forget | Commands persisted in stream before delivery |
 | **If server is offline** | Client gets timeout error immediately | Message queued in stream, delivered when server starts |
 | **Retry on failure** | No built-in retry | No retry (`max_deliver: 1`), error returned to caller |
 | **Default timeout** | 30 seconds | 3 minutes |
@@ -181,15 +181,15 @@ RPC commands are **never** redelivered via `nak()`. Retrying a command could cau
 The transport serializes errors differently based on their type:
 
 ```typescript
-// 1. RpcException — full payload preserved
+// 1. RpcException, full payload preserved
 throw new RpcException({ code: 'NOT_FOUND', message: 'Order not found' });
 // Client receives: { code: 'NOT_FOUND', message: 'Order not found' }
 
-// 2. Generic Error — only message extracted
+// 2. Generic Error, only message extracted
 throw new Error('Something went wrong');
 // Client receives: { message: 'Something went wrong' }
 
-// 3. Plain object — passed through as-is
+// 3. Plain object, passed through as-is
 throw { code: 'VALIDATION_ERROR', fields: ['email'] };
 // Client receives: { code: 'VALIDATION_ERROR', fields: ['email'] }
 ```
@@ -219,10 +219,10 @@ export class CustomRpcFilter implements RpcExceptionFilter<RpcException> {
 
 A single `timeout` value in `RpcConfig` controls **both sides** of the RPC call:
 
-- **Client side** — how long the client waits for a response before rejecting with `"RPC timeout"`.
-- **Server side (JetStream mode only)** — how long the handler has to complete before the message is `term()`'d.
+- **Client side**: how long the client waits for a response before rejecting with `"RPC timeout"`.
+- **Server side (JetStream mode only)**: how long the handler has to complete before the message is `term()`'d.
 
-Defaults: **Core** &mdash; 30,000 ms (30 s). **JetStream** &mdash; 180,000 ms (3 min). Both modes accept the value under `rpc.timeout`.
+Defaults: **Core**, 30,000 ms (30 s). **JetStream**, 180,000 ms (3 min). Both modes accept the value under `rpc.timeout`.
 
 ```typescript
 JetstreamModule.forRoot({
@@ -261,7 +261,7 @@ See [Module Configuration](/docs/reference/module-configuration) for all `RpcCon
 
 ### Server not running
 
-**Core mode.** The client receives a timeout error — no subscriber exists to handle the request, so NATS gives up after the deadline.
+**Core mode.** The client receives a timeout error: no subscriber exists to handle the request, so NATS gives up after the deadline.
 
 **JetStream mode.** The command is persisted in the stream. When the server comes online, the consumer delivers it. If the client's timeout expires before the response arrives, the client receives a timeout error but the handler may still execute later.
 
@@ -271,7 +271,7 @@ If the client times out but the server processes the message later, the response
 
 ### Observable returns
 
-When a handler returns an `Observable`, the transport subscribes and takes the **first emitted value** as the RPC response. Subsequent emissions are ignored, and the subscription is cleaned up immediately.
+When a handler returns an `Observable`, the transport subscribes and takes the **first emitted value** as the RPC response. Later emissions are ignored, and the subscription is cleaned up immediately.
 
 ```typescript
 @MessagePattern('stream.first')
@@ -283,7 +283,7 @@ handleStream(): Observable<string> {
 
 ### Double-settlement protection (JetStream mode)
 
-The JetStream RPC router uses a `settled` flag to prevent race conditions between the handler completing and the timeout firing. Once the message is settled (ack'd, term'd, or timed out), any subsequent settlement attempt is a no-op. This means:
+The JetStream RPC router uses a `settled` flag to prevent race conditions between the handler completing and the timeout firing. Once the message is settled (ack'd, term'd, or timed out), any later settlement attempt is a no-op. This means:
 
 - If the handler completes just as the timeout fires, only one path executes.
 - No duplicate responses are published to the client's inbox.
@@ -305,7 +305,7 @@ In Core mode, NATS handles disconnect behavior natively. Pending `nc.request()` 
 
 ## See Also
 
-- [Record Builder](/docs/guides/record-builder) — custom headers, message IDs, per-request timeouts
-- [Module Configuration](/docs/reference/module-configuration) — RPC mode selection and timeout config
-- [Performance Tuning](/docs/guides/performance) — concurrency and ack extension for JetStream RPC
-- [Troubleshooting](/docs/guides/troubleshooting#rpc-issues) — diagnosing timeout and routing errors
+- [Record Builder](/docs/guides/record-builder): custom headers, message IDs, per-request timeouts
+- [Module Configuration](/docs/reference/module-configuration): RPC mode selection and timeout config
+- [Performance Tuning](/docs/guides/performance): concurrency and ack extension for JetStream RPC
+- [Troubleshooting](/docs/guides/troubleshooting#rpc-issues): diagnosing timeout and routing errors

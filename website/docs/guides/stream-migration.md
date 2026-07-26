@@ -1,7 +1,7 @@
 ---
 sidebar_position: 4
 sidebar_label: "Stream Migration"
-title: "How to migrate immutable stream properties — NestJS JetStream"
+title: "How to migrate immutable stream properties: NestJS JetStream"
 description: "Safely change immutable NATS JetStream stream properties (storage, retention) without losing messages, via automatic blue-green sourcing."
 schema:
   type: Article
@@ -21,15 +21,15 @@ Safely change immutable stream properties (like `storage`) without losing messag
 
 ## When is migration needed?
 
-Most stream config changes are **mutable** — the transport applies them on startup via a simple update. No downtime, no message loss. See the [full property classification](/docs/reference/default-configs#immutable-vs-mutable-stream-properties).
+Most stream config changes are **mutable**: the transport applies them on startup via a simple update. No downtime, no message loss. See the [full property classification](/docs/reference/default-configs#immutable-vs-mutable-stream-properties).
 
 Migration is only needed for **immutable** properties that NATS locks after stream creation:
 
 | Property | Example change | Requires migration |
 |----------|---------------|-------------------|
 | `storage` | `File` -> `Memory` | **Yes** |
-| `retention` | `Workqueue` -> `Limits` | **Not allowed** — controlled by the transport |
-| `max_age`, `num_replicas`, etc. | Any value | No — mutable, updated automatically |
+| `retention` | `Workqueue` -> `Limits` | **Not allowed**: controlled by the transport |
+| `max_age`, `num_replicas`, etc. | Any value | No: mutable, updated automatically |
 
 ## How to enable
 
@@ -51,7 +51,7 @@ Without `allowDestructiveMigration`, the transport logs a warning and continues 
 
 ## How it works
 
-The transport uses **blue-green recreation** via [NATS stream sourcing](https://docs.nats.io/nats-concepts/jetstream/streams#sources) — a server-side message copy mechanism that preserves all messages:
+The transport uses **blue-green recreation** via [NATS stream sourcing](https://docs.nats.io/nats-concepts/jetstream/streams#sources), a server-side message copy mechanism that preserves all messages:
 
 ```text
 Phase 1/4  Quiesce: remove the original's subjects
@@ -69,25 +69,25 @@ Phase 4/4  Original ← sourcing ← backup
 
 The stream keeps its original name. Consumers are recreated automatically after migration by each pod's startup sequence or self-healing.
 
-Every acknowledged publish is preserved: a producer either gets a successful ack (the message survives the migration) or a loud rejection it can retry — never an ack for a message that later disappears.
+Every acknowledged publish is preserved: a producer either gets a successful ack (the message survives the migration) or a loud rejection it can retry, never an ack for a message that later disappears.
 
 ### Backup stream as a distributed lock
 
 During migration, the backup stream (`{stream}__migration_backup`) serves a dual purpose:
 
 1. **Temporary message storage** between delete and recreate
-2. **Distributed lock** — other pods' self-healing detects the backup and waits instead of recreating consumers, preventing interference with message restoration
+2. **Distributed lock**: other pods' self-healing detects the backup and waits instead of recreating consumers, preventing interference with message restoration
 
 ## What happens during migration
 
 ### To publishers
 
-From the quiesce (Phase 1) until the restore completes, publishes to the migrating stream are **rejected** — the subject has no stream behind it, so producers receive "no stream matches subject" / no-responders errors.
+From the quiesce (Phase 1) until the restore completes, publishes to the migrating stream are **rejected**: the subject has no stream behind it, so producers receive "no stream matches subject" / no-responders errors.
 
-- **`client.emit()`** (fire-and-forget) — the publish rejects with an error. Implement retry logic in the caller if you need delivery during migration.
-- **`client.send()`** (RPC) — the caller receives an error and can retry.
+- **`client.emit()`** (fire-and-forget): the publish rejects with an error. Implement retry logic in the caller if you need delivery during migration.
+- **`client.send()`** (RPC): the caller receives an error and can retry.
 
-The rejection window lasts as long as the message copy does — milliseconds for small streams. This is deliberate: a rejected publish is retryable, while an acknowledged write into a stream that is about to be deleted would be silent data loss. If you need a zero-rejection migration, schedule it during a maintenance window with publishers paused.
+The rejection window lasts as long as the message copy does, milliseconds for small streams. This is deliberate: a rejected publish is retryable, while an acknowledged write into a stream that is about to be deleted would be silent data loss. If you need a zero-rejection migration, schedule it during a maintenance window with publishers paused.
 
 ### To consumers on other pods (rolling updates)
 
@@ -98,8 +98,8 @@ When one pod migrates the stream, other pods' consumers break because the stream
 3. Migration completes → backup deleted → next retry creates consumer → consumption resumes
 
 This prevents two critical issues:
-- **Config overwrite** — old pods cannot overwrite a newer pod's consumer configuration
-- **Message consumption during restore** — consumers cannot eat messages from the workqueue while they're being sourced back
+- **Config overwrite**: old pods cannot overwrite a newer pod's consumer configuration
+- **Message consumption during restore**: consumers cannot eat messages from the workqueue while they're being sourced back
 
 ### To the migrating pod itself
 
@@ -107,13 +107,13 @@ The pod that triggers migration blocks during startup until all phases complete.
 
 ## Performance
 
-Migration speed depends on message count, message size, and NATS server performance. Stream sourcing is a server-side operation — no messages travel back over the network — so throughput is bounded by the NATS server's disk or memory, not the transport.
+Migration speed depends on message count, message size, and NATS server performance. Stream sourcing is a server-side operation (no messages travel back over the network) so throughput is bounded by the NATS server's disk or memory, not the transport.
 
-Expect migration time to scale roughly linearly with message count. For small streams (thousands of messages) the migration is effectively instantaneous from an operator's standpoint; for very large streams (hundreds of thousands or more), measure on your own hardware before scheduling a rolling update. Proper benchmarks will be published alongside the broader performance suite.
+Expect migration time to scale roughly linearly with message count. For small streams (thousands of messages) the migration is effectively instantaneous from an operator's standpoint; for large streams (hundreds of thousands or more), measure on your own hardware before scheduling a rolling update. Proper benchmarks will be published alongside the broader performance suite.
 
 ## Error handling
 
-- **Failure before the original is deleted.** The quiesce is rolled back (subjects restored), the backup is removed, and an error is thrown — the original stream is intact and serving traffic.
+- **Failure before the original is deleted.** The quiesce is rolled back (subjects restored), the backup is removed, and an error is thrown: the original stream is intact and serving traffic.
 - **Failure after the original is deleted.** The backup is the only copy of the data and is always preserved. Restoration resumes automatically on the next application startup.
 - **Sourcing timeout (30s default).** Same as above: the backup is preserved and the restore resumes on the next startup. Nothing is lost.
 - **Process killed mid-migration.** Detected on the next startup: a stranded backup is restored into the stream (recreating it first if the crash happened between delete and create), then cleaned up.
@@ -123,10 +123,10 @@ Expect migration time to scale roughly linearly with message count. For small st
 
 Streams managed in `ManagementMode.Manual` (externally provisioned) are never created, updated, or migrated by the library; regardless of `allowDestructiveMigration`. The library only binds to them and validates their configuration at boot.
 
-Setting `allowDestructiveMigration: true` together with a global `provisioning.management: ManagementMode.Manual` is therefore a no-op for all streams. The library logs a warning at boot when this combination is detected:
+Setting `allowDestructiveMigration: true` together with a global `provisioning.management: ManagementMode.Manual` is so a no-op for all streams. The library logs a warning at boot when this combination is detected:
 
 ```
-allowDestructiveMigration has no effect under provisioning.management: Manual — the library never migrates externally managed streams.
+allowDestructiveMigration has no effect under provisioning.management: Manual, the library never migrates externally managed streams.
 ```
 
 If you use **mixed ownership** (some streams Auto, some Manual), `allowDestructiveMigration` applies only to the Auto-managed streams.
@@ -137,8 +137,8 @@ See [Bring Your Own Infrastructure](/docs/guides/external-infrastructure) for th
 
 - **`retention` is not migratable.** It is controlled by the transport (`Workqueue` for events/commands, `Limits` for broadcast/ordered). A mismatch always throws an error on startup.
 - **The publisher gap is inherent.** NATS does not support atomic stream rename or swap. The millisecond window between delete and create cannot be eliminated.
-- **`allowDestructiveMigration` applies to all service-owned streams.** It's a single flag at the module level — if any of them has an immutable conflict, it will be migrated.
-- **The shared broadcast stream is never destructively migrated.** `broadcast-stream` is shared by every service in the cluster; recreating it would delete other services' durable consumers and replay retained history to them. An immutable conflict on it throws an error instead — coordinate that change manually.
+- **`allowDestructiveMigration` applies to all service-owned streams.** It's a single flag at the module level: if any of them has an immutable conflict, it will be migrated.
+- **The shared broadcast stream is never destructively migrated.** `broadcast-stream` is shared by every service in the cluster; recreating it would delete other services' durable consumers and replay retained history to them. An immutable conflict on it throws an error instead: coordinate that change manually.
 - **Manual streams are never migrated.** See the section above.
 
 ## Example: switching to in-memory streams
@@ -146,13 +146,13 @@ See [Bring Your Own Infrastructure](/docs/guides/external-infrastructure) for th
 A common use case is switching from `File` (persistent disk) to `Memory` (RAM) storage for lower latency in development or staging:
 
 ```typescript
-// Before — File storage (default)
+// Before, File storage (default)
 JetstreamModule.forRoot({
   name: 'orders',
   servers: ['nats://localhost:4222'],
 });
 
-// After — Memory storage with migration enabled
+// After, Memory storage with migration enabled
 JetstreamModule.forRoot({
   name: 'orders',
   servers: ['nats://localhost:4222'],
@@ -163,10 +163,10 @@ JetstreamModule.forRoot({
 });
 ```
 
-After all pods restart with the new config, you can remove `allowDestructiveMigration` — it's only needed for the migration itself:
+After all pods restart with the new config, you can remove `allowDestructiveMigration`: it's only needed for the migration itself:
 
 ```typescript
-// After migration — remove the flag
+// After migration, remove the flag
 JetstreamModule.forRoot({
   name: 'orders',
   servers: ['nats://localhost:4222'],
@@ -178,7 +178,7 @@ JetstreamModule.forRoot({
 
 ## See also
 
-- [Default Configs — Immutable vs mutable stream properties](/docs/reference/default-configs#immutable-vs-mutable-stream-properties) — which properties require migration
-- [Self-healing consumers](/docs/reference/edge-cases#consumer-self-healing) — how consumers on other pods wait out a migration
-- [Troubleshooting — Stream migration](/docs/guides/troubleshooting#stream-migration) — recovery from interrupted migrations
-- [Module Configuration](/docs/reference/module-configuration) — `allowDestructiveMigration` in the options reference
+- [Default Configs: Immutable vs mutable stream properties](/docs/reference/default-configs#immutable-vs-mutable-stream-properties): which properties require migration
+- [Self-healing consumers](/docs/reference/edge-cases#consumer-self-healing): how consumers on other pods wait out a migration
+- [Troubleshooting: Stream migration](/docs/guides/troubleshooting#stream-migration): recovery from interrupted migrations
+- [Module Configuration](/docs/reference/module-configuration): `allowDestructiveMigration` in the options reference
