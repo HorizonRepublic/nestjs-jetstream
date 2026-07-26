@@ -43,8 +43,8 @@ export class StreamMigration {
   private readonly logger = new Logger('Jetstream:Stream');
 
   public constructor(
-    private readonly sourcingTimeoutMs = DEFAULT_SOURCING_TIMEOUT_MS,
-    private readonly peerWaitMs = DEFAULT_PEER_WAIT_MS,
+    private readonly sourcingTimeoutMs: number = DEFAULT_SOURCING_TIMEOUT_MS,
+    private readonly peerWaitMs: number = DEFAULT_PEER_WAIT_MS,
   ) {}
 
   public async migrate(

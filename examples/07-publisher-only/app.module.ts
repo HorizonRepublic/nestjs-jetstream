@@ -25,7 +25,7 @@ class GatewayController {
 
 /**
  * Publisher-only mode: `consumer: false` skips all stream/consumer
- * infrastructure. The app only publishes — no handlers, no streams.
+ * infrastructure. The app only publishes - no handlers, no streams.
  *
  * Typical use case: API gateway, BFF, or cron service that
  * dispatches events to downstream microservices.

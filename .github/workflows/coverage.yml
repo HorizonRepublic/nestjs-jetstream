@@ -30,6 +30,12 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Check formatting
+        run: pnpm format:check
+
+      - name: Type check
+        run: pnpm typecheck
+
       - name: Run all tests with coverage
         run: pnpm test:cov
 
@@ -41,3 +47,44 @@ jobs:
           flags: unittests
           name: codecov-umbrella
           fail_ci_if_error: true
+
+  # NestJS 12 is still a prerelease. peerDependencies declare `^12.0.0`, which
+  # does not match `12.0.0-alpha.*`, so this job installs the prerelease
+  # explicitly to catch transport contract changes before users hit them.
+  # Advisory only: it must never block a merge.
+  nestjs-prerelease:
+    name: NestJS 12 prerelease
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.16.0'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Install NestJS prerelease
+        run: >
+          pnpm add -D
+          @nestjs/common@next
+          @nestjs/core@next
+          @nestjs/microservices@next
+          @nestjs/platform-express@next
+          @nestjs/testing@next
+
+      - name: Type check
+        run: pnpm typecheck
+
+      - name: Build
+        run: pnpm build
+
+      - name: Unit tests
+        run: pnpm vitest run --project unit

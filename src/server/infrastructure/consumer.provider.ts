@@ -380,7 +380,7 @@ export class ConsumerProvider {
       default: {
         const _exhaustive: never = kind;
 
-        throw new Error(`Unexpected StreamKind: ${_exhaustive}`);
+        throw new Error(`Unexpected StreamKind: ${String(_exhaustive)}`);
       }
     }
   }

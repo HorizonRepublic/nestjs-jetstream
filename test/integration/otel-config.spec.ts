@@ -63,7 +63,7 @@ const bootstrapPair = async (
   port: number,
   publisherOtel: OtelOptions,
   serverOtel: OtelOptions = {},
-  rpcMode: 'core' | undefined = undefined,
+  rpcMode?: 'core',
 ): Promise<{
   serverApp: INestApplication;
   serverModule: TestingModule;

@@ -54,7 +54,7 @@ export class MessageProvider {
     private readonly connection: ConnectionProvider,
     private readonly eventBus: EventBus,
     private readonly consumeOptionsMap: Map<StreamKind, Partial<ConsumeOptions>> = new Map(),
-    private readonly consumerRecoveryFn?: ConsumerRecoveryFn,
+    private readonly consumerRecoveryFn?: ConsumerRecoveryFn | undefined,
   ) {}
 
   /** Observable stream of workqueue event messages. */
@@ -278,7 +278,7 @@ export class MessageProvider {
       default: {
         const _exhaustive: never = kind;
 
-        throw new Error(`Unknown stream kind: ${_exhaustive}`);
+        throw new Error(`Unknown stream kind: ${String(_exhaustive)}`);
       }
     }
   }

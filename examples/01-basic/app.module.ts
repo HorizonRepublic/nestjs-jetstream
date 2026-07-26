@@ -10,7 +10,7 @@ class EventController {
 
   @EventPattern('user.created')
   handleUserCreated(@Payload() data: { userId: number; email: string }): void {
-    this.logger.log(`Event: user.created — ${data.userId} (${data.email})`);
+    this.logger.log(`Event: user.created - ${data.userId} (${data.email})`);
   }
 
   @EventPattern('config.updated', { broadcast: true })

@@ -47,7 +47,7 @@ class OrdersController {
   private readonly logger = new Logger('OrdersController');
 
   /**
-   * RPC handler — receives an order placement request, simulates an
+   * RPC handler - receives an order placement request, simulates an
    * inventory check, returns a result. The CONSUMER span produced here
    * is linked as a child of the upstream CLIENT span via traceparent.
    */
@@ -56,8 +56,8 @@ class OrdersController {
     @Payload() data: { readonly sku: string; readonly qty: number },
     @Ctx() ctx: RpcContext,
   ): Promise<{ readonly ok: true; readonly orderId: string }> {
-    this.logger.log(`Placing order — sku=${data.sku} qty=${data.qty} subject=${ctx.getSubject()}`);
-    // Simulate downstream work — any handler-level await keeps the
+    this.logger.log(`Placing order - sku=${data.sku} qty=${data.qty} subject=${ctx.getSubject()}`);
+    // Simulate downstream work - any handler-level await keeps the
     // active span context alive thanks to AsyncLocalStorageContextManager
     await new Promise((r) => setTimeout(r, 25));
 
@@ -65,7 +65,7 @@ class OrdersController {
   }
 
   /**
-   * Event handler — fires after every successful order placement.
+   * Event handler - fires after every successful order placement.
    * Each delivery produces a CONSUMER span linked to the publish span
    * via the traceparent header.
    */
@@ -92,7 +92,7 @@ class HttpController {
    * - RPC `orders.place` (CLIENT span on this side, CONSUMER span on the handler)
    * - Event `orders.placed` (PRODUCER span here, CONSUMER span on the handler)
    *
-   * Watch the console — every span prints with its `traceId`, `spanId`,
+   * Watch the console - every span prints with its `traceId`, `spanId`,
    * `parentSpanId`, kind, and attributes. Same `traceId` across the chain
    * means the trace is intact end-to-end.
    */
@@ -105,7 +105,7 @@ class HttpController {
       }),
     );
 
-    // `emit()` returns a cold Observable — without `lastValueFrom` the
+    // `emit()` returns a cold Observable - without `lastValueFrom` the
     // publish (and its PRODUCER span) never fires. The full round-trip
     // for the demo depends on this actually hitting NATS.
     await lastValueFrom(this.client.emit('orders.placed', { orderId: result.orderId }));
@@ -121,7 +121,7 @@ class HttpController {
       name: SERVICE,
       servers: ['nats://localhost:4222'],
       otel: {
-        // `traces` replaces DEFAULT_TRACES entirely — we re-list every default
+        // `traces` replaces DEFAULT_TRACES entirely - we re-list every default
         // here and add `ConnectionLifecycle` so the demo also shows the
         // connect/disconnect pattern in the APM. Drop any kind you don't want.
         traces: [

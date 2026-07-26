@@ -13,13 +13,13 @@ import { StreamKind } from './interfaces';
 import type { JetStreamRpcConfig, RpcConfig, SubjectKind } from './interfaces';
 
 /** Token for the resolved JetstreamModuleOptions. */
-export const JETSTREAM_OPTIONS = Symbol('JETSTREAM_OPTIONS');
+export const JETSTREAM_OPTIONS: unique symbol = Symbol('JETSTREAM_OPTIONS');
 
 /** Token for the shared ConnectionProvider instance. */
-export const JETSTREAM_CONNECTION = Symbol('JETSTREAM_CONNECTION');
+export const JETSTREAM_CONNECTION: unique symbol = Symbol('JETSTREAM_CONNECTION');
 
 /** Token for the global Codec instance. */
-export const JETSTREAM_CODEC = Symbol('JETSTREAM_CODEC');
+export const JETSTREAM_CODEC: unique symbol = Symbol('JETSTREAM_CODEC');
 
 /**
  * Token for the EventBus instance.
@@ -28,7 +28,7 @@ export const JETSTREAM_CODEC = Symbol('JETSTREAM_CODEC');
  * public API; user code should register hooks via `forRoot({ hooks })`
  * instead of injecting the bus directly.
  */
-export const JETSTREAM_EVENT_BUS = Symbol('JETSTREAM_EVENT_BUS');
+export const JETSTREAM_EVENT_BUS: unique symbol = Symbol('JETSTREAM_EVENT_BUS');
 
 /**
  * Generate the injection token for a `forFeature()` client.
@@ -254,7 +254,7 @@ export enum JetstreamDlqHeader {
 }
 
 /** Set of header names that are reserved and cannot be set by users. */
-export const RESERVED_HEADERS = new Set<string>([
+export const RESERVED_HEADERS: ReadonlySet<string> = new Set<string>([
   JetstreamHeader.CorrelationId,
   JetstreamHeader.ReplyTo,
   JetstreamHeader.Error,

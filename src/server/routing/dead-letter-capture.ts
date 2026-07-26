@@ -35,16 +35,17 @@ export class DeadLetterCapture {
     private readonly otel: ResolvedOtelOptions,
     private readonly serviceName: string,
     private readonly serverEndpoint: ServerEndpoint | null,
-    private readonly connection?: ConnectionProvider,
-    private readonly options?: JetstreamModuleOptions,
-    private readonly names?: NameResolver,
+    private readonly connection?: ConnectionProvider | undefined,
+    private readonly options?: JetstreamModuleOptions | undefined,
+    private readonly names?: NameResolver | undefined,
   ) {}
 
   /** True when this delivery is the consumer's last attempt for the message. */
   public isFinalDelivery(msg: JsMsg): boolean {
     // updateMaxDeliverMap() populates maxDeliverByStream after consumers are
     // ensured; optional chaining guards the brief startup window before then.
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- runtime lifecycle guard
+    // runtime lifecycle guard
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     const maxDeliver = this.deadLetterConfig.maxDeliverByStream?.get(msg.info.stream);
 
     if (maxDeliver === undefined || maxDeliver <= 0) return false;

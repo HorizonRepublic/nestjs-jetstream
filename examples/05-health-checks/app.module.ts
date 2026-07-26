@@ -8,7 +8,7 @@ class HealthController {
   constructor(private readonly health: JetstreamHealthIndicator) {}
 
   /**
-   * Simple health check — returns status without throwing.
+   * Simple health check - returns status without throwing.
    * Use this for custom health endpoints.
    */
   @Get()
@@ -17,7 +17,7 @@ class HealthController {
   }
 
   /**
-   * Terminus-compatible — throws on unhealthy.
+   * Terminus-compatible - throws on unhealthy.
    * Use this with @nestjs/terminus HealthCheckService.
    */
   @Get('terminus')

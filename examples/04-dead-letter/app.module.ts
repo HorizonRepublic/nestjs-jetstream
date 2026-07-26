@@ -9,12 +9,12 @@ class FailingHandler {
   private readonly logger = new Logger('Handlers');
 
   /**
-   * This handler always throws — after max_deliver attempts (3),
+   * This handler always throws - after max_deliver attempts (3),
    * the message lands in the dead letter callback.
    */
   @EventPattern('invoice.generate')
   handleInvoice(@Payload() data: { invoiceId: number }): void {
-    this.logger.warn(`Attempt to generate invoice #${data.invoiceId} — simulating failure`);
+    this.logger.warn(`Attempt to generate invoice #${data.invoiceId} - simulating failure`);
 
     throw new Error('PDF service unavailable');
   }
@@ -47,7 +47,7 @@ const dlqLogger = new Logger('DLQ');
           ack_wait: toNanos(2, 'seconds'),
         },
       },
-      // v2.9.0+ — built-in DLQ stream. Exhausted messages are
+      // v2.9.0+ - built-in DLQ stream. Exhausted messages are
       // republished to `billing__microservice_dlq-stream` with tracking
       // headers (original subject, failure reason, delivery count,
       // failed-at timestamp). This is the recommended production setup.

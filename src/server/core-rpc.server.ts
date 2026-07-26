@@ -41,7 +41,7 @@ export class CoreRpcServer {
     private readonly patternRegistry: PatternRegistry,
     private readonly codec: Codec,
     private readonly eventBus: EventBus,
-    private readonly names?: NameResolver,
+    private readonly names?: NameResolver | undefined,
   ) {
     const derived = deriveOtelAttrs(options);
 

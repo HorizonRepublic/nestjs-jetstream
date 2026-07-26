@@ -24,13 +24,13 @@ export class JetstreamRecord<TData = unknown> {
     /** Custom headers set via {@link JetstreamRecordBuilder.setHeader}. */
     public readonly headers: ReadonlyMap<string, string>,
     /** Per-request RPC timeout override in ms. */
-    public readonly timeout?: number,
+    public readonly timeout?: number | undefined,
     /** Custom message ID for JetStream deduplication. */
-    public readonly messageId?: string,
+    public readonly messageId?: string | undefined,
     /** Schedule options for delayed delivery. */
-    public readonly schedule?: ScheduleRecordOptions,
+    public readonly schedule?: ScheduleRecordOptions | undefined,
     /** Per-message TTL as Go duration string (e.g. "30s", "5m"). */
-    public readonly ttl?: string,
+    public readonly ttl?: string | undefined,
   ) {}
 }
 

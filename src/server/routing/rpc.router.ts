@@ -80,8 +80,8 @@ export class RpcRouter {
     private readonly connection: ConnectionProvider,
     private readonly codec: Codec,
     private readonly eventBus: EventBus,
-    private readonly rpcOptions?: RpcRouterOptions,
-    private readonly ackWaitMap?: Map<StreamKind, number>,
+    private readonly rpcOptions?: RpcRouterOptions | undefined,
+    private readonly ackWaitMap?: Map<StreamKind, number> | undefined,
     options?: JetstreamModuleOptions,
   ) {
     this.timeout = rpcOptions?.timeout ?? DEFAULT_JETSTREAM_RPC_TIMEOUT;
