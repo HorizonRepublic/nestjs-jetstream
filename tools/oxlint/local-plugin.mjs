@@ -55,12 +55,10 @@ const noNestedConditional = {
 
     return {
       ConditionalExpression: (node) => {
-        if (node.consequent?.type === 'ConditionalExpression') {
-          report(node.consequent);
-        }
-
-        if (node.alternate?.type === 'ConditionalExpression') {
-          report(node.alternate);
+        for (const branch of [node.test, node.consequent, node.alternate]) {
+          if (branch?.type === 'ConditionalExpression') {
+            report(branch);
+          }
         }
       },
     };
