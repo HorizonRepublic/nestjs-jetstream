@@ -43,6 +43,7 @@ Under the hood, ordered events use a different NATS JetStream primitive than wor
 Workqueue and broadcast events use **durable consumers**: server-side state that tracks which messages have been acknowledged. Ordered events use **ordered consumers**, which are ephemeral. The server keeps no consumer state. The `@nats-io/jetstream` client creates a new consumer on each connection and manages its lifecycle internally.
 
 This means:
+
 - No consumer name appears in `nats consumer ls`
 - No ack tracking, no pending message state
 - If the connection drops, the client recreates the consumer automatically at the correct sequence position
@@ -51,12 +52,12 @@ This means:
 
 The ordered stream uses **Limits retention** (`RetentionPolicy.Limits`), not Workqueue retention. This is a critical distinction:
 
-| | Workqueue retention | Limits retention |
-|---|---|---|
-| Message lifecycle | Deleted after acknowledgment | Kept until age/size limits |
-| Multiple readers | Compete for messages | Each reads independently |
-| Replay possible | No (messages are gone after ack) | Yes (messages persist) |
-| Default `max_age` | 7 days | **1 day** |
+|                   | Workqueue retention              | Limits retention           |
+| ----------------- | -------------------------------- | -------------------------- |
+| Message lifecycle | Deleted after acknowledgment     | Kept until age/size limits |
+| Multiple readers  | Compete for messages             | Each reads independently   |
+| Replay possible   | No (messages are gone after ack) | Yes (messages persist)     |
+| Default `max_age` | 7 days                           | **1 day**                  |
 
 With Limits retention, messages stay in the stream until they expire (default: 1 day, configurable via `max_age`). Every consumer, and every service instance, can read the full history independently.
 
@@ -273,7 +274,7 @@ With `All` policy, a service that restarts after running for 7 days will replay 
 <details>
 <summary><b>New</b>: start from "now", skip backlog</summary>
 
-**Scenario:** A real-time dashboard that shows live order activity. Historical data is loaded from a database on startup: you only need events published *after* the service starts.
+**Scenario:** A real-time dashboard that shows live order activity. Historical data is loaded from a database on startup: you only need events published _after_ the service starts.
 
 ```typescript
 import { DeliverPolicy } from '@nats-io/jetstream';
@@ -325,7 +326,7 @@ JetstreamModule.forRoot({
 <details>
 <summary><b>LastPerSubject</b>: latest per entity, then live</summary>
 
-**Scenario:** An in-memory status map that tracks the latest state of every entity. The stream contains per-entity subjects like `order.status.123`, `order.status.456`. On startup, you need the latest status for *each* order, then you track updates in real time.
+**Scenario:** An in-memory status map that tracks the latest state of every entity. The stream contains per-entity subjects like `order.status.123`, `order.status.456`. On startup, you need the latest status for _each_ order, then you track updates in real time.
 
 ```typescript
 import { DeliverPolicy } from '@nats-io/jetstream';
@@ -434,6 +435,7 @@ useFactory: () => ({
   },
 }),
 ```
+
 :::
 
 </details>
@@ -468,10 +470,10 @@ If you use `DeliverPolicy.All` and your projection needs to replay 7 days of eve
 
 The `replayPolicy` controls how fast historical messages are delivered:
 
-| Policy | Behavior |
-|---|---|
-| `ReplayPolicy.Instant` (default) | Deliver historical messages as fast as possible. |
-| `ReplayPolicy.Original` | Deliver historical messages at the original publishing rate (preserving time gaps). |
+| Policy                           | Behavior                                                                            |
+| -------------------------------- | ----------------------------------------------------------------------------------- |
+| `ReplayPolicy.Instant` (default) | Deliver historical messages as fast as possible.                                    |
+| `ReplayPolicy.Original`          | Deliver historical messages at the original publishing rate (preserving time gaps). |
 
 `Instant` is almost always what you want. `Original` is useful for testing or simulation scenarios where you want to faithfully reproduce the original timing of events.
 
@@ -542,28 +544,30 @@ async handleOrderStatus(@Payload() data: OrderStatusDto) {
 
 ## Comparison: Workqueue vs Ordered
 
-| | Workqueue events | Ordered events |
-|---|---|---|
-| **Delivery guarantee** | At-least-once | At-most-once |
-| **Message ordering** | Not guaranteed (parallel) | Strict sequential |
-| **Handler parallelism** | `mergeMap`; concurrent | `concatMap`: one at a time |
-| **Retry on failure** | Yes (`nak` triggers redeliver) | No (error logged, continues) |
-| **Dead letter queue** | Yes (after `max_deliver` attempts) | No |
-| **Acknowledgment** | Explicit (`msg.ack()`) | Automatic by the client |
-| **Stream retention** | Workqueue (delete on ack) | Limits (delete by age/size) |
-| **Consumer type** | Durable (server-side state) | Ephemeral (client-side) |
-| **Scaling model** | Load-balanced across instances | All instances get all messages |
-| **Replay on restart** | No (acked messages are gone) | Yes (based on deliver policy) |
-| **Publish prefix** | _(none)_ | `ordered:` |
-| **Typical use case** | Workload distribution, task queues | Event sourcing, projections, audit logs |
+|                         | Workqueue events                   | Ordered events                          |
+| ----------------------- | ---------------------------------- | --------------------------------------- |
+| **Delivery guarantee**  | At-least-once                      | At-most-once                            |
+| **Message ordering**    | Not guaranteed (parallel)          | Strict sequential                       |
+| **Handler parallelism** | `mergeMap`; concurrent             | `concatMap`: one at a time              |
+| **Retry on failure**    | Yes (`nak` triggers redeliver)     | No (error logged, continues)            |
+| **Dead letter queue**   | Yes (after `max_deliver` attempts) | No                                      |
+| **Acknowledgment**      | Explicit (`msg.ack()`)             | Automatic by the client                 |
+| **Stream retention**    | Workqueue (delete on ack)          | Limits (delete by age/size)             |
+| **Consumer type**       | Durable (server-side state)        | Ephemeral (client-side)                 |
+| **Scaling model**       | Load-balanced across instances     | All instances get all messages          |
+| **Replay on restart**   | No (acked messages are gone)       | Yes (based on deliver policy)           |
+| **Publish prefix**      | _(none)_                           | `ordered:`                              |
+| **Typical use case**    | Workload distribution, task queues | Event sourcing, projections, audit logs |
 
 **When to use workqueue events:**
+
 - You need guaranteed processing (at-least-once)
 - Messages should be processed by exactly one instance
 - Order doesn't matter (or is acceptable within a single consumer)
 - You want retry + DLQ for failed messages
 
 **When to use ordered events:**
+
 - Processing order is critical
 - Every instance needs the full event stream
 - You're building read models, projections, or caches from events

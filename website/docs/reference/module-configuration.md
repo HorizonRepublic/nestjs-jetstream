@@ -279,9 +279,9 @@ JetstreamModule.forRoot({
 })
 ```
 
-| `management` value | Behavior |
-|---|---|
-| `ManagementMode.Auto` | Library creates and updates every entity. **Default.** |
+| `management` value      | Behavior                                                             |
+| ----------------------- | -------------------------------------------------------------------- |
+| `ManagementMode.Auto`   | Library creates and updates every entity. **Default.**               |
 | `ManagementMode.Manual` | Library binds to existing entities; fails at boot if any are absent. |
 
 The global value can be overridden per entity via `events.management`, `broadcast.management`, etc. Resolution order: per-entity -> global -> `Auto`. See [Bring Your Own Infrastructure](/docs/guides/external-infrastructure) for a complete guide.

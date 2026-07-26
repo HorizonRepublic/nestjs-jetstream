@@ -141,11 +141,11 @@ See [Scheduling (Delayed Jobs)](/docs/guides/scheduling) for the full guide, inc
 
 The transport uses three headers internally for RPC correlation. These are **reserved** and cannot be set via the builder:
 
-| Header | Purpose |
-|---|---|
-| `x-correlation-id` | Links an RPC request to its response |
-| `x-reply-to` | Inbox subject for the RPC response |
-| `x-error` | Marks error responses so the client can distinguish success from failure |
+| Header             | Purpose                                                                  |
+| ------------------ | ------------------------------------------------------------------------ |
+| `x-correlation-id` | Links an RPC request to its response                                     |
+| `x-reply-to`       | Inbox subject for the RPC response                                       |
+| `x-error`          | Marks error responses so the client can distinguish success from failure |
 
 Attempting to set a reserved header throws an error immediately on **`setHeader()` call**:
 
@@ -165,10 +165,10 @@ The error is thrown on `setHeader()`, not on `build()`. The failure surfaces at 
 
 Also to reserved headers, the transport automatically sets two informational headers on every outbound message:
 
-| Header | Value | Description |
-|---|---|---|
-| `x-subject` | NATS subject | The original subject the message was published to |
-| `x-caller-name` | Service name | The internal name of the sending service |
+| Header          | Value        | Description                                       |
+| --------------- | ------------ | ------------------------------------------------- |
+| `x-subject`     | NATS subject | The original subject the message was published to |
+| `x-caller-name` | Service name | The internal name of the sending service          |
 
 These headers are read-only from the handler's perspective: you can access them via `ctx.getHeader('x-subject')` but cannot override them via the builder.
 

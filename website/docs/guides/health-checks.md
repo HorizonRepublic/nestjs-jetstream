@@ -32,10 +32,10 @@ If the connection is closed or the RTT ping fails, the indicator reports the con
 
 The health indicator exposes two methods for different use cases:
 
-| Method | Throws on unhealthy? | Use case |
-|---|---|---|
-| `check()` | No | Custom health endpoints, monitoring integrations |
-| `isHealthy(key?)` | Yes | @nestjs/terminus integration |
+| Method            | Throws on unhealthy? | Use case                                         |
+| ----------------- | -------------------- | ------------------------------------------------ |
+| `check()`         | No                   | Custom health endpoints, monitoring integrations |
+| `isHealthy(key?)` | Yes                  | @nestjs/terminus integration                     |
 
 ### check(): plain status object
 

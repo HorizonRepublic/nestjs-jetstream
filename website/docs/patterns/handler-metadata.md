@@ -119,12 +119,12 @@ The KV bucket is created on first startup. Changing `ttl` or `replicas` after cr
 
 Keys follow the pattern `{service_name}.{kind}.{pattern}`:
 
-| Handler | Key |
-|---|---|
-| `@EventPattern('order.created', { meta })` | `orders.ev.order.created` |
-| `@MessagePattern('order.get', { meta })` | `orders.cmd.order.get` |
+| Handler                                                      | Key                               |
+| ------------------------------------------------------------ | --------------------------------- |
+| `@EventPattern('order.created', { meta })`                   | `orders.ev.order.created`         |
+| `@MessagePattern('order.get', { meta })`                     | `orders.cmd.order.get`            |
 | `@EventPattern('config.updated', { broadcast: true, meta })` | `orders.broadcast.config.updated` |
-| `@EventPattern('audit.trail', { ordered: true, meta })` | `orders.ordered.audit.trail` |
+| `@EventPattern('audit.trail', { ordered: true, meta })`      | `orders.ordered.audit.trail`      |
 
 The `metadataKey()` helper is exported for programmatic key construction:
 

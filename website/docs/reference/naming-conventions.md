@@ -30,30 +30,30 @@ Given `name: 'orders'`, the transport generates the following names:
 
 ### Subjects
 
-| Type | Pattern | Example |
-|------|---------|---------|
-| Internal name | `{name}__microservice` | `orders__microservice` |
-| Event subject | `{name}__microservice.ev.{pattern}` | `orders__microservice.ev.order.created` |
-| RPC command subject | `{name}__microservice.cmd.{pattern}` | `orders__microservice.cmd.get-order` |
-| Ordered subject | `{name}__microservice.ordered.{pattern}` | `orders__microservice.ordered.order.updated` |
-| Broadcast subject | `broadcast.{pattern}` | `broadcast.config.updated` |
+| Type                | Pattern                                  | Example                                      |
+| ------------------- | ---------------------------------------- | -------------------------------------------- |
+| Internal name       | `{name}__microservice`                   | `orders__microservice`                       |
+| Event subject       | `{name}__microservice.ev.{pattern}`      | `orders__microservice.ev.order.created`      |
+| RPC command subject | `{name}__microservice.cmd.{pattern}`     | `orders__microservice.cmd.get-order`         |
+| Ordered subject     | `{name}__microservice.ordered.{pattern}` | `orders__microservice.ordered.order.updated` |
+| Broadcast subject   | `broadcast.{pattern}`                    | `broadcast.config.updated`                   |
 
 ### Streams
 
-| Stream Type | Name Pattern | Example |
-|-------------|-------------|---------|
-| Event stream | `{name}__microservice_ev-stream` | `orders__microservice_ev-stream` |
-| Command stream | `{name}__microservice_cmd-stream` | `orders__microservice_cmd-stream` |
-| Ordered stream | `{name}__microservice_ordered-stream` | `orders__microservice_ordered-stream` |
-| Broadcast stream | `broadcast-stream` | `broadcast-stream` |
-| [DLQ stream](/docs/guides/dead-letter-queue#built-in-dlq-stream) | `{name}__microservice_dlq-stream` | `orders__microservice_dlq-stream` |
+| Stream Type                                                      | Name Pattern                          | Example                               |
+| ---------------------------------------------------------------- | ------------------------------------- | ------------------------------------- |
+| Event stream                                                     | `{name}__microservice_ev-stream`      | `orders__microservice_ev-stream`      |
+| Command stream                                                   | `{name}__microservice_cmd-stream`     | `orders__microservice_cmd-stream`     |
+| Ordered stream                                                   | `{name}__microservice_ordered-stream` | `orders__microservice_ordered-stream` |
+| Broadcast stream                                                 | `broadcast-stream`                    | `broadcast-stream`                    |
+| [DLQ stream](/docs/guides/dead-letter-queue#built-in-dlq-stream) | `{name}__microservice_dlq-stream`     | `orders__microservice_dlq-stream`     |
 
 ### Consumers
 
-| Consumer Type | Name Pattern | Example |
-|---------------|-------------|---------|
-| Event consumer | `{name}__microservice_ev-consumer` | `orders__microservice_ev-consumer` |
-| Command consumer | `{name}__microservice_cmd-consumer` | `orders__microservice_cmd-consumer` |
+| Consumer Type      | Name Pattern                              | Example                                   |
+| ------------------ | ----------------------------------------- | ----------------------------------------- |
+| Event consumer     | `{name}__microservice_ev-consumer`        | `orders__microservice_ev-consumer`        |
+| Command consumer   | `{name}__microservice_cmd-consumer`       | `orders__microservice_cmd-consumer`       |
 | Broadcast consumer | `{name}__microservice_broadcast-consumer` | `orders__microservice_broadcast-consumer` |
 
 :::note
@@ -156,12 +156,12 @@ metadataKey('orders', StreamKind.Event, 'order.created');
 
 Each stream subscribes to a wildcard subject pattern that captures all messages for its type:
 
-| Stream Kind | Subject Filter |
-|------------|---------------|
-| Event | `{name}__microservice.ev.>` |
-| Command | `{name}__microservice.cmd.>` |
-| Ordered | `{name}__microservice.ordered.>` |
-| Broadcast | `broadcast.>` |
+| Stream Kind | Subject Filter                   |
+| ----------- | -------------------------------- |
+| Event       | `{name}__microservice.ev.>`      |
+| Command     | `{name}__microservice.cmd.>`     |
+| Ordered     | `{name}__microservice.ordered.>` |
+| Broadcast   | `broadcast.>`                    |
 
 The `>` wildcard matches one or more tokens, so `orders__microservice.ev.>` will capture `orders__microservice.ev.order.created`, `orders__microservice.ev.payment.processed`, etc.
 
@@ -169,9 +169,9 @@ The `>` wildcard matches one or more tokens, so `orders__microservice.ev.>` will
 
 When [message scheduling](/docs/guides/scheduling) is enabled (`allow_msg_schedules: true`), the transport adds extra subject filters to capture scheduled messages:
 
-| Stream Kind | Extra Subject Filter |
-|------------|--------------------------|
-| Event | `{name}__microservice._sch.>` |
-| Broadcast | `broadcast._sch.>` |
+| Stream Kind | Extra Subject Filter          |
+| ----------- | ----------------------------- |
+| Event       | `{name}__microservice._sch.>` |
+| Broadcast   | `broadcast._sch.>`            |
 
 The `_sch` subjects are a library convention to separate scheduled messages from regular events within the same stream. NATS scheduling itself works via headers (`Nats-Schedule`, `Nats-Schedule-Target` per [ADR-51](https://github.com/nats-io/nats-architecture-and-design/blob/main/adr/ADR-51.md)), not special subjects. You don't interact with `_sch` subjects directly: the library manages them automatically.

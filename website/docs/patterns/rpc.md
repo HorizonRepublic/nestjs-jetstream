@@ -162,15 +162,15 @@ RPC commands are **never** redelivered via `nak()`. Retrying a command could cau
 
 ## Comparison: Core vs JetStream
 
-| Aspect | Core Mode | JetStream Mode |
-|---|---|---|
-| **Latency** | Lowest (direct request/reply) | Slightly higher (stream persistence + inbox routing) |
-| **Persistence** | None: fire and forget | Commands persisted in stream before delivery |
-| **If server is offline** | Client gets timeout error immediately | Message queued in stream, delivered when server starts |
-| **Retry on failure** | No built-in retry | No retry (`max_deliver: 1`), error returned to caller |
-| **Default timeout** | 30 seconds | 3 minutes |
-| **Load balancing** | NATS queue group | JetStream consumer (one delivery) |
-| **Use case** | Low-latency queries, real-time lookups | Commands that must not be lost (payments, state changes) |
+| Aspect                   | Core Mode                              | JetStream Mode                                           |
+| ------------------------ | -------------------------------------- | -------------------------------------------------------- |
+| **Latency**              | Lowest (direct request/reply)          | Slightly higher (stream persistence + inbox routing)     |
+| **Persistence**          | None: fire and forget                  | Commands persisted in stream before delivery             |
+| **If server is offline** | Client gets timeout error immediately  | Message queued in stream, delivered when server starts   |
+| **Retry on failure**     | No built-in retry                      | No retry (`max_deliver: 1`), error returned to caller    |
+| **Default timeout**      | 30 seconds                             | 3 minutes                                                |
+| **Load balancing**       | NATS queue group                       | JetStream consumer (one delivery)                        |
+| **Use case**             | Low-latency queries, real-time lookups | Commands that must not be lost (payments, state changes) |
 
 **Start with Core mode** (the default) for most use cases. Switch to JetStream mode when you need the guarantee that commands survive a brief server restart without the client seeing an error.
 

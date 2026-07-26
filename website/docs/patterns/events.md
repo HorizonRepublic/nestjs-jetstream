@@ -112,11 +112,11 @@ JetstreamModule.forRoot({
 });
 ```
 
-| Stream kind | Generated durable consumer name |
-|---|---|
-| Workqueue events | `orders__microservice_ev-consumer` |
-| [Broadcast](/docs/patterns/broadcast) | `orders__microservice_broadcast-consumer` |
-| [Ordered](/docs/patterns/ordered-events) | `orders__microservice_ordered-consumer` |
+| Stream kind                              | Generated durable consumer name           |
+| ---------------------------------------- | ----------------------------------------- |
+| Workqueue events                         | `orders__microservice_ev-consumer`        |
+| [Broadcast](/docs/patterns/broadcast)    | `orders__microservice_broadcast-consumer` |
+| [Ordered](/docs/patterns/ordered-events) | `orders__microservice_ordered-consumer`   |
 
 All `@EventPattern` handlers in the same `orders` service share the workqueue consumer above. JetStream load-balances across replicas of the same service via that single durable consumer, which is exactly what at-least-once delivery requires, multiple replicas, one cursor, ack semantics enforced server-side.
 

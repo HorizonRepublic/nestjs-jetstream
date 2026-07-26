@@ -22,11 +22,13 @@ If something isn't working, start here. The sections below are grouped by sympto
 The transport throws this on startup when the NATS server is unreachable.
 
 **Causes:**
+
 - NATS server is not running
 - Wrong server URL in `servers` config
 - Firewall or network policy blocking the port
 
 **Fix:**
+
 ```bash
 # Verify NATS is running
 nats-server --version
@@ -56,6 +58,7 @@ JetstreamModule.forRootAsync({
 The transport defaults to unlimited reconnection (`maxReconnectAttempts: -1`). If you see repeated `Reconnecting...` logs, the NATS server is flapping or the connection is being dropped.
 
 **Diagnosis:**
+
 1. Register a `Reconnect` hook to see when reconnections happen:
    ```typescript
    hooks: {
@@ -70,6 +73,7 @@ The transport defaults to unlimited reconnection (`maxReconnectAttempts: -1`). I
 ### Messages not being delivered
 
 **Checklist:**
+
 1. **Handler registered?**: Check startup logs for `Registered handlers: X RPC, Y events, Z broadcasts` (plus `N ordered` when ordered handlers are present). A zero count means the decorator didn't hit the registry, which points to an import-order or module-wiring problem.
 2. **Stream exists?**: The transport creates streams on startup. Check with `nats stream ls`.
 3. **Consumer exists?**: Check with `nats consumer ls <stream-name>`.
@@ -81,11 +85,13 @@ The transport defaults to unlimited reconnection (`maxReconnectAttempts: -1`). I
 Messages are redelivered when the `ack_wait` deadline expires before the handler acknowledges them.
 
 **Causes:**
+
 - Handler is too slow (exceeds `ack_wait`)
 - Handler throws an error (message is nak'd for retry)
 - Connection lost during processing
 
 **Fix:**
+
 - Increase `ack_wait`: `consumer: { ack_wait: toNanos(60, 'seconds') }`
 - Enable `ackExtension: true` for long-running handlers
 - Set explicit `concurrency` to prevent overload
@@ -100,6 +106,7 @@ If your consumer is falling behind (messages accumulating faster than they're pr
 4. **Check handler performance:** Profile your handlers. Database queries, external API calls, and heavy computations are common bottlenecks.
 
 Monitor lag with the NATS CLI:
+
 ```bash
 nats consumer info <stream> <consumer> | grep "Num Pending"
 ```
@@ -111,12 +118,14 @@ nats consumer info <stream> <consumer> | grep "Num Pending"
 The caller didn't receive a response before the timeout expired.
 
 **Causes:**
+
 - Handler is slow or stuck
 - No handler registered for the pattern
 - Network partition between publisher and consumer
 - Wrong RPC mode: publisher uses `core` but handler expects `jetstream` (or vice versa)
 
 **Diagnosis:**
+
 ```typescript
 hooks: {
   [TransportEvent.RpcTimeout]: (subject, correlationId) =>
@@ -125,6 +134,7 @@ hooks: {
 ```
 
 **Fix:**
+
 - Increase timeout: `rpc: { mode: 'core', timeout: 60_000 }`
 - Per-request timeout: `new JetstreamRecordBuilder(data).setTimeout(120_000).build()`
 - Ensure both sides use the same RPC mode
@@ -134,6 +144,7 @@ hooks: {
 A message arrived on a subject that has no registered handler.
 
 **Causes:**
+
 - Typo in the `@EventPattern()` or `@MessagePattern()` pattern
 - Handler not imported in the module
 - Subject naming mismatch between publisher and consumer
@@ -145,11 +156,13 @@ A message arrived on a subject that has no registered handler.
 ### `onDeadLetter` not called
 
 The callback only fires when **all** of these conditions are met:
+
 1. `onDeadLetter` is configured in module options
 2. The message has been delivered `max_deliver` times (default: 3)
 3. The handler throws on every delivery attempt
 
 **Not applicable to:**
+
 - RPC commands (they use `term`, not DLQ)
 - Ordered events (no ack/nak)
 - Messages that are `term`'d (decode errors, missing handlers)
@@ -163,11 +176,13 @@ If your `onDeadLetter` callback throws, the message is nak'd for another retry i
 When `dlq: { stream }` is configured, the transport republishes exhausted messages to a dedicated DLQ stream. If that publish fails, the transport falls back to the `onDeadLetter` callback and then to `nak()` as a last resort: the full sequence is documented in the [Fallback chain](/docs/guides/dead-letter-queue#fallback-chain).
 
 **Causes:**
+
 - DLQ stream was deleted manually (`nats stream rm orders__microservice_dlq-stream`)
 - NATS server is out of disk space or has hit `max_bytes`
 - NATS connection dropped between the original publish and the DLQ republish
 
 **Fix:**
+
 1. Check that the DLQ stream exists: `nats stream ls | grep dlq-stream`
 2. If it was deleted, restart the pod: the transport's `ensureDlqStream()` recreates it on startup when `dlq` is configured
 3. Check NATS server disk usage: `nats server report accounts`
@@ -180,6 +195,7 @@ When `dlq: { stream }` is configured, the transport republishes exhausted messag
 The transport only publishes handler metadata when the handler has a `meta` field in its decorator extras. Handlers without `meta` are intentionally skipped, see [Handler Metadata](/docs/patterns/handler-metadata) for the quick-start example.
 
 **Checklist:**
+
 1. Does the handler have `meta: { ... }` in `@EventPattern` / `@MessagePattern`?
 2. Is the NATS server version >= 2.10 (KV support)?
 3. Did startup succeed? Check logs for `MetadataRegistry` errors.
@@ -205,6 +221,7 @@ nats kv rm handler_registry
 If a previous migration was interrupted (process killed mid-phase, NATS crash), an orphaned `{stream}__migration_backup` stream exists. During **consumer self-healing** (after a live consumer's iterator breaks), the transport detects the backup stream and refuses to recreate the consumer until the backup is gone: the self-healing loop waits with exponential backoff. This check runs only in the recovery path, not during initial application startup.
 
 **Diagnosis:**
+
 ```bash
 nats stream ls | grep migration_backup
 ```
@@ -226,6 +243,7 @@ During the brief window between Phase 2 (delete) and Phase 3 (create) of a strea
 ### `listen() hangs` on startup
 
 If the application doesn't finish starting:
+
 1. **Ordered consumer can't connect**: The stream might not exist yet. Check that the ordered stream is created before the consumer tries to connect.
 2. **NATS connection timeout**: The initial connection attempt blocks startup.
 
@@ -234,6 +252,7 @@ If the application doesn't finish starting:
 NATS returns an error when you try to update a stream with incompatible changes (e.g., changing retention policy on an existing stream).
 
 **Fix:** Delete the stream and let the transport recreate it:
+
 ```bash
 nats stream rm <stream-name>
 ```

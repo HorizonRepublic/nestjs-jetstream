@@ -19,7 +19,7 @@ import Since from '@site/src/components/Since';
 
 When a message fails on every delivery attempt and exhausts its `max_deliver` limit, the transport treats it as a **dead letter**. Instead of silently discarding it, the library gives you two mechanisms to capture it:
 
-1. **A built-in DLQ stream** *(added in v2.9.0)*: `dlq: { stream }` in your module options. Exhausted messages get republished to a dedicated JetStream stream with tracking headers. This is the recommended default.
+1. **A built-in DLQ stream** _(added in v2.9.0)_: `dlq: { stream }` in your module options. Exhausted messages get republished to a dedicated JetStream stream with tracking headers. This is the recommended default.
 2. **An `onDeadLetter` callback**: a hook with full dead letter context for custom persistence (database, S3, external queue).
 
 Start with either. For maximum durability, use them together: the full fallback chain is described in [Built-in DLQ stream](#built-in-dlq-stream) below.

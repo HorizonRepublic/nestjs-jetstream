@@ -206,7 +206,7 @@ export default function Home() {
               Quick start
             </Link>
             <Link className="lp-cta lp-cta--quiet" to="/docs/getting-started/why-jetstream">
-              Why JetStream, honestly
+              Compare with the built-in transport
             </Link>
             <span className="lp-facts">
               MIT · v{version} · Node ≥ {NODE_MAJOR} · NestJS 10 to 12 · NATS ≥ 2.10

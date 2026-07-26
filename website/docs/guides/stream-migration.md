@@ -25,11 +25,11 @@ Most stream config changes are **mutable**: the transport applies them on startu
 
 Migration is only needed for **immutable** properties that NATS locks after stream creation:
 
-| Property | Example change | Requires migration |
-|----------|---------------|-------------------|
-| `storage` | `File` -> `Memory` | **Yes** |
-| `retention` | `Workqueue` -> `Limits` | **Not allowed**: controlled by the transport |
-| `max_age`, `num_replicas`, etc. | Any value | No: mutable, updated automatically |
+| Property                        | Example change          | Requires migration                           |
+| ------------------------------- | ----------------------- | -------------------------------------------- |
+| `storage`                       | `File` -> `Memory`      | **Yes**                                      |
+| `retention`                     | `Workqueue` -> `Limits` | **Not allowed**: controlled by the transport |
+| `max_age`, `num_replicas`, etc. | Any value               | No: mutable, updated automatically           |
 
 ## How to enable
 
@@ -98,6 +98,7 @@ When one pod migrates the stream, other pods' consumers break because the stream
 3. Migration completes → backup deleted → next retry creates consumer → consumption resumes
 
 This prevents two critical issues:
+
 - **Config overwrite**: old pods cannot overwrite a newer pod's consumer configuration
 - **Message consumption during restore**: consumers cannot eat messages from the workqueue while they're being sourced back
 

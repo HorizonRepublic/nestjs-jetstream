@@ -148,6 +148,7 @@ The key difference from workqueue events: broadcast delivery is **at-least-once 
 This is the most important concept to understand about broadcast events: **each service's consumer is independent**.
 
 If the orders service fails to process a broadcast message and the message is nak'd:
+
 - Only the orders service's consumer retries the message.
 - The payments service and analytics service are **unaffected**.
 - Each consumer tracks its own delivery count independently.
@@ -169,6 +170,7 @@ sequenceDiagram
 ```
 
 This means:
+
 - A bug in one service does not block message delivery to other services.
 - Dead letter tracking is per-consumer: the orders service can exhaust its retries while payments processes normally.
 - Each service can be deployed, restarted, or scaled independently.
@@ -311,4 +313,4 @@ handleFeatureFlag(@Payload() data: FeatureFlagEvent): void {
 
 ## See also
 
-Broadcast consumers compete with regular event consumers for the same concurrency budget, tune both via [Performance Tuning](/docs/guides/performance#concurrency-control). If a broadcast handler keeps failing, only *that* service's consumer retries; see [Dead Letter Queue](/docs/guides/dead-letter-queue#scope) for per-consumer dead letter semantics.
+Broadcast consumers compete with regular event consumers for the same concurrency budget, tune both via [Performance Tuning](/docs/guides/performance#concurrency-control). If a broadcast handler keeps failing, only _that_ service's consumer retries; see [Dead Letter Queue](/docs/guides/dead-letter-queue#scope) for per-consumer dead letter semantics.

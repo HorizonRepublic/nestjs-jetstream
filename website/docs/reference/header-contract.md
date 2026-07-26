@@ -17,22 +17,22 @@ Every NATS message header the transport touches, in one place. The contract is *
 
 ## At a glance
 
-| Header | Read | Write | Source | What it does |
-|---|:---:|:---:|---|---|
-| `traceparent` | ✓ | ✓ | W3C Trace Context | Links the consume span to the upstream producer span. |
-| `tracestate` | ✓ | ✓ | W3C Trace Context | Vendor-specific trace state. Forwarded as-is. |
-| `baggage` | ✓ | ✓ | W3C Baggage | App-level context propagation. Forwarded. |
-| `Nats-Msg-Id` | ✓ | ✓ | NATS standard | Dedup key. Surfaces on consume spans as `messaging.message.id`. |
-| `x-correlation-id` | RPC | RPC | Library | Identifies the matching RPC reply. |
-| `x-reply-to` | RPC | RPC | Library | Inbox subject for the RPC reply. |
-| `x-error` | RPC reply | RPC reply | Library | Marks the reply payload as an error envelope. |
-| `x-subject` | - | ✓ | Library | Original subject the message was published to. |
-| `x-caller-name` | - | ✓ | Library | Internal name of the sending service. |
-| `x-dead-letter-reason` | - | DLQ | Library | DLQ tracking: exhausted-retry reason. |
-| `x-original-subject` | - | DLQ | Library | DLQ tracking: original target subject. |
-| `x-original-stream` | - | DLQ | Library | DLQ tracking: original stream name. |
-| `x-failed-at` | - | DLQ | Library | DLQ tracking: ISO 8601 failure timestamp. |
-| `x-delivery-count` | - | DLQ | Library | DLQ tracking: delivery attempt counter. |
+| Header                 |   Read    |   Write   | Source            | What it does                                                    |
+| ---------------------- | :-------: | :-------: | ----------------- | --------------------------------------------------------------- |
+| `traceparent`          |     ✓     |     ✓     | W3C Trace Context | Links the consume span to the upstream producer span.           |
+| `tracestate`           |     ✓     |     ✓     | W3C Trace Context | Vendor-specific trace state. Forwarded as-is.                   |
+| `baggage`              |     ✓     |     ✓     | W3C Baggage       | App-level context propagation. Forwarded.                       |
+| `Nats-Msg-Id`          |     ✓     |     ✓     | NATS standard     | Dedup key. Surfaces on consume spans as `messaging.message.id`. |
+| `x-correlation-id`     |    RPC    |    RPC    | Library           | Identifies the matching RPC reply.                              |
+| `x-reply-to`           |    RPC    |    RPC    | Library           | Inbox subject for the RPC reply.                                |
+| `x-error`              | RPC reply | RPC reply | Library           | Marks the reply payload as an error envelope.                   |
+| `x-subject`            |     -     |     ✓     | Library           | Original subject the message was published to.                  |
+| `x-caller-name`        |     -     |     ✓     | Library           | Internal name of the sending service.                           |
+| `x-dead-letter-reason` |     -     |    DLQ    | Library           | DLQ tracking: exhausted-retry reason.                           |
+| `x-original-subject`   |     -     |    DLQ    | Library           | DLQ tracking: original target subject.                          |
+| `x-original-stream`    |     -     |    DLQ    | Library           | DLQ tracking: original stream name.                             |
+| `x-failed-at`          |     -     |    DLQ    | Library           | DLQ tracking: ISO 8601 failure timestamp.                       |
+| `x-delivery-count`     |     -     |    DLQ    | Library           | DLQ tracking: delivery attempt counter.                         |
 
 Header names are matched **case-insensitively** per the W3C Trace Context specification.
 

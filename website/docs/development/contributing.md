@@ -47,18 +47,18 @@ We welcome contributions from the community. The full contribution guidelines li
 
 ## Development Commands
 
-| Command | Description |
-|---------|-------------|
-| `pnpm build` | Build the library (tsup, dual CJS/ESM) |
-| `pnpm build:watch` | Build in watch mode |
-| `pnpm lint` | Check for linting issues |
-| `pnpm lint:fix` | Auto-fix linting issues |
-| `pnpm test` | Run all tests (unit + integration, parallel) |
-| `pnpm test:watch` | Run tests in watch mode |
-| `pnpm test:cov` | Run tests with coverage |
-| `pnpm docs:dev` | Start the Docusaurus dev server |
-| `pnpm docs:build` | Build the documentation site (includes TypeDoc regeneration via `docusaurus-plugin-typedoc`) |
-| `pnpm docs:serve` | Serve the built documentation locally |
+| Command            | Description                                                                                  |
+| ------------------ | -------------------------------------------------------------------------------------------- |
+| `pnpm build`       | Build the library (tsup, dual CJS/ESM)                                                       |
+| `pnpm build:watch` | Build in watch mode                                                                          |
+| `pnpm lint`        | Check for linting issues                                                                     |
+| `pnpm lint:fix`    | Auto-fix linting issues                                                                      |
+| `pnpm test`        | Run all tests (unit + integration, parallel)                                                 |
+| `pnpm test:watch`  | Run tests in watch mode                                                                      |
+| `pnpm test:cov`    | Run tests with coverage                                                                      |
+| `pnpm docs:dev`    | Start the Docusaurus dev server                                                              |
+| `pnpm docs:build`  | Build the documentation site (includes TypeDoc regeneration via `docusaurus-plugin-typedoc`) |
+| `pnpm docs:serve`  | Serve the built documentation locally                                                        |
 
 See [Testing](/docs/development/testing) for detailed test conventions and setup.
 
@@ -70,14 +70,14 @@ Docusaurus' dev server and the example apps both default to port 3000. If you ru
 
 The project uses [Conventional Commits](https://www.conventionalcommits.org/) with [Release Please](https://github.com/googleapis/release-please) for automated releases. Your commit messages determine how the changelog and version bumps are generated.
 
-| Prefix | Purpose | Version Bump |
-|--------|---------|-------------|
-| `feat:` | New feature | Minor |
-| `fix:` | Bug fix | Patch |
-| `docs:` | Documentation | None |
-| `refactor:` | Code refactoring | None |
-| `test:` | Adding/updating tests | None |
-| `chore:` | Maintenance | None |
+| Prefix      | Purpose               | Version Bump |
+| ----------- | --------------------- | ------------ |
+| `feat:`     | New feature           | Minor        |
+| `fix:`      | Bug fix               | Patch        |
+| `docs:`     | Documentation         | None         |
+| `refactor:` | Code refactoring      | None         |
+| `test:`     | Adding/updating tests | None         |
+| `chore:`    | Maintenance           | None         |
 
 **Examples:**
 

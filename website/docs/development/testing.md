@@ -29,11 +29,11 @@ This library handles real-time message delivery, consumer lifecycle, and self-he
 
 ## Test Commands
 
-| Command | Description |
-|---------|-------------|
-| `pnpm test` | Run all tests (unit + integration, parallel) |
-| `pnpm test:watch` | Run tests in watch mode |
-| `pnpm test:cov` | Run all tests with coverage reporting |
+| Command           | Description                                  |
+| ----------------- | -------------------------------------------- |
+| `pnpm test`       | Run all tests (unit + integration, parallel) |
+| `pnpm test:watch` | Run tests in watch mode                      |
+| `pnpm test:cov`   | Run all tests with coverage reporting        |
 
 :::tip
 `docker compose up -d` is available for manual testing and debugging, but is **not needed** to run the test suite.
@@ -95,14 +95,14 @@ describe('My Feature', () => {
 
 Key helpers in `test/integration/`:
 
-| Helper | Purpose |
-|--------|---------|
-| `startNatsContainer()` | Start a NATS container with JetStream, return container + random port |
-| `createNatsConnection(port)` | Create a standalone NATS connection for assertions |
+| Helper                                                       | Purpose                                                                                                                                                                                          |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `startNatsContainer()`                                       | Start a NATS container with JetStream, return container + random port                                                                                                                            |
+| `createNatsConnection(port)`                                 | Create a standalone NATS connection for assertions                                                                                                                                               |
 | `createTestApp({ name, port }, controllers, clientTargets?)` | Bootstrap a full NestJS app with the transport. `clientTargets` is an array of service names that will be registered as `forFeature` clients; pass the names you need to `@Inject` in your test. |
-| `cleanupStreams(nc, serviceName)` | Delete streams/consumers created during a test |
-| `waitForCondition(fn, timeoutMs)` | Poll until an async condition is met |
-| `uniqueServiceName()` | Generate a unique service name per test |
+| `cleanupStreams(nc, serviceName)`                            | Delete streams/consumers created during a test                                                                                                                                                   |
+| `waitForCondition(fn, timeoutMs)`                            | Poll until an async condition is met                                                                                                                                                             |
+| `uniqueServiceName()`                                        | Generate a unique service name per test                                                                                                                                                          |
 
 ### Self-Healing Tests
 

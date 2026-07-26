@@ -121,9 +121,9 @@ export class OrdersController {
 
 `ManagementMode` is an enum with two values:
 
-| Value | Behavior |
-|---|---|
-| `ManagementMode.Auto` | The library creates the entity if it doesn't exist and updates its config on every startup. **Default.** |
+| Value                   | Behavior                                                                                                                     |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `ManagementMode.Auto`   | The library creates the entity if it doesn't exist and updates its config on every startup. **Default.**                     |
 | `ManagementMode.Manual` | The library reads the entity's live state but never creates, updates, or migrates it. Fails at boot if the entity is absent. |
 
 ### Resolution order
@@ -193,12 +193,12 @@ When the library binds to an external entity it validates that the entity's conf
 
 ### Event stream (workqueue)
 
-| Requirement | What to configure externally |
-|---|---|
-| Stream subjects must cover all registered handler subjects | Add a wildcard like `ext.orders.>` or list individual subjects |
-| Consumer filter must cover all registered handler subjects | Set `filter_subject` or `filter_subjects` to include each subject |
-| `retention: workqueue` is strongly recommended | Validated with a warning if absent |
-| If `allow_msg_schedules: true` is set in the app config, the stream subjects must also cover `{prefix}_sch.>` | Add the schedule wildcard to the stream's subjects |
+| Requirement                                                                                                   | What to configure externally                                      |
+| ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Stream subjects must cover all registered handler subjects                                                    | Add a wildcard like `ext.orders.>` or list individual subjects    |
+| Consumer filter must cover all registered handler subjects                                                    | Set `filter_subject` or `filter_subjects` to include each subject |
+| `retention: workqueue` is strongly recommended                                                                | Validated with a warning if absent                                |
+| If `allow_msg_schedules: true` is set in the app config, the stream subjects must also cover `{prefix}_sch.>` | Add the schedule wildcard to the stream's subjects                |
 
 ### Command stream (JetStream RPC mode)
 
@@ -206,10 +206,10 @@ Same requirements as the event stream. Only applies when `rpc: { mode: 'jetstrea
 
 ### Broadcast stream
 
-| Requirement | What to configure externally |
-|---|---|
+| Requirement                                                                  | What to configure externally                                                                      |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | Stream subjects must cover all broadcast subjects registered by this service | Each broadcast subject follows the `broadcast.{pattern}` convention unless a custom prefix is set |
-| Consumer filter must cover all broadcast handler subjects | Set `filter_subject` or `filter_subjects` |
+| Consumer filter must cover all broadcast handler subjects                    | Set `filter_subject` or `filter_subjects`                                                         |
 
 :::warning
 Setting broadcast to Manual means the shared cluster-wide `broadcast-stream` is externally owned. Every service in the cluster that uses broadcast events will consume from that same stream.
@@ -217,15 +217,15 @@ Setting broadcast to Manual means the shared cluster-wide `broadcast-stream` is 
 
 ### Ordered stream
 
-| Requirement | What to configure externally |
-|---|---|
+| Requirement                                                                      | What to configure externally                                                                          |
+| -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | Stream subjects must cover all ordered-event subjects registered by this service | Subjects use the `{service}__microservice.ordered.{pattern}` convention unless a custom prefix is set |
-| Consumer filter (ordered consumers are recreated automatically by the client) | No filter configuration needed: ordered consumers are ephemeral |
+| Consumer filter (ordered consumers are recreated automatically by the client)    | No filter configuration needed: ordered consumers are ephemeral                                       |
 
 ### DLQ stream
 
-| Requirement | What to configure externally |
-|---|---|
+| Requirement                                                           | What to configure externally                                                                                        |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | The stream's `subjects` list must contain exactly the DLQ stream name | The DLQ subject equals the stream name: e.g., if the stream is named `ext_dlq`, its subjects must include `ext_dlq` |
 
 See [External DLQ](#external-dlq) below for a full example.
@@ -236,23 +236,23 @@ At startup the binder performs the following checks. Failures are thrown as `Jet
 
 ### Throws (hard errors)
 
-| Condition | Error message summary |
-|---|---|
-| Stream not found in NATS | `Management mode is Manual; the stream must be provisioned externally before boot.` |
-| Consumer not found in NATS | `Management mode is Manual; the consumer must be provisioned externally before boot.` |
-| Consumer filter does not cover one or more registered handler subjects | `Consumer "…" does not cover the following registered handler subjects: …. Update the consumer's filter_subject / filter_subjects to include them.` |
-| DLQ stream subjects do not contain the DLQ subject | `DLQ stream "…" subjects do not cover "…" (dead letters publish to a subject equal to the stream name). Add it to the stream's subjects list.` |
-| Scheduling is enabled (`allow_msg_schedules: true`) but stream subjects do not cover the schedule wildcard | `Stream "…" has scheduling enabled but its subjects do not cover the schedule prefix "…". Add "…>" to the stream's subjects.` |
-| Scheduling is enabled and a consumer filter also matches the schedule namespace | `Consumer "…" filter … also matches the schedule namespace "…". Consuming schedule holders removes pending schedules from the stream. Use exact filter_subjects for the registered handler subjects instead.` |
+| Condition                                                                                                  | Error message summary                                                                                                                                                                                         |
+| ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Stream not found in NATS                                                                                   | `Management mode is Manual; the stream must be provisioned externally before boot.`                                                                                                                           |
+| Consumer not found in NATS                                                                                 | `Management mode is Manual; the consumer must be provisioned externally before boot.`                                                                                                                         |
+| Consumer filter does not cover one or more registered handler subjects                                     | `Consumer "…" does not cover the following registered handler subjects: …. Update the consumer's filter_subject / filter_subjects to include them.`                                                           |
+| DLQ stream subjects do not contain the DLQ subject                                                         | `DLQ stream "…" subjects do not cover "…" (dead letters publish to a subject equal to the stream name). Add it to the stream's subjects list.`                                                                |
+| Scheduling is enabled (`allow_msg_schedules: true`) but stream subjects do not cover the schedule wildcard | `Stream "…" has scheduling enabled but its subjects do not cover the schedule prefix "…". Add "…>" to the stream's subjects.`                                                                                 |
+| Scheduling is enabled and a consumer filter also matches the schedule namespace                            | `Consumer "…" filter … also matches the schedule namespace "…". Consuming schedule holders removes pending schedules from the stream. Use exact filter_subjects for the registered handler subjects instead.` |
 
 ### Warns (advisory)
 
-| Condition | Warning message summary |
-|---|---|
-| Event or command stream retention is not `workqueue` | `Stream "…" retention is "…"; expected "workqueue" for reliable at-least-once delivery.` |
+| Condition                                                                                 | Warning message summary                                                                                                                                                                                    |
+| ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Event or command stream retention is not `workqueue`                                      | `Stream "…" retention is "…"; expected "workqueue" for reliable at-least-once delivery.`                                                                                                                   |
 | Scheduling is enabled but the external stream does not report `allow_msg_schedules: true` | `Stream "…" does not report allow_msg_schedules=true, but scheduling is enabled in the application options. Scheduled publishes will be rejected by the server until the stream allows message schedules.` |
-| Consumer has unlimited `max_deliver` but `dlq` is enabled | `Consumer "…" has unlimited max_deliver but options.dlq is enabled; messages will never be dead-lettered. Set max_deliver > 0 on the consumer.` |
-| Consumer `ack_wait` is shorter than the computed `ackExtension` interval | `Consumer "…" ack_wait (…ms) is shorter than the ackExtension interval (…ms). Messages may redeliver before the handler finishes. Increase ack_wait.` |
+| Consumer has unlimited `max_deliver` but `dlq` is enabled                                 | `Consumer "…" has unlimited max_deliver but options.dlq is enabled; messages will never be dead-lettered. Set max_deliver > 0 on the consumer.`                                                            |
+| Consumer `ack_wait` is shorter than the computed `ackExtension` interval                  | `Consumer "…" ack_wait (…ms) is shorter than the ackExtension interval (…ms). Messages may redeliver before the handler finishes. Increase ack_wait.`                                                      |
 
 ### Boot summary
 
@@ -351,6 +351,7 @@ Setting `allowDestructiveMigration: true` at the same time as a global `provisio
 ```text
 allowDestructiveMigration has no effect under provisioning.management: Manual; the library never migrates externally managed streams.
 ```
+
 :::
 
 The `allowDestructiveMigration` flag only applies to `Auto`-managed streams. See [Stream Migration](/docs/guides/stream-migration#manual-streams-are-never-migrated) for details.

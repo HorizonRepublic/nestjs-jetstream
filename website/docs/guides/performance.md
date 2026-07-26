@@ -27,13 +27,13 @@ The primary flow control knob is `max_ack_pending` on the consumer. It limits ho
 
 ### Configuration options
 
-| Option | Default | Effect |
-|--------|---------|--------|
-| `consumer.max_ack_pending` | 100 | Max in-flight unacked messages |
-| `consumer.ack_wait` | 10s (events) / 5min (RPC) | Ack deadline before redelivery |
-| `concurrency` | unlimited | Limits parallel handler execution |
-| `consume.max_messages` | `@nats-io/jetstream` default | Internal prefetch buffer size |
-| `consume.threshold_messages` | 75% of max_messages | Auto-refill trigger |
+| Option                       | Default                      | Effect                            |
+| ---------------------------- | ---------------------------- | --------------------------------- |
+| `consumer.max_ack_pending`   | 100                          | Max in-flight unacked messages    |
+| `consumer.ack_wait`          | 10s (events) / 5min (RPC)    | Ack deadline before redelivery    |
+| `concurrency`                | unlimited                    | Limits parallel handler execution |
+| `consume.max_messages`       | `@nats-io/jetstream` default | Internal prefetch buffer size     |
+| `consume.threshold_messages` | 75% of max_messages          | Auto-refill trigger               |
 
 ### How these interact
 
@@ -87,6 +87,7 @@ events: {
 When enabled, the transport calls `msg.working()` at regular intervals (at half the `ack_wait` period) to signal that the message is still being processed. This resets the ack deadline on the server.
 
 **When to use:**
+
 - Handlers that call slow external APIs or run complex computations.
 - RPC handlers with long timeouts: `ackExtension` keeps the command message alive while the handler runs.
 
@@ -133,6 +134,7 @@ JetstreamModule.forRoot({
 ```
 
 This configuration:
+
 - Allows up to 500 unacked event messages, with 200 processed in parallel.
 - Extends ack deadlines automatically for long-running event and RPC handlers.
 - Limits broadcast processing to 50 concurrent handlers.

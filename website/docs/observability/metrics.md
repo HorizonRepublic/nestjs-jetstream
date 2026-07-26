@@ -125,25 +125,25 @@ All metric names are prefixed with `jetstream_` (configurable). `defaultLabels` 
 
 ### Counters
 
-| Name                                | Labels                              | Description |
-| ----------------------------------- | ----------------------------------- | ----------- |
-| `jetstream_messages_received_total` | `stream`, `subject`, `kind`         | Messages routed to a handler. |
-| `jetstream_messages_processed_total`| `stream`, `subject`, `kind`, `status` | Handler invocations that completed. `status` ∈ `success`, `error`, `retried`, `terminated`. |
-| `jetstream_messages_unhandled_total`| `subject` (literal `<unmatched>`)   | Messages with no matching handler. |
-| `jetstream_messages_dead_letter_total` | `stream`, `subject`              | Messages that exhausted all delivery attempts. |
-| `jetstream_publish_total`           | `subject`, `kind`, `status`         | Client-side publish operations. `status` ∈ `success`, `error`. |
-| `jetstream_rpc_timeout_total`       | `subject`                           | RPC calls that exceeded the timeout deadline. |
-| `jetstream_consumer_recovered_total`| `kind`                              | Self-healing recoveries after consume-loop failures. |
-| `jetstream_errors_total`            | `context`                           | Transport-level errors. `context` ∈ `connection`, `codec`, `publish`, `consume`, `handler`, `shutdown`, `other`. |
-| `jetstream_metrics_poll_errors_total` | `target`                          | Errors hit while polling for gauge data. `target` ∈ `consumer.info`, `stream.info`, `jsm.connect`. |
+| Name                                   | Labels                                | Description                                                                                                      |
+| -------------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `jetstream_messages_received_total`    | `stream`, `subject`, `kind`           | Messages routed to a handler.                                                                                    |
+| `jetstream_messages_processed_total`   | `stream`, `subject`, `kind`, `status` | Handler invocations that completed. `status` ∈ `success`, `error`, `retried`, `terminated`.                      |
+| `jetstream_messages_unhandled_total`   | `subject` (literal `<unmatched>`)     | Messages with no matching handler.                                                                               |
+| `jetstream_messages_dead_letter_total` | `stream`, `subject`                   | Messages that exhausted all delivery attempts.                                                                   |
+| `jetstream_publish_total`              | `subject`, `kind`, `status`           | Client-side publish operations. `status` ∈ `success`, `error`.                                                   |
+| `jetstream_rpc_timeout_total`          | `subject`                             | RPC calls that exceeded the timeout deadline.                                                                    |
+| `jetstream_consumer_recovered_total`   | `kind`                                | Self-healing recoveries after consume-loop failures.                                                             |
+| `jetstream_errors_total`               | `context`                             | Transport-level errors. `context` ∈ `connection`, `codec`, `publish`, `consume`, `handler`, `shutdown`, `other`. |
+| `jetstream_metrics_poll_errors_total`  | `target`                              | Errors hit while polling for gauge data. `target` ∈ `consumer.info`, `stream.info`, `jsm.connect`.               |
 
 ### Histograms
 
-| Name                                  | Labels                              | Source |
-| ------------------------------------- | ----------------------------------- | ------ |
-| `jetstream_handler_duration_seconds`  | `stream`, `subject`, `kind`, `status` | Wall-clock duration from handler entry to settlement. |
-| `jetstream_publish_duration_seconds`  | `subject`, `kind`, `status`         | Wall-clock duration of client publish operations. |
-| `jetstream_rpc_duration_seconds`      | `subject`, `status`                 | Full RPC round-trip from caller's perspective. `status` includes `timeout`. |
+| Name                                 | Labels                                | Source                                                                      |
+| ------------------------------------ | ------------------------------------- | --------------------------------------------------------------------------- |
+| `jetstream_handler_duration_seconds` | `stream`, `subject`, `kind`, `status` | Wall-clock duration from handler entry to settlement.                       |
+| `jetstream_publish_duration_seconds` | `subject`, `kind`, `status`           | Wall-clock duration of client publish operations.                           |
+| `jetstream_rpc_duration_seconds`     | `subject`, `status`                   | Full RPC round-trip from caller's perspective. `status` includes `timeout`. |
 
 Default buckets (in seconds): `[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]`. Cover sub-millisecond RPC up to ten-second batch handlers. Override via `metrics.buckets`.
 
@@ -151,15 +151,15 @@ Default buckets (in seconds): `[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5,
 
 Refreshed every `pollInterval` ms by querying `JetStreamManager.consumers.info()` and `JetStreamManager.streams.info()` for every consumer this service owns.
 
-| Name                              | Labels                              | Source field |
-| --------------------------------- | ----------------------------------- | ------------ |
-| `jetstream_consumer_num_pending`  | `stream`, `consumer`, `kind`        | `ConsumerInfo.num_pending` |
-| `jetstream_consumer_num_ack_pending` | `stream`, `consumer`, `kind`     | `ConsumerInfo.num_ack_pending` |
-| `jetstream_consumer_num_redelivered` | `stream`, `consumer`, `kind`     | `ConsumerInfo.num_redelivered` |
-| `jetstream_consumer_num_waiting`  | `stream`, `consumer`, `kind`        | `ConsumerInfo.num_waiting` |
-| `jetstream_stream_messages`       | `stream`                            | `StreamInfo.state.messages` |
-| `jetstream_stream_bytes`          | `stream`                            | `StreamInfo.state.bytes` |
-| `jetstream_connection_up`         | `server`                            | `1` while connected, `0` after disconnect. |
+| Name                                 | Labels                       | Source field                               |
+| ------------------------------------ | ---------------------------- | ------------------------------------------ |
+| `jetstream_consumer_num_pending`     | `stream`, `consumer`, `kind` | `ConsumerInfo.num_pending`                 |
+| `jetstream_consumer_num_ack_pending` | `stream`, `consumer`, `kind` | `ConsumerInfo.num_ack_pending`             |
+| `jetstream_consumer_num_redelivered` | `stream`, `consumer`, `kind` | `ConsumerInfo.num_redelivered`             |
+| `jetstream_consumer_num_waiting`     | `stream`, `consumer`, `kind` | `ConsumerInfo.num_waiting`                 |
+| `jetstream_stream_messages`          | `stream`                     | `StreamInfo.state.messages`                |
+| `jetstream_stream_bytes`             | `stream`                     | `StreamInfo.state.bytes`                   |
+| `jetstream_connection_up`            | `server`                     | `1` while connected, `0` after disconnect. |
 
 Setting `pollInterval: 0` (or `false`) disables the polling loop entirely. Counter and histogram metrics continue to update from event hooks.
 
