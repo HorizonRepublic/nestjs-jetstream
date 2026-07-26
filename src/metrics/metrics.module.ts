@@ -66,9 +66,7 @@ export class JetstreamMetricsModule {
 
         const mod = await resolvePromClient();
 
-        /* eslint-disable @typescript-eslint/naming-convention -- mirrors prom-client class names */
         return { Counter: mod.Counter, Histogram: mod.Histogram, Gauge: mod.Gauge };
-        /* eslint-enable @typescript-eslint/naming-convention */
       },
     };
 

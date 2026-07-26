@@ -20,7 +20,7 @@ const mockKv = { put: mockPut };
 const mockCreate = vi.fn<(name: string, opts?: unknown) => Promise<typeof mockKv>>();
 
 vi.mock('@nats-io/kv', () => {
-  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+  // oxlint-disable-next-line typescript/explicit-function-return-type
   const KvmImpl = function KvmImpl() {
     // @ts-expect-error -- mock constructor
     this.create = mockCreate;

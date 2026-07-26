@@ -22,7 +22,7 @@ class PaymentController {
   ): { status: string; requestId: string | undefined } {
     const requestId = ctx.getHeader('x-request-id');
 
-    this.logger.log(`RPC: payment.process — ${data.amount} ${data.currency} (req: ${requestId})`);
+    this.logger.log(`RPC: payment.process - ${data.amount} ${data.currency} (req: ${requestId})`);
 
     return { status: 'processed', requestId };
   }
@@ -35,7 +35,7 @@ class HttpController {
     private readonly client: JetstreamClient,
   ) {}
 
-  /** RPC via JetStream — command persisted in stream, at-least-once delivery. */
+  /** RPC via JetStream - command persisted in stream, at-least-once delivery. */
   @Get('pay')
   pay(): Observable<unknown> {
     const record = new JetstreamRecordBuilder({ amount: 99.99, currency: 'USD' })

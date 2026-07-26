@@ -1,9 +1,10 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "ignoreDeprecations": "6.0",
     "declaration": true,
     "declarationMap": true,
+    "isolatedDeclarations": true,
+    "rootDir": "./src",
     "outDir": "./dist",
     "types": ["node"]
   },

@@ -153,4 +153,4 @@ export const startAckExtensionTimer = (
  * Internal, exposed for tests only.
  * @internal
  */
-export const _ackExtensionPoolForTest = pool;
+export const _ackExtensionPoolForTest: AckExtensionPool = pool;

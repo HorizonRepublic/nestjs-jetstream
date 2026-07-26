@@ -108,7 +108,7 @@ export class JetstreamModule implements OnApplicationShutdown {
   public constructor(
     @Optional()
     @Inject(ShutdownManager)
-    private readonly shutdownManager?: ShutdownManager,
+    private readonly shutdownManager?: ShutdownManager | undefined,
     @Optional() @Inject(JetstreamStrategy) private readonly strategy?: JetstreamStrategy | null,
   ) {}
 

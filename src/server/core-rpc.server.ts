@@ -41,7 +41,7 @@ export class CoreRpcServer {
     private readonly patternRegistry: PatternRegistry,
     private readonly codec: Codec,
     private readonly eventBus: EventBus,
-    private readonly names?: NameResolver,
+    private readonly names?: NameResolver | undefined,
   ) {
     const derived = deriveOtelAttrs(options);
 
@@ -66,8 +66,8 @@ export class CoreRpcServer {
           return;
         }
 
-        this.handleRequest(msg).catch((err) => {
-          this.logger.error('Unhandled request error:', err);
+        this.handleRequest(msg).catch((handlerErr: unknown) => {
+          this.logger.error('Unhandled request error:', handlerErr);
         });
       },
     });

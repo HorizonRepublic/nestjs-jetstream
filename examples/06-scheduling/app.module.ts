@@ -16,7 +16,7 @@ class ReminderHandler {
   /** Receives the event at the scheduled time, not when it was published. */
   @EventPattern('reminder.send')
   handleReminder(@Payload() data: { userId: number; message: string }): void {
-    this.logger.log(`Reminder delivered: user=${data.userId} — "${data.message}"`);
+    this.logger.log(`Reminder delivered: user=${data.userId} - "${data.message}"`);
   }
 }
 
@@ -45,7 +45,7 @@ class HttpController {
 
     this.logger.log(`Scheduled reminder for ${deliverAt.toISOString()}`);
 
-    return `Scheduled — will deliver at ${deliverAt.toISOString()}`;
+    return `Scheduled - will deliver at ${deliverAt.toISOString()}`;
   }
 }
 

@@ -75,6 +75,7 @@ export class EventBus {
     if (subs?.length) {
       // Snapshot the array so a subscriber that re-subscribes to the same
       // event during dispatch cannot extend the live iteration.
+      // oxlint-disable-next-line unicorn/no-useless-spread
       for (const sub of [...subs]) {
         this.callHook(event, sub, ...args);
       }
@@ -94,13 +95,13 @@ export class EventBus {
       if (result && typeof (result as Promise<unknown>).catch === 'function') {
         (result as Promise<unknown>).catch((err: unknown) => {
           this.logger.error(
-            `Async hook "${event}" rejected: ${err instanceof Error ? err.message : err}`,
+            `Async hook "${event}" rejected: ${err instanceof Error ? err.message : String(err)}`,
           );
         });
       }
     } catch (err) {
       this.logger.error(
-        `Hook "${event}" threw an error: ${err instanceof Error ? err.message : err}`,
+        `Hook "${event}" threw an error: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }

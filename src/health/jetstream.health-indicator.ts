@@ -48,7 +48,7 @@ export class JetstreamHealthIndicator {
 
       return { connected: true, server: nc.getServer(), latency };
     } catch (err) {
-      this.logger.warn(`Health check failed: ${err instanceof Error ? err.message : err}`);
+      this.logger.warn(`Health check failed: ${err instanceof Error ? err.message : String(err)}`);
       return { connected: false, server: nc.getServer(), latency: null };
     }
   }

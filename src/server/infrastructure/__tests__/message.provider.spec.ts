@@ -90,13 +90,15 @@ const createMockMessages = (
         ),
       }),
     }),
-    // eslint-disable-next-line prefer-arrow/prefer-arrow-functions -- method shorthand required by method-signature-style on the MockMessages interface
+    // method shorthand required by method-signature-style on the MockMessages interface
+    // oxlint-disable-next-line prefer-arrow/prefer-arrow-functions
     setCallback(cb: (msg: JsMsg) => void): void {
       callback = cb;
       // Auto-deliver anything queued before the callback was registered.
       deliverPending();
     },
-    // eslint-disable-next-line prefer-arrow/prefer-arrow-functions -- same as above
+    // same as above
+    // oxlint-disable-next-line prefer-arrow/prefer-arrow-functions
     deliver(): void {
       deliverPending();
     },

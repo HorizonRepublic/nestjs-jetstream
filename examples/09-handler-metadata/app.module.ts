@@ -23,7 +23,7 @@ class OrderHandler {
 
   @EventPattern('order.internal', {})
   handleInternal(@Payload() _data: unknown): void {
-    // No meta — will not appear in KV bucket
+    // No meta - will not appear in KV bucket
   }
 }
 

@@ -68,6 +68,7 @@ describe('safelyInvokeHook', () => {
 
   it('should ignore objects whose `then` is not a function (not actually thenable)', () => {
     // Given: `'then' in result` is true but `then` is not callable
+    // oxlint-disable-next-line unicorn/no-thenable
     const hook = vi.fn().mockReturnValue({ then: 'not a function' });
 
     // When + Then

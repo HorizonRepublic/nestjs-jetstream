@@ -23,8 +23,8 @@ import { EventRouter, PatternRegistry, RpcRouter } from './routing';
  * consumption and routing (Core or JetStream RPC based on configuration).
  */
 export class JetstreamStrategy extends Server implements CustomTransportStrategy {
-  public readonly transportId = Symbol('jetstream-transport');
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+  public readonly transportId: symbol = Symbol('jetstream-transport');
+  // oxlint-disable-next-line typescript/no-unsafe-function-type
   private readonly listeners = new Map<string, Function[]>();
   private started = false;
 
@@ -39,7 +39,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     private readonly rpcRouter: RpcRouter,
     private readonly coreRpcServer: CoreRpcServer,
     private readonly ackWaitMap: Map<StreamKind, number> = new Map(),
-    private readonly metadataProvider?: MetadataProvider,
+    private readonly metadataProvider?: MetadataProvider | undefined,
   ) {
     super();
   }
@@ -96,7 +96,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
   }
 
   /** Register event listener (required by Server base class); lifecycle events use EventBus. */
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+  // oxlint-disable-next-line typescript/no-unsafe-function-type
   public on(event: string, callback: Function): void {
     const existing = this.listeners.get(event) ?? [];
 

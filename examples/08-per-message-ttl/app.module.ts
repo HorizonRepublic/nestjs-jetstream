@@ -43,7 +43,7 @@ class HttpController {
 
     this.logger.log('Published session token with 30s TTL');
 
-    return 'Published — message will expire from stream after 30 seconds';
+    return 'Published - message will expire from stream after 30 seconds';
   }
 }
 

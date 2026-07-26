@@ -62,7 +62,8 @@ const subscribeToFirst = (obs: Observable<unknown>): Promise<unknown> =>
 
     // `next` may have fired synchronously during subscribe() and already
     // flipped `done`; unsubscribe immediately if so.
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- mutated in sync callback above
+    // mutated in sync callback above
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     if (done) {
       subscription.unsubscribe();
     }

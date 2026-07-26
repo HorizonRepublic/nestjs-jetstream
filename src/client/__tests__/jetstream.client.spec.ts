@@ -1010,7 +1010,8 @@ describe(JetstreamClient, () => {
 
       // When: sending an RPC whose messageId was already used
       const result = firstValueFrom(sut.send('rpc.dup', {}));
-      // Attach the expectation before the rejection settles
+      // Attach the expectation before the rejection settles; awaited below
+      // oxlint-disable-next-line vitest/valid-expect
       const assertion = expect(result).rejects.toThrow(/duplicate/i);
 
       await vi.advanceTimersByTimeAsync(0);
@@ -1151,7 +1152,9 @@ describe(JetstreamClient, () => {
         mockJs.publish.mockRejectedValueOnce(new Error('stream not found'));
 
         // When
-        await expect(firstValueFrom(sut.emit('user.created', {}))).rejects.toThrow();
+        await expect(firstValueFrom(sut.emit('user.created', {}))).rejects.toThrow(
+          'stream not found',
+        );
 
         // Then
         const call = findEmit(TransportEvent.Published);

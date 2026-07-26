@@ -231,7 +231,9 @@ export class ConnectionProvider {
       return nc;
     } catch (err) {
       if (err instanceof Error && err.message.includes('REFUSED')) {
-        throw new Error(`NATS connection refused: ${this.options.servers.join(', ')}`);
+        throw new Error(`NATS connection refused: ${this.options.servers.join(', ')}`, {
+          cause: err,
+        });
       }
 
       throw err;

@@ -8,7 +8,7 @@ import { getClientToken, JetstreamClient, JetstreamModule } from '../../src';
 class OrderProjection {
   private readonly logger = new Logger('Projection');
 
-  /** Ordered events arrive in strict sequence — ideal for projections / read models. */
+  /** Ordered events arrive in strict sequence - ideal for projections / read models. */
   @EventPattern('order.status-changed', { ordered: true })
   handleStatusChange(@Payload() data: { orderId: number; status: string; seq: number }): void {
     this.logger.log(`Order #${data.orderId}: ${data.status} (seq=${data.seq})`);
@@ -24,7 +24,7 @@ class HttpController {
     private readonly client: JetstreamClient,
   ) {}
 
-  /** Publishes 5 sequential status changes — handler receives them in order. */
+  /** Publishes 5 sequential status changes - handler receives them in order. */
   @Get('sequence')
   async sequence(): Promise<string> {
     const statuses = ['created', 'paid', 'shipped', 'delivered', 'completed'];
@@ -41,7 +41,7 @@ class HttpController {
 
     this.logger.log('Published 5 ordered events');
 
-    return 'OK — check console for sequential delivery';
+    return 'OK - check console for sequential delivery';
   }
 }
 

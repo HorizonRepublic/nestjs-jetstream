@@ -1,0 +1,158 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "import", "promise", "node", "vitest"],
+  "jsPlugins": [
+    "./tools/oxlint/local-plugin.mjs",
+    "@stylistic/eslint-plugin",
+    "eslint-plugin-prefer-arrow"
+  ],
+  "ignorePatterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/dist-example/**",
+    "**/docs/**",
+    "**/tmp/**",
+    "benchmarks/**",
+    "website/**",
+    "tsdown.config.ts",
+    "vitest.config.ts"
+  ],
+  "rules": {
+    "eslint/complexity": ["warn", 15],
+    "eslint/max-depth": ["warn", 4],
+    "eslint/max-params": ["warn", 15],
+    "eslint/no-alert": "error",
+    "eslint/no-debugger": "error",
+    "eslint/no-useless-constructor": "error",
+    "eslint/no-useless-return": "error",
+    "eslint/no-var": "error",
+    "eslint/prefer-arrow-callback": "error",
+    "eslint/prefer-const": "error",
+    "eslint/prefer-template": "error",
+    "eslint/no-unused-vars": [
+      "error",
+      {
+        "args": "after-used",
+        "argsIgnorePattern": "^_",
+        "ignoreRestSiblings": true,
+        "vars": "all",
+        "varsIgnorePattern": "^_"
+      }
+    ],
+
+    "typescript/array-type": ["error", { "default": "array" }],
+    "typescript/consistent-type-definitions": ["error", "interface"],
+    "typescript/explicit-function-return-type": [
+      "error",
+      {
+        "allowConciseArrowFunctionExpressionsStartingWithVoid": false,
+        "allowDirectConstAssertionInArrowFunctions": true,
+        "allowExpressions": false,
+        "allowHigherOrderFunctions": true,
+        "allowTypedFunctionExpressions": true
+      }
+    ],
+    "typescript/explicit-member-accessibility": [
+      "error",
+      {
+        "accessibility": "explicit",
+        "overrides": {
+          "accessors": "explicit",
+          "constructors": "explicit",
+          "methods": "explicit",
+          "parameterProperties": "off",
+          "properties": "explicit"
+        }
+      }
+    ],
+    "typescript/explicit-module-boundary-types": "error",
+    "typescript/method-signature-style": ["error", "method"],
+    "typescript/no-confusing-void-expression": "error",
+    "typescript/no-explicit-any": "error",
+    "typescript/no-non-null-assertion": "error",
+    "typescript/no-redundant-type-constituents": "error",
+    "typescript/no-unnecessary-condition": "error",
+    "typescript/no-useless-empty-export": "error",
+    "typescript/prefer-nullish-coalescing": "error",
+    "typescript/prefer-optional-chain": "error",
+    "typescript/prefer-readonly": "error",
+    "typescript/prefer-string-starts-ends-with": "error",
+    "typescript/switch-exhaustiveness-check": "error",
+
+    // Optional parameter properties carry an explicit `| undefined` because
+    // Oxc declaration emit requires it under `isolatedDeclarations`.
+    "typescript/no-duplicate-type-constituents": "off",
+    // `createMock<T>()` hands unbound methods to assertions throughout the suite.
+    "typescript/unbound-method": "off",
+
+    "@stylistic/lines-between-class-members": [
+      "error",
+      {
+        "enforce": [
+          { "blankLine": "always", "prev": "method", "next": "method" },
+          { "blankLine": "always", "prev": "field", "next": "method" }
+        ]
+      },
+      { "exceptAfterSingleLine": true }
+    ],
+    "@stylistic/padding-line-between-statements": [
+      "error",
+      { "blankLine": "always", "prev": ["const", "let", "var"], "next": "*" },
+      { "blankLine": "any", "prev": ["const", "let", "var"], "next": ["const", "let", "var"] },
+      { "blankLine": "always", "prev": "import", "next": "*" },
+      { "blankLine": "any", "prev": "import", "next": "import" },
+      { "blankLine": "always", "prev": "*", "next": "function" },
+      { "blankLine": "always", "prev": "*", "next": "class" },
+      { "blankLine": "always", "prev": "*", "next": "export" },
+      { "blankLine": "always", "prev": "block-like", "next": "*" }
+    ],
+
+    "prefer-arrow/prefer-arrow-functions": [
+      "error",
+      {
+        "classPropertiesAllowed": false,
+        "disallowPrototype": true,
+        "singleReturnOnly": false
+      }
+    ],
+
+    "local/type-pascal-case": "error",
+    "local/no-nested-conditional": "error",
+
+    "eslint/no-shadow": "error",
+    "eslint/no-unmodified-loop-condition": "error",
+    "eslint/preserve-caught-error": "error",
+    "unicorn/no-array-sort": "error",
+
+    "vitest/expect-expect": "error",
+    "vitest/require-to-throw-message": "error",
+    "vitest/valid-expect": "error",
+    "vitest/require-mock-type-parameters": "off",
+    "vitest/valid-title": "off"
+  },
+  "overrides": [
+    {
+      "files": ["**/*.spec.ts", "**/*.test.ts", "test/**/*.ts"],
+      "rules": {
+        "typescript/no-non-null-assertion": "off",
+        "typescript/explicit-member-accessibility": "off",
+        "local/type-pascal-case": "off",
+        "eslint/no-shadow": "off"
+      }
+    },
+    {
+      "files": ["test/integration/**/*.ts"],
+      "rules": {
+        "vitest/require-to-throw-message": "off"
+      }
+    },
+    {
+      "files": ["examples/**/*.ts"],
+      "rules": {
+        "typescript/explicit-member-accessibility": "off",
+        "typescript/no-unnecessary-condition": "off",
+        "local/type-pascal-case": "off"
+      }
+    }
+  ]
+}

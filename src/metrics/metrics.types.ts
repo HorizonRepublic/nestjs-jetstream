@@ -10,11 +10,9 @@ import type { HistogramBuckets } from './metrics.config';
  * `JetstreamMetricsModule` resolves the peer dependency via dynamic import.
  */
 export interface PromClientRuntime {
-  /* eslint-disable @typescript-eslint/naming-convention -- mirrors prom-client class names */
   Counter: typeof Counter;
   Histogram: typeof Histogram;
   Gauge: typeof Gauge;
-  /* eslint-enable @typescript-eslint/naming-convention */
 }
 
 /** Resolved metric handles. Names are stable; emitters use them by property. */
