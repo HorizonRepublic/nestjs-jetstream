@@ -415,7 +415,7 @@ describe('Ordered Event Delivery', () => {
       const startMs = (await lastServerTimeMs()) + 2;
       const startTime = new Date(startMs).toISOString();
 
-      // Publish 'after' until its server timestamp lands past startTime
+      // Publish 'after' until its server timestamp passes startTime
       let afterMs = 0;
 
       for (let attempt = 0; attempt < 10 && afterMs < startMs; attempt += 1) {

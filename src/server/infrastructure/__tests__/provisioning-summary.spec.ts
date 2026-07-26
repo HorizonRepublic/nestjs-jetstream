@@ -154,7 +154,7 @@ describe('formatProvisioningSummary', () => {
       // When: no third argument
       const result = formatProvisioningSummary('svc', reservations);
 
-      // Then: existing tests remain valid, no crash, no "external" text
+      // Then: the summary renders as before, with the "external" text left out
       expect(result).not.toContain('external');
     });
   });

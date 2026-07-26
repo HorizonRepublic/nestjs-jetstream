@@ -317,7 +317,7 @@ export class RpcRouter {
         // Close the CONSUMER span early via the abort signal; the handler's
         // eventual resolution is ignored (span is idempotent after first finish).
         abortController.abort();
-        // RpcTimeout hook is the canonical signal here, no separate log.
+        // RpcTimeout hook is the canonical signal here and carries the report alone.
         emitRpcTimeout(subject, correlationId);
         // Bare timer callback: an unguarded term throw would be an uncaught exception.
         settleQuietly(logger, `Failed to term ${subject}:`, () => {

@@ -24,7 +24,7 @@ export interface KindOptionsBlock {
   subjectPrefix?: string;
 }
 
-/** Single source of truth for navigating from a StreamKind to its options block. */
+/** Single source of truth for resolving a StreamKind to its options block. */
 export const kindOptionsBlock = (
   options: JetstreamModuleOptions,
   kind: StreamKind,

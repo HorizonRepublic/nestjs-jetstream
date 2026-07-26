@@ -508,7 +508,7 @@ export class JetstreamClient extends ClientProxy {
     // (where `maxReconnectAttempts: -1` keeps connect() pending forever) still
     // settles the span, the pending-message entry, and the caller's
     // subscription instead of leaking them for the life of the process.
-    // `effectiveTimeout` therefore bounds connect + RPC, not just RPC.
+    // `effectiveTimeout` bounds connect and RPC together, not RPC alone.
     this.rpcInbox.armTimeout(correlationId, effectiveTimeout, () => {
       spanHandle.finish({ kind: RpcOutcomeKind.Timeout });
       // RpcTimeout hook + OTel CLIENT span are the canonical signals; no separate log.

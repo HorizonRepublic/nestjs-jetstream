@@ -129,9 +129,9 @@ const createEventResolver = (
  * Build the routing pipeline for workqueue and broadcast streams.
  *
  * The returned function runs the full flow for one message and returns
- * `undefined` when it completed synchronously (sync handler, no awaitable
- * settlement) so the concurrency gate can skip the `.finally()` allocation
- * on the sync path.
+ * `undefined` when it completed synchronously (a sync handler that settles
+ * inline) so the concurrency gate can skip the `.finally()` allocation on the
+ * sync path.
  */
 export const createWorkqueuePipeline = (
   rctx: RoutePipelineContext,
@@ -237,9 +237,9 @@ export const createWorkqueuePipeline = (
 };
 
 /**
- * Build the routing pipeline for ordered streams: no settlement (ordered
- * consumers auto-acknowledge), no dead-letter escalation, strictly
- * sequential delivery enforced by the concurrency gate.
+ * Build the routing pipeline for ordered streams. Ordered consumers
+ * auto-acknowledge, so the pipeline skips settlement and dead-letter
+ * escalation, and the concurrency gate keeps delivery strictly sequential.
  */
 export const createOrderedPipeline = (
   rctx: RoutePipelineContext,

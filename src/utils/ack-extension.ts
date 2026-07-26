@@ -130,9 +130,9 @@ class AckExtensionPool {
 const pool = new AckExtensionPool();
 
 /**
- * Register a message for ack extension. While the entry is live the pool
- * periodically calls `msg.working()` at the configured interval to keep
- * NATS from redelivering before the handler finishes.
+ * Register a message for ack extension. The pool calls `msg.working()` at the
+ * configured interval for as long as the entry lives, keeping NATS from
+ * redelivering before the handler finishes.
  *
  * @returns Cleanup function that cancels the registration, or `null` when
  *          ack extension is disabled.

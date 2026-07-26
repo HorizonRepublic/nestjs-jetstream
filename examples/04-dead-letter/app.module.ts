@@ -10,8 +10,8 @@ class FailingHandler {
   private readonly logger = new Logger('Handlers');
 
   /**
-   * This handler always throws - after max_deliver attempts (3),
-   * the message lands in the dead letter callback.
+   * This handler always throws. After max_deliver attempts (3) the message
+   * is routed to the dead letter callback.
    */
   @EventPattern('invoice.generate')
   handleInvoice(@Payload() data: { invoiceId: number }): void {

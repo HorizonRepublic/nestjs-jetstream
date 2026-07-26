@@ -133,8 +133,8 @@ export interface CaptureBodyOptions {
  */
 export interface OtelOptions {
   /**
-   * Global kill switch. When `false`, no spans are emitted, no propagation
-   * is attempted, and no hooks fire.
+   * Global kill switch. When `false`, the transport skips span creation,
+   * context propagation and hook invocation.
    *
    * @default true
    */

@@ -7,7 +7,7 @@ export const JETSTREAM_METRICS_CONFIG: unique symbol = Symbol('JETSTREAM_METRICS
 /** DI token for the resolved `prom-client` Registry. */
 export const JETSTREAM_METRICS_REGISTRY: unique symbol = Symbol('JETSTREAM_METRICS_REGISTRY');
 
-/** DI token for the dynamically loaded `prom-client` runtime classes. */
+/** DI token for the `prom-client` runtime classes, loaded on demand. */
 export const JETSTREAM_METRICS_PROM_CLIENT: unique symbol = Symbol('JETSTREAM_METRICS_PROM_CLIENT');
 
 export const DEFAULT_METRICS_PREFIX = 'jetstream_';

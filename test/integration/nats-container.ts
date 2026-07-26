@@ -80,7 +80,7 @@ export const startNatsContainer = async (): Promise<NatsContainerResult> => {
   return { container, port };
 };
 
-/** For restart tests: dynamic ports may be reassigned on restart, fixed bindings survive. */
+/** For restart tests: a randomly assigned port may change on restart, a fixed binding survives. */
 export const startNatsContainerWithFixedPort = async (
   hostPort: number,
 ): Promise<NatsContainerResult> => {

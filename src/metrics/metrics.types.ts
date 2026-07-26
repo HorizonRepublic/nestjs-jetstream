@@ -6,7 +6,7 @@ import type { HistogramBuckets } from './metrics.config';
 /**
  * Subset of the `prom-client` runtime surface used by the factory. Injected
  * (rather than statically imported) so nothing here triggers a load until
- * `JetstreamMetricsModule` resolves the peer dependency via dynamic import.
+ * `JetstreamMetricsModule` resolves the peer dependency via `import()`.
  */
 export interface PromClientRuntime {
   Counter: typeof Counter;
@@ -45,7 +45,7 @@ export interface CreateMetricsOptions {
   buckets?: HistogramBuckets;
 }
 
-/** A consumer this service owns: stream + durable + StreamKind for labelling. */
+/** Stream, durable name and StreamKind of a consumer this service owns, used for labelling. */
 export interface ConsumerPollTarget {
   kind: StreamKind;
   stream: string;

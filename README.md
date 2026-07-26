@@ -5,9 +5,9 @@
 <h1 align="center">nestjs-jetstream</h1>
 
 <p align="center">
-  The NATS JetStream transport NestJS microservices need —
-  durable, retried, traced — under the same <code>@EventPattern</code>
-  and <code>@MessagePattern</code> decorators you already use.
+  Durable, retried and traced NATS JetStream transport for NestJS
+  microservices, under the same <code>@EventPattern</code> and
+  <code>@MessagePattern</code> decorators you already use.
 </p>
 
 <p align="center">
@@ -30,21 +30,21 @@
 
 ---
 
-## Why this exists
+## What the built-in transport leaves out
 
-NestJS' [built-in NATS transport](https://docs.nestjs.com/microservices/nats) loses messages on pod restart, doesn't retry on failure, and gives you nothing to debug with. JetStream fixes all three — but wiring it into NestJS by hand is a project on its own.
+NestJS' [built-in NATS transport](https://docs.nestjs.com/microservices/nats) loses messages on pod restart, doesn't retry on failure, and gives you nothing to debug with. JetStream fixes all three, but wiring it into NestJS by hand is a project on its own.
 
 **This library is the swap.** Same `@EventPattern`, same `@MessagePattern`, same `client.emit()`. Durability, retries, and tracing underneath.
 
 ## What you get
 
-- **At-least-once delivery** — every event acked after the handler resolves; bounded retries with exponential backoff.
-- **Broadcast** — one message reaches every running pod via per-service durable consumers.
-- **Ordered delivery** — sequential per partition key without giving up horizontal scale.
-- **RPC** — Core for speed, JetStream for durability — same @MessagePattern either way.
-- **DLQ** — typed sink with original headers preserved after retries are exhausted.
-- **Scheduled messages, per-message TTL, health checks, graceful shutdown** — all the production levers.
-- **OpenTelemetry-compatible** — W3C `traceparent` propagated through every hop.
+- **At-least-once delivery**: every event acked after the handler resolves, with bounded retries and exponential backoff.
+- **Broadcast**: one message reaches every running pod via per-service durable consumers.
+- **Ordered delivery**: sequential per partition key, without giving up horizontal scale.
+- **RPC**: Core for speed, JetStream for durability, under the same `@MessagePattern` either way.
+- **DLQ**: typed sink that keeps the original headers once retries are exhausted.
+- **Scheduled messages, per-message TTL, health checks, graceful shutdown.**
+- **OpenTelemetry-compatible**: W3C `traceparent` propagated through every hop.
 
 ## Install
 
@@ -81,7 +81,7 @@ The full configuration surface, every pattern, and the production checklist live
 
 ## Quality
 
-The transport is covered by an extensive test suite (unit and integration) — see the [Codecov report](https://codecov.io/github/HorizonRepublic/nestjs-jetstream) above. 
+Unit and integration suites cover the transport; the [Codecov report](https://codecov.io/github/HorizonRepublic/nestjs-jetstream) tracks where they reach.
 
 Runnable demos for most supported patterns live under [`examples/`](./examples).
 

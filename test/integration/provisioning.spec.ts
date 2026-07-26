@@ -31,7 +31,7 @@ describe('Provisioning error clarity', () => {
     // Given: a service whose default streams exceed max_file_store
     const serviceName = uniqueServiceName();
 
-    // When / Then: app boot fails with the wrapped, actionable error
+    // When / Then: app boot fails with the wrapped error that names the fix
     let captured: unknown;
 
     try {

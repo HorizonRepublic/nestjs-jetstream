@@ -111,7 +111,7 @@ export interface StreamConsumerOverrides {
    * Default: `undefined` (unlimited, naturally bounded by `max_ack_pending`).
    * Set this to protect downstream systems from overload.
    *
-   * **Important:** if `concurrency < max_ack_pending`, messages buffer in RxJS
+   * If `concurrency < max_ack_pending`, messages buffer in RxJS
    * while their NATS ack timer ticks. Increase `ack_wait` proportionally to
    * prevent unnecessary redeliveries.
    */
@@ -353,7 +353,7 @@ export interface JetstreamModuleOptions {
    * When any handler has `meta` in its `@EventPattern` / `@MessagePattern` extras,
    * the transport writes metadata to a NATS KV bucket at startup.
    * External services (API gateways, dashboards, CLI tools) can read or watch
-   * the bucket for dynamic service discovery.
+   * the bucket to discover services at runtime.
    *
    * Auto-enabled when any handler has `meta`. Set to customize bucket name,
    * replicas, or TTL.

@@ -103,7 +103,7 @@ export class MessageProvider {
    * Start an ordered consumer for strict sequential delivery.
    *
    * Unlike durable consumers, ordered consumers are ephemeral: created at
-   * consumption time, no durable state. nats.js handles auto-recreation.
+   * consumption time and forgotten afterwards. nats.js handles auto-recreation.
    *
    * @param streamName - JetStream stream to consume from.
    * @param filterSubjects - NATS subjects to filter on.
@@ -291,7 +291,7 @@ export class MessageProvider {
       for await (const status of messages.status()) {
         // Threshold: 2 consecutive missed heartbeats triggers restart.
         // One missed heartbeat can happen during normal GC pauses or brief network blips.
-        // Two consecutive misses strongly indicate a stale consumer.
+        // A second miss in a row indicates a stale consumer.
         if (status.type === 'heartbeats_missed' && status.count >= 2) {
           this.logger.warn(`Consumer ${name}: ${status.count} heartbeats missed, restarting`);
           messages.stop();

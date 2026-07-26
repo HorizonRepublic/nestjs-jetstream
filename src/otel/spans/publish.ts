@@ -78,7 +78,7 @@ export interface PublishSpanContext {
  * errors (infrastructure failure, not a business outcome).
  *
  * Fast paths:
- * - `otel.enabled: false` -> run `fn` with no span, no header injection
+ * - `otel.enabled: false` -> run `fn` directly, leaving headers untouched
  * - `traces` set does not include `Publish` -> inject propagation only
  * - `shouldTracePublish` returns false -> inject propagation only
  */

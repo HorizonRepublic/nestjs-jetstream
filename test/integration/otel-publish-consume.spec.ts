@@ -158,7 +158,7 @@ describe('OTel publish + consume integration', () => {
       await waitForCondition(() => controller.received.length === 1, 5_000);
       await provider.forceFlush();
 
-      // Then: only the two functional spans, no provisioning/connection/etc.
+      // Then: the two functional spans are the only ones recorded
       const spans = exporter.getFinishedSpans();
       const kinds = new Set(spans.map((s) => s.kind));
 
