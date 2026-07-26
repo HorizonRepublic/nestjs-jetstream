@@ -245,7 +245,7 @@ To schedule delayed broadcasts, enable `broadcast.stream.allow_msg_schedules: tr
 - **`max_deliver`** (per-service), `3`. Each service retries independently before dead letter.
 - **`ack_wait`** (per-service), 10 seconds. Scoped to each service's broadcast consumer.
 
-See [Default Configs, Broadcast Stream](/docs/reference/default-configs#broadcast-stream) and [Broadcast Consumer](/docs/reference/default-configs#broadcast-consumer) for the complete list.
+See [Default Configs](/docs/reference/default-configs#stream-defaults) for the broadcast stream and [consumer](/docs/reference/default-configs#consumer-defaults) values side by side with the other kinds.
 
 ## Common use cases
 

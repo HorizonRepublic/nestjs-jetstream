@@ -15,7 +15,7 @@ schema:
 
 When your service starts, the transport ensures its JetStream streams exist. Each stream
 reserves storage up front, and that reservation is charged against a budget shared by **every
-service** on the cluster. This page explains the arithmetic and how to read the boot summary.
+service** on the cluster.
 
 ## The arithmetic
 

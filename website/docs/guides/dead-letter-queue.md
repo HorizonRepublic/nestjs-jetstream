@@ -76,19 +76,9 @@ JetstreamModule.forRoot({
 
 ### Defaults
 
-| Setting             | Default                                       |
-| ------------------- | --------------------------------------------- |
-| Stream name         | `{service}__microservice_dlq-stream`          |
-| Retention           | `Workqueue`, removed once a DLQ consumer acks |
-| `max_age`           | 30 days                                       |
-| `max_bytes`         | 5 GB                                          |
-| `max_msgs`          | 50,000,000                                    |
-| `max_msg_size`      | 10 MB                                         |
-| `max_consumers`     | 100                                           |
-| `allow_rollup_hdrs` | `false`                                       |
-| `duplicate_window`  | 2 minutes                                     |
+The stream is named `{service}__microservice_dlq-stream` and keeps messages for **30 days** under `Limits` retention, so reading a dead letter does not consume it. Everything else matches the other streams; the [full table](/docs/reference/default-configs#stream-defaults) has the exact values, and `DEFAULT_DLQ_STREAM_CONFIG` is exported if you want to compose overrides on top of it.
 
-Override any of them through `dlq.stream`; full values live in `DEFAULT_DLQ_STREAM_CONFIG`. The stream name is always derived from the service name, and a `name` on `dlq.stream` is ignored, which keeps DLQ streams predictable across services. Use the exported `dlqStreamName(serviceName)` helper instead of hardcoding it.
+Override through `dlq.stream`. A `name` there is ignored: the stream name is always derived from the service name, which keeps DLQ streams predictable across a fleet. Use the exported `dlqStreamName(serviceName)` helper rather than hardcoding the pattern.
 
 ### Tracking headers
 
@@ -224,7 +214,7 @@ export class DlqService {
 
 ## Metrics and alerting
 
-`TransportEvent.DeadLetter` fires before the callback, whether or not one is registered:
+`TransportEvent.DeadLetter` fires before the callback, with or without one registered:
 
 ```typescript
 import { JetstreamModule, TransportEvent } from '@horizon-republic/nestjs-jetstream';

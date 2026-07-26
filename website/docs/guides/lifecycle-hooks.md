@@ -27,7 +27,7 @@ The full event set is defined in the `TransportEvent` enum:
 | `Disconnect`        | `() => void`                                              | NATS connection lost                                                                              |
 | `Reconnect`         | `(server: string) => void`                                | NATS connection re-established after a disconnect                                                 |
 | `Error`             | `(error: Error, context?: string) => void`                | Any transport-level error                                                                         |
-| `RpcTimeout`        | `(subject: string, correlationId: string) => void`        | An RPC handler exceeds its timeout                                                                |
+| `RpcTimeout`        | `(subject: string, correlationId: string) => void`        | A deadline expires on either side of an RPC call                                                  |
 | `MessageRouted`     | `(subject: string, kind: MessageKind) => void`            | A message is successfully routed to its handler                                                   |
 | `HandlerCompleted`  | `(subject, kind: StreamKind, durationMs, status) => void` | A handler returns or throws (success/error/retried/terminated). <Since version="2.11.0" />        |
 | `Published`         | `(subject, kind: StreamKind, durationMs, status) => void` | Every client-side publish leg completes (event emit or RPC publish). <Since version="2.11.0" />   |
@@ -37,7 +37,9 @@ The full event set is defined in the `TransportEvent` enum:
 | `ShutdownComplete`  | `() => void`                                              | Graceful shutdown sequence finishes                                                               |
 | `DeadLetter`        | `(info: DeadLetterInfo) => void`                          | A message exhausts all delivery attempts                                                          |
 
-The `MessageKind` enum on `MessageRouted` has two values; `Event` and `Rpc`; and is importable from `@horizon-republic/nestjs-jetstream`.
+The `MessageKind` enum on `MessageRouted` has two values, `Event` and `Rpc`, and is importable from `@horizon-republic/nestjs-jetstream`.
+
+`RpcTimeout` fires on the caller when a request never gets its reply, and on the responder when a handler runs past the deadline. Core-mode caller timeouts have no correlation ID to report and pass an empty string, so read `subject` first and treat `correlationId` as optional detail.
 
 ## Registering hooks
 

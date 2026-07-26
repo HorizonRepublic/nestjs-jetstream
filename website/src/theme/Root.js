@@ -52,7 +52,7 @@ export default function Root({ children }) {
   "headline": "Installation",
   "description": "Install the package, set up NATS with Docker, and configure peer dependencies.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-04-11"
+  "dateModified": "2026-07-27"
 },
       
     '/docs/getting-started/quick-start/': {
@@ -156,7 +156,7 @@ export default function Root({ children }) {
   "headline": "JetstreamRecordBuilder: Headers, Message IDs & Deduplication",
   "description": "Build NestJS NATS messages with custom headers, deterministic message IDs for publish-side deduplication, and per-request RPC timeouts.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-07-26"
+  "dateModified": "2026-07-27"
 },
       
     '/docs/guides/scheduling/': {
@@ -196,7 +196,7 @@ export default function Root({ children }) {
   "headline": "NestJS NATS Transport with JetStream: Introduction",
   "description": "A NestJS NATS microservice transport backed by JetStream: durable events, broadcast, ordered delivery, RPC, and dead letter queues.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-07-26"
+  "dateModified": "2026-07-27"
 },
       
     '/docs/observability/index/': {
@@ -300,7 +300,7 @@ export default function Root({ children }) {
   "headline": "Naming Conventions",
   "description": "Stream, consumer, and subject naming patterns derived from the service name.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-07-26"
+  "dateModified": "2026-07-27"
 },
       
     '/docs/reference/release-notes/': {

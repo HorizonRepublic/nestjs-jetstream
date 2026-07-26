@@ -24,16 +24,9 @@ A projection that applies `delivered` before `shipped` is wrong, and one that mi
 
 ## How ordered consumers differ
 
-|                               | Workqueue and broadcast    | Ordered                            |
-| ----------------------------- | -------------------------- | ---------------------------------- |
-| Consumer                      | Durable, server-side state | Ephemeral, recreated by the client |
-| Visible in `nats consumer ls` | Yes                        | No                                 |
-| Retention                     | Workqueue, delete on ack   | Limits, delete by age or size      |
-| Default `max_age`             | 7 days                     | 1 day                              |
-| Acknowledgment                | Explicit `msg.ack()`       | Automatic, inside the client       |
-| Handler flow                  | `mergeMap`, concurrent     | `concatMap`, one message at a time |
+An ordered consumer is ephemeral and lives in the client, not on the server: it will not appear in `nats consumer ls`, and it is recreated from scratch whenever the connection drops. It acks for you, so handler code never calls `msg.ack()` or `msg.nak()`, and the router pins its concurrency limit to one, so the next message waits for your handler to settle.
 
-Messages stay until `max_age` expires, so every consumer and every instance can read the full history independently. Handler code never calls `msg.ack()` or `msg.nak()`: the ordered consumer protocol acks for you.
+The stream behind it keeps messages under `Limits` retention for a day by default instead of deleting them on ack, which is what lets every instance read the same history independently. The [full comparison](#workqueue-or-ordered) with workqueue events is at the end of this page.
 
 If the consumer disconnects, the transport re-establishes it through a `defer()` + `repeat()` loop with backoff from 100ms up to 30 seconds. See [self-healing consumers](/docs/reference/edge-cases#consumer-self-healing).
 
@@ -248,20 +241,20 @@ async handleOrderStatus(@Payload() data: OrderStatusDto) {
 
 ## Workqueue or ordered
 
-|                         | Workqueue events                   | Ordered events                          |
-| ----------------------- | ---------------------------------- | --------------------------------------- |
-| **Delivery guarantee**  | At-least-once                      | At-most-once                            |
-| **Message ordering**    | Not guaranteed (parallel)          | Strict sequential                       |
-| **Handler parallelism** | `mergeMap`, concurrent             | `concatMap`, one at a time              |
-| **Retry on failure**    | Yes, `nak` triggers redelivery     | No, error logged and skipped            |
-| **Dead letter queue**   | Yes, after `max_deliver` attempts  | No                                      |
-| **Acknowledgment**      | Explicit `msg.ack()`               | Automatic by the client                 |
-| **Stream retention**    | Workqueue, delete on ack           | Limits, delete by age or size           |
-| **Consumer type**       | Durable, server-side               | Ephemeral, client-side                  |
-| **Scaling model**       | Load-balanced across instances     | Every instance gets every message       |
-| **Replay on restart**   | No, acked messages are gone        | Yes, per deliver policy                 |
-| **Publish prefix**      | _(none)_                           | `ordered:`                              |
-| **Typical use case**    | Workload distribution, task queues | Event sourcing, projections, audit logs |
+|                         | Workqueue events                     | Ordered events                          |
+| ----------------------- | ------------------------------------ | --------------------------------------- |
+| **Delivery guarantee**  | At-least-once                        | At-most-once                            |
+| **Message ordering**    | Not guaranteed (parallel)            | Strict sequential                       |
+| **Handler parallelism** | Concurrent, bounded by `concurrency` | One message at a time                   |
+| **Retry on failure**    | Yes, `nak` triggers redelivery       | No, error logged and skipped            |
+| **Dead letter queue**   | Yes, after `max_deliver` attempts    | No                                      |
+| **Acknowledgment**      | Explicit `msg.ack()`                 | Automatic by the client                 |
+| **Stream retention**    | Workqueue, delete on ack             | Limits, delete by age or size           |
+| **Consumer type**       | Durable, server-side                 | Ephemeral, client-side                  |
+| **Scaling model**       | Load-balanced across instances       | Every instance gets every message       |
+| **Replay on restart**   | No, acked messages are gone          | Yes, per deliver policy                 |
+| **Publish prefix**      | _(none)_                             | `ordered:`                              |
+| **Typical use case**    | Workload distribution, task queues   | Event sourcing, projections, audit logs |
 
 Reach for workqueue when processing must be guaranteed and order does not matter. Reach for ordered when sequence is the point and every instance needs the whole stream.
 

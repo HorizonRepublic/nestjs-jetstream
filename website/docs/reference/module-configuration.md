@@ -286,6 +286,8 @@ JetstreamModule.forRoot({
 
 The global value can be overridden per entity via `events.management`, `broadcast.management`, etc. Resolution order: per-entity -> global -> `Auto`. See [Bring Your Own Infrastructure](/docs/guides/external-infrastructure) for a complete guide.
 
+The other field is `preflightStorageCheck` (default `false`): when on, the transport calls `getAccountInfo()` before provisioning and warns if the streams it is about to create would not fit the account's storage budget. It never blocks boot.
+
 #### `metadata`, `MetadataRegistryOptions`
 
 Default: auto-enabled if any handler has `meta`. Handler metadata registry; publishes `@EventPattern` / `@MessagePattern` handler metadata to a NATS KV bucket for cross-service discovery. No-op when `consumer: false`. See [Handler Metadata](/docs/patterns/handler-metadata). <Since version="2.9.0" />
@@ -306,9 +308,9 @@ Default: `10_000` (10 s). Graceful shutdown timeout in milliseconds. Handlers ex
 
 Default: none. Raw NATS `ConnectionOptions` pass-through for TLS, auth, reconnection, etc. See [connectionOptions](#connectionoptions) below.
 
-#### `otel`, `OtelOptions`
+#### `otel`, `OtelOptions | boolean`
 
-Default: enabled with sensible defaults. OpenTelemetry tracing configuration. See [Distributed Tracing](/docs/observability/tracing).
+Default: enabled. Pass `false` to turn tracing off entirely, `true` for the defaults, or an object to configure it. See [Distributed Tracing](/docs/observability/tracing).
 
 ### RpcConfig
 

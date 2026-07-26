@@ -37,7 +37,7 @@ The workqueue flow, step by step:
 
 Because the stream uses **workqueue retention**, a message is automatically deleted once acknowledged, keeping the stream compact.
 
-Handlers run concurrently via RxJS `mergeMap`, bounded by the consumer's `max_ack_pending` (default: 100). Multiple messages can be in-flight at once.
+Handlers run concurrently, bounded by the consumer's `max_ack_pending` (default: 100) and by `concurrency` when you set one. Multiple messages can be in flight at once.
 
 ## Code examples
 
@@ -319,7 +319,7 @@ The default of 3 delivery attempts works well for transient errors (network blip
 - **`max_age`**, 7 days. How long events live in the stream before being purged.
 - **`duplicate_window`**, 2 minutes. Dedup window for [`setMessageId()`](/docs/guides/record-builder).
 
-See [Default Configs, Event Stream](/docs/reference/default-configs#event-stream) and [Event Consumer](/docs/reference/default-configs#event-consumer) for the complete list of stream and consumer defaults.
+See [Default Configs](/docs/reference/default-configs#stream-defaults) for the event stream and [consumer](/docs/reference/default-configs#consumer-defaults) values side by side with the other kinds.
 
 ## Error handling
 

@@ -13,7 +13,7 @@ schema:
 
 # Header Contract
 
-Every NATS message header the transport touches, in one place. The contract is **stable across minor versions**; header names change only on major bumps. External publishers (Go, Python, Rust, …) only need to honour this page to interoperate with NestJS services using the library.
+The transport reads and writes the headers below and nothing else. Names are **stable across minor versions** and change only on major bumps, so a publisher in Go, Python or Rust interoperates with a NestJS service by honouring them.
 
 ## At a glance
 
@@ -42,18 +42,21 @@ Calling `JetstreamRecordBuilder.setHeader()` with any of these throws a reserved
 
 - `x-correlation-id` · `x-reply-to` · `x-error`
 
-The builder accepts values for these next two, but they're **silently overwritten** at publish time:
-
-- `x-subject` · `x-caller-name`
+The builder accepts `x-subject` and `x-caller-name`. The transport writes both before your custom headers are applied, so a value you set for either one **wins**. Set them only when you are deliberately relabelling a message; the consume span and `ctx.getCallerName()` read what arrives on the wire.
 
 User-defined headers should use a distinct prefix or name (`x-tenant-id`, `x-request-id`, `application-foo`) and avoid the reserved names above.
 
 ## NATS server-interpreted (`Nats-*` prefix)
 
-The NATS server interprets these itself:
+`setHeader()` rejects **every** header starting with `nats-`, whatever the casing. These drive server-side behaviour: a stray `Nats-Rollup` purges every pending message on the subject. Reach them through the builder methods instead:
 
-- **`Nats-Msg-Id`**; publisher-supplied deduplication key. Set via `JetstreamRecordBuilder.setMessageId()` (from this library) or directly on the headers map (external publishers). Do not set it both ways on the same publish.
-- **`Nats-TTL`, `Nats-Schedule`, `Nats-Expected-*`, `Nats-Rollup`, …**: set them per the [NATS docs](https://docs.nats.io/) when you need their semantics; otherwise leave them alone.
+| Header          | Builder method     | Guide                                           |
+| --------------- | ------------------ | ----------------------------------------------- |
+| `Nats-Msg-Id`   | `setMessageId(id)` | Deduplication within `duplicate_window`         |
+| `Nats-TTL`      | `ttl(nanos)`       | [Per-message TTL](/docs/guides/per-message-ttl) |
+| `Nats-Schedule` | `scheduleAt(date)` | [Scheduling](/docs/guides/scheduling)           |
+
+External publishers in other languages set these directly on the headers map, as the NATS docs describe. Do not set `Nats-Msg-Id` both ways on the same publish.
 
 ## Cross-language examples
 

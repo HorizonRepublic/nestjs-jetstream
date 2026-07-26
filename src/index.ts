@@ -84,6 +84,9 @@ export { JetstreamProvisioningError } from './server/infrastructure/provisioning
 // Server (for advanced use cases)
 export { JetstreamStrategy } from './server';
 
+// Prometheus metrics
+export type { HistogramBuckets, MetricsConfig, MetricsOption } from './metrics/metrics.config';
+
 // OpenTelemetry integration
 export { ConsumeKind, DEFAULT_TRACES, JetstreamTrace, PublishKind, TRACER_NAME } from './otel';
 

@@ -145,7 +145,7 @@ All metric names are prefixed with `jetstream_` (configurable). `defaultLabels` 
 | `jetstream_publish_duration_seconds` | `subject`, `kind`, `status`           | Wall-clock duration of client publish operations.                           |
 | `jetstream_rpc_duration_seconds`     | `subject`, `status`                   | Full RPC round-trip from caller's perspective. `status` includes `timeout`. |
 
-Default buckets (in seconds): `[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]`. Cover sub-millisecond RPC up to ten-second batch handlers. Override via `metrics.buckets`.
+Handler and RPC buckets run `[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]` seconds, covering sub-millisecond calls up to ten-second batch handlers. Publish stops at `5`, since a publish still running after five seconds is a connection problem to investigate elsewhere. Override any of the three via `metrics.buckets`.
 
 ### Gauges (polled)
 

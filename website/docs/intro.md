@@ -20,7 +20,7 @@ Three doors, by situation. The full map is in the sidebar.
 
 ## "Is this production-ready?"
 
-[Why JetStream?](/docs/getting-started/why-jetstream) states the trade-offs, the cases where the built-in transport is genuinely enough, and where Core NATS drops messages. [Testing](/docs/development/testing) covers what the suite actually exercises against a real NATS server.
+[Why JetStream?](/docs/getting-started/why-jetstream) states the trade-offs, the cases where the built-in transport is enough on its own, and where Core NATS drops messages. [Testing](/docs/development/testing) covers what the suite exercises against a real NATS server.
 
 ## "I need the exact key"
 

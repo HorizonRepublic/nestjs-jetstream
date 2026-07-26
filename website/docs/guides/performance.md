@@ -20,7 +20,7 @@ Pull consumers provide **implicit backpressure**: the client controls how fast i
 The message flow through the system:
 
 ```text
-NATS Server -> pull consumer (max_ack_pending) -> consume() buffer -> RxJS mergeMap (concurrency) -> handler -> ack -> frees slot
+NATS Server -> pull consumer (max_ack_pending) -> consume() buffer -> concurrency gate -> handler -> ack -> frees slot
 ```
 
 The primary flow control knob is `max_ack_pending` on the consumer. It limits how many messages can be in-flight (delivered but not yet acknowledged) at any time. When the limit is reached, the server stops delivering new messages until existing ones are acknowledged, creating natural backpressure.
@@ -61,7 +61,7 @@ The `idle_heartbeat` option enables the server to send periodic heartbeats when 
 
 ## Concurrency control
 
-The `concurrency` option limits the number of messages processed in parallel by the `mergeMap` operator in the message pipeline. Without it, all pulled messages are dispatched to handlers immediately.
+The `concurrency` option caps how many messages the router has in flight at once. Anything beyond the cap queues FIFO and drains as handlers settle. Without it, every pulled message is dispatched immediately.
 
 ```typescript
 events: {

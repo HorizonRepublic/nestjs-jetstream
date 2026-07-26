@@ -189,44 +189,21 @@ When a custom `subjectPrefix` is set:
 
 ## Subject contract per kind
 
-When the library binds to an external entity it validates that the entity's configuration satisfies these requirements. The table below describes what each kind needs from an externally provisioned stream and consumer.
+Binding validates that the external entity can carry this service's traffic. The **stream's subjects** must include every subject this service publishes or handles, and the **consumer's filter** must include every subject it handles. What that means per kind:
 
-### Event stream (workqueue)
+| Kind      | Stream subjects must cover                                                                          | Consumer filter                                       |
+| --------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Event     | Every registered handler subject: a wildcard like `ext.orders.>` or the individual subjects         | `filter_subject` or `filter_subjects`, covering each  |
+| Command   | Same as event; only when `rpc: { mode: 'jetstream' }`                                               | Same as event                                         |
+| Broadcast | Every broadcast subject this service registers, `broadcast.{pattern}` unless a custom prefix is set | `filter_subject` or `filter_subjects`                 |
+| Ordered   | `{service}__microservice.ordered.{pattern}` unless a custom prefix is set                           | Nothing to configure: ordered consumers are ephemeral |
+| DLQ       | The DLQ stream's own name, since dead letters publish to a subject equal to it                      | Nothing: the transport creates no DLQ consumer        |
 
-| Requirement                                                                                                   | What to configure externally                                      |
-| ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Stream subjects must cover all registered handler subjects                                                    | Add a wildcard like `ext.orders.>` or list individual subjects    |
-| Consumer filter must cover all registered handler subjects                                                    | Set `filter_subject` or `filter_subjects` to include each subject |
-| `retention: workqueue` is strongly recommended                                                                | Validated with a warning if absent                                |
-| If `allow_msg_schedules: true` is set in the app config, the stream subjects must also cover `{prefix}_sch.>` | Add the schedule wildcard to the stream's subjects                |
-
-### Command stream (JetStream RPC mode)
-
-Same requirements as the event stream. Only applies when `rpc: { mode: 'jetstream' }` is configured.
-
-### Broadcast stream
-
-| Requirement                                                                  | What to configure externally                                                                      |
-| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Stream subjects must cover all broadcast subjects registered by this service | Each broadcast subject follows the `broadcast.{pattern}` convention unless a custom prefix is set |
-| Consumer filter must cover all broadcast handler subjects                    | Set `filter_subject` or `filter_subjects`                                                         |
+Event and command streams should also carry `retention: workqueue`; anything else boots with a warning. And with `allow_msg_schedules: true` in the app config, the stream's subjects must cover `{prefix}_sch.>` as well, or scheduled publishes have nowhere to land.
 
 :::warning
-Setting broadcast to Manual means the shared cluster-wide `broadcast-stream` is externally owned. Every service in the cluster that uses broadcast events will consume from that same stream.
+Setting broadcast to Manual means the cluster-wide `broadcast-stream` is externally owned. Every service in the cluster that uses broadcast events consumes from that same stream.
 :::
-
-### Ordered stream
-
-| Requirement                                                                      | What to configure externally                                                                          |
-| -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Stream subjects must cover all ordered-event subjects registered by this service | Subjects use the `{service}__microservice.ordered.{pattern}` convention unless a custom prefix is set |
-| Consumer filter (ordered consumers are recreated automatically by the client)    | No filter configuration needed: ordered consumers are ephemeral                                       |
-
-### DLQ stream
-
-| Requirement                                                           | What to configure externally                                                                                        |
-| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| The stream's `subjects` list must contain exactly the DLQ stream name | The DLQ subject equals the stream name: e.g., if the stream is named `ext_dlq`, its subjects must include `ext_dlq` |
 
 See [External DLQ](#external-dlq) below for a full example.
 

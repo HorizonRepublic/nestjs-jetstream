@@ -42,23 +42,29 @@ We welcome contributions from the community. The full contribution guidelines li
 ## Prerequisites
 
 - Node.js >= 20.0.0
-- pnpm 10.x or higher
+- pnpm >= 10
 - Docker (integration tests use [Testcontainers](https://testcontainers.com/) to start NATS automatically)
 
 ## Development Commands
 
-| Command            | Description                                                                                  |
-| ------------------ | -------------------------------------------------------------------------------------------- |
-| `pnpm build`       | Build the library (tsup, dual CJS/ESM)                                                       |
-| `pnpm build:watch` | Build in watch mode                                                                          |
-| `pnpm lint`        | Check for linting issues                                                                     |
-| `pnpm lint:fix`    | Auto-fix linting issues                                                                      |
-| `pnpm test`        | Run all tests (unit + integration, parallel)                                                 |
-| `pnpm test:watch`  | Run tests in watch mode                                                                      |
-| `pnpm test:cov`    | Run tests with coverage                                                                      |
-| `pnpm docs:dev`    | Start the Docusaurus dev server                                                              |
-| `pnpm docs:build`  | Build the documentation site (includes TypeDoc regeneration via `docusaurus-plugin-typedoc`) |
-| `pnpm docs:serve`  | Serve the built documentation locally                                                        |
+| Command             | Description                                                        |
+| ------------------- | ------------------------------------------------------------------ |
+| `pnpm build`        | Build the library with tsdown, dual CJS/ESM                        |
+| `pnpm build:watch`  | Build in watch mode                                                |
+| `pnpm typecheck`    | Type-check against `tsconfig.build.json`                           |
+| `pnpm lint`         | Lint with oxlint, type-aware rules included                        |
+| `pnpm lint:fix`     | Lint and apply fixes                                               |
+| `pnpm lint:md`      | Lint markdown structure with markdownlint                          |
+| `pnpm format`       | Format source and docs with oxfmt                                  |
+| `pnpm format:check` | Check formatting without writing                                   |
+| `pnpm test`         | Run unit and integration tests in parallel                         |
+| `pnpm test:watch`   | Run tests in watch mode                                            |
+| `pnpm test:cov`     | Run tests with coverage                                            |
+| `pnpm bench`        | Run the benchmark harness                                          |
+| `pnpm docs:api`     | Regenerate the TypeDoc API reference                               |
+| `pnpm docs:dev`     | Regenerate the API reference, then start the Docusaurus dev server |
+| `pnpm docs:build`   | Regenerate the API reference, then build the site                  |
+| `pnpm docs:serve`   | Serve the built site locally                                       |
 
 See [Testing](/docs/development/testing) for detailed test conventions and setup.
 
@@ -103,7 +109,7 @@ Use a scope in parentheses (e.g., `feat(client):`, `fix(strategy):`) to show the
 
 - TypeScript for all code
 - JSDoc comments on all public APIs
-- Follow existing code style (enforced by ESLint + Prettier)
+- Follow existing code style (enforced by oxlint and oxfmt)
 - See [Testing](/docs/development/testing) for test conventions (`sut` naming, `createMock<T>()`, Given-When-Then, etc.)
 
 ## License

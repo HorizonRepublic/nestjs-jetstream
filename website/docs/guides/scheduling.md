@@ -143,5 +143,5 @@ See [Bring Your Own Infrastructure, Scheduling with a custom prefix](/docs/guide
 
 - [Record Builder & Deduplication](/docs/guides/record-builder#scheduled-delivery): `JetstreamRecordBuilder.scheduleAt()` in the full builder API
 - [Per-Message TTL](/docs/guides/per-message-ttl): sibling feature for per-message expiration
-- [Naming Conventions: Scheduling subjects](/docs/reference/naming-conventions#scheduling-subjects): how the transport routes scheduled messages internally
+- [Naming Conventions: stream subject wildcards](/docs/reference/naming-conventions#stream-subject-wildcards): how the transport routes scheduled messages internally
 - [Default Configs](/docs/reference/default-configs#enable-only-can-be-turned-on-but-never-off): `allow_msg_schedules` in the enable-only stream properties table
