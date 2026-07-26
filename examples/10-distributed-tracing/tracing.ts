@@ -1,3 +1,4 @@
+import { NodeSDK } from '@opentelemetry/sdk-node';
 /**
  * OpenTelemetry SDK setup. Imported FIRST in main.ts so the global
  * TracerProvider, ContextManager, and Propagator are registered before
@@ -11,7 +12,6 @@
  *   const exporter = new OTLPTraceExporter({ url: 'http://localhost:4318/v1/traces' });
  */
 import { ConsoleSpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
-import { NodeSDK } from '@opentelemetry/sdk-node';
 
 export const sdk = new NodeSDK({
   serviceName: 'distributed-tracing-example',

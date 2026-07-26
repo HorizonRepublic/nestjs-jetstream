@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+
 import {
   JetStreamApiError,
   RetentionPolicy,
@@ -17,7 +18,6 @@ import {
   DEFAULT_ORDERED_STREAM_CONFIG,
   DEFAULT_DLQ_STREAM_CONFIG,
 } from '../../jetstream.constants';
-import { NameResolver } from './name-resolver';
 import {
   deriveOtelAttrs,
   withMigrationSpan,
@@ -25,6 +25,9 @@ import {
   type ResolvedOtelOptions,
   type ServerEndpoint,
 } from '../../otel';
+import { InfrastructureBinder } from './infrastructure-binder';
+import { kindOptionsBlock, resolveManagementMode } from './management';
+import { NameResolver } from './name-resolver';
 import { NatsErrorCode } from './nats-error-codes';
 import { assertStorageBudget } from './provisioning-budget';
 import { mapProvisioningError, type ProvisioningErrorContext } from './provisioning-error';
@@ -34,8 +37,6 @@ import {
   type ReservationKind,
   type StreamReservation,
 } from './provisioning-summary';
-import { kindOptionsBlock, resolveManagementMode } from './management';
-import { InfrastructureBinder } from './infrastructure-binder';
 import { compareStreamConfig, type StreamConfigDiffResult } from './stream-config-diff';
 import { StreamMigration } from './stream-migration';
 import { subjectCovers } from './subject-utils';

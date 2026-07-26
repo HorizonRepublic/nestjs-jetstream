@@ -1,7 +1,6 @@
 import { type JetStreamApiError } from '@nats-io/jetstream';
 
 import { type ProvisioningEntity } from '../../otel';
-
 import { NatsErrorCode } from './nats-error-codes';
 
 /** What was being provisioned when the failure occurred. */

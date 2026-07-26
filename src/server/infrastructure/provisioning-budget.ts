@@ -1,4 +1,5 @@
 import { type Logger } from '@nestjs/common';
+
 import { type JetStreamManager, StorageType } from '@nats-io/jetstream';
 
 import { type StreamReservation } from './provisioning-summary';

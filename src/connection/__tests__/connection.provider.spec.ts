@@ -1,3 +1,10 @@
+import type { JetStreamClient, JetStreamManager } from '@nats-io/jetstream';
+import { jetstream, jetstreamManager } from '@nats-io/jetstream';
+import type { NatsConnection, Status } from '@nats-io/transport-node';
+import { connect } from '@nats-io/transport-node';
+
+import { faker } from '@faker-js/faker';
+import { createMock } from '@golevelup/ts-vitest';
 import {
   afterEach,
   beforeEach,
@@ -8,17 +15,10 @@ import {
   type Mocked,
   type MockedFunction,
 } from 'vitest';
-import { createMock } from '@golevelup/ts-vitest';
-import { faker } from '@faker-js/faker';
-import type { NatsConnection, Status } from '@nats-io/transport-node';
-import { connect } from '@nats-io/transport-node';
-import type { JetStreamClient, JetStreamManager } from '@nats-io/jetstream';
-import { jetstream, jetstreamManager } from '@nats-io/jetstream';
 
 import { EventBus } from '../../hooks';
 import type { JetstreamModuleOptions } from '../../interfaces';
 import { TransportEvent } from '../../interfaces';
-
 import { ConnectionProvider } from '../connection.provider';
 
 vi.mock('@nats-io/transport-node', async () => ({

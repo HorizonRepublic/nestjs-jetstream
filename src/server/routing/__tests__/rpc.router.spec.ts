@@ -1,10 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type Mocked } from 'vitest';
 import { Logger } from '@nestjs/common';
-import { createMock } from '@golevelup/ts-vitest';
-import { faker } from '@faker-js/faker';
-import type { MsgHdrs, NatsConnection } from '@nats-io/transport-node';
+
 import type { JsMsg } from '@nats-io/jetstream';
+import type { MsgHdrs, NatsConnection } from '@nats-io/transport-node';
+
+import { faker } from '@faker-js/faker';
+import { createMock } from '@golevelup/ts-vitest';
 import { Subject } from 'rxjs';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type Mocked } from 'vitest';
 
 import { ConnectionProvider } from '../../../connection';
 import { EventBus } from '../../../hooks';
@@ -12,7 +14,6 @@ import type { Codec } from '../../../interfaces';
 import { StreamKind, TransportEvent } from '../../../interfaces';
 import { DEFAULT_JETSTREAM_RPC_TIMEOUT, JetstreamHeader } from '../../../jetstream.constants';
 import { MessageProvider } from '../../infrastructure';
-
 import { PatternRegistry } from '../pattern-registry';
 import { RpcRouter } from '../rpc.router';
 

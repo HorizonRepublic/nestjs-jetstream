@@ -14,9 +14,8 @@ import type { ConsumeOptions, ConsumerInfo } from '@nats-io/jetstream';
 import { JetstreamClient } from './client';
 import { JsonCodec } from './codec';
 import { ConnectionProvider } from './connection';
-import { deriveOtelAttrs, withSelfHealingSpan } from './otel';
-import { EventBus } from './hooks';
 import { JetstreamHealthIndicator } from './health';
+import { EventBus } from './hooks';
 import { ManagementMode, StreamKind } from './interfaces';
 import type {
   Codec,
@@ -35,6 +34,7 @@ import {
   JETSTREAM_OPTIONS,
 } from './jetstream.constants';
 import { JetstreamMetricsModule } from './metrics/metrics.module';
+import { deriveOtelAttrs, withSelfHealingSpan } from './otel';
 import {
   CoreRpcServer,
   ConsumerProvider,

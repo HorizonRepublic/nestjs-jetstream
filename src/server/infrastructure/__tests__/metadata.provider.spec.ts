@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createMock } from '@golevelup/ts-vitest';
 import { faker } from '@faker-js/faker';
+import { createMock } from '@golevelup/ts-vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConnectionProvider } from '../../../connection';
 import type { JetstreamModuleOptions } from '../../../interfaces';
@@ -11,7 +11,6 @@ import {
   DEFAULT_METADATA_TTL,
   MIN_METADATA_TTL,
 } from '../../../jetstream.constants';
-
 import { MetadataProvider } from '../metadata.provider';
 
 const mockPut = vi.fn<(k: string, data: string) => Promise<number>>();

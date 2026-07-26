@@ -1,5 +1,6 @@
-import type { Attributes } from '@opentelemetry/api';
 import type { MsgHdrs } from '@nats-io/transport-node';
+
+import type { Attributes } from '@opentelemetry/api';
 
 import {
   ATTR_MESSAGING_NATS_BODY,

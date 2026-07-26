@@ -1,9 +1,11 @@
 import { Logger } from '@nestjs/common';
-import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
-import { createMock } from '@golevelup/ts-vitest';
-import { faker } from '@faker-js/faker';
+
 import type { StreamInfo } from '@nats-io/jetstream';
 import { JetStreamApiError, RetentionPolicy, StorageType } from '@nats-io/jetstream';
+
+import { faker } from '@faker-js/faker';
+import { createMock } from '@golevelup/ts-vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 
 import { ConnectionProvider } from '../../../connection';
 import { ManagementMode, StreamKind } from '../../../interfaces';
@@ -14,10 +16,9 @@ import {
   DEFAULT_EVENT_STREAM_CONFIG,
   internalName,
 } from '../../../jetstream.constants';
-
+import { PatternRegistry } from '../../routing';
 import { InfrastructureBinder } from '../infrastructure-binder';
 import { NameResolver } from '../name-resolver';
-import { PatternRegistry } from '../../routing';
 import { StreamProvider } from '../stream.provider';
 
 describe(StreamProvider, () => {

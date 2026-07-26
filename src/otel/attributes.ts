@@ -1,5 +1,6 @@
-import type { Attributes, Span } from '@opentelemetry/api';
 import type { DeliveryInfo } from '@nats-io/jetstream';
+
+import type { Attributes, Span } from '@opentelemetry/api';
 
 import {
   ATTR_JETSTREAM_DEAD_LETTER_REASON,

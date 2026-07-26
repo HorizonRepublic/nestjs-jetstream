@@ -1,14 +1,14 @@
-import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 import { Global, Logger, Module } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+
 import { createMock } from '@golevelup/ts-vitest';
 import { Registry, register as globalRegister } from 'prom-client';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 
 import { EventBus } from '../../hooks';
 import type { JetstreamModuleOptions } from '../../interfaces';
 import { JETSTREAM_EVENT_BUS, JETSTREAM_OPTIONS } from '../../jetstream.constants';
 import { NameResolver } from '../../server/infrastructure/name-resolver';
-
 import {
   JETSTREAM_METRICS_CONFIG,
   JETSTREAM_METRICS_PROM_CLIENT,

@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+
 import type { JsMsg } from '@nats-io/jetstream';
 import { headers as natsHeaders, type MsgHdrs } from '@nats-io/transport-node';
 
@@ -11,9 +12,8 @@ import {
   JetstreamDlqHeader,
   NATS_CONTROL_HEADER_PREFIX,
 } from '../../jetstream.constants';
-import { settleQuietly } from '../../utils';
 import { withDeadLetterSpan, type ResolvedOtelOptions, type ServerEndpoint } from '../../otel';
-
+import { settleQuietly } from '../../utils';
 import { NameResolver } from '../infrastructure/name-resolver';
 import { PatternRegistry } from './pattern-registry';
 

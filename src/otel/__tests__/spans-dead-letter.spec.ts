@@ -1,5 +1,8 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import type { JsMsg } from '@nats-io/jetstream';
+import { headers } from '@nats-io/transport-node';
+
 import { faker } from '@faker-js/faker';
+import { createMock } from '@golevelup/ts-vitest';
 import { SpanKind, SpanStatusCode, context, propagation, trace } from '@opentelemetry/api';
 import { AsyncLocalStorageContextManager } from '@opentelemetry/context-async-hooks';
 import { W3CTraceContextPropagator } from '@opentelemetry/core';
@@ -8,9 +11,7 @@ import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
 } from '@opentelemetry/sdk-trace-base';
-import { headers } from '@nats-io/transport-node';
-import type { JsMsg } from '@nats-io/jetstream';
-import { createMock } from '@golevelup/ts-vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { resolveOtelOptions } from '../config';
 import { withDeadLetterSpan, type DeadLetterSpanContext } from '../spans/dead-letter';

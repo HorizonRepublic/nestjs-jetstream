@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+
 import { JetStreamApiError, type ConsumerConfig, type ConsumerInfo } from '@nats-io/jetstream';
 
 import { ConnectionProvider } from '../../connection';
@@ -16,12 +17,11 @@ import {
   type ServerEndpoint,
 } from '../../otel';
 import { PatternRegistry } from '../routing';
-
-import { mapProvisioningError, type ProvisioningErrorContext } from './provisioning-error';
-import { NatsErrorCode } from './nats-error-codes';
-import { NameResolver } from './name-resolver';
-import { kindOptionsBlock, resolveManagementMode } from './management';
 import { InfrastructureBinder } from './infrastructure-binder';
+import { kindOptionsBlock, resolveManagementMode } from './management';
+import { NameResolver } from './name-resolver';
+import { NatsErrorCode } from './nats-error-codes';
+import { mapProvisioningError, type ProvisioningErrorContext } from './provisioning-error';
 import { MIGRATION_BACKUP_SUFFIX } from './stream-migration';
 import { StreamProvider } from './stream.provider';
 

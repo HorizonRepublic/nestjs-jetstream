@@ -1,14 +1,14 @@
 import type { MessageHandler } from '@nestjs/microservices';
+
 import type { JsMsg } from '@nats-io/jetstream';
 
 import { RpcContext } from '../../context';
 import { MessageKind, TransportEvent } from '../../interfaces';
-import { isPromiseLike, startAckExtensionTimer, unwrapResult } from '../../utils';
 import { withConsumeSpan } from '../../otel';
-
+import { isPromiseLike, startAckExtensionTimer, unwrapResult } from '../../utils';
 import type { DeadLetterCapture } from './dead-letter-capture';
-import { createSettlement, statusForContext } from './settlement';
 import type { HandlerReporter, RoutePipelineContext } from './routing.types';
+import { createSettlement, statusForContext } from './settlement';
 
 /** Routing shape resolved for one incoming message. */
 interface ResolvedEvent {

@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+
 import type { JetStreamManager } from '@nats-io/jetstream';
 
 import { STREAM_KIND_LABEL } from './metrics.constants';

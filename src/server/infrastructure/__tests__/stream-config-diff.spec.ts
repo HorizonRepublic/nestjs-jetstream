@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RetentionPolicy, StorageType } from '@nats-io/jetstream';
 import type { StreamConfig } from '@nats-io/jetstream';
+
 import { faker } from '@faker-js/faker';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { compareStreamConfig } from '../stream-config-diff';
 

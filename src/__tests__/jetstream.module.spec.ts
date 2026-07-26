@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createMock } from '@golevelup/ts-vitest';
 import { Logger, type Provider } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+
+import { createMock } from '@golevelup/ts-vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ManagementMode } from '../interfaces';
 import type { JetstreamModuleOptions } from '../interfaces';

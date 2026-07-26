@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { faker } from '@faker-js/faker';
 import { HttpException, NotFoundException } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
+
+import { faker } from '@faker-js/faker';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveOtelOptions } from '../config';
 import { JetstreamTrace, DEFAULT_TRACES } from '../trace-kinds';

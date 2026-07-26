@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+
 import type {
   ConsumeOptions,
   Consumer,
@@ -8,6 +9,7 @@ import type {
   OrderedConsumerOptions,
 } from '@nats-io/jetstream';
 import { DeliverPolicy } from '@nats-io/jetstream';
+
 import {
   catchError,
   defer,

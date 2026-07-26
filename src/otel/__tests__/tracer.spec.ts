@@ -1,10 +1,10 @@
-import { afterEach, describe, expect, it } from 'vitest';
 import { trace } from '@opentelemetry/api';
 import {
   BasicTracerProvider,
   InMemorySpanExporter,
   SimpleSpanProcessor,
 } from '@opentelemetry/sdk-trace-base';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { getTracer } from '../tracer';
 

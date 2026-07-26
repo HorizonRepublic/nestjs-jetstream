@@ -1,5 +1,6 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { connect, type NatsConnection } from '@nats-io/transport-node';
+import { Controller } from '@nestjs/common';
+import { EventPattern, Payload } from '@nestjs/microservices';
+
 import {
   jetstream,
   jetstreamManager,
@@ -8,16 +9,15 @@ import {
   type JetStreamClient,
   type JetStreamManager,
 } from '@nats-io/jetstream';
-import type { StartedTestContainer } from 'testcontainers';
-import { Controller } from '@nestjs/common';
-import { EventPattern, Payload } from '@nestjs/microservices';
+import { connect, type NatsConnection } from '@nats-io/transport-node';
 
 import { faker } from '@faker-js/faker';
+import type { StartedTestContainer } from 'testcontainers';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { buildSubject, streamName, StreamKind } from '../../src';
-
-import { startNatsContainer } from './nats-container';
 import { cleanupStreams, createTestApp, uniqueServiceName, waitForCondition } from './helpers';
+import { startNatsContainer } from './nats-container';
 
 const MEMORY_STREAM_MAX_BYTES = 50_000_000;
 

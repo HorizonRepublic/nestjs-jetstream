@@ -10,6 +10,7 @@ import {
   type OnApplicationShutdown,
 } from '@nestjs/common';
 import { Ctx, EventPattern, MessagePattern, Payload } from '@nestjs/microservices';
+
 import { firstValueFrom, lastValueFrom } from 'rxjs';
 
 import {
@@ -19,7 +20,6 @@ import {
   JetstreamTrace,
   RpcContext,
 } from '../../src';
-
 import { sdk } from './tracing';
 
 const SERVICE = 'tracing-demo';

@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest';
 import * as promClient from 'prom-client';
+import { describe, it, expect, beforeEach } from 'vitest';
 
-import { createMetrics } from '../metrics.factory';
 import { DEFAULT_METRICS_PREFIX } from '../metrics.constants';
+import { createMetrics } from '../metrics.factory';
 import type { PromClientRuntime } from '../metrics.types';
 
 const runtime: PromClientRuntime = {

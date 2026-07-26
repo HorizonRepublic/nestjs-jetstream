@@ -1,13 +1,14 @@
-import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
-import { createMock } from '@golevelup/ts-vitest';
 import type { MessageHandler } from '@nestjs/microservices';
-import type { NatsConnection } from '@nats-io/transport-node';
+
 import type { ConsumerInfo } from '@nats-io/jetstream';
+import type { NatsConnection } from '@nats-io/transport-node';
+
+import { createMock } from '@golevelup/ts-vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 
 import { ConnectionProvider } from '../../connection';
 import type { JetstreamModuleOptions } from '../../interfaces';
 import { StreamKind } from '../../interfaces';
-
 import { CoreRpcServer } from '../core-rpc.server';
 import {
   ConsumerProvider,

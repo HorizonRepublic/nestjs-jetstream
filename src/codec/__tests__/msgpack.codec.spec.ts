@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
 import { faker } from '@faker-js/faker';
+import { describe, expect, it, vi } from 'vitest';
 
 import { MsgpackCodec, type PackrLike } from '../msgpack.codec';
 

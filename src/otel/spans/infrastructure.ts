@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+
 import {
   SpanKind,
   SpanStatusCode,
@@ -30,8 +31,8 @@ import {
   SPAN_NAME_NATS_CONNECTION,
 } from '../attribute-keys';
 import type { ResolvedOtelOptions, ServerEndpoint } from '../config';
-import { getTracer } from '../tracer';
 import { JetstreamTrace } from '../trace-kinds';
+import { getTracer } from '../tracer';
 
 const logger = new Logger('Jetstream:Otel');
 

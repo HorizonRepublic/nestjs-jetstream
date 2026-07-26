@@ -1,4 +1,3 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { Controller, INestApplication } from '@nestjs/common';
 import {
   ClientProxy,
@@ -8,6 +7,9 @@ import {
   RpcException,
 } from '@nestjs/microservices';
 import { TestingModule } from '@nestjs/testing';
+
+import { type NatsConnection } from '@nats-io/transport-node';
+
 import { context, propagation, SpanKind, SpanStatusCode, trace } from '@opentelemetry/api';
 import { AsyncLocalStorageContextManager } from '@opentelemetry/context-async-hooks';
 import { W3CTraceContextPropagator } from '@opentelemetry/core';
@@ -16,12 +18,11 @@ import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
 } from '@opentelemetry/sdk-trace-base';
-import { type NatsConnection } from '@nats-io/transport-node';
 import { firstValueFrom } from 'rxjs';
 import type { StartedTestContainer } from 'testcontainers';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { getClientToken, internalName, StreamKind, type OtelOptions } from '../../src';
-
 import {
   cleanupStreams,
   createNatsConnection,

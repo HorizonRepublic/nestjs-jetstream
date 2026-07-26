@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
-import { faker } from '@faker-js/faker';
 import { headers as natsHeaders } from '@nats-io/transport-node';
+
+import { faker } from '@faker-js/faker';
+import { describe, expect, it } from 'vitest';
 
 import { hdrsGetter, hdrsSetter } from '../carrier';
 

@@ -1,11 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
-import { createMock } from '@golevelup/ts-vitest';
-import { faker } from '@faker-js/faker';
-import type { Msg, MsgHdrs } from '@nats-io/transport-node';
 import type { DeliveryInfo, JsMsg } from '@nats-io/jetstream';
+import type { Msg, MsgHdrs } from '@nats-io/transport-node';
+
+import { faker } from '@faker-js/faker';
+import { createMock } from '@golevelup/ts-vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { JetstreamHeader } from '../../jetstream.constants';
-
 import { RpcContext } from '../rpc.context';
 
 describe(RpcContext, () => {

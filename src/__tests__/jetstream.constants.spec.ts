@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { faker } from '@faker-js/faker';
 import { StoreCompression } from '@nats-io/jetstream';
+
+import { faker } from '@faker-js/faker';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { StreamKind } from '../interfaces';
 import {

@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
-import { createMock } from '@golevelup/ts-vitest';
-import { faker } from '@faker-js/faker';
 import { HttpException, NotFoundException } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
+
 import type { JsMsg } from '@nats-io/jetstream';
+
+import { faker } from '@faker-js/faker';
+import { createMock } from '@golevelup/ts-vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   buildConsumeAttributes,

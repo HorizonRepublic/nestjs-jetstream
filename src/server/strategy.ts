@@ -1,12 +1,12 @@
 import { CustomTransportStrategy, Server } from '@nestjs/microservices';
 import type { MessageHandler, MsPattern } from '@nestjs/microservices';
+
 import type { ConsumerInfo } from '@nats-io/jetstream';
 
 import { ConnectionProvider } from '../connection';
 import { StreamKind } from '../interfaces';
 import type { JetstreamModuleOptions } from '../interfaces';
 import { isCoreRpcMode, isJetStreamRpcMode } from '../jetstream.constants';
-
 import { CoreRpcServer } from './core-rpc.server';
 import {
   ConsumerProvider,

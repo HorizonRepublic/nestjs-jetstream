@@ -1,0 +1,46 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "singleQuote": true,
+  "trailingComma": "all",
+  "printWidth": 100,
+  "tabWidth": 2,
+  "useTabs": false,
+  "semi": true,
+  "bracketSameLine": false,
+  "arrowParens": "always",
+  "endOfLine": "lf",
+  "proseWrap": "preserve",
+  "quoteProps": "as-needed",
+  "htmlWhitespaceSensitivity": "css",
+  "embeddedLanguageFormatting": "auto",
+  "sortPackageJson": false,
+  "ignorePatterns": [],
+  "sortImports": {
+    "customGroups": [
+      {
+        "groupName": "nest",
+        "elementNamePattern": [
+          "@nestjs/**"
+        ]
+      },
+      {
+        "groupName": "nats",
+        "elementNamePattern": [
+          "@nats-io/**"
+        ]
+      }
+    ],
+    "groups": [
+      "builtin",
+      "nest",
+      "nats",
+      "external",
+      [
+        "parent",
+        "sibling",
+        "index"
+      ],
+      "unknown"
+    ]
+  }
+}

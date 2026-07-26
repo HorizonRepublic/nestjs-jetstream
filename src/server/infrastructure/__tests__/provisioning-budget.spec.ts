@@ -1,7 +1,9 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createMock } from '@golevelup/ts-vitest';
 import { Logger } from '@nestjs/common';
+
 import { RetentionPolicy, StorageType } from '@nats-io/jetstream';
+
+import { createMock } from '@golevelup/ts-vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { StreamKind } from '../../../interfaces';
 import { assertStorageBudget } from '../provisioning-budget';

@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
 import { RetentionPolicy, StorageType } from '@nats-io/jetstream';
+
+import { describe, expect, it } from 'vitest';
 
 import { StreamKind } from '../../../interfaces';
 import {

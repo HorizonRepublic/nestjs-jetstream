@@ -1,27 +1,28 @@
-import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type Mocked } from 'vitest';
 import { Logger } from '@nestjs/common';
-import { createMock } from '@golevelup/ts-vitest';
-import { faker } from '@faker-js/faker';
-import type { DeliveryInfo, JsMsg } from '@nats-io/jetstream';
-import { Subject } from 'rxjs';
 
+import type { DeliveryInfo, JsMsg } from '@nats-io/jetstream';
+
+import { faker } from '@faker-js/faker';
+import { createMock } from '@golevelup/ts-vitest';
+import { Subject } from 'rxjs';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type Mocked } from 'vitest';
+
+import { ConnectionProvider } from '../../../connection';
+import { RpcContext } from '../../../context';
 import { EventBus } from '../../../hooks';
 import type { Codec } from '../../../interfaces';
 import { TransportEvent } from '../../../interfaces';
-import { MessageProvider } from '../../infrastructure';
-
-import { RpcContext } from '../../../context';
 import { StreamKind } from '../../../interfaces';
 import type {
   DeadLetterConfig,
   EventProcessingConfig,
   JetstreamModuleOptions,
 } from '../../../interfaces';
+import { dlqStreamName, JetstreamDlqHeader } from '../../../jetstream.constants';
+import { MessageProvider } from '../../infrastructure';
+import { NameResolver } from '../../infrastructure/name-resolver';
 import { EventRouter } from '../event.router';
 import { PatternRegistry } from '../pattern-registry';
-import { ConnectionProvider } from '../../../connection';
-import { dlqStreamName, JetstreamDlqHeader } from '../../../jetstream.constants';
-import { NameResolver } from '../../infrastructure/name-resolver';
 
 describe(EventRouter, () => {
   let sut: EventRouter;

@@ -1,5 +1,4 @@
 import { StreamKind } from '../interfaces';
-
 import type { ErrorContext, HistogramBuckets } from './metrics.config';
 
 /** DI token for the resolved {@link MetricsConfig} (defaults applied). */

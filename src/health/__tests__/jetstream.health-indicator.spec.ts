@@ -1,10 +1,10 @@
-import { afterEach, describe, expect, it, vi, type Mocked } from 'vitest';
-import { createMock } from '@golevelup/ts-vitest';
-import { faker } from '@faker-js/faker';
 import type { NatsConnection } from '@nats-io/transport-node';
 
-import { ConnectionProvider } from '../../connection';
+import { faker } from '@faker-js/faker';
+import { createMock } from '@golevelup/ts-vitest';
+import { afterEach, describe, expect, it, vi, type Mocked } from 'vitest';
 
+import { ConnectionProvider } from '../../connection';
 import { JetstreamHealthIndicator } from '../jetstream.health-indicator';
 
 describe(JetstreamHealthIndicator, () => {

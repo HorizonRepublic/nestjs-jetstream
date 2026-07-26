@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+
 import { headers as natsHeaders, type Msg, type Subscription } from '@nats-io/transport-node';
 
 import { ConnectionProvider } from '../connection';
@@ -15,7 +16,6 @@ import {
   type ServerEndpoint,
 } from '../otel';
 import { isPromiseLike, serializeError, unwrapResult } from '../utils';
-
 import { NameResolver } from './infrastructure/name-resolver';
 import { PatternRegistry } from './routing/pattern-registry';
 

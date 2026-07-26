@@ -1,9 +1,9 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Controller } from '@nestjs/common';
 import { EventPattern } from '@nestjs/microservices';
 
-import { JetstreamProvisioningError, NatsErrorCode } from '../../src';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { JetstreamProvisioningError, NatsErrorCode } from '../../src';
 import { createTestApp, uniqueServiceName } from './helpers';
 import { startNatsCluster, type NatsClusterResult } from './nats-container';
 
