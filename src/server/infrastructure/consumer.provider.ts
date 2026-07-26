@@ -168,6 +168,7 @@ export class ConsumerProvider {
             throw new Error(
               `Consumer ${name} on ${stream} is externally managed and currently absent; ` +
                 `waiting for it to be restored.`,
+              { cause: err },
             );
           }
 

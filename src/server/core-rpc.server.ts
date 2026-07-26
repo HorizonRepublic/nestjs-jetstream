@@ -66,8 +66,8 @@ export class CoreRpcServer {
           return;
         }
 
-        this.handleRequest(msg).catch((err) => {
-          this.logger.error('Unhandled request error:', err);
+        this.handleRequest(msg).catch((handlerErr: unknown) => {
+          this.logger.error('Unhandled request error:', handlerErr);
         });
       },
     });
