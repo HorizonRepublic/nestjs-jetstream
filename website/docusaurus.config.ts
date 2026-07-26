@@ -38,6 +38,9 @@ const config: Config = {
           changefreq: 'weekly',
           priority: 0.5,
           filename: 'sitemap.xml',
+          // The generated API reference carries `noindex` and the plugin drops
+          // those on its own; /404 has no such tag and has to be named.
+          ignorePatterns: ['/404'],
         },
       } satisfies Preset.Options,
     ],

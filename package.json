@@ -65,7 +65,7 @@
     "prepublishOnly": "pnpm build",
     "lint": "oxlint --type-aware",
     "lint:fix": "oxlint --type-aware --fix",
-    "docs:api": "npx -y -p typedoc@0.28.20 -p typescript@6.0.3 -p typedoc-plugin-markdown@4.12.0 typedoc",
+    "docs:api": "npx -y -p typedoc@0.28.20 -p typescript@6.0.3 -p typedoc-plugin-markdown@4.12.0 typedoc && node tools/seo/noindex-generated-docs.mjs",
     "docs:dev": "pnpm docs:api && pnpm --filter ./website start",
     "docs:build": "pnpm docs:api && pnpm --filter ./website build",
     "docs:serve": "pnpm --filter ./website serve",
