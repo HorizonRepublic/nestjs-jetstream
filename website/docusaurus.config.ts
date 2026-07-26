@@ -65,8 +65,22 @@ const config: Config = {
         baseSchema: {
           organization: {
             '@type': 'Organization',
+            // publisher references resolve against this @id; without it every
+            // Article on the site points at a node that is not in the graph.
+            '@id': '${DOCUSAURUS_CONFIG_URL}/#organization',
             name: 'Horizon Republic',
             url: '${DOCUSAURUS_CONFIG_URL}',
+          },
+          // Every WebPage declares isPartOf this node, so it has to be in the
+          // graph on every page, not only on the home page.
+          website: {
+            '@type': 'WebSite',
+            '@id': '${DOCUSAURUS_CONFIG_URL}/#website',
+            name: '@horizon-republic/nestjs-jetstream',
+            description:
+              'A NATS JetStream transport for NestJS microservices: durable events, broadcast, ordered delivery, RPC and dead letters.',
+            url: '${DOCUSAURUS_CONFIG_URL}',
+            publisher: { '@id': '${DOCUSAURUS_CONFIG_URL}/#organization' },
           },
         },
       },

@@ -5,6 +5,8 @@
 
 import React from 'react';
 import { useLocation } from '@docusaurus/router';
+import Head from '@docusaurus/Head';
+import CommandPalette from '@site/src/components/CommandPalette';
 
 export default function Root({ children }) {
   const location = useLocation();
@@ -20,8 +22,19 @@ export default function Root({ children }) {
     "baseSchema": {
       "organization": {
         "@type": "Organization",
+        "@id": "https://nestjs-jetstream.horizon-republic.dev/#organization",
         "name": "Horizon Republic",
         "url": "https://nestjs-jetstream.horizon-republic.dev"
+      },
+      "website": {
+        "@type": "WebSite",
+        "@id": "https://nestjs-jetstream.horizon-republic.dev/#website",
+        "name": "@horizon-republic/nestjs-jetstream",
+        "description": "A NATS JetStream transport for NestJS microservices: durable events, broadcast, ordered delivery, RPC and dead letters.",
+        "url": "https://nestjs-jetstream.horizon-republic.dev",
+        "publisher": {
+          "@id": "https://nestjs-jetstream.horizon-republic.dev/#organization"
+        }
       }
     }
   }
@@ -314,7 +327,7 @@ export default function Root({ children }) {
 
   };
   for (const homePath of homePathes) {
-    schemas[homePath] = { "@type": "WebSite", "name": "@horizon-republic/nestjs-jetstream", "description": "Production-grade NestJS transport for NATS JetStream — events, broadcast, ordered delivery, and RPC." };
+    schemas[homePath] = {};
   }
   
   // Get the schema for the current page
@@ -329,7 +342,7 @@ export default function Root({ children }) {
 
     if (articlesWithAuthorPublisher.includes(schemaType)) {
       contentData.author = {
-        '@id': `${baseUrl}/#person`
+        '@id': `${baseUrl}/#organization`
       };
       contentData.publisher = {
         '@id': `${baseUrl}/#organization`
@@ -420,9 +433,10 @@ export default function Root({ children }) {
   return (
     <>
       {children}
-      <script type="application/ld+json">
-          {JSON.stringify(graphData)}
-        </script>
+      <CommandPalette />
+      <Head>
+        <script type="application/ld+json">{JSON.stringify(graphData)}</script>
+      </Head>
     </>
   );
 }
