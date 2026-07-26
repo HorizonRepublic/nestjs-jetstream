@@ -147,14 +147,6 @@ website/docs/reference/api/
 *.swp
 *.swo
 
-# AI tools
-.claude/
-.copilot/
-.serena/
-CLAUDE.md
-GEMINI.md
-AGENTS.md
-
 # Benchmarks (dev-only, local harness and results)
 benchmarks/
 benchmarks/results/
