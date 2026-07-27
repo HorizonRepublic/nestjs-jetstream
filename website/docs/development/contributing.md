@@ -41,7 +41,7 @@ We welcome contributions from the community. The full contribution guidelines li
 
 ## Prerequisites
 
-- Node.js >= 20.0.0
+- Node.js >= 22.0.0
 - pnpm >= 10
 - Docker (integration tests use [Testcontainers](https://testcontainers.com/) to start NATS automatically)
 

@@ -7,6 +7,13 @@ const DEFAULT_ACK_EXTENSION_INTERVAL = 5_000;
 const MIN_ACK_EXTENSION_INTERVAL = 500;
 
 /**
+ * How long a single message may be kept alive by extension. A handler that
+ * hangs used to hold its message and its concurrency slot for the life of the
+ * process; past this point the extension stops and the server redelivers.
+ */
+export const DEFAULT_MAX_ACK_EXTENSION_MS = 300_000;
+
+/**
  * Resolve the ack extension interval from user config and NATS ack_wait.
  *
  * @param config  - `false`/`undefined` -> disabled, `number` -> explicit ms, `true` -> auto from ack_wait.
@@ -36,6 +43,7 @@ interface AckEntry {
   msg: { working(): void };
   interval: number;
   nextFireAt: number;
+  expiresAt: number;
   active: boolean;
 }
 
@@ -57,11 +65,13 @@ class AckExtensionPool {
   private handle: ReturnType<typeof setTimeout> | null = null;
   private handleFireAt = 0;
 
-  public schedule(msg: { working(): void }, interval: number): AckEntry {
+  public schedule(msg: { working(): void }, interval: number, maxTotalMs: number): AckEntry {
+    const now = Date.now();
     const entry: AckEntry = {
       msg,
       interval,
-      nextFireAt: Date.now() + interval,
+      nextFireAt: now + interval,
+      expiresAt: now + maxTotalMs,
       active: true,
     };
 
@@ -109,6 +119,12 @@ class AckExtensionPool {
 
     for (const entry of this.entries) {
       if (!entry.active) continue;
+
+      if (entry.expiresAt <= now) {
+        this.cancel(entry);
+        continue;
+      }
+
       if (entry.nextFireAt <= now) {
         try {
           entry.msg.working();
@@ -140,9 +156,10 @@ const pool = new AckExtensionPool();
 export const startAckExtensionTimer = (
   msg: { working(): void },
   interval: number | null,
+  maxTotalMs: number = DEFAULT_MAX_ACK_EXTENSION_MS,
 ): (() => void) | null => {
   if (interval === null || interval <= 0) return null;
-  const entry = pool.schedule(msg, interval);
+  const entry = pool.schedule(msg, interval, maxTotalMs);
 
   return () => {
     pool.cancel(entry);

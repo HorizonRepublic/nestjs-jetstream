@@ -142,7 +142,7 @@ export const createWorkqueuePipeline = (
 
   const reportHandlerCompleted = createHandlerReporter(rctx);
   const resolveEvent = createEventResolver(rctx);
-  const { settleSuccess, settleFailure } = createSettlement(logger, rctx.capture);
+  const { settleSuccess, settleFailure } = createSettlement(logger, rctx.capture, rctx.retryDelays);
 
   return (msg) => {
     const resolved = resolveEvent(msg);

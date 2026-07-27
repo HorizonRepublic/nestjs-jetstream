@@ -50,5 +50,7 @@ export interface RoutePipelineContext {
   readonly serverEndpoint: ServerEndpoint | null;
   /** Resolved ack-extension interval in ms, or null when disabled. */
   readonly ackExtensionInterval: number | null;
+  /** Delay before each redelivery, in ms; empty means nak immediately. */
+  readonly retryDelays: readonly number[];
   readonly capture: DeadLetterCapture | null;
 }

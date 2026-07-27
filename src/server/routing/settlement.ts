@@ -4,7 +4,7 @@ import type { JsMsg } from '@nats-io/jetstream';
 
 import type { RpcContext } from '../../context';
 import type { HandlerStatus } from '../../interfaces';
-import { settleQuietly } from '../../utils';
+import { retryDelayFor, settleQuietly } from '../../utils';
 import type { DeadLetterCapture } from './dead-letter-capture';
 import type { Settlement } from './routing.types';
 
@@ -16,7 +16,11 @@ export const statusForContext = (ctx: RpcContext): HandlerStatus => {
   return 'success';
 };
 
-export const createSettlement = (logger: Logger, capture: DeadLetterCapture | null): Settlement => {
+export const createSettlement = (
+  logger: Logger,
+  capture: DeadLetterCapture | null,
+  retryDelays: readonly number[] = [],
+): Settlement => {
   const settleSuccess = (msg: JsMsg, ctx: RpcContext, data: unknown): Promise<void> | undefined => {
     if (ctx.shouldTerminate) {
       settleQuietly(logger, `Failed to term ${msg.subject}:`, () => {
@@ -36,7 +40,7 @@ export const createSettlement = (logger: Logger, capture: DeadLetterCapture | nu
       }
 
       settleQuietly(logger, `Failed to nak ${msg.subject}:`, () => {
-        msg.nak(ctx.retryDelay);
+        msg.nak(ctx.retryDelay ?? retryDelayFor(retryDelays, msg));
       });
 
       return undefined;
@@ -57,7 +61,7 @@ export const createSettlement = (logger: Logger, capture: DeadLetterCapture | nu
     }
 
     settleQuietly(logger, `Failed to nak ${msg.subject}:`, () => {
-      msg.nak();
+      msg.nak(retryDelayFor(retryDelays, msg));
     });
   };
 

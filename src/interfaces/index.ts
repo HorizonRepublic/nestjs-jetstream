@@ -17,7 +17,9 @@ export { ManagementMode } from './options.interface';
 
 export type {
   AckExtensionConfig,
+  DlqOptions,
   EntityManagement,
+  RetryConfig,
   JetstreamFeatureOptions,
   JetstreamModuleAsyncOptions,
   JetstreamModuleOptions,
@@ -43,6 +45,7 @@ export type {
 export type {
   DeadLetterConfig,
   EventProcessingConfig,
+  KindProcessingConfig,
   PatternsByKind,
   RegisteredHandler,
   RpcRouterOptions,

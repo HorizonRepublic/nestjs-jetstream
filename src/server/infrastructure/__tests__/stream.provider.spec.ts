@@ -44,7 +44,9 @@ describe(StreamProvider, () => {
   };
 
   beforeEach(() => {
-    options = { name: faker.lorem.word(), servers: ['nats://localhost:4222'] };
+    // The DLQ stream is provisioned by default; these cases assert on the
+    // event and broadcast streams, so it is switched off unless a case wants it.
+    options = { name: faker.lorem.word(), servers: ['nats://localhost:4222'], dlq: false };
 
     mockJsm = {
       streams: {

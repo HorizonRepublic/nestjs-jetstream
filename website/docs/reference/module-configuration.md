@@ -257,9 +257,24 @@ Default: none. Transport lifecycle hook handlers. Unset hooks are silently ignor
 
 Default: none. Async callback for dead letter handling. Called and awaited when a message exhausts all delivery attempts. See [Dead Letter Queue](/docs/guides/dead-letter-queue). <Since version="2.2.0" />
 
-#### `dlq`, `{ stream?: StreamConfigOverrides; management?: EntityManagement }`
+#### `dlq`, `DlqOptions | false`
 
-Default: none. Built-in Dead Letter Queue stream. When set, exhausted messages are automatically republished to a dedicated DLQ stream with tracking headers. The optional `management` field controls whether the DLQ stream is auto-provisioned (`Auto`, default) or externally managed (`Manual`). See [Built-in DLQ stream](/docs/guides/dead-letter-queue#built-in-dlq-stream) and [External DLQ](/docs/guides/external-infrastructure#external-dlq). <Since version="2.9.0" />
+Default: enabled. Exhausted messages are republished to a dedicated DLQ stream with tracking headers. Pass `false` to turn it off and leave them where they land. `management` controls whether the stream is provisioned (`Auto`, default) or bound to an existing one (`Manual`). See [Built-in DLQ stream](/docs/guides/dead-letter-queue#built-in-dlq-stream) and [External DLQ](/docs/guides/external-infrastructure#external-dlq). <Since version="2.9.0" />
+
+:::note Bind-only deployments
+Under `provisioning: { management: Manual }` the implicit default stands down, since a service that provisions nothing should not fail boot over a stream nobody asked for. Set `dlq` explicitly to bind to an externally provisioned one.
+:::
+
+#### `events.retry` / `broadcast.retry`, `readonly number[] | false`
+
+Default: `[2000, 10000]`. Delay in milliseconds before each redelivery after a handler throws or calls `ctx.retry()`; index 0 is the first retry and the last entry repeats once the curve runs out. `false` naks immediately, which burns every attempt as fast as the handler can fail. The same curve is written to the consumer's `backoff`, so redeliveries the server schedules after `ack_wait` expires follow it too. <Since version="3.0.0" />
+
+```typescript
+events: {
+  consumer: { max_deliver: 5 },
+  retry: [1_000, 5_000, 30_000, 60_000],
+}
+```
 
 #### `provisioning`, `ProvisioningOptions`
 

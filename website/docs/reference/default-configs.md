@@ -19,19 +19,23 @@ Every stream and consumer the transport creates starts from the values below, ta
 
 Every stream is created with `storage: File`, `num_replicas: 1` (see [replicas in production](#replicas-in-production)), `discard: Old`, `allow_direct: true` and `compression: S2`. What differs per kind:
 
-| Property               | Event        | Command      | Broadcast    | Ordered      | DLQ          |
-| ---------------------- | ------------ | ------------ | ------------ | ------------ | ------------ |
-| `retention`            | `Workqueue`  | `Workqueue`  | `Limits`     | `Limits`     | `Limits`     |
-| `allow_rollup_hdrs`    | `true`       | `false`      | `true`       | `false`      | `false`      |
-| `max_consumers`        | `100`        | `50`         | `200`        | `100`        | `100`        |
-| `max_msg_size`         | `10 MB`      | `5 MB`       | `10 MB`      | `10 MB`      | `10 MB`      |
-| `max_msgs_per_subject` | `5,000,000`  | `100,000`    | `1,000,000`  | `5,000,000`  | `5,000,000`  |
-| `max_msgs`             | `50,000,000` | `1,000,000`  | `10,000,000` | `50,000,000` | `50,000,000` |
-| `max_bytes`            | `5 GB`       | `100 MB`     | `2 GB`       | `5 GB`       | `5 GB`       |
-| `max_age`              | `7 days`     | `3 minutes`  | `1 hour`     | `1 day`      | `30 days`    |
-| `duplicate_window`     | `2 minutes`  | `30 seconds` | `2 minutes`  | `2 minutes`  | `2 minutes`  |
+| Property               | Event       | Command      | Broadcast   | Ordered     | DLQ         |
+| ---------------------- | ----------- | ------------ | ----------- | ----------- | ----------- |
+| `retention`            | `Workqueue` | `Workqueue`  | `Limits`    | `Limits`    | `Limits`    |
+| `allow_rollup_hdrs`    | `true`      | `false`      | `true`      | `false`     | `false`     |
+| `max_consumers`        | `100`       | `50`         | `200`       | `100`       | `100`       |
+| `max_msg_size`         | `1 MB`      | `1 MB`       | `1 MB`      | `1 MB`      | `1 MB`      |
+| `max_msgs_per_subject` | `100,000`   | `10,000`     | `50,000`    | `500,000`   | `50,000`    |
+| `max_msgs`             | `1,000,000` | `100,000`    | `500,000`   | `5,000,000` | `500,000`   |
+| `max_bytes`            | `512 MB`    | `64 MB`      | `256 MB`    | `1 GB`      | `256 MB`    |
+| `max_age`              | `7 days`    | `3 minutes`  | `1 hour`    | `1 day`     | `30 days`   |
+| `duplicate_window`     | `2 minutes` | `30 seconds` | `2 minutes` | `2 minutes` | `2 minutes` |
 
-Sizes are binary: `10 MB` is 10,485,760 bytes, `5 GB` is 5,368,709,120 bytes. Durations are written with [`toNanos`](/docs/reference/module-configuration), so `max_age: toNanos(7, 'days')`.
+`max_bytes` is what the account is charged for, not what the stream currently holds: JetStream counts it against the account's storage budget the moment the stream is created. A service that provisions events plus a DLQ reserves **768 MB**, and one that also uses ordered delivery reserves **1.75 GB**, so a 10 GB file store carries roughly a dozen services rather than one.
+
+`max_msg_size` matches the NATS server's own `max_payload` default of 1 MB. A larger value here has no effect until the server is reconfigured to accept larger payloads.
+
+Sizes are binary: `1 MB` is 1,048,576 bytes, `512 MB` is 536,870,912 bytes. Durations are written with [`toNanos`](/docs/reference/module-configuration), so `max_age: toNanos(7, 'days')`.
 
 What each kind is for:
 
@@ -39,7 +43,7 @@ What each kind is for:
 - **Command** carries RPC requests in [JetStream RPC mode](/docs/patterns/rpc) only. Everything about it is short-lived, because a request nobody answered within three minutes is a request nobody wants answered.
 - **Broadcast** is one stream shared by every service. An hour of `max_age` is enough catch-up for a pod that just started and short enough that config updates do not accumulate.
 - **Ordered** keeps messages for a day under `Limits` retention, because an ordered consumer replays a subject from the beginning rather than consuming it away.
-- **DLQ** is created on demand when `dlq: { stream }` is set in `forRoot()`. Thirty days under `Limits` retention: reading a dead letter must not remove it. See [Dead Letter Queue](/docs/guides/dead-letter-queue#built-in-dlq-stream).
+- **DLQ** is created unless you pass `dlq: false`. Thirty days under `Limits` retention: reading a dead letter must not remove it. See [Dead Letter Queue](/docs/guides/dead-letter-queue#built-in-dlq-stream).
 
 :::note S2 compression
 [S2](https://github.com/klauspost/compress/tree/master/s2) is a Snappy-compatible codec with better ratios. It cuts disk I/O and storage for CPU that varies with payload entropy and size, and needs NATS Server >= 2.10 (see [runtime requirements](/docs/getting-started/installation#runtime-requirements)). Override per kind:
@@ -67,8 +71,11 @@ Every durable consumer uses `ack_policy: Explicit`, `deliver_policy: All` and `r
 | `ack_wait`        | `10 seconds` | `5 minutes` | `10 seconds` |
 | `max_deliver`     | `3`          | `1`         | `3`          |
 | `max_ack_pending` | `100`        | `100`       | `100`        |
+| `backoff`         | `2s, 10s`    | -           | `2s, 10s`    |
 
-An event that fails three times is [dead-lettered](/docs/guides/dead-letter-queue). A command is delivered once and never retried, so an RPC failure reaches the caller instead of being repeated behind their back.
+An event that fails three times is [dead-lettered](/docs/guides/dead-letter-queue). Between attempts the transport naks with a delay taken from the retry curve, so the three attempts span roughly twelve seconds instead of burning out in milliseconds; `backoff` carries the same curve for redeliveries the server schedules itself after `ack_wait` expires. Tune it with `events.retry`, or pass `false` to nak immediately.
+
+A command is delivered once and never retried, so an RPC failure reaches the caller instead of being repeated behind their back.
 
 :::note
 Ordered consumers have no durable configuration. They are ephemeral and managed entirely by the `@nats-io/jetstream` client library.

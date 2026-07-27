@@ -8,6 +8,7 @@ import type { AckExtensionConfig, JetstreamModuleOptions } from '../../interface
 import type { ProvisioningEntity } from '../../otel';
 import { resolveAckExtensionInterval } from '../../utils/ack-extension';
 import { PatternRegistry } from '../routing';
+import { isDlqEnabled } from './dlq-options';
 import { kindOptionsBlock, type ManagedKind } from './management';
 import { NameResolver } from './name-resolver';
 import { NatsErrorCode } from './nats-error-codes';
@@ -255,7 +256,7 @@ export class InfrastructureBinder {
   }
 
   private warnOnUnlimitedDelivery(info: ConsumerInfo, kind: StreamKind): void {
-    if (!this.options.dlq) return;
+    if (!isDlqEnabled(this.options)) return;
 
     const maxDeliver = info.config.max_deliver;
 

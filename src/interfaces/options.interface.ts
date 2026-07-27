@@ -88,6 +88,25 @@ export type RpcConfig =
 /** The JetStream variant of {@link RpcConfig}. */
 export type JetStreamRpcConfig = Extract<RpcConfig, { mode: 'jetstream' }>;
 
+/**
+ * Redelivery pacing for a stream kind.
+ *
+ * An array sets the delay in milliseconds before each retry, index 0 being the
+ * first one, and the last entry repeats once the curve runs out. `false` naks
+ * immediately, which burns every attempt as fast as the handler can fail.
+ *
+ * @default [2000, 10000]
+ */
+export type RetryConfig = readonly number[] | false;
+
+/** Built-in dead-letter stream, or `false` to leave exhausted messages in place. */
+export interface DlqOptions {
+  /** Raw NATS StreamConfig overrides for the DLQ stream. `name` is ignored. */
+  stream?: StreamConfigOverrides;
+  /** Provisioning control for the DLQ stream. Falls back to provisioning.management. */
+  management?: EntityManagement;
+}
+
 /** Overrides for JetStream stream and consumer configuration. */
 export interface StreamConsumerOverrides {
   stream?: StreamConfigOverrides;
@@ -126,6 +145,12 @@ export interface StreamConsumerOverrides {
    * - `number`: explicit extension interval in milliseconds.
    */
   ackExtension?: AckExtensionConfig;
+
+  /**
+   * Delay before each redelivery after a handler throws or calls `ctx.retry()`.
+   * See {@link RetryConfig}.
+   */
+  retry?: RetryConfig;
 
   /** Provisioning control for this kind's stream/consumer. Falls back to provisioning.management. */
   management?: EntityManagement;
@@ -317,11 +342,7 @@ export interface JetstreamModuleOptions {
    * })
    * ```
    */
-  dlq?: {
-    stream?: StreamConfigOverrides;
-    /** Provisioning control for the DLQ stream. Falls back to provisioning.management. */
-    management?: EntityManagement;
-  };
+  dlq?: DlqOptions | false;
 
   /**
    * Graceful shutdown timeout in ms.

@@ -25,6 +25,7 @@ import {
   type ResolvedOtelOptions,
   type ServerEndpoint,
 } from '../../otel';
+import { isDlqEnabled, dlqStreamOverrides } from './dlq-options';
 import { InfrastructureBinder } from './infrastructure-binder';
 import { kindOptionsBlock, resolveManagementMode } from './management';
 import { NameResolver } from './name-resolver';
@@ -92,11 +93,11 @@ export class StreamProvider {
       name: this.names.streamName(kind),
     }));
 
+    const dlqEnabled = isDlqEnabled(this.options);
     const dlqIsManual =
-      !!this.options.dlq &&
-      resolveManagementMode(this.options, 'dlq', 'stream') === ManagementMode.Manual;
+      dlqEnabled && resolveManagementMode(this.options, 'dlq', 'stream') === ManagementMode.Manual;
 
-    if (this.options.dlq) {
+    if (dlqEnabled) {
       if (dlqIsManual) {
         external.push({ kind: 'dlq', name: this.names.dlqStreamName() });
       } else {
@@ -115,7 +116,7 @@ export class StreamProvider {
       ...externalKinds.map((kind) => this.bindStream(jsm, kind)),
     ]);
 
-    if (this.options.dlq) {
+    if (dlqEnabled) {
       if (dlqIsManual) {
         await this.bindDlqStream(jsm);
       } else {
@@ -493,7 +494,7 @@ export class StreamProvider {
     const name = this.names.dlqStreamName();
     const subjects = [name];
     const description = `JetStream DLQ stream for ${this.options.name}`;
-    const overrides = this.options.dlq?.stream ?? {};
+    const overrides = dlqStreamOverrides(this.options);
     const safeOverrides = this.stripTransportControlled(overrides);
 
     return {

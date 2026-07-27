@@ -8,6 +8,7 @@ import { ConnectionProvider } from '../../connection';
 import { EventBus } from '../../hooks';
 import { StreamKind } from '../../interfaces';
 import type {
+  RetryConfig,
   AckExtensionConfig,
   Codec,
   DeadLetterConfig,
@@ -21,7 +22,11 @@ import {
   type ResolvedOtelOptions,
   type ServerEndpoint,
 } from '../../otel';
-import { resolveAckExtensionInterval, startAckExtensionTimer } from '../../utils';
+import {
+  resolveAckExtensionInterval,
+  resolveRetryDelays,
+  startAckExtensionTimer,
+} from '../../utils';
 import { MessageProvider } from '../infrastructure';
 import { NameResolver } from '../infrastructure/name-resolver';
 import { ConcurrencyGate } from './concurrency-gate';
@@ -140,6 +145,7 @@ export class EventRouter {
       serviceName: this.serviceName,
       serverEndpoint: this.serverEndpoint,
       ackExtensionInterval,
+      retryDelays: resolveRetryDelays(this.getRetryConfig(kind)),
       capture: this.capture,
     };
 
@@ -166,6 +172,14 @@ export class EventRouter {
     });
 
     this.subscriptions.push(subscription);
+  }
+
+  private getRetryConfig(kind: StreamKind): RetryConfig | undefined {
+    if (kind === StreamKind.Event) return this.processingConfig?.events?.retry;
+    if (kind === StreamKind.Broadcast) return this.processingConfig?.broadcast?.retry;
+
+    // Ordered consumers never redeliver, so a curve would have nothing to pace.
+    return false;
   }
 
   private getConcurrency(kind: StreamKind): number | undefined {

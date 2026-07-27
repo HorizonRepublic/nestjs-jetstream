@@ -1,6 +1,7 @@
 import type { MessageHandler } from '@nestjs/microservices';
 
 import type { DeadLetterInfo } from './hooks.interface';
+import type { AckExtensionConfig, RetryConfig } from './options.interface';
 
 /** @internal Entry stored in the pattern registry after handler registration. */
 export interface RegisteredHandler {
@@ -31,9 +32,15 @@ export interface PatternsByKind {
 }
 
 /** Options for configuring event/broadcast processing behavior. */
+export interface KindProcessingConfig {
+  concurrency?: number;
+  ackExtension?: AckExtensionConfig;
+  retry?: RetryConfig;
+}
+
 export interface EventProcessingConfig {
-  events?: { concurrency?: number; ackExtension?: boolean | number };
-  broadcast?: { concurrency?: number; ackExtension?: boolean | number };
+  events?: KindProcessingConfig;
+  broadcast?: KindProcessingConfig;
 }
 
 /** Options for dead letter queue handling. */
