@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://nestjs-jetstream.horizon-republic.dev/img/logo.svg" width="56" alt="nestjs-jetstream mark: three stream lines committing to a record"/>
+  <img src="website/static/img/logo.svg" width="56" alt="nestjs-jetstream mark: three stream lines committing to a record"/>
 </p>
 
 <h1 align="center">nestjs-jetstream</h1>
@@ -91,14 +91,9 @@ enabled.
 
 One runnable example per pattern, ten in all, lives under [`examples/`](./examples).
 
-## Quality
-
-Unit and integration suites run on every commit against a real NATS server, and
-[Codecov](https://codecov.io/github/HorizonRepublic/nestjs-jetstream) tracks
-where they reach. Releases follow semver through release-please, with breaking
-changes only on majors, and the
+Versioning follows semver: breaking changes land on majors, and the
 [header contract](https://nestjs-jetstream.horizon-republic.dev/docs/reference/header-contract)
-stays stable across minors.
+holds across minors.
 
 ---
 
