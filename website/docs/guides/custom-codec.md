@@ -68,17 +68,17 @@ Stick with `JsonCodec` when:
 
 Measured on the library's own codec bench, sync `decode` throughput. Payload buckets refer to the serialized wire size produced by the fixture generator:
 
-| Payload         | Shape          | vs JSON  |
-|-----------------|----------------|----------|
-| ~64 B           | flat / nested  | JSON wins by 15-34% |
-| small (~1 KB)   | flat / nested  | JSON wins by ~12%   |
-| small (~1 KB)   | string-heavy   | **msgpack +18%**    |
-| medium (~10 KB) | flat           | **msgpack +193%**   |
-| medium (~10 KB) | nested         | **msgpack +104%**   |
-| medium (~10 KB) | string-heavy   | **msgpack +264%**   |
-| large (~100 KB) | flat           | **msgpack +478%**   |
-| large (~100 KB) | string-heavy   | **msgpack +490%**   |
-| ~1 MB           | string-heavy   | **msgpack +325%**   |
+| Payload         | Shape         | vs JSON             |
+| --------------- | ------------- | ------------------- |
+| ~64 B           | flat / nested | JSON wins by 15-34% |
+| small (~1 KB)   | flat / nested | JSON wins by ~12%   |
+| small (~1 KB)   | string-heavy  | **msgpack +18%**    |
+| medium (~10 KB) | flat          | **msgpack +193%**   |
+| medium (~10 KB) | nested        | **msgpack +104%**   |
+| medium (~10 KB) | string-heavy  | **msgpack +264%**   |
+| large (~100 KB) | flat          | **msgpack +478%**   |
+| large (~100 KB) | string-heavy  | **msgpack +490%**   |
+| ~1 MB           | string-heavy  | **msgpack +325%**   |
 
 ### Installation
 

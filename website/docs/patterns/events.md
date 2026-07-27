@@ -8,7 +8,7 @@ schema:
   headline: "Workqueue Events: NestJS JetStream At-Least-Once Delivery"
   description: "NestJS NATS JetStream workqueue events with at-least-once delivery, automatic retry, publish-side deduplication, and dead letter handling."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
 # Events (Workqueue)
@@ -20,9 +20,9 @@ Workqueue events are fire-and-forget messages where **exactly one** handler inst
 
 ## When to use
 
-Imagine an e-commerce system: an order is created, and you need to send a confirmation email, update inventory, and notify the warehouse. Each of these tasks should happen **once**: you don't want three instances of the email service each sending the same confirmation.
+An order is created and exactly one confirmation email should go out, even with three replicas of the email service running.
 
-Workqueue events solve this. When you publish an event, NATS JetStream delivers it to a single consumer in the group. If that consumer fails, the message is redelivered to another instance. If all retries are exhausted, the message is routed to a dead letter queue for investigation.
+JetStream delivers a workqueue event to a single consumer in the group. A failed consumer means redelivery to another instance, and exhausted retries route the message to a dead letter queue.
 
 ## How it works
 
@@ -37,7 +37,7 @@ The workqueue flow, step by step:
 
 Because the stream uses **workqueue retention**, a message is automatically deleted once acknowledged, keeping the stream compact.
 
-Handlers run concurrently via RxJS `mergeMap`, bounded by the consumer's `max_ack_pending` (default: 100). Multiple messages can be in-flight at once.
+Handlers run concurrently, bounded by the consumer's `max_ack_pending` (default: 100) and by `concurrency` when you set one. Multiple messages can be in flight at once.
 
 ## Code examples
 
@@ -112,11 +112,11 @@ JetstreamModule.forRoot({
 });
 ```
 
-| Stream kind | Generated durable consumer name |
-|---|---|
-| Workqueue events | `orders__microservice_ev-consumer` |
-| [Broadcast](/docs/patterns/broadcast) | `orders__microservice_broadcast-consumer` |
-| [Ordered](/docs/patterns/ordered-events) | `orders__microservice_ordered-consumer` |
+| Stream kind                              | Generated durable consumer name           |
+| ---------------------------------------- | ----------------------------------------- |
+| Workqueue events                         | `orders__microservice_ev-consumer`        |
+| [Broadcast](/docs/patterns/broadcast)    | `orders__microservice_broadcast-consumer` |
+| [Ordered](/docs/patterns/ordered-events) | `orders__microservice_ordered-consumer`   |
 
 All `@EventPattern` handlers in the same `orders` service share the workqueue consumer above. JetStream load-balances across replicas of the same service via that single durable consumer, which is exactly what at-least-once delivery requires, multiple replicas, one cursor, ack semantics enforced server-side.
 
@@ -143,7 +143,7 @@ async onSettingsChanged(@Payload() s: Settings) { /* ... */ }
 
 **`meta: Record<string, unknown>`**, free-form metadata published to the [handler metadata registry](/docs/patterns/handler-metadata).
 
-There is no `durable`, `ackWait`, or `maxDeliver` on the decorator: those are stream-and-consumer-level concerns, configured once on the module under [Custom configuration](#custom-configuration) below.
+The decorator takes no `durable`, `ackWait` or `maxDeliver`: those are stream-and-consumer-level concerns, configured once on the module under [Custom configuration](#custom-configuration) below.
 
 ## Delivery semantics
 
@@ -198,7 +198,7 @@ For full details on dead letter handling, see the [Dead Letter Queue](/docs/guid
 
 ## Idempotency
 
-Because the transport provides **at-least-once** delivery, a handler may receive the same message more than once, for example, if the service crashes after processing but before acknowledging. Your handlers must be **idempotent**: processing the same message twice should produce the same result.
+Because the transport provides **at-least-once** delivery, a handler may receive the same message more than once, say the service crashes after processing but before acknowledging. Your handlers must be **idempotent**: processing the same message twice should produce the same result.
 
 ### Practical patterns
 
@@ -319,7 +319,7 @@ The default of 3 delivery attempts works well for transient errors (network blip
 - **`max_age`**, 7 days. How long events live in the stream before being purged.
 - **`duplicate_window`**, 2 minutes. Dedup window for [`setMessageId()`](/docs/guides/record-builder).
 
-See [Default Configs, Event Stream](/docs/reference/default-configs#event-stream) and [Event Consumer](/docs/reference/default-configs#event-consumer) for the complete list of stream and consumer defaults.
+See [Default Configs](/docs/reference/default-configs#stream-defaults) for the event stream and [consumer](/docs/reference/default-configs#consumer-defaults) values side by side with the other kinds.
 
 ## Error handling
 
@@ -384,7 +384,7 @@ When a message is `nak`'d repeatedly and reaches the `max_deliver` limit (defaul
 1. The `onDeadLetter` callback is invoked (if configured) with full message context.
 2. The message is terminated with `term()`.
 
-`ctx.terminate()` is so for errors you **know** will never succeed (validation failures, schema mismatches), while `throw` is for errors that **might** succeed on retry (timeouts, temporary unavailability). For messages that exhaust all retries, the dead letter mechanism provides a safety net.
+`ctx.terminate()` is for errors you **know** will never succeed (validation failures, schema mismatches), while `throw` is for errors that **might** succeed on retry (timeouts, temporary unavailability). For messages that exhaust all retries, the dead letter mechanism provides a safety net.
 
 See the [Dead Letter Queue](/docs/guides/dead-letter-queue) guide for how to configure and handle dead letters.
 

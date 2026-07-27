@@ -51,19 +51,21 @@
     "LICENSE"
   ],
   "engines": {
-    "node": ">= 20.0.0"
+    "node": ">= 20.0.0",
+    "pnpm": ">= 10.0.0"
   },
-  "packageManager": "pnpm@11.17.0",
   "scripts": {
     "build": "tsdown",
     "build:watch": "tsdown --watch",
     "typecheck": "tsc --noEmit -p tsconfig.build.json",
-    "format": "oxfmt \"{src,test,examples,tools}/**/*.{ts,mjs}\"",
-    "format:check": "oxfmt --check \"{src,test,examples,tools}/**/*.{ts,mjs}\"",
+    "format": "oxfmt \"{src,test,examples,tools}/**/*.{ts,mjs}\" \"website/docs/**/*.md\" \"examples/**/*.md\" README.md",
+    "format:check": "oxfmt --check \"{src,test,examples,tools}/**/*.{ts,mjs}\" \"website/docs/**/*.md\" \"examples/**/*.md\" README.md",
     "start:example": "pnpm build && tsx --tsconfig examples/tsconfig.json examples/01-basic/main.ts",
     "dev:example": "tsx --tsconfig examples/tsconfig.json examples/01-basic/main.ts",
     "prepublishOnly": "pnpm build",
     "lint": "oxlint --type-aware",
+    "lint:md": "markdownlint-cli2",
+    "lint:md:fix": "markdownlint-cli2 --fix",
     "lint:fix": "oxlint --type-aware --fix",
     "docs:api": "npx -y -p typedoc@0.28.20 -p typescript@6.0.3 -p typedoc-plugin-markdown@4.12.0 typedoc && node tools/seo/noindex-generated-docs.mjs",
     "docs:dev": "pnpm docs:api && pnpm --filter ./website start",
@@ -118,6 +120,7 @@
     "@vitest/coverage-v8": "^4.1.10",
     "eslint-plugin-prefer-arrow": "^1.2.3",
     "hdr-histogram-js": "^3.0.1",
+    "markdownlint-cli2": "^0.23.1",
     "msgpackr": "^2.0.4",
     "oxfmt": "^0.60.0",
     "oxlint": "^1.75.0",

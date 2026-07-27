@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import Link from '@docusaurus/Link';
 import { useLocation } from '@docusaurus/router';
 import NavbarMobileSidebarToggle from '@theme/Navbar/MobileSidebar/Toggle';
+import NavbarColorModeToggle from '@theme/Navbar/ColorModeToggle';
 import rootPkg from '../../../../package.json';
 import styles from './styles.module.css';
 
@@ -34,9 +35,11 @@ const useLiveVersion = (initial) => {
 };
 
 const BrandMark = () => (
-  <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-    <path d="M3 7 H10 a4 4 0 0 1 0 8 H3" stroke="currentColor" strokeWidth="1.5" />
-    <path d="M9 7 H16 a4 4 0 0 1 0 8 H9" stroke="oklch(0.86 0.19 145)" strokeWidth="1.5" />
+  <svg width="22" height="22" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+    <path d="M7 11 H21" stroke="currentColor" strokeWidth="2.6" strokeLinecap="square" />
+    <path d="M4 16 H21" stroke="currentColor" strokeWidth="2.6" strokeLinecap="square" />
+    <path d="M7 21 H17" stroke="currentColor" strokeWidth="2.6" strokeLinecap="square" />
+    <rect x="20.7" y="17.4" width="7.3" height="7.3" fill="var(--jt-state-deliver)" />
   </svg>
 );
 
@@ -84,6 +87,7 @@ export default function SiteNav() {
         <span className={styles.kbd}>⌘K</span>
       </button>
       <div className={styles.actions}>
+        <NavbarColorModeToggle className={styles.colorMode} />
         <a className={styles.iconBtn} href={NPM_HREF} target="_blank" rel="noopener noreferrer" aria-label="npm package">
           <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
             <path d="M0 0v16h16V0H0zm13 13h-2V5H8v8H3V3h10v10z" />

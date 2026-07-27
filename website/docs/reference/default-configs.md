@@ -2,190 +2,86 @@
 sidebar_position: 2
 sidebar_label: "Default Configs"
 title: "Default Stream & Consumer Configs for NATS JetStream"
-description: "Production-ready default stream, consumer, and connection settings for every NestJS JetStream StreamKind (event, broadcast, ordered, command, DLQ)."
+description: "Default stream, consumer, and connection settings for every NestJS JetStream StreamKind (event, broadcast, ordered, command, DLQ)."
 schema:
   type: Article
   headline: "Default Stream & Consumer Configs for NATS JetStream"
-  description: "Production-ready default stream, consumer, and connection settings for every NestJS JetStream StreamKind (event, broadcast, ordered, command, DLQ)."
+  description: "Default stream, consumer, and connection settings for every NestJS JetStream StreamKind (event, broadcast, ordered, command, DLQ)."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
 # Default Configs
 
-The transport ships with production-ready defaults for every stream and consumer type. This page lists the exact values from the source code. All defaults can be overridden via [module configuration](/docs/reference/module-configuration).
+Every stream and consumer the transport creates starts from the values below, taken from the source. Override any of them through [module configuration](/docs/reference/module-configuration).
 
 ## Stream Defaults
 
-All streams share a common base configuration:
+Every stream is created with `storage: File`, `num_replicas: 1` (see [replicas in production](#replicas-in-production)), `discard: Old`, `allow_direct: true` and `compression: S2`. What differs per kind:
 
-| Property | Value |
-|----------|-------|
-| `retention` | `Workqueue` (overridden per type below) |
-| `storage` | `File` |
-| `num_replicas` | `1` (see [production recommendation](#replicas-in-production) below) |
-| `discard` | `Old` |
-| `allow_direct` | `true` |
-| `compression` | `S2` |
+| Property               | Event        | Command      | Broadcast    | Ordered      | DLQ          |
+| ---------------------- | ------------ | ------------ | ------------ | ------------ | ------------ |
+| `retention`            | `Workqueue`  | `Workqueue`  | `Limits`     | `Limits`     | `Limits`     |
+| `allow_rollup_hdrs`    | `true`       | `false`      | `true`       | `false`      | `false`      |
+| `max_consumers`        | `100`        | `50`         | `200`        | `100`        | `100`        |
+| `max_msg_size`         | `10 MB`      | `5 MB`       | `10 MB`      | `10 MB`      | `10 MB`      |
+| `max_msgs_per_subject` | `5,000,000`  | `100,000`    | `1,000,000`  | `5,000,000`  | `5,000,000`  |
+| `max_msgs`             | `50,000,000` | `1,000,000`  | `10,000,000` | `50,000,000` | `50,000,000` |
+| `max_bytes`            | `5 GB`       | `100 MB`     | `2 GB`       | `5 GB`       | `5 GB`       |
+| `max_age`              | `7 days`     | `3 minutes`  | `1 hour`     | `1 day`      | `30 days`    |
+| `duplicate_window`     | `2 minutes`  | `30 seconds` | `2 minutes`  | `2 minutes`  | `2 minutes`  |
 
-:::info S2 Compression
-All streams default to [S2 compression](https://github.com/klauspost/compress/tree/master/s2), a Snappy-compatible codec with better ratios. This reduces disk I/O and storage with modest CPU overhead that varies with payload entropy and size. Requires NATS Server >= 2.10 (see [runtime requirements](/docs/getting-started/installation#runtime-requirements)). Override per stream kind:
+Sizes are binary: `10 MB` is 10,485,760 bytes, `5 GB` is 5,368,709,120 bytes. Durations are written with [`toNanos`](/docs/reference/module-configuration), so `max_age: toNanos(7, 'days')`.
+
+What each kind is for:
+
+- **Event** carries workqueue events. A message is removed once a consumer acks it.
+- **Command** carries RPC requests in [JetStream RPC mode](/docs/patterns/rpc) only. Everything about it is short-lived, because a request nobody answered within three minutes is a request nobody wants answered.
+- **Broadcast** is one stream shared by every service. An hour of `max_age` is enough catch-up for a pod that just started and short enough that config updates do not accumulate.
+- **Ordered** keeps messages for a day under `Limits` retention, because an ordered consumer replays a subject from the beginning rather than consuming it away.
+- **DLQ** is created on demand when `dlq: { stream }` is set in `forRoot()`. Thirty days under `Limits` retention: reading a dead letter must not remove it. See [Dead Letter Queue](/docs/guides/dead-letter-queue#built-in-dlq-stream).
+
+:::note S2 compression
+[S2](https://github.com/klauspost/compress/tree/master/s2) is a Snappy-compatible codec with better ratios. It cuts disk I/O and storage for CPU that varies with payload entropy and size, and needs NATS Server >= 2.10 (see [runtime requirements](/docs/getting-started/installation#runtime-requirements)). Override per kind:
 
 ```typescript
 import { StoreCompression } from '@nats-io/jetstream';
 
 events: {
-  stream: { compression: StoreCompression.None }, // disable for event streams
+  stream: { compression: StoreCompression.None },
 }
 ```
 
 :::
 
-### Event Stream
-
-Workqueue retention: each message is removed after being acknowledged by a consumer.
-
-| Property | Value | Notes |
-|----------|-------|-------|
-| `retention` | `Workqueue` | |
-| `storage` | `File` | |
-| `num_replicas` | `1` | |
-| `allow_rollup_hdrs` | `true` | |
-| `max_consumers` | `100` | |
-| `max_msg_size` | `10 MB` | 10,485,760 bytes |
-| `max_msgs_per_subject` | `5,000,000` | |
-| `max_msgs` | `50,000,000` | |
-| `max_bytes` | `5 GB` | 5,368,709,120 bytes |
-| `max_age` | `7 days` | `toNanos(7, 'days')` |
-| `duplicate_window` | `2 minutes` | `toNanos(2, 'minutes')` |
-
 :::tip Scheduling
 To enable [message scheduling](/docs/guides/scheduling), add `allow_msg_schedules: true` to the event stream config. This requires NATS Server >= 2.12.
 :::
 
-### Command Stream
-
-Short-lived RPC commands (JetStream RPC mode only).
-
-| Property | Value | Notes |
-|----------|-------|-------|
-| `retention` | `Workqueue` | |
-| `storage` | `File` | |
-| `num_replicas` | `1` | |
-| `allow_rollup_hdrs` | `false` | |
-| `max_consumers` | `50` | |
-| `max_msg_size` | `5 MB` | 5,242,880 bytes |
-| `max_msgs_per_subject` | `100,000` | |
-| `max_msgs` | `1,000,000` | |
-| `max_bytes` | `100 MB` | 104,857,600 bytes |
-| `max_age` | `3 minutes` | `toNanos(3, 'minutes')` |
-| `duplicate_window` | `30 seconds` | `toNanos(30, 'seconds')` |
-
-### Broadcast Stream
-
-Limits retention, messages persist until the configured limits are reached. Shared across all services.
-
-| Property | Value | Notes |
-|----------|-------|-------|
-| `retention` | `Limits` | |
-| `storage` | `File` | |
-| `num_replicas` | `1` | |
-| `allow_rollup_hdrs` | `true` | |
-| `max_consumers` | `200` | |
-| `max_msg_size` | `10 MB` | 10,485,760 bytes |
-| `max_msgs_per_subject` | `1,000,000` | |
-| `max_msgs` | `10,000,000` | |
-| `max_bytes` | `2 GB` | 2,147,483,648 bytes |
-| `max_age` | `1 hour` | `toNanos(1, 'hours')` |
-| `duplicate_window` | `2 minutes` | `toNanos(2, 'minutes')` |
-
-:::info Changed in v2.9.0
-`max_age` reduced from 1 day to 1 hour. Broadcast messages (config propagation, cache invalidation, feature flags) are relevant for minutes, not days. 1 hour provides enough catch-up window for new instances while reducing unnecessary storage. This is a mutable property, existing streams update automatically on next startup.
-:::
-
-### Ordered Stream
-
-Limits retention for strict sequential delivery. Ordered consumers are ephemeral.
-
-| Property | Value | Notes |
-|----------|-------|-------|
-| `retention` | `Limits` | |
-| `storage` | `File` | |
-| `num_replicas` | `1` | |
-| `allow_rollup_hdrs` | `false` | |
-| `max_consumers` | `100` | |
-| `max_msg_size` | `10 MB` | 10,485,760 bytes |
-| `max_msgs_per_subject` | `5,000,000` | |
-| `max_msgs` | `50,000,000` | |
-| `max_bytes` | `5 GB` | 5,368,709,120 bytes |
-| `max_age` | `1 day` | `toNanos(1, 'days')` |
-| `duplicate_window` | `2 minutes` | `toNanos(2, 'minutes')` |
-
-### DLQ Stream
-
-Workqueue retention, dead letters are removed when a DLQ consumer acks them. Created on demand when `dlq: { stream }` is set in `forRoot()`. See [Dead Letter Queue, Built-in DLQ stream](/docs/guides/dead-letter-queue#built-in-dlq-stream).
-
-| Property | Value | Notes |
-|----------|-------|-------|
-| `retention` | `Workqueue` | |
-| `storage` | `File` | |
-| `num_replicas` | `1` | |
-| `allow_rollup_hdrs` | `false` | |
-| `max_consumers` | `100` | |
-| `max_msg_size` | `10 MB` | 10,485,760 bytes |
-| `max_msgs_per_subject` | `5,000,000` | |
-| `max_msgs` | `50,000,000` | |
-| `max_bytes` | `5 GB` | 5,368,709,120 bytes |
-| `max_age` | `30 days` | `toNanos(30, 'days')` |
-| `duplicate_window` | `2 minutes` | `toNanos(2, 'minutes')` |
-
 ## Consumer Defaults
 
-### Event Consumer
+Every durable consumer uses `ack_policy: Explicit`, `deliver_policy: All` and `replay_policy: Instant`. What differs:
 
-| Property | Value | Notes |
-|----------|-------|-------|
-| `ack_wait` | `10 seconds` | `toNanos(10, 'seconds')` |
-| `max_deliver` | `3` | Message moves to dead-letter after 3 failed attempts |
-| `max_ack_pending` | `100` | |
-| `ack_policy` | `Explicit` | |
-| `deliver_policy` | `All` | |
-| `replay_policy` | `Instant` | |
+| Property          | Event        | Command     | Broadcast    |
+| ----------------- | ------------ | ----------- | ------------ |
+| `ack_wait`        | `10 seconds` | `5 minutes` | `10 seconds` |
+| `max_deliver`     | `3`          | `1`         | `3`          |
+| `max_ack_pending` | `100`        | `100`       | `100`        |
 
-### Command Consumer
-
-| Property | Value | Notes |
-|----------|-------|-------|
-| `ack_wait` | `5 minutes` | `toNanos(5, 'minutes')` |
-| `max_deliver` | `1` | No retries: RPC failures propagate immediately |
-| `max_ack_pending` | `100` | |
-| `ack_policy` | `Explicit` | |
-| `deliver_policy` | `All` | |
-| `replay_policy` | `Instant` | |
-
-### Broadcast Consumer
-
-| Property | Value | Notes |
-|----------|-------|-------|
-| `ack_wait` | `10 seconds` | `toNanos(10, 'seconds')` |
-| `max_deliver` | `3` | |
-| `max_ack_pending` | `100` | |
-| `ack_policy` | `Explicit` | |
-| `deliver_policy` | `All` | |
-| `replay_policy` | `Instant` | |
+An event that fails three times is [dead-lettered](/docs/guides/dead-letter-queue). A command is delivered once and never retried, so an RPC failure reaches the caller instead of being repeated behind their back.
 
 :::note
-Ordered consumers do not have a durable consumer configuration. They are ephemeral and managed entirely by the `@nats-io/jetstream` client library.
+Ordered consumers have no durable configuration. They are ephemeral and managed entirely by the `@nats-io/jetstream` client library.
 :::
 
 ## Connection Defaults
 
 The transport applies the following connection defaults for production resilience:
 
-| Property | Value | Notes |
-|----------|-------|-------|
-| `maxReconnectAttempts` | `-1` | Unlimited reconnection attempts |
-| `reconnectTimeWait` | `1000` | 1 second between reconnection attempts |
+| Property               | Value  | Notes                                  |
+| ---------------------- | ------ | -------------------------------------- |
+| `maxReconnectAttempts` | `-1`   | Unlimited reconnection attempts        |
+| `reconnectTimeWait`    | `1000` | 1 second between reconnection attempts |
 
 These defaults ensure the transport automatically recovers from transient network failures without manual intervention. Override them via `connectionOptions` in `forRoot()`:
 
@@ -202,17 +98,17 @@ JetstreamModule.forRoot({
 
 ## RPC Timeouts
 
-| Mode | Default Timeout | Constant |
-|------|----------------|----------|
-| Core (standard NATS request-reply) | `30 seconds` | `DEFAULT_RPC_TIMEOUT` |
-| JetStream (persistent RPC) | `3 minutes` | `DEFAULT_JETSTREAM_RPC_TIMEOUT` |
+| Mode                               | Default Timeout | Constant                        |
+| ---------------------------------- | --------------- | ------------------------------- |
+| Core (standard NATS request-reply) | `30 seconds`    | `DEFAULT_RPC_TIMEOUT`           |
+| JetStream (persistent RPC)         | `3 minutes`     | `DEFAULT_JETSTREAM_RPC_TIMEOUT` |
 
 The JetStream RPC timeout is intentionally longer because messages are persisted to a stream and the consumer may take time to process them.
 
 ## Graceful Shutdown Timeout
 
-| Property | Value |
-|----------|-------|
+| Property         | Value        |
+| ---------------- | ------------ |
 | Shutdown timeout | `10 seconds` |
 
 On shutdown, the transport calls `drain()` on the NATS connection and waits up to 10 seconds for it to complete before forcing the connection closed. Increase this timeout if your handlers have long-running I/O that must finish cleanly.
@@ -250,28 +146,28 @@ The transport applies mutable changes automatically on startup, just update the 
 
 These properties can be **enabled** on an existing stream via a normal update, but once enabled they cannot be disabled. No stream recreation required.
 
-| Property | Default | Notes |
-|----------|---------|-------|
+| Property              | Default | Notes                                                                                 |
+| --------------------- | ------- | ------------------------------------------------------------------------------------- |
 | `allow_msg_schedules` | `false` | Enable [message scheduling](/docs/guides/scheduling): safe to add to existing streams |
-| `allow_msg_ttl` | `false` | Enable per-message TTL |
-| `deny_delete` | `false` | Prevent message deletion via API |
-| `deny_purge` | `false` | Prevent stream purging via API |
+| `allow_msg_ttl`       | `false` | Enable per-message TTL                                                                |
+| `deny_delete`         | `false` | Prevent message deletion via API                                                      |
+| `deny_purge`          | `false` | Prevent stream purging via API                                                        |
 
 :::tip Enabling scheduling on existing streams
-You can safely add `allow_msg_schedules: true` to an existing stream config; NATS applies this as a regular update. No downtime, no message loss, no stream recreation. Just update `forRoot()` and restart.
+You can safely add `allow_msg_schedules: true` to an existing stream config; NATS applies this as a regular update. Uptime, messages and the stream itself all survive. Just update `forRoot()` and restart.
 :::
 
 ### Immutable (locked after creation)
 
-| Property | Default | Migratable | Notes |
-|----------|---------|-----------|-------|
-| `name` | derived from service name | No | Cannot be renamed |
-| `retention` | `Workqueue` or `Limits` | **No** | Controlled by the transport: a mismatch is always an error |
-| `storage` | `File` | **Yes** | Can be migrated with `allowDestructiveMigration: true` |
+| Property    | Default                   | Migratable | Notes                                                      |
+| ----------- | ------------------------- | ---------- | ---------------------------------------------------------- |
+| `name`      | derived from service name | No         | Cannot be renamed                                          |
+| `retention` | `Workqueue` or `Limits`   | **No**     | Controlled by the transport: a mismatch is always an error |
+| `storage`   | `File`                    | **Yes**    | Can be migrated with `allowDestructiveMigration: true`     |
 
 The transport can automatically migrate `storage` via blue-green stream recreation. See the full **[Stream Migration guide](/docs/guides/stream-migration)** for how it works, rolling update behavior, performance benchmarks, and limitations.
 
-:::caution retention is never migratable
+:::warning retention is never migratable
 `retention` is controlled by the transport (`Workqueue` for events/commands, `Limits` for broadcast/ordered). A mismatch between the running stream and the expected retention policy always throws an error on startup, regardless of `allowDestructiveMigration`.
 :::
 
@@ -313,38 +209,33 @@ Every default above is exposed as a typed constant from the package, so you can 
 
 **Stream and consumer defaults:**
 
-| Constant | Contents |
-|---|---|
-| `DEFAULT_EVENT_STREAM_CONFIG` | Event (workqueue) stream defaults |
-| `DEFAULT_BROADCAST_STREAM_CONFIG` | Broadcast stream defaults (shared `broadcast-stream`) |
-| `DEFAULT_ORDERED_STREAM_CONFIG` | Ordered stream defaults |
-| `DEFAULT_COMMAND_STREAM_CONFIG` | JetStream RPC command stream defaults |
-| `DEFAULT_DLQ_STREAM_CONFIG` | [Dead Letter Queue](/docs/guides/dead-letter-queue#built-in-dlq-stream) stream defaults |
-| `DEFAULT_EVENT_CONSUMER_CONFIG` | Event consumer defaults |
-| `DEFAULT_BROADCAST_CONSUMER_CONFIG` | Broadcast consumer defaults |
-| `DEFAULT_COMMAND_CONSUMER_CONFIG` | JetStream RPC command consumer defaults |
+| Constant                            | Contents                                                                                |
+| ----------------------------------- | --------------------------------------------------------------------------------------- |
+| `DEFAULT_EVENT_STREAM_CONFIG`       | Event (workqueue) stream defaults                                                       |
+| `DEFAULT_BROADCAST_STREAM_CONFIG`   | Broadcast stream defaults (shared `broadcast-stream`)                                   |
+| `DEFAULT_ORDERED_STREAM_CONFIG`     | Ordered stream defaults                                                                 |
+| `DEFAULT_COMMAND_STREAM_CONFIG`     | JetStream RPC command stream defaults                                                   |
+| `DEFAULT_DLQ_STREAM_CONFIG`         | [Dead Letter Queue](/docs/guides/dead-letter-queue#built-in-dlq-stream) stream defaults |
+| `DEFAULT_EVENT_CONSUMER_CONFIG`     | Event consumer defaults                                                                 |
+| `DEFAULT_BROADCAST_CONSUMER_CONFIG` | Broadcast consumer defaults                                                             |
+| `DEFAULT_COMMAND_CONSUMER_CONFIG`   | JetStream RPC command consumer defaults                                                 |
 
-**Timeouts:**
+**Timeouts and the handler metadata registry:**
 
-| Constant | Value |
-|---|---|
-| `DEFAULT_RPC_TIMEOUT` | `30_000` (Core mode timeout, ms) |
-| `DEFAULT_JETSTREAM_RPC_TIMEOUT` | `180_000` (JetStream mode timeout, ms) |
-| `DEFAULT_SHUTDOWN_TIMEOUT` | `10_000` (graceful shutdown drain timeout, ms) |
-
-**Handler metadata registry:**
-
-| Constant | Value |
-|---|---|
-| `DEFAULT_METADATA_BUCKET` | `'handler_registry'` |
-| `DEFAULT_METADATA_REPLICAS` | `1` |
-| `DEFAULT_METADATA_HISTORY` | `1` |
-| `DEFAULT_METADATA_TTL` | `30_000` (heartbeat-refreshed entry TTL, ms) |
-| `MIN_METADATA_TTL` | `5_000` (minimum configurable TTL, ms) |
+| Constant                        | Value                | Meaning                               |
+| ------------------------------- | -------------------- | ------------------------------------- |
+| `DEFAULT_RPC_TIMEOUT`           | `30_000`             | Core RPC timeout, ms                  |
+| `DEFAULT_JETSTREAM_RPC_TIMEOUT` | `180_000`            | JetStream RPC timeout, ms             |
+| `DEFAULT_SHUTDOWN_TIMEOUT`      | `10_000`             | Graceful shutdown drain, ms           |
+| `DEFAULT_METADATA_BUCKET`       | `'handler_registry'` | KV bucket holding handler entries     |
+| `DEFAULT_METADATA_REPLICAS`     | `1`                  | KV bucket replicas                    |
+| `DEFAULT_METADATA_HISTORY`      | `1`                  | KV history depth: latest only         |
+| `DEFAULT_METADATA_TTL`          | `30_000`             | Entry TTL, refreshed by heartbeat, ms |
+| `MIN_METADATA_TTL`              | `5_000`              | Lowest TTL the module accepts, ms     |
 
 **Other:**
 
-- `RESERVED_HEADERS`; the `Set<string>` of header names blocked by `JetstreamRecordBuilder.setHeader()`. See [Record Builder](/docs/guides/record-builder#reserved-headers).
+- `RESERVED_HEADERS`; the `Set<string>` of header names blocked by `JetstreamRecordBuilder.setHeader()`. See [Record Builder](/docs/guides/record-builder#headers-the-transport-sets-itself).
 
 ```typescript
 import { DEFAULT_EVENT_STREAM_CONFIG, toNanos } from '@horizon-republic/nestjs-jetstream';

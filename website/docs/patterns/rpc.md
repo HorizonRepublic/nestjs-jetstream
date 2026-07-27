@@ -8,7 +8,7 @@ schema:
   headline: "NestJS NATS RPC: Core vs JetStream Request/Reply"
   description: "Synchronous NestJS NATS request-reply in Core NATS or JetStream mode, with timeout handling, error serialization, and per-request overrides."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
 # RPC (Request/Reply)
@@ -156,21 +156,21 @@ const order = await firstValueFrom(
 
 **Response publish failure.** The message is still `ack()`'d (the handler succeeded), but the client times out because the reply never arrived on the inbox.
 
-:::info Why `term()` instead of `nak()`?
+:::note Why `term()` instead of `nak()`?
 RPC commands are **never** redelivered via `nak()`. Retrying a command could cause duplicate side effects (double charges, duplicate records). If the handler fails, the message is terminated and the error is returned to the caller, who can decide whether to retry.
 :::
 
 ## Comparison: Core vs JetStream
 
-| Aspect | Core Mode | JetStream Mode |
-|---|---|---|
-| **Latency** | Lowest (direct request/reply) | Slightly higher (stream persistence + inbox routing) |
-| **Persistence** | None: fire and forget | Commands persisted in stream before delivery |
-| **If server is offline** | Client gets timeout error immediately | Message queued in stream, delivered when server starts |
-| **Retry on failure** | No built-in retry | No retry (`max_deliver: 1`), error returned to caller |
-| **Default timeout** | 30 seconds | 3 minutes |
-| **Load balancing** | NATS queue group | JetStream consumer (one delivery) |
-| **Use case** | Low-latency queries, real-time lookups | Commands that must not be lost (payments, state changes) |
+| Aspect                   | Core Mode                              | JetStream Mode                                           |
+| ------------------------ | -------------------------------------- | -------------------------------------------------------- |
+| **Latency**              | Lowest (direct request/reply)          | Slightly higher (stream persistence + inbox routing)     |
+| **Persistence**          | None: fire and forget                  | Commands persisted in stream before delivery             |
+| **If server is offline** | Client gets timeout error immediately  | Message queued in stream, delivered when server starts   |
+| **Retry on failure**     | No built-in retry                      | No retry (`max_deliver: 1`), error returned to caller    |
+| **Default timeout**      | 30 seconds                             | 3 minutes                                                |
+| **Load balancing**       | NATS queue group                       | JetStream consumer (one delivery)                        |
+| **Use case**             | Low-latency queries, real-time lookups | Commands that must not be lost (payments, state changes) |
 
 **Start with Core mode** (the default) for most use cases. Switch to JetStream mode when you need the guarantee that commands survive a brief server restart without the client seeing an error.
 
@@ -251,7 +251,7 @@ const order = await firstValueFrom(
 );
 ```
 
-:::info
+:::note
 The per-request timeout overrides the client-side wait time. In JetStream mode, the server-side handler timeout is still governed by the global `rpc.timeout` configuration.
 :::
 
@@ -283,7 +283,7 @@ handleStream(): Observable<string> {
 
 ### Double-settlement protection (JetStream mode)
 
-The JetStream RPC router uses a `settled` flag to prevent race conditions between the handler completing and the timeout firing. Once the message is settled (ack'd, term'd, or timed out), any later settlement attempt is a no-op. This means:
+The JetStream RPC router uses a `settled` flag to prevent race conditions between the handler completing and the timeout firing. Once the message is settled (ack'd, term'd, or timed out), any later settlement attempt is a no-op:
 
 - If the handler completes just as the timeout fires, only one path executes.
 - No duplicate responses are published to the client's inbox.
@@ -299,7 +299,7 @@ When the NATS connection drops, **all pending JetStream-mode RPC callbacks** are
 
 This fail-fast behavior prevents the client from hanging indefinitely when the network is down.
 
-:::info Core mode disconnect
+:::note Core mode disconnect
 In Core mode, NATS handles disconnect behavior natively. Pending `nc.request()` calls are rejected by the NATS client library when the connection is lost.
 :::
 

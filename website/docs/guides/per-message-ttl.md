@@ -59,13 +59,13 @@ The consumer handles it like any normal event: no changes needed on the receivin
 
 ## Use cases
 
-| Scenario | TTL | Why |
-|----------|-----|-----|
-| Session tokens | 30 minutes | Auto-expire inactive sessions |
-| OTP codes | 5 minutes | Security: short-lived by design |
-| Cache entries | 1 hour | Stale cache auto-cleans |
-| Feature flags | 24 hours | Temporary overrides that self-remove |
-| Rate limit counters | 1 minute | Rolling window without cleanup jobs |
+| Scenario            | TTL        | Why                                  |
+| ------------------- | ---------- | ------------------------------------ |
+| Session tokens      | 30 minutes | Auto-expire inactive sessions        |
+| OTP codes           | 5 minutes  | Security: short-lived by design      |
+| Cache entries       | 1 hour     | Stale cache auto-cleans              |
+| Feature flags       | 24 hours   | Temporary overrides that self-remove |
+| Rate limit counters | 1 minute   | Rolling window without cleanup jobs  |
 
 ## How it works
 

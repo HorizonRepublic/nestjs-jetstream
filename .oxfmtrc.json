@@ -42,5 +42,16 @@
       ],
       "unknown"
     ]
-  }
+  },
+  "overrides": [
+    {
+      "files": [
+        "*.md"
+      ],
+      "options": {
+        "singleQuote": false,
+        "embeddedLanguageFormatting": "off"
+      }
+    }
+  ]
 }

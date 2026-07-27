@@ -8,14 +8,14 @@ schema:
   headline: "Quick Start"
   description: "Complete working example in four steps: register the module, connect the transport, define handlers, and send messages."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
 # Quick Start
 
-Five minutes from now you'll have a NestJS service that emits `order.created`, survives a restart without losing the message, and responds to `order.get` RPCs, all over NATS JetStream. Four steps: register the module, connect the transport, define handlers, send messages.
+Five minutes from now you'll have a NestJS service that emits `order.created`, survives a restart without losing the message, and responds to `order.get` RPCs, all over NATS JetStream. Registering the module, connecting the transport, defining handlers and sending messages: register the module, connect the transport, define handlers, send messages.
 
-:::info Prerequisites
+:::note Prerequisites
 Make sure you have [installed the library](/docs/getting-started/installation) and have a NATS server running with JetStream enabled.
 :::
 
@@ -174,9 +174,9 @@ export class GatewayController {
 }
 ```
 
-Use `client.emit()` for fire-and-forget events; at-least-once delivery through JetStream, no response. Use `client.send()` for request/reply RPC; it returns an `Observable<TResponse>` with the handler's reply.
+Use `client.emit()` for fire-and-forget events; at-least-once delivery through JetStream, leaving the caller without a response. Use `client.send()` for request/reply RPC; it returns an `Observable<TResponse>` with the handler's reply.
 
-:::info Broadcast prefix
+:::note Broadcast prefix
 To send a broadcast event, prefix the pattern with `broadcast:` when calling `emit()`. On the handler side, use `{ broadcast: true }` in the decorator extras: no prefix needed.
 :::
 

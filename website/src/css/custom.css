@@ -1,43 +1,5 @@
 
-@import url("https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap");
 @import "./tokens.css";
-
-/* ---- extra status / motion tokens ----------------------------------- */
-:root {
-  --jt-info: oklch(0.80 0.10 230);
-  --jt-info-soft: oklch(0.80 0.10 230 / 0.12);
-  --jt-info-line: oklch(0.80 0.10 230 / 0.30);
-
-  --jt-warn: oklch(0.84 0.13 75);
-  --jt-warn-soft: oklch(0.84 0.13 75 / 0.12);
-  --jt-warn-line: oklch(0.84 0.13 75 / 0.30);
-
-  --jt-danger: oklch(0.72 0.18 28);
-  --jt-danger-soft: oklch(0.72 0.18 28 / 0.12);
-  --jt-danger-line: oklch(0.72 0.18 28 / 0.30);
-
-  --jt-accent-line: oklch(0.86 0.19 145 / 0.32);
-
-  --jt-line-3: oklch(0.42 0.006 60);
-  --jt-bg-code: oklch(0.135 0.007 60);
-
-  --jt-m-fast: 120ms cubic-bezier(0.2, 0, 0, 1);
-  --jt-m-base: 220ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-[data-theme="light"] {
-  --jt-line-3: oklch(0.78 0.005 90);
-  --jt-bg-code: oklch(0.97 0.003 90);
-  --jt-info: oklch(0.55 0.16 230);
-  --jt-info-soft: oklch(0.55 0.16 230 / 0.10);
-  --jt-info-line: oklch(0.55 0.16 230 / 0.28);
-  --jt-warn: oklch(0.62 0.14 75);
-  --jt-warn-soft: oklch(0.62 0.14 75 / 0.10);
-  --jt-warn-line: oklch(0.62 0.14 75 / 0.28);
-  --jt-danger: oklch(0.55 0.20 28);
-  --jt-danger-soft: oklch(0.55 0.20 28 / 0.10);
-  --jt-danger-line: oklch(0.55 0.20 28 / 0.28);
-}
 
 /* ---- Infima mapping -------------------------------------------------- */
 :root {
@@ -73,6 +35,41 @@
   --ifm-toc-border-color: transparent;
   --ifm-blockquote-border-color: var(--jt-line-2);
 }
+
+/* ---- Recursive ------------------------------------------------------- */
+body {
+  font-variation-settings: var(--jt-vf-prose);
+}
+
+code,
+kbd,
+samp,
+pre,
+.jt-struct,
+[class*="codeLine"],
+.token,
+.theme-code-block {
+  font-variation-settings: var(--jt-vf-struct);
+}
+
+h1,
+h2 {
+  font-variation-settings: var(--jt-vf-display);
+}
+
+h3,
+h4,
+h5,
+h6 {
+  font-variation-settings: var(--jt-vf-prose);
+}
+
+table td,
+table th,
+.jt-num {
+  font-variant-numeric: tabular-nums;
+}
+
 
 [data-theme="dark"] {
   --ifm-background-color: var(--jt-bg-0);
@@ -156,7 +153,10 @@ body {
   letter-spacing: -0.005em;
 }
 
-::selection { background: var(--jt-accent-soft); color: var(--jt-fg-0); }
+::selection {
+  background: color-mix(in oklab, var(--jt-accent) 22%, transparent);
+  color: var(--jt-fg-0);
+}
 
 *:focus-visible {
   outline: 2px solid var(--jt-accent);
@@ -383,6 +383,52 @@ body {
   font-size: 13.5px !important;
   line-height: 1.6 !important;
   background: var(--jt-bg-code) !important;
+  color: var(--jt-fg-0) !important;
+}
+
+/* Prism ships its own palette; these map it onto the site's. */
+.prism-code .token.comment,
+.prism-code .token.prolog,
+.prism-code .token.cdata {
+  color: var(--jt-code-comment) !important;
+}
+
+.prism-code .token.string,
+.prism-code .token.char,
+.prism-code .token.attr-value,
+.prism-code .token.regex {
+  color: var(--jt-code-string) !important;
+}
+
+.prism-code .token.keyword,
+.prism-code .token.boolean,
+.prism-code .token.atrule,
+.prism-code .token.important {
+  color: var(--jt-code-keyword) !important;
+}
+
+.prism-code .token.function,
+.prism-code .token.class-name,
+.prism-code .token.decorator,
+.prism-code .token.tag {
+  color: var(--jt-accent) !important;
+}
+
+.prism-code .token.number,
+.prism-code .token.constant,
+.prism-code .token.symbol {
+  color: var(--jt-state-redeliver) !important;
+}
+
+.prism-code .token.punctuation,
+.prism-code .token.operator {
+  color: var(--jt-fg-2) !important;
+}
+
+.prism-code .token.property,
+.prism-code .token.attr-name,
+.prism-code .token.parameter {
+  color: var(--jt-fg-0) !important;
 }
 [class*="codeBlockTitle"] {
   background: var(--jt-bg-1) !important;
@@ -452,33 +498,66 @@ button[class*="copyButton"]:hover {
   margin-right: 6px;
 }
 
+/* Admonitions: note/info and warning/caution share styling. */
 .theme-admonition-note,
-.theme-admonition-info { background: var(--jt-bg-1); }
+.theme-admonition-info {
+  background: var(--jt-bg-1);
+}
+
 .theme-admonition-note::before,
-.theme-admonition-info::before { background: var(--jt-info); }
+.theme-admonition-info::before {
+  background: var(--jt-line-2);
+}
+
 .theme-admonition-note [class*="admonitionHeading"],
 .theme-admonition-info [class*="admonitionHeading"],
 .theme-admonition-note [class*="admonitionIcon"] svg,
-.theme-admonition-info [class*="admonitionIcon"] svg { color: var(--jt-info); }
+.theme-admonition-info [class*="admonitionIcon"] svg {
+  color: var(--jt-fg-2);
+}
 
-.theme-admonition-tip { background: var(--jt-bg-1); }
-.theme-admonition-tip::before { background: var(--jt-accent); }
+.theme-admonition-tip {
+  background: var(--jt-bg-1);
+}
+
+.theme-admonition-tip::before {
+  background: var(--jt-state-deliver);
+}
+
 .theme-admonition-tip [class*="admonitionHeading"],
-.theme-admonition-tip [class*="admonitionIcon"] svg { color: var(--jt-accent); }
+.theme-admonition-tip [class*="admonitionIcon"] svg {
+  color: var(--jt-state-deliver);
+}
 
 .theme-admonition-warning,
-.theme-admonition-caution { background: var(--jt-bg-1); }
+.theme-admonition-caution {
+  background: var(--jt-bg-1);
+}
+
 .theme-admonition-warning::before,
-.theme-admonition-caution::before { background: var(--jt-warn); }
+.theme-admonition-caution::before {
+  background: var(--jt-state-redeliver);
+}
+
 .theme-admonition-warning [class*="admonitionHeading"],
 .theme-admonition-caution [class*="admonitionHeading"],
 .theme-admonition-warning [class*="admonitionIcon"] svg,
-.theme-admonition-caution [class*="admonitionIcon"] svg { color: var(--jt-warn); }
+.theme-admonition-caution [class*="admonitionIcon"] svg {
+  color: var(--jt-state-redeliver);
+}
 
-.theme-admonition-danger { background: var(--jt-bg-1); }
-.theme-admonition-danger::before { background: var(--jt-danger); }
+.theme-admonition-danger {
+  background: var(--jt-bg-1);
+}
+
+.theme-admonition-danger::before {
+  background: var(--jt-state-dlq);
+}
+
 .theme-admonition-danger [class*="admonitionHeading"],
-.theme-admonition-danger [class*="admonitionIcon"] svg { color: var(--jt-danger); }
+.theme-admonition-danger [class*="admonitionIcon"] svg {
+  color: var(--jt-state-dlq);
+}
 
 
 .markdown-table-wrapper {

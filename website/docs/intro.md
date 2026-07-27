@@ -9,29 +9,40 @@ schema:
   headline: "NestJS NATS Transport with JetStream: Introduction"
   description: "A NestJS NATS microservice transport backed by JetStream: durable events, broadcast, ordered delivery, RPC, and dead letter queues."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
-# Introduction
+# What do you need right now?
 
-NestJS' [built-in NATS transport](https://docs.nestjs.com/microservices/nats) loses messages on pod restart, doesn't retry on failure, and gives you nothing to debug with. [JetStream](https://docs.nats.io/nats-concepts/jetstream) fixes all three, but wiring it into NestJS by hand is a project on its own.
+NestJS' [built-in NATS transport](https://docs.nestjs.com/microservices/nats) loses messages on pod restart, never retries, and leaves nothing to debug with. This library keeps the decorators and changes what happens underneath: durability, bounded retries, dead letters and W3C tracing.
 
-**`nestjs-jetstream` is the swap.** Same `@EventPattern`, same `@MessagePattern`, same `client.emit()`. Durability, retries, dead letters, and W3C tracing, underneath, automatic.
+Three doors, by situation. The full map is in the sidebar.
 
-For a side-by-side with the built-in transport and the scenarios that force the switch, read [**Why JetStream?**](/docs/getting-started/why-jetstream).
+## "Is this production-ready?"
 
-## Where to start
+[Why JetStream?](/docs/getting-started/why-jetstream) states the trade-offs, the cases where the built-in transport is enough on its own, and where Core NATS drops messages. [Testing](/docs/development/testing) covers what the suite exercises against a real NATS server.
 
-Pick an entry point based on where you are in your journey:
+## "I need the exact key"
 
-- **New to the library?**: [Installation](/docs/getting-started/installation) → [Quick Start](/docs/getting-started/quick-start)
-- **Comparing transports?**: [Why JetStream?](/docs/getting-started/why-jetstream) covers when Core NATS is enough and when you outgrow it
-- **Migrating from `@nestjs/microservices` NATS?**: [Migration Guide](/docs/guides/migration)
-- **Planning a production rollout?**: [Module Configuration](/docs/reference/module-configuration), [Dead Letter Queue](/docs/guides/dead-letter-queue), [Graceful Shutdown](/docs/guides/graceful-shutdown), [Health Checks](/docs/guides/health-checks), [Performance Tuning](/docs/guides/performance)
-- **Looking for a specific delivery pattern?**: [Workqueue Events](/docs/patterns/events), [RPC (Request/Reply)](/docs/patterns/rpc), [Broadcast](/docs/patterns/broadcast), [Ordered Events](/docs/patterns/ordered-events)
+[Module configuration](/docs/reference/module-configuration) for every option and default, [header contract](/docs/reference/header-contract) for every header the transport reads and writes, [default configs](/docs/reference/default-configs) for the stream and consumer values you inherit. Or press <kbd>⌘K</kbd> and type the name.
 
-The full feature catalog lives in the sidebar on the left: every page is one click away.
+## "Something is wrong in prod"
+
+By symptom:
+
+| Symptom                       | Start here                                                                                                                 |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Messages disappear on deploy  | [Graceful shutdown](/docs/guides/graceful-shutdown)                                                                        |
+| Consumer lag climbing         | [Consumer issues](/docs/guides/troubleshooting#consumer-issues), [performance](/docs/guides/performance)                   |
+| Everything dead-letters       | [Dead letter queue](/docs/guides/dead-letter-queue), [DLQ troubleshooting](/docs/guides/troubleshooting#dead-letter-queue) |
+| RPC calls time out            | [RPC issues](/docs/guides/troubleshooting#rpc-issues)                                                                      |
+| Handlers never fire           | [Startup issues](/docs/guides/troubleshooting#startup-issues)                                                              |
+| Stream config change rejected | [Stream migration](/docs/guides/stream-migration)                                                                          |
+
+## New here
+
+[Quick start](/docs/getting-started/quick-start) gets a consumer running in ten minutes, then [events](/docs/patterns/events) is the delivery pattern everything else builds on. Coming from the built-in transport, [migrating](/docs/guides/migration) maps each old option to its replacement.
 
 :::tip Runnable examples
-The GitHub repository ships [9 self-contained demos](https://github.com/HorizonRepublic/nestjs-jetstream/tree/main/examples) covering events, RPC, ordered delivery, DLQ, health checks, scheduling, publisher-only mode, per-message TTL, and the handler metadata registry. Clone and run.
+The repository ships [ten self-contained demos](https://github.com/HorizonRepublic/nestjs-jetstream/tree/main/examples): events, RPC, ordered delivery, DLQ, health checks, scheduling, publisher-only mode, per-message TTL, handler metadata and distributed tracing. Clone and run.
 :::

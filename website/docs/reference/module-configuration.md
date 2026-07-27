@@ -8,14 +8,14 @@ schema:
   headline: "Module Configuration Reference"
   description: "Reference for forRoot(), forRootAsync(), and forFeature() registration methods with stream, consumer, and connection options."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
 import Since from '@site/src/components/Since';
 
 # Module Configuration
 
-Reference for the three registration methods exposed by `JetstreamModule`: `forRoot()` for global setup, `forRootAsync()` for async/dynamic configuration, and `forFeature()` for per-module client registration. Every option is listed below with its type and default. For a guided introduction see the [Quick Start](/docs/getting-started/quick-start).
+Reference for the three registration methods exposed by `JetstreamModule`: `forRoot()` for global setup, `forRootAsync()` for async/runtime configuration, and `forFeature()` for per-module client registration. Every option is listed below with its type and default. For a guided introduction see the [Quick Start](/docs/getting-started/quick-start).
 
 ## forRoot()
 
@@ -99,7 +99,7 @@ import { JetstreamModule } from '@horizon-republic/nestjs-jetstream';
 export class AppModule {}
 ```
 
-:::info The `name` lives outside the factory
+:::note The `name` lives outside the factory
 The `name` property is defined at the top level of `forRootAsync()`, not inside the factory return value. This is by design: the name is needed upfront for DI token generation before the factory runs.
 :::
 
@@ -279,12 +279,14 @@ JetstreamModule.forRoot({
 })
 ```
 
-| `management` value | Behavior |
-|---|---|
-| `ManagementMode.Auto` | Library creates and updates every entity. **Default.** |
+| `management` value      | Behavior                                                             |
+| ----------------------- | -------------------------------------------------------------------- |
+| `ManagementMode.Auto`   | Library creates and updates every entity. **Default.**               |
 | `ManagementMode.Manual` | Library binds to existing entities; fails at boot if any are absent. |
 
 The global value can be overridden per entity via `events.management`, `broadcast.management`, etc. Resolution order: per-entity -> global -> `Auto`. See [Bring Your Own Infrastructure](/docs/guides/external-infrastructure) for a complete guide.
+
+The other field is `preflightStorageCheck` (default `false`): when on, the transport calls `getAccountInfo()` before provisioning and warns if the streams it is about to create would not fit the account's storage budget. It never blocks boot.
 
 #### `metadata`, `MetadataRegistryOptions`
 
@@ -306,15 +308,15 @@ Default: `10_000` (10 s). Graceful shutdown timeout in milliseconds. Handlers ex
 
 Default: none. Raw NATS `ConnectionOptions` pass-through for TLS, auth, reconnection, etc. See [connectionOptions](#connectionoptions) below.
 
-#### `otel`, `OtelOptions`
+#### `otel`, `OtelOptions | boolean`
 
-Default: enabled with sensible defaults. OpenTelemetry tracing configuration. See [Distributed Tracing](/docs/observability/tracing).
+Default: enabled. Pass `false` to turn tracing off entirely, `true` for the defaults, or an object to configure it. See [Distributed Tracing](/docs/observability/tracing).
 
 ### RpcConfig
 
 RPC configuration is a discriminated union on `mode`. Pick the mode based on whether commands must survive handler downtime:
 
-**`mode: 'core'`**, default. NATS native request/reply, no persistence. Lowest latency. Default timeout `30_000` ms (30 s). Best for low-latency queries and lookups where in-flight requests can simply error on failure.
+**`mode: 'core'`**, default. NATS native request/reply, leaving the message unpersisted. Lowest latency. Default timeout `30_000` ms (30 s). Best for low-latency queries and lookups where in-flight requests can simply error on failure.
 
 **`mode: 'jetstream'`**, commands persisted in a JetStream stream before delivery. Default timeout `180_000` ms (3 min). Best for commands that must survive a handler restart (payments, state changes).
 
@@ -335,7 +337,7 @@ rpc: {
 }
 ```
 
-:::info Timeout applies to both sides
+:::note Timeout applies to both sides
 The `timeout` value controls both the **client-side wait** (how long the caller waits for a response) and the **server-side handler limit** (how long the handler is allowed to run before being terminated). Both sides use the value from their own `forRoot()` configuration.
 :::
 
@@ -423,7 +425,7 @@ See [Bring Your Own Infrastructure](/docs/guides/external-infrastructure#custom-
 
 <Since version="2.4.0" />
 
-Ordered events use a separate stream with Limits retention and deliver messages in strict sequential order. The configuration is simpler than workqueue/broadcast because ordered consumers are ephemeral and auto-managed by the `@nats-io/jetstream` client.
+Ordered events use a separate stream with Limits retention and deliver messages in strict sequential order. Ordered consumers are ephemeral, so the configuration is smaller than workqueue or broadcast and auto-managed by the `@nats-io/jetstream` client.
 
 ```typescript
 import { DeliverPolicy } from '@nats-io/jetstream';
@@ -555,4 +557,4 @@ void bootstrap();
 - [**Events & Broadcast**](/docs/patterns/events): workqueue events and fan-out delivery
 - [**Scheduling (Delayed Jobs)**](/docs/guides/scheduling): one-shot delayed delivery via NATS 2.12
 - [**Lifecycle Hooks**](/docs/guides/lifecycle-hooks): monitor connection state and transport events
-- [**Default Configs**](/docs/reference/default-configs): full list of production-ready stream and consumer defaults
+- [**Default Configs**](/docs/reference/default-configs): full list of the stream and consumer defaults

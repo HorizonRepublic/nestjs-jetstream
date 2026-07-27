@@ -8,7 +8,7 @@ schema:
   headline: "Distributed Tracing: NestJS JetStream Transport"
   description: "Built-in W3C Trace Context propagation and OpenTelemetry spans for every publish, consume, and RPC round-trip."
   datePublished: "2026-04-24"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
 # Distributed Tracing
@@ -162,7 +162,7 @@ otel: {
 
 ## Security and privacy
 
-Two configuration knobs deal with potentially sensitive data. Both default to safe values; opting in is a deliberate choice.
+Configuration knobs deal with potentially sensitive data. Both default to safe values; opting in is a deliberate choice.
 
 ### `captureHeaders`
 
@@ -171,7 +171,7 @@ Captures matching message headers as `messaging.header.<name>` span attributes. 
 The library-internal `x-correlation-id` is never emitted as a `messaging.header.*` attribute even if added to the allowlist; it surfaces on RPC spans as the standard `messaging.message.conversation_id` attribute instead, which keeps the OpenTelemetry semantic-conventions contract intact and avoids duplicating the same value under two keys.
 
 :::warning
-Headers frequently carry authentication tokens, session identifiers, and other sensitive data. Captured values are exported to your OTel backend (Sentry, Datadog, etc.). **Never set `captureHeaders: true` in production**: that captures every header. Use an explicit allowlist.
+Headers frequently hold authentication tokens, session identifiers, and other sensitive data. Captured values are exported to your OTel backend (Sentry, Datadog, etc.). **Never set `captureHeaders: true` in production**: that captures every header. Use an explicit allowlist.
 :::
 
 The library always excludes propagator-owned headers (`traceparent`, `tracestate`, `baggage`, `sentry-trace`, `b3`, `x-b3-*`, Jaeger format) from capture even when the matcher would pass them: they are noise and already represented by the span's own context.
@@ -194,7 +194,7 @@ otel: {
 
 ## Custom enrichment hooks
 
-Three hooks let you attach business-specific attributes to library-emitted spans without subclassing or wrapping:
+Hooks let you attach business-specific attributes to library-emitted spans without subclassing or wrapping:
 
 ```ts
 otel: {
@@ -241,4 +241,4 @@ This requires an OpenTelemetry `ContextManager` (typically `AsyncLocalStorageCon
 Review your `captureHeaders` allowlist; set explicit headers, never `true`. Confirm `captureBody` is `false`. If you need backend-side scrubbing, register a custom `SpanProcessor` that drops or rewrites attributes in `onEnd`.
 
 **Span name format looks "reversed" in my APM.**
-The library uses the OpenTelemetry messaging convention: `{operation} {destination}` (`publish orders.created`, `process orders.created`). Some older APMs render it differently, rendering is a UI concern, not a span data issue.
+The library uses the OpenTelemetry messaging convention: `{operation} {destination}` (`publish orders.created`, `process orders.created`). Some older APMs render it differently, rendering is a UI concern rather than span data.

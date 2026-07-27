@@ -27,7 +27,6 @@ const config: Config = {
           editUrl: 'https://github.com/HorizonRepublic/nestjs-jetstream/tree/main/website/',
           showLastUpdateTime: true,
           showLastUpdateAuthor: true,
-          
         },
         blog: false,
         theme: { customCss: './src/css/custom.css' },
@@ -65,14 +64,35 @@ const config: Config = {
         baseSchema: {
           organization: {
             '@type': 'Organization',
+            // Article.publisher and WebPage.publisher reference this @id.
+            '@id': '${DOCUSAURUS_CONFIG_URL}/#organization',
             name: 'Horizon Republic',
             url: '${DOCUSAURUS_CONFIG_URL}',
+          },
+          // WebPage.isPartOf references this @id on every route.
+          website: {
+            '@type': 'WebSite',
+            '@id': '${DOCUSAURUS_CONFIG_URL}/#website',
+            name: '@horizon-republic/nestjs-jetstream',
+            description:
+              'A NATS JetStream transport for NestJS microservices: durable events, broadcast, ordered delivery, RPC and dead letters.',
+            url: '${DOCUSAURUS_CONFIG_URL}',
+            publisher: { '@id': '${DOCUSAURUS_CONFIG_URL}/#organization' },
           },
         },
       },
     ],
   ],
   headTags: [
+    { tagName: 'link', attributes: { rel: 'preconnect', href: 'https://fonts.googleapis.com' } },
+    { tagName: 'link', attributes: { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: 'anonymous' } },
+    {
+      tagName: 'link',
+      attributes: {
+        rel: 'stylesheet',
+        href: 'https://fonts.googleapis.com/css2?family=Recursive:slnt,wght,CASL,MONO@-15..0,300..800,0..1,0..1&display=swap',
+      },
+    },
     { tagName: 'link', attributes: { rel: 'icon', type: 'image/png', sizes: '48x48', href: '/img/favicon-48.png' } },
     { tagName: 'link', attributes: { rel: 'icon', type: 'image/png', sizes: '96x96', href: '/img/favicon-96.png' } },
     { tagName: 'link', attributes: { rel: 'icon', type: 'image/png', sizes: '192x192', href: '/img/favicon-192.png' } },
@@ -120,10 +140,10 @@ const config: Config = {
       { name: 'twitter:description', content: 'Durable, retried and traced NATS JetStream transport for NestJS, under the same @EventPattern decorators you already use.' },
     ],
     mermaid: {
-      theme: { light: 'dark', dark: 'dark' },
+      theme: { light: 'neutral', dark: 'dark' },
       options: {
         securityLevel: 'loose',
-        fontFamily: '"Geist Mono", ui-monospace, monospace',
+        fontFamily: '"Recursive", ui-monospace, monospace',
         flowchart: {
           curve: 'basis',
           padding: 18,
@@ -140,43 +160,12 @@ const config: Config = {
           showSequenceNumbers: true,
           useMaxWidth: true,
         },
-        themeVariables: {
-          background: '#211f1d',
-          primaryColor: '#2a2826',
-          primaryBorderColor: '#4a4744',
-          primaryTextColor: '#f3f1ee',
-          secondaryColor: '#2a2826',
-          tertiaryColor: '#2a2826',
-          lineColor: '#787470',
-          textColor: '#f3f1ee',
-          mainBkg: '#2a2826',
-          nodeBorder: '#4a4744',
-          clusterBkg: '#1d1c1a99',
-          clusterBorder: '#3c3936',
-          edgeLabelBackground: '#211f1d',
-          actorBkg: '#2a2826',
-          actorBorder: '#4a4744',
-          actorTextColor: '#f3f1ee',
-          actorLineColor: '#3c3936',
-          signalColor: '#787470',
-          signalTextColor: '#c2bfbb',
-          labelBoxBkgColor: '#2a2826',
-          labelBoxBorderColor: '#52d68e80',
-          labelTextColor: '#52d68e',
-          loopTextColor: '#52d68e',
-          activationBkgColor: '#2a2826',
-          activationBorderColor: '#52d68e80',
-          noteBkgColor: '#1f2823',
-          noteBorderColor: '#52d68e80',
-          noteTextColor: '#f3f1ee',
-          fontFamily: '"Geist Mono", ui-monospace, monospace',
-        },
       },
     },
     colorMode: {
-      defaultMode: 'dark',
-      disableSwitch: true,
-      respectPrefersColorScheme: false,
+      defaultMode: 'light',
+      disableSwitch: false,
+      respectPrefersColorScheme: true,
     },
     navbar: {
       title: 'nestjs-jetstream',
@@ -194,9 +183,9 @@ const config: Config = {
         {
           title: 'Docs',
           items: [
-            { label: 'Getting Started', to: '/docs/getting-started/installation' },
-            { label: 'Core Concepts', to: '/docs/patterns/events' },
-            { label: 'Going to Production', to: '/docs/reference/module-configuration' },
+            { label: 'Start', to: '/docs/getting-started/installation' },
+            { label: 'Delivery patterns', to: '/docs/patterns/events' },
+            { label: 'Reference', to: '/docs/reference/module-configuration' },
           ],
         },
         {
@@ -218,8 +207,8 @@ const config: Config = {
       copyright: `Copyright © ${new Date().getFullYear()} Horizon Republic. MIT License.`,
     },
     prism: {
-      theme: prismThemes.dracula,
-      darkTheme: prismThemes.dracula,
+      theme: prismThemes.github,
+      darkTheme: prismThemes.vsDark,
       additionalLanguages: ['bash', 'json', 'yaml'],
     },
   } satisfies Preset.ThemeConfig,

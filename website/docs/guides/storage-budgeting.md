@@ -8,14 +8,14 @@ schema:
   headline: "Storage budgeting & provisioning"
   description: "How JetStream stream reservations relate to the server max_file_store, and how to read the boot-time provisioning summary."
   datePublished: "2026-06-02"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
 # Storage budgeting & provisioning
 
 When your service starts, the transport ensures its JetStream streams exist. Each stream
 reserves storage up front, and that reservation is charged against a budget shared by **every
-service** on the cluster. This page explains the arithmetic and how to read the boot summary.
+service** on the cluster.
 
 ## The arithmetic
 
@@ -73,7 +73,7 @@ JetstreamModule.forRoot({
 });
 ```
 
-This is a best-effort heuristic, not a guarantee:
+This is a best-effort heuristic:
 
 - The server-side `max_file_store` is not exposed to clients. If the account has no explicit
   `max_storage` limit, the check logs that it cannot verify the real ceiling.

@@ -8,7 +8,7 @@ schema:
   headline: "How to migrate immutable stream properties"
   description: "Safely change immutable stream properties without losing messages via blue-green sourcing."
   datePublished: "2026-04-02"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
 import Since from '@site/src/components/Since';
@@ -21,15 +21,15 @@ Safely change immutable stream properties (like `storage`) without losing messag
 
 ## When is migration needed?
 
-Most stream config changes are **mutable**: the transport applies them on startup via a simple update. No downtime, no message loss. See the [full property classification](/docs/reference/default-configs#immutable-vs-mutable-stream-properties).
+Most stream config changes are **mutable**: the transport applies them on startup via a simple update. Uptime and messages both survive. See the [full property classification](/docs/reference/default-configs#immutable-vs-mutable-stream-properties).
 
 Migration is only needed for **immutable** properties that NATS locks after stream creation:
 
-| Property | Example change | Requires migration |
-|----------|---------------|-------------------|
-| `storage` | `File` -> `Memory` | **Yes** |
-| `retention` | `Workqueue` -> `Limits` | **Not allowed**: controlled by the transport |
-| `max_age`, `num_replicas`, etc. | Any value | No: mutable, updated automatically |
+| Property                        | Example change          | Requires migration                           |
+| ------------------------------- | ----------------------- | -------------------------------------------- |
+| `storage`                       | `File` -> `Memory`      | **Yes**                                      |
+| `retention`                     | `Workqueue` -> `Limits` | **Not allowed**: controlled by the transport |
+| `max_age`, `num_replicas`, etc. | Any value               | No: mutable, updated automatically           |
 
 ## How to enable
 
@@ -98,6 +98,7 @@ When one pod migrates the stream, other pods' consumers break because the stream
 3. Migration completes → backup deleted → next retry creates consumer → consumption resumes
 
 This prevents two critical issues:
+
 - **Config overwrite**: old pods cannot overwrite a newer pod's consumer configuration
 - **Message consumption during restore**: consumers cannot eat messages from the workqueue while they're being sourced back
 
@@ -117,15 +118,15 @@ Expect migration time to scale roughly linearly with message count. For small st
 - **Failure after the original is deleted.** The backup is the only copy of the data and is always preserved. Restoration resumes automatically on the next application startup.
 - **Sourcing timeout (30s default).** Same as above: the backup is preserved and the restore resumes on the next startup. Nothing is lost.
 - **Process killed mid-migration.** Detected on the next startup: a stranded backup is restored into the stream (recreating it first if the crash happened between delete and create), then cleaned up.
-- **Two instances migrating concurrently (rolling deploy).** Backups carry a freshness stamp. An instance that finds another instance's live backup waits for that migration to finish instead of interfering; only stale leftovers are recovered.
+- **Instances migrating concurrently (rolling deploy).** Backups carry a freshness stamp. An instance that finds another instance's live backup waits for that migration to finish instead of interfering; only stale leftovers are recovered.
 
 ## Manual streams are never migrated
 
 Streams managed in `ManagementMode.Manual` (externally provisioned) are never created, updated, or migrated by the library; regardless of `allowDestructiveMigration`. The library only binds to them and validates their configuration at boot.
 
-Setting `allowDestructiveMigration: true` together with a global `provisioning.management: ManagementMode.Manual` is so a no-op for all streams. The library logs a warning at boot when this combination is detected:
+Setting `allowDestructiveMigration: true` together with a global `provisioning.management: ManagementMode.Manual` is a no-op for all streams. The library logs a warning at boot when this combination is detected:
 
-```
+```text
 allowDestructiveMigration has no effect under provisioning.management: Manual, the library never migrates externally managed streams.
 ```
 

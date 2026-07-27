@@ -25,12 +25,17 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
+        with:
+          version: 11
 
       - name: Install dependencies
         run: pnpm install
 
       - name: Lint
         run: pnpm lint
+
+      - name: Lint markdown
+        run: pnpm lint:md
 
       - name: Check formatting
         run: pnpm format:check
@@ -71,6 +76,8 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
+        with:
+          version: 11
 
       - name: Install dependencies
         run: pnpm install

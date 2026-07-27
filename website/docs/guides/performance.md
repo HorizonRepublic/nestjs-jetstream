@@ -6,12 +6,12 @@ schema:
   headline: "Performance Tuning"
   description: "Tune ackWait, maxAckPending, batch sizes, and ack extension for high-throughput workloads."
   datePublished: "2026-03-26"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
 # Performance Tuning
 
-This guide covers how to tune the transport for high-throughput workloads. The most impactful settings are backpressure controls and concurrency limits.
+Backpressure controls and concurrency limits move throughput the most.
 
 ## Backpressure & flow control
 
@@ -20,20 +20,20 @@ Pull consumers provide **implicit backpressure**: the client controls how fast i
 The message flow through the system:
 
 ```text
-NATS Server -> pull consumer (max_ack_pending) -> consume() buffer -> RxJS mergeMap (concurrency) -> handler -> ack -> frees slot
+NATS Server -> pull consumer (max_ack_pending) -> consume() buffer -> concurrency gate -> handler -> ack -> frees slot
 ```
 
 The primary flow control knob is `max_ack_pending` on the consumer. It limits how many messages can be in-flight (delivered but not yet acknowledged) at any time. When the limit is reached, the server stops delivering new messages until existing ones are acknowledged, creating natural backpressure.
 
 ### Configuration options
 
-| Option | Default | Effect |
-|--------|---------|--------|
-| `consumer.max_ack_pending` | 100 | Max in-flight unacked messages |
-| `consumer.ack_wait` | 10s (events) / 5min (RPC) | Ack deadline before redelivery |
-| `concurrency` | unlimited | Limits parallel handler execution |
-| `consume.max_messages` | `@nats-io/jetstream` default | Internal prefetch buffer size |
-| `consume.threshold_messages` | 75% of max_messages | Auto-refill trigger |
+| Option                       | Default                      | Effect                            |
+| ---------------------------- | ---------------------------- | --------------------------------- |
+| `consumer.max_ack_pending`   | 100                          | Max in-flight unacked messages    |
+| `consumer.ack_wait`          | 10s (events) / 5min (RPC)    | Ack deadline before redelivery    |
+| `concurrency`                | unlimited                    | Limits parallel handler execution |
+| `consume.max_messages`       | `@nats-io/jetstream` default | Internal prefetch buffer size     |
+| `consume.threshold_messages` | 75% of max_messages          | Auto-refill trigger               |
 
 ### How these interact
 
@@ -61,7 +61,7 @@ The `idle_heartbeat` option enables the server to send periodic heartbeats when 
 
 ## Concurrency control
 
-The `concurrency` option limits the number of messages processed in parallel by the `mergeMap` operator in the message pipeline. Without it, all pulled messages are dispatched to handlers immediately.
+The `concurrency` option caps how many messages the router has in flight at once. Anything beyond the cap queues FIFO and drains as handlers settle. Without it, every pulled message is dispatched immediately.
 
 ```typescript
 events: {
@@ -87,6 +87,7 @@ events: {
 When enabled, the transport calls `msg.working()` at regular intervals (at half the `ack_wait` period) to signal that the message is still being processed. This resets the ack deadline on the server.
 
 **When to use:**
+
 - Handlers that call slow external APIs or run complex computations.
 - RPC handlers with long timeouts: `ackExtension` keeps the command message alive while the handler runs.
 
@@ -106,7 +107,7 @@ See [Default Configs, Connection Defaults](/docs/reference/default-configs#conne
 
 ## Complete example
 
-A production-ready configuration tuned for high throughput:
+A configuration tuned for high throughput:
 
 ```typescript
 import { toNanos } from '@horizon-republic/nestjs-jetstream';
@@ -133,6 +134,7 @@ JetstreamModule.forRoot({
 ```
 
 This configuration:
+
 - Allows up to 500 unacked event messages, with 200 processed in parallel.
 - Extends ack deadlines automatically for long-running event and RPC handlers.
 - Limits broadcast processing to 50 concurrent handlers.
@@ -140,12 +142,12 @@ This configuration:
 
 ## Performance expectations
 
-Published benchmark numbers for this library don't exist yet, any figures you see elsewhere are guesses. A real benchmark suite is planned (see the project issues), and this section will be updated with reproducible results when it lands.
+Published benchmark numbers for this library don't exist yet, any figures you see elsewhere are guesses. A real benchmark suite is planned (see the project issues), and this section will be updated with reproducible results when it arrives.
 
 In the meantime, here is what you can rely on without numbers:
 
 - **The bottleneck is almost always the handler**, not the transport. Database writes, external API calls, and serialization dominate. Profile the handler first.
-- **Core NATS RPC is the lowest-latency path of the two RPC modes**: no stream write, no inbox routing. Use it when in-cluster latency is the priority.
+- **Core NATS RPC is the lowest-latency path of the two RPC modes**: skipping the stream write and the inbox routing. Use it when in-cluster latency is the priority.
 - **JetStream RPC adds a stream persist plus an inbox reply** on top of Core NATS. You trade a fixed amount of added latency for the guarantee that the command survives a server restart. Quantify the trade-off on your own workload before planning around it.
 - **Event handler throughput scales with [`concurrency`](/docs/guides/performance#concurrency-control)** up to the point where your downstream dependencies become the bottleneck. CPU-bound handlers generally scale with core count; I/O-bound handlers gain from higher concurrency and a larger `max_ack_pending`.
 - **Broadcast is not a throughput hit**: each instance processes its copy independently through its own consumer.

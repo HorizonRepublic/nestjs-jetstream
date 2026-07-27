@@ -6,12 +6,12 @@ schema:
   headline: Naming Conventions
   description: "Stream, consumer, and subject naming patterns derived from the service name."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
 # Naming Conventions
 
-The transport derives all NATS subject names, stream names, and consumer names from the single `name` value you pass to `forRoot()`. This page documents every naming rule and the helper functions behind them.
+Every NATS subject, stream and consumer name is derived from the single `name` value you pass to `forRoot()`, through helper functions the package exports.
 
 ## The `__microservice` Suffix
 
@@ -26,42 +26,22 @@ JetstreamModule.forRoot({
 
 ## Full Naming Table
 
-Given `name: 'orders'`, the transport generates the following names:
+Everything below is written against `{internal}`, the internal name: `orders` becomes `orders__microservice`.
 
-### Subjects
+| Kind                                                      | Subject                        | Stream                      | Consumer                        |
+| --------------------------------------------------------- | ------------------------------ | --------------------------- | ------------------------------- |
+| Event                                                     | `{internal}.ev.{pattern}`      | `{internal}_ev-stream`      | `{internal}_ev-consumer`        |
+| Command                                                   | `{internal}.cmd.{pattern}`     | `{internal}_cmd-stream`     | `{internal}_cmd-consumer`       |
+| Ordered                                                   | `{internal}.ordered.{pattern}` | `{internal}_ordered-stream` | Ephemeral, no durable name      |
+| Broadcast                                                 | `broadcast.{pattern}`          | `broadcast-stream`, shared  | `{internal}_broadcast-consumer` |
+| [DLQ](/docs/guides/dead-letter-queue#built-in-dlq-stream) | `{internal}_dlq-stream`        | `{internal}_dlq-stream`     | Yours to create                 |
 
-| Type | Pattern | Example |
-|------|---------|---------|
-| Internal name | `{name}__microservice` | `orders__microservice` |
-| Event subject | `{name}__microservice.ev.{pattern}` | `orders__microservice.ev.order.created` |
-| RPC command subject | `{name}__microservice.cmd.{pattern}` | `orders__microservice.cmd.get-order` |
-| Ordered subject | `{name}__microservice.ordered.{pattern}` | `orders__microservice.ordered.order.updated` |
-| Broadcast subject | `broadcast.{pattern}` | `broadcast.config.updated` |
+So a service named `orders` handling `order.created` consumes `orders__microservice.ev.order.created` from `orders__microservice_ev-stream` through `orders__microservice_ev-consumer`.
 
-### Streams
+Ordered consumers are created and managed by the `@nats-io/jetstream` client at consumption time, so they never appear under a name you can look up. The DLQ stream publishes to a subject equal to its own name, and the transport creates no consumer on it: reading dead letters is your call, and the [DLQ guide](/docs/guides/dead-letter-queue#built-in-dlq-stream) covers how.
 
-| Stream Type | Name Pattern | Example |
-|-------------|-------------|---------|
-| Event stream | `{name}__microservice_ev-stream` | `orders__microservice_ev-stream` |
-| Command stream | `{name}__microservice_cmd-stream` | `orders__microservice_cmd-stream` |
-| Ordered stream | `{name}__microservice_ordered-stream` | `orders__microservice_ordered-stream` |
-| Broadcast stream | `broadcast-stream` | `broadcast-stream` |
-| [DLQ stream](/docs/guides/dead-letter-queue#built-in-dlq-stream) | `{name}__microservice_dlq-stream` | `orders__microservice_dlq-stream` |
-
-### Consumers
-
-| Consumer Type | Name Pattern | Example |
-|---------------|-------------|---------|
-| Event consumer | `{name}__microservice_ev-consumer` | `orders__microservice_ev-consumer` |
-| Command consumer | `{name}__microservice_cmd-consumer` | `orders__microservice_cmd-consumer` |
-| Broadcast consumer | `{name}__microservice_broadcast-consumer` | `orders__microservice_broadcast-consumer` |
-
-:::note
-Ordered consumers are **ephemeral**: they are created and managed by the `@nats-io/jetstream` client at consumption time and do not have a durable consumer name.
-:::
-
-:::info
-The broadcast stream (`broadcast-stream`) is **shared** across all services. Each service creates its own durable consumer on this shared stream, named with the service-specific prefix (e.g., `orders__microservice_broadcast-consumer`).
+:::note Overriding the convention
+`subjectPrefix`, `stream.name` and `consumer.durable_name` each override the derived value for one kind. That is how a service binds to infrastructure someone else provisioned; see [external infrastructure](/docs/guides/external-infrastructure).
 :::
 
 ## Helper Functions
@@ -154,24 +134,15 @@ metadataKey('orders', StreamKind.Event, 'order.created');
 
 ## Stream Subject Wildcards
 
-Each stream subscribes to a wildcard subject pattern that captures all messages for its type:
+Each stream subscribes to a wildcard subject that captures every message of its kind. With [message scheduling](/docs/guides/scheduling) enabled (`allow_msg_schedules: true`), event and broadcast streams take a second filter for the scheduled twins:
 
-| Stream Kind | Subject Filter |
-|------------|---------------|
-| Event | `{name}__microservice.ev.>` |
-| Command | `{name}__microservice.cmd.>` |
-| Ordered | `{name}__microservice.ordered.>` |
-| Broadcast | `broadcast.>` |
+| Kind      | Subject filter         | With scheduling enabled |
+| --------- | ---------------------- | ----------------------- |
+| Event     | `{internal}.ev.>`      | `{internal}._sch.>`     |
+| Command   | `{internal}.cmd.>`     | -                       |
+| Ordered   | `{internal}.ordered.>` | -                       |
+| Broadcast | `broadcast.>`          | `broadcast._sch.>`      |
 
-The `>` wildcard matches one or more tokens, so `orders__microservice.ev.>` will capture `orders__microservice.ev.order.created`, `orders__microservice.ev.payment.processed`, etc.
+The `>` wildcard matches one or more tokens, so `orders__microservice.ev.>` captures `orders__microservice.ev.order.created`, `orders__microservice.ev.payment.processed` and everything else under that prefix.
 
-### Scheduling subjects
-
-When [message scheduling](/docs/guides/scheduling) is enabled (`allow_msg_schedules: true`), the transport adds extra subject filters to capture scheduled messages:
-
-| Stream Kind | Extra Subject Filter |
-|------------|--------------------------|
-| Event | `{name}__microservice._sch.>` |
-| Broadcast | `broadcast._sch.>` |
-
-The `_sch` subjects are a library convention to separate scheduled messages from regular events within the same stream. NATS scheduling itself works via headers (`Nats-Schedule`, `Nats-Schedule-Target` per [ADR-51](https://github.com/nats-io/nats-architecture-and-design/blob/main/adr/ADR-51.md)), not special subjects. You don't interact with `_sch` subjects directly: the library manages them automatically.
+`_sch` is this library's convention for keeping a scheduled message out of the filter its own consumer watches, until the server publishes it for real. NATS scheduling itself runs on headers (`Nats-Schedule`, `Nats-Schedule-Target` per [ADR-51](https://github.com/nats-io/nats-architecture-and-design/blob/main/adr/ADR-51.md)), not on subjects. You never address a `_sch` subject yourself.

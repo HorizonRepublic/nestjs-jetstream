@@ -2,18 +2,18 @@
 sidebar_position: 2
 sidebar_label: "Prometheus Metrics"
 title: "Prometheus Metrics: NestJS JetStream Transport"
-description: "Production-ready Prometheus metrics for NATS JetStream transport: throughput, handler latency, consumer lag, dead letters, and publish errors. Zero-config integration with @willsoto/nestjs-prometheus."
+description: "Built-in Prometheus metrics for NATS JetStream transport: throughput, handler latency, consumer lag, dead letters, and publish errors. Zero-config integration with @willsoto/nestjs-prometheus."
 schema:
   type: Article
   headline: "Prometheus Metrics: NestJS JetStream Transport"
-  description: "Production-ready Prometheus metrics for NATS JetStream transport: throughput, handler latency, consumer lag, dead letters, and publish errors."
+  description: "Built-in Prometheus metrics for NATS JetStream transport: throughput, handler latency, consumer lag, dead letters, and publish errors."
   datePublished: "2026-05-27"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
 # Prometheus Metrics
 
-The transport ships built-in Prometheus metrics covering throughput, handler latency, consumer lag, publish errors, dead letters, and connection health. Metrics are written to a `prom-client` registry; the de-facto standard in the NestJS ecosystem; so any `/metrics` endpoint exporter picks them up without extra wiring.
+The transport ships built-in Prometheus metrics covering throughput, handler latency, consumer lag, publish errors, dead letters, and connection health. Metrics are written to a `prom-client` registry, the de-facto standard in the NestJS ecosystem, which any `/metrics` exporter picks up without extra wiring.
 
 ## What it covers
 
@@ -114,7 +114,7 @@ JetstreamModule.forRoot({
 
 When the `metrics` option is omitted or set to `false`:
 
-- `prom-client` is never imported (the dynamic `import()` only runs when `metrics` is truthy).
+- `prom-client` is never imported (the lazy `import()` only runs when `metrics` is truthy).
 - The transport's hot paths add ~30 nanoseconds per message (a single `Map.get` to check if a listener exists): effectively free.
 
 Production deployments that don't need metrics pay nothing for the feature.
@@ -125,41 +125,41 @@ All metric names are prefixed with `jetstream_` (configurable). `defaultLabels` 
 
 ### Counters
 
-| Name                                | Labels                              | Description |
-| ----------------------------------- | ----------------------------------- | ----------- |
-| `jetstream_messages_received_total` | `stream`, `subject`, `kind`         | Messages routed to a handler. |
-| `jetstream_messages_processed_total`| `stream`, `subject`, `kind`, `status` | Handler invocations that completed. `status` ∈ `success`, `error`, `retried`, `terminated`. |
-| `jetstream_messages_unhandled_total`| `subject` (literal `<unmatched>`)   | Messages with no matching handler. |
-| `jetstream_messages_dead_letter_total` | `stream`, `subject`              | Messages that exhausted all delivery attempts. |
-| `jetstream_publish_total`           | `subject`, `kind`, `status`         | Client-side publish operations. `status` ∈ `success`, `error`. |
-| `jetstream_rpc_timeout_total`       | `subject`                           | RPC calls that exceeded the timeout deadline. |
-| `jetstream_consumer_recovered_total`| `kind`                              | Self-healing recoveries after consume-loop failures. |
-| `jetstream_errors_total`            | `context`                           | Transport-level errors. `context` ∈ `connection`, `codec`, `publish`, `consume`, `handler`, `shutdown`, `other`. |
-| `jetstream_metrics_poll_errors_total` | `target`                          | Errors hit while polling for gauge data. `target` ∈ `consumer.info`, `stream.info`, `jsm.connect`. |
+| Name                                   | Labels                                | Description                                                                                                      |
+| -------------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `jetstream_messages_received_total`    | `stream`, `subject`, `kind`           | Messages routed to a handler.                                                                                    |
+| `jetstream_messages_processed_total`   | `stream`, `subject`, `kind`, `status` | Handler invocations that completed. `status` ∈ `success`, `error`, `retried`, `terminated`.                      |
+| `jetstream_messages_unhandled_total`   | `subject` (literal `<unmatched>`)     | Messages with no matching handler.                                                                               |
+| `jetstream_messages_dead_letter_total` | `stream`, `subject`                   | Messages that exhausted all delivery attempts.                                                                   |
+| `jetstream_publish_total`              | `subject`, `kind`, `status`           | Client-side publish operations. `status` ∈ `success`, `error`.                                                   |
+| `jetstream_rpc_timeout_total`          | `subject`                             | RPC calls that exceeded the timeout deadline.                                                                    |
+| `jetstream_consumer_recovered_total`   | `kind`                                | Self-healing recoveries after consume-loop failures.                                                             |
+| `jetstream_errors_total`               | `context`                             | Transport-level errors. `context` ∈ `connection`, `codec`, `publish`, `consume`, `handler`, `shutdown`, `other`. |
+| `jetstream_metrics_poll_errors_total`  | `target`                              | Errors hit while polling for gauge data. `target` ∈ `consumer.info`, `stream.info`, `jsm.connect`.               |
 
 ### Histograms
 
-| Name                                  | Labels                              | Source |
-| ------------------------------------- | ----------------------------------- | ------ |
-| `jetstream_handler_duration_seconds`  | `stream`, `subject`, `kind`, `status` | Wall-clock duration from handler entry to settlement. |
-| `jetstream_publish_duration_seconds`  | `subject`, `kind`, `status`         | Wall-clock duration of client publish operations. |
-| `jetstream_rpc_duration_seconds`      | `subject`, `status`                 | Full RPC round-trip from caller's perspective. `status` includes `timeout`. |
+| Name                                 | Labels                                | Source                                                                      |
+| ------------------------------------ | ------------------------------------- | --------------------------------------------------------------------------- |
+| `jetstream_handler_duration_seconds` | `stream`, `subject`, `kind`, `status` | Wall-clock duration from handler entry to settlement.                       |
+| `jetstream_publish_duration_seconds` | `subject`, `kind`, `status`           | Wall-clock duration of client publish operations.                           |
+| `jetstream_rpc_duration_seconds`     | `subject`, `status`                   | Full RPC round-trip from caller's perspective. `status` includes `timeout`. |
 
-Default buckets (in seconds): `[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]`. Cover sub-millisecond RPC up to ten-second batch handlers. Override via `metrics.buckets`.
+Handler and RPC buckets run `[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]` seconds, covering sub-millisecond calls up to ten-second batch handlers. Publish stops at `5`, since a publish still running after five seconds is a connection problem to investigate elsewhere. Override any of the three via `metrics.buckets`.
 
 ### Gauges (polled)
 
 Refreshed every `pollInterval` ms by querying `JetStreamManager.consumers.info()` and `JetStreamManager.streams.info()` for every consumer this service owns.
 
-| Name                              | Labels                              | Source field |
-| --------------------------------- | ----------------------------------- | ------------ |
-| `jetstream_consumer_num_pending`  | `stream`, `consumer`, `kind`        | `ConsumerInfo.num_pending` |
-| `jetstream_consumer_num_ack_pending` | `stream`, `consumer`, `kind`     | `ConsumerInfo.num_ack_pending` |
-| `jetstream_consumer_num_redelivered` | `stream`, `consumer`, `kind`     | `ConsumerInfo.num_redelivered` |
-| `jetstream_consumer_num_waiting`  | `stream`, `consumer`, `kind`        | `ConsumerInfo.num_waiting` |
-| `jetstream_stream_messages`       | `stream`                            | `StreamInfo.state.messages` |
-| `jetstream_stream_bytes`          | `stream`                            | `StreamInfo.state.bytes` |
-| `jetstream_connection_up`         | `server`                            | `1` while connected, `0` after disconnect. |
+| Name                                 | Labels                       | Source field                               |
+| ------------------------------------ | ---------------------------- | ------------------------------------------ |
+| `jetstream_consumer_num_pending`     | `stream`, `consumer`, `kind` | `ConsumerInfo.num_pending`                 |
+| `jetstream_consumer_num_ack_pending` | `stream`, `consumer`, `kind` | `ConsumerInfo.num_ack_pending`             |
+| `jetstream_consumer_num_redelivered` | `stream`, `consumer`, `kind` | `ConsumerInfo.num_redelivered`             |
+| `jetstream_consumer_num_waiting`     | `stream`, `consumer`, `kind` | `ConsumerInfo.num_waiting`                 |
+| `jetstream_stream_messages`          | `stream`                     | `StreamInfo.state.messages`                |
+| `jetstream_stream_bytes`             | `stream`                     | `StreamInfo.state.bytes`                   |
+| `jetstream_connection_up`            | `server`                     | `1` while connected, `0` after disconnect. |
 
 Setting `pollInterval: 0` (or `false`) disables the polling loop entirely. Counter and histogram metrics continue to update from event hooks.
 
@@ -231,7 +231,7 @@ The polling loop pulls `consumer.info()` and `streams.info()` from the NATS serv
 - **Graceful shutdown**: `OnModuleDestroy` cancels the timer and awaits the in-flight tick before resolving, so the process exits cleanly.
 - **Connection-loss tolerance**: while NATS is disconnected, polling fails fast and increments the poll-error counter. Gauges become stale (not zero): which is the correct semantic: we do not know the values, so we do not lie about them.
 
-The Command (RPC) consumer is only polled in JetStream RPC mode. Core RPC mode does not create a JetStream stream for commands, so there is nothing to poll. Ordered consumers are ephemeral and do not have a stable durable name, so they are excluded from polling, use `jetstream_messages_processed_total{kind="ordered"}` to monitor ordered throughput instead.
+The Command (RPC) consumer is polled only in JetStream RPC mode, since Core RPC mode creates no JetStream stream for commands. Ordered consumers are ephemeral and do not have a stable durable name, so they are excluded from polling, use `jetstream_messages_processed_total{kind="ordered"}` to monitor ordered throughput instead.
 
 ## Cardinality safety
 

@@ -8,7 +8,7 @@ schema:
   headline: "Broadcast Events: NestJS JetStream Fan-Out Delivery"
   description: "Fan-out NATS JetStream events to every NestJS service instance via per-service durable consumers on a shared broadcast stream."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
 # Broadcast Events
@@ -20,7 +20,7 @@ Broadcast events implement **fan-out** delivery: every subscribing service recei
 
 ## When to use
 
-Imagine a multi-service platform where an admin updates a feature flag. Every service (orders, payments, notifications, analytics) must refresh its local cache immediately. You don't want to call each service individually, and you don't want only one instance to get the update.
+A feature flag changes, and every service (orders, payments, notifications, analytics) has to refresh its local cache. Calling each one individually does not scale, and a workqueue event would reach only a single instance.
 
 Broadcast events solve this. When you publish a broadcast event, every service that has registered a handler receives the message independently.
 
@@ -148,6 +148,7 @@ The key difference from workqueue events: broadcast delivery is **at-least-once 
 This is the most important concept to understand about broadcast events: **each service's consumer is independent**.
 
 If the orders service fails to process a broadcast message and the message is nak'd:
+
 - Only the orders service's consumer retries the message.
 - The payments service and analytics service are **unaffected**.
 - Each consumer tracks its own delivery count independently.
@@ -168,7 +169,8 @@ sequenceDiagram
     OC-->>OC: SUCCESS (ack)
 ```
 
-This means:
+Consumers are isolated from each other:
+
 - A bug in one service does not block message delivery to other services.
 - Dead letter tracking is per-consumer: the orders service can exhaust its retries while payments processes normally.
 - Each service can be deployed, restarted, or scaled independently.
@@ -243,7 +245,7 @@ To schedule delayed broadcasts, enable `broadcast.stream.allow_msg_schedules: tr
 - **`max_deliver`** (per-service), `3`. Each service retries independently before dead letter.
 - **`ack_wait`** (per-service), 10 seconds. Scoped to each service's broadcast consumer.
 
-See [Default Configs, Broadcast Stream](/docs/reference/default-configs#broadcast-stream) and [Broadcast Consumer](/docs/reference/default-configs#broadcast-consumer) for the complete list.
+See [Default Configs](/docs/reference/default-configs#stream-defaults) for the broadcast stream and [consumer](/docs/reference/default-configs#consumer-defaults) values side by side with the other kinds.
 
 ## Common use cases
 
@@ -311,4 +313,4 @@ handleFeatureFlag(@Payload() data: FeatureFlagEvent): void {
 
 ## See also
 
-Broadcast consumers compete with regular event consumers for the same concurrency budget, tune both via [Performance Tuning](/docs/guides/performance#concurrency-control). If a broadcast handler keeps failing, only *that* service's consumer retries; see [Dead Letter Queue](/docs/guides/dead-letter-queue#scope) for per-consumer dead letter semantics.
+Broadcast consumers compete with regular event consumers for the same concurrency budget, tune both via [Performance Tuning](/docs/guides/performance#concurrency-control). If a broadcast handler keeps failing, only _that_ service's consumer retries; see [Dead Letter Queue](/docs/guides/dead-letter-queue#scope) for per-consumer dead letter semantics.

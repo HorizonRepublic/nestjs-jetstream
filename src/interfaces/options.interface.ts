@@ -106,7 +106,8 @@ export interface StreamConsumerOverrides {
   consume?: Partial<ConsumeOptions>;
 
   /**
-   * Maximum number of concurrent handler executions (RxJS `mergeMap` limit).
+   * Maximum number of handler executions in flight at once. Messages beyond
+   * the limit queue FIFO and drain as handlers settle.
    *
    * Default: `undefined` (unlimited, naturally bounded by `max_ack_pending`).
    * Set this to protect downstream systems from overload.

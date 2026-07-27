@@ -8,124 +8,97 @@ schema:
   headline: "Why JetStream? NestJS NATS Transport Comparison"
   description: "When the built-in NestJS NATS transport is enough, and when your system outgrows Core NATS and needs JetStream for durable messaging."
   datePublished: "2026-04-11"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
 # Why JetStream?
 
-The goal of this page isn't to replace the [built-in NestJS NATS transport](https://docs.nestjs.com/microservices/nats): it's to help you recognize the moment when your system outgrows Core NATS and needs a persistence layer underneath.
+The [built-in NestJS NATS transport](https://docs.nestjs.com/microservices/nats) runs on Core NATS: fire-and-forget pub/sub with no persistence. This page marks the line where that stops being enough.
 
-Most production systems hit that moment eventually. The sections below walk through when the built-in transport is enough, the concrete scenarios where it silently loses data, and what this library adds on top.
+## Stay on the built-in transport when
 
-## When the built-in NATS transport is enough
+- Messages are idempotent hints: cache invalidations, notification fan-out, metric updates.
+- Losing one is acceptable, because retrying or recomputing is cheap.
+- No consumer needs history.
+- Latency is the thing you tune for, ahead of durability.
 
-The official `@nestjs/microservices` NATS transport is built on Core NATS, a fast, fire-and-forget pub/sub layer. It's a solid choice when:
+Persistence costs disk I/O, stream provisioning and consumer state. If the list above describes your workload, stop here.
 
-- **All your services run in the same cluster** and restart rarely.
-- **Messages are idempotent hints**, not commands that must be executed exactly once. Cache invalidations, notification fan-out, metric updates.
-- **Losing a message is acceptable**: retrying later or recomputing state is cheap.
-- **You don't need replay**: new consumers don't care about historical messages.
-- **Latency matters more than durability**: you want the lowest possible round-trip time and are willing to trade reliability for speed.
+## Where Core NATS drops messages
 
-If this describes your workload, stop here. Use the built-in transport. Adding persistence costs you disk I/O, stream provisioning, consumer state to manage.
+| Situation                                     | Core NATS                                        | With this library                                                                          |
+| --------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| Pod gets `SIGTERM` with 40 messages in flight | All 40 are gone: the publisher was already acked | Messages return to pending, the next pod takes them                                        |
+| Downstream is down for 3 minutes              | 200 events delivered into the void               | Events wait in the stream, processed in order on return                                    |
+| Handler throws on a specific payload          | Lost on the first throw                          | Retried to `max_deliver` (default 3), then written to the DLQ stream with tracking headers |
+| New service needs the last 7 days             | Custom backfill job against the database         | A consumer with `deliver_policy` by start time replays the stream                          |
+| New replica missed a broadcast during startup | No answer                                        | Per-service durable consumers catch it up                                                  |
 
-## When you outgrow Core NATS
+The first row needs one line from you: call `app.enableShutdownHooks()` so NestJS runs the shutdown lifecycle. See [Graceful Shutdown](../guides/graceful-shutdown) and [Dead Letter Queue](../guides/dead-letter-queue).
 
-Most production systems eventually hit a scenario where Core NATS silently loses data. These are the moments that motivate a switch.
+## What the library adds over raw JetStream
 
-### Scenario 1: Deploy kills in-flight messages
+Driving JetStream from the `@nats-io/*` packages directly means building this yourself:
 
-You roll out a new version. Kubernetes sends `SIGTERM` to the old pod while it's processing 40 messages. With Core NATS, those 40 messages are gone: the publisher already got its "delivered" ack, but no handler finished them. Nobody notices until a customer opens a ticket.
+**Delivery**
 
-With JetStream, messages stay in the stream until a handler **explicitly acks** them. When the pod dies, the messages go back to pending and the next pod picks them up. Zero loss, no code changes in your publishers.
-
-This library enforces this guarantee automatically, handlers ack on successful return, nak on thrown errors, and the module drains in-flight work before the NATS connection closes. One caveat: make sure to call `app.enableShutdownHooks()` in your bootstrap so NestJS triggers the shutdown lifecycle. See [Graceful Shutdown](../guides/graceful-shutdown) for the full flow.
-
-### Scenario 2: Downstream service is down for 3 minutes
-
-Your payment service restarts. During the window, 200 "order placed" events try to reach it. Core NATS delivers them into the void: no subscriber, no problem, messages vanish.
-
-With JetStream, those 200 events sit in the stream. When the payment service comes back up, it processes them in order, from where it left off. No outbox pattern, no retry queue, no custom replay logic.
-
-### Scenario 3: A handler keeps failing
-
-A bug in your email sender throws on a specific payload. With Core NATS, the message is lost on the first throw. With raw JetStream, the message redelivers forever, blocking the queue.
-
-The library caps retries (`max_deliver`, default 3), and on the final failure it persists the dead message to a dedicated DLQ stream with tracking headers so you can investigate or replay later. No message is silently discarded. See [Dead Letter Queue](../guides/dead-letter-queue) for the full flow, including the optional callback hook.
-
-### Scenario 4: A new service needs historical data
-
-You ship a new analytics service that needs the last 7 days of orders. With Core NATS, you write a custom backfill job that queries the database and replays events. With JetStream, you create a new consumer on the existing stream with a `deliver_policy` of "by start time", and the stream feeds your new consumer the entire history automatically.
-
-### Scenario 5: Every instance must see every message
-
-You run three replicas of a cache service and each one needs to invalidate its local cache on every config change. Core NATS pub/sub actually handles this well. But when you add "the new replica that just spun up needs the last change it missed during startup", Core NATS has no answer.
-
-The library ships a dedicated [Broadcast](../patterns/broadcast) pattern: per-service durable consumers over a shared stream, so every replica catches up on missed broadcasts automatically after startup.
-
-## What this library adds on top of raw JetStream
-
-JetStream itself is a protocol. Using it from Node.js directly with the `@nats-io/*` client packages works, but you'd rebuild a lot of infrastructure before you could focus on business logic. Here is what the library provides out of the box: each bullet is a link to the dedicated page:
-
-**Delivery patterns**
-- [Workqueue events](../patterns/events): at-least-once delivery with one handler instance per message
+- [Workqueue events](../patterns/events): at-least-once, one handler instance per message
 - [Broadcast events](../patterns/broadcast): fan-out to every subscribing service
-- [Ordered events](../patterns/ordered-events): strict sequential delivery with ephemeral consumers
-- [RPC (Core or JetStream mode)](../patterns/rpc): synchronous request/reply with configurable persistence
+- [Ordered events](../patterns/ordered-events): strict sequence over ephemeral consumers
+- [RPC](../patterns/rpc) in Core or JetStream mode
 
-**Message durability & recovery**
-- [Dead Letter Queue stream](../guides/dead-letter-queue) for messages that fail every retry
-- [Stream migration](../guides/stream-migration): safely change locked stream settings (like storage type) without losing messages
-- [Self-healing consumers](../reference/edge-cases#consumer-self-healing) that recover automatically from broker restarts and external deletions
-- [Graceful shutdown](../guides/graceful-shutdown): in-flight messages finish before the connection closes
+**Durability and recovery**
 
-**Publisher features**
-- [Per-message TTL](../guides/per-message-ttl) for individual message expiration
-- [Scheduled delivery](../guides/scheduling) via NATS 2.12 scheduling headers
-- [Deduplication via deterministic message IDs](../guides/record-builder) through the built-in `JetstreamRecordBuilder`
-- [Publisher-only mode](../reference/edge-cases#publisher-only-mode) for API gateways
+- [Dead letter queue](../guides/dead-letter-queue) for messages that exhaust every retry
+- [Stream migration](../guides/stream-migration) for locked settings such as storage type
+- [Self-healing consumers](../reference/edge-cases#consumer-self-healing) after broker restarts and external deletion
+- [Graceful shutdown](../guides/graceful-shutdown) that drains in-flight work first
+
+**Publishing**
+
+- [Per-message TTL](../guides/per-message-ttl)
+- [Scheduled delivery](../guides/scheduling) through NATS 2.12 headers
+- [Deduplication by deterministic message ID](../guides/record-builder)
+- [Publisher-only mode](../reference/edge-cases#publisher-only-mode) for gateways
 
 **Operations**
-- [Health indicator](../guides/health-checks) for Kubernetes readiness/liveness probes
-- [Lifecycle hooks](../guides/lifecycle-hooks) for metrics, tracing, and alerting
-- [Handler metadata registry](../patterns/handler-metadata) backed by NATS KV for cross-service discovery
-- Handlers that run longer than `ack_wait` stay alive automatically via [ack extension](../guides/performance#ack-extension)
 
-All of this is wrapped behind the same NestJS decorators you already use (`@EventPattern`, `@MessagePattern`, `ClientProxy`), so moving from the built-in transport to JetStream is a configuration change rather than a rewrite.
+- [Health indicator](../guides/health-checks) for Kubernetes probes
+- [Lifecycle hooks](../guides/lifecycle-hooks) for metrics, tracing and alerting
+- [Handler metadata registry](../patterns/handler-metadata) over NATS KV
+- [Ack extension](../guides/performance#ack-extension) for handlers slower than `ack_wait`
 
-## When HTTP is the wrong question
+Every item sits behind `@EventPattern`, `@MessagePattern` and `ClientProxy`.
 
-Teams sometimes ask "should I use HTTP or NATS for service-to-service calls?". It's the wrong framing: the two protocols optimize for different things.
+## HTTP, Core NATS or JetStream
 
-- **HTTP** is great at request/response with well-defined endpoints, easy debugging, and mature tooling. But it couples caller and callee in time: if the callee is down, the call fails. Retries, circuit breakers, and timeouts become your problem.
-- **NATS (Core)** is great at low-latency RPC between in-cluster services: multiplexed connections, no connection pooling, minimal per-call overhead.
-- **NATS (JetStream)** is great at asynchronous work that must not be lost: events, commands, integrations with unreliable downstreams.
+|           | Best at                              | Cost                                                                      |
+| --------- | ------------------------------------ | ------------------------------------------------------------------------- |
+| HTTP      | Request/response with mature tooling | Couples caller and callee in time; retries and circuit breakers are yours |
+| Core NATS | Low-latency in-cluster RPC           | No persistence                                                            |
+| JetStream | Work that must not be lost           | Disk I/O, stream and consumer state                                       |
 
-In practice, most production systems use all three. HTTP at the edge (ingress from browsers), Core NATS for internal low-latency RPC, JetStream for durable events and workflows. This library lets you configure the RPC mode per module (`rpc.mode: 'core'` for hot paths, `rpc.mode: 'jetstream'` for persisted commands) while `@EventPattern` handlers keep using durable JetStream delivery.
+Most systems run all three: HTTP at the edge, Core NATS for hot internal calls, JetStream for durable events. RPC mode is per module (`rpc.mode: 'core'` or `'jetstream'`) while `@EventPattern` stays on durable delivery.
 
-## The NestJS + NATS ecosystem
+## Other NestJS NATS packages
 
-You have four options when connecting NestJS to NATS. Each project has its own focus, and the right choice depends on your workload. Listed in order of longevity in the ecosystem:
+| Package                                                                                                                            | Focus                                                                      |
+| ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| [`@nestjs/microservices`](https://docs.nestjs.com/microservices/nats)                                                              | Official Core NATS integration, maintained by the NestJS team              |
+| [`@nestjs-plugins/nestjs-nats-jetstream-transport`](https://www.npmjs.com/package/@nestjs-plugins/nestjs-nats-jetstream-transport) | Community JetStream transport                                              |
+| [`@mirasys/nestjs-jetstream-transporter`](https://www.npmjs.com/package/@mirasys/nestjs-jetstream-transporter)                     | Custom JetStream transporter                                               |
+| `@horizon-republic/nestjs-jetstream`                                                                                               | This library: DLQ, health indicators, broadcast, ordered delivery, tracing |
 
-- **[`@nestjs/microservices`](https://docs.nestjs.com/microservices/nats) (built-in NATS transport)**: the official, lean Core NATS integration maintained by the NestJS core team. A solid default for low-latency in-cluster RPC and fire-and-forget pub/sub.
-- **[`@nestjs-plugins/nestjs-nats-jetstream-transport`](https://www.npmjs.com/package/@nestjs-plugins/nestjs-nats-jetstream-transport)**: a community-maintained JetStream transport for NestJS microservices.
-- **[`@mirasys/nestjs-jetstream-transporter`](https://www.npmjs.com/package/@mirasys/nestjs-jetstream-transporter)**: a custom JetStream transporter for NestJS.
-- **`@horizon-republic/nestjs-jetstream`** *(this library)*: a JetStream transport with a focus on production readiness: built-in DLQ, health indicators, and broadcast delivery.
+## Don't use this library when
 
-All of these projects are active parts of the NATS + NestJS ecosystem and we encourage you to compare them against your own requirements. If your workload fits one of the other options better, use it, what matters is that the community keeps growing.
+- **You don't run NATS.** Operating it costs real time; solve the problem you have now.
+- **Your workload is request/response without durability.** The built-in transport is lighter.
+- **You need cross-region replication under strict latency SLAs.** Mirrors and sources exist, though tuning them for multi-region is its own project.
+- **You're prototyping.**
 
-## When NOT to use this library
+## Next
 
-Being honest about trade-offs matters. Don't use this library if:
-
-- **You don't run NATS.** Adding NATS + JetStream is a real operational commitment. If your team doesn't already operate it, start with the problem you have today, not the one you might have tomorrow.
-- **Your workload is pure request/response with no durability needs.** The built-in transport is lighter and faster for that case.
-- **You need cross-region replication with strict latency SLAs.** JetStream mirrors and sources exist, but tuning them for multi-region is non-trivial. Evaluate carefully.
-- **You're prototyping.** Reach for the simplest thing until you have a real reliability problem.
-
-## Next steps
-
-- Install the package and connect to a local NATS broker: [Installation](./installation)
-- Run the full four-step example in under five minutes: [Quick Start](./quick-start)
-- Explore the patterns you'll use daily: [Events](../patterns/events), [RPC](../patterns/rpc)
-- Skim the production checklist: [Module Configuration](/docs/reference/module-configuration), [DLQ](/docs/guides/dead-letter-queue), [Health Checks](/docs/guides/health-checks), [Graceful Shutdown](/docs/guides/graceful-shutdown)
+- [Installation](./installation)
+- [Quick Start](./quick-start): the four-step example
+- [Events](../patterns/events) and [RPC](../patterns/rpc): the patterns you use daily
+- [Module Configuration](/docs/reference/module-configuration), [DLQ](/docs/guides/dead-letter-queue), [Health Checks](/docs/guides/health-checks), [Graceful Shutdown](/docs/guides/graceful-shutdown)

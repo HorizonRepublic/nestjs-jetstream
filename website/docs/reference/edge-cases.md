@@ -8,7 +8,7 @@ schema:
   headline: "Edge Cases & FAQ: NestJS JetStream Transport"
   description: "NestJS JetStream transport FAQ: publisher-only mode, consumer self-healing, NATS header limits, fire-and-forget messaging, and DeliverPolicy edge cases."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
 # Edge Cases & FAQ
@@ -25,7 +25,7 @@ Use `client.emit()`. This publishes an event to the event stream (JetStream-back
 await lastValueFrom(this.client.emit('order.created', { orderId: '123' }));
 ```
 
-If you specifically need non-durable Core NATS `publish()` (truly ephemeral pub/sub), use the standard `@nestjs/microservices` NATS transport alongside this library, both can share the same NATS cluster.
+If you in detail need non-durable Core NATS `publish()` (truly ephemeral pub/sub), use the standard `@nestjs/microservices` NATS transport alongside this library, both can share the same NATS cluster.
 
 ## Publisher-Only Mode
 
@@ -47,9 +47,8 @@ This is ideal for API gateways and services that act purely as event producers.
 
 **Q: Why does the broadcast stream name have no service prefix?**
 
-The broadcast stream is named `broadcast-stream` (no service prefix) because it is **shared across all services** in the cluster. Every service that registers `@EventPattern('...', { broadcast: true })` handlers creates its own durable consumer on this same stream.
+The broadcast stream is named `broadcast-stream` (no service prefix) because it is **shared across all services** in the cluster. Every service that registers `@EventPattern('...', { broadcast: true })` handlers creates its own durable consumer on this same stream, so:
 
-This means:
 - Any service can publish to `broadcast.{pattern}`
 - Every service with a matching handler receives its own copy of the message
 - Each service's consumer tracks delivery independently (broadcast `nak` only affects that service's consumer)
@@ -82,7 +81,8 @@ handleOrderCreated(@Payload() data: OrderCreatedDto): Observable<void> {
 }
 ```
 
-Specifically:
+In detail:
+
 - If the handler returns an `Observable`, the transport subscribes and resolves with the first `next` emission
 - If the handler returns a `Promise<Observable>` (common when NestJS exception filters wrap errors), the Promise is awaited first, then the Observable is subscribed
 - Plain values and Promises work as expected
@@ -125,6 +125,7 @@ NATS imposes a total header size limit (default 4 KB per message in most server 
 - **Auto-set**: `x-subject`, `x-caller-name`. The transport populates these on every outbound message; any value you pass via the builder is silently replaced at publish time.
 
 When using `JetstreamRecordBuilder.setHeader()`, keep in mind:
+
 - None of the five transport-managed headers above can be overwritten from user code
 - Custom headers are additive: they are included alongside transport-managed headers
 - If the total header size exceeds the NATS server limit, the publish will fail
@@ -158,6 +159,7 @@ See [Ordered Events](/docs/patterns/ordered-events) for the full ordered consume
 NATS JetStream uses nanosecond timestamps internally (`int64` in Go), but the `@nats-io/transport-node` SDK represents them as JavaScript `number` (IEEE 754 float64). Since `Number.MAX_SAFE_INTEGER` is ~9x10^15 and current timestamps in nanos are ~1.7x10^18, **arithmetic on nanosecond values loses +/-1ms precision**.
 
 This affects:
+
 - `ctx.getTimestamp()`; returns `Date` (millisecond precision), accurate to +/-1ms
 - `toNanos()` helper: output is accurate for typical config values (seconds, minutes), but sub-millisecond precision is not guaranteed
 - `msg.info.timestampNanos`: raw value from the SDK, already truncated before reaching this library

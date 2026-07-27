@@ -8,7 +8,7 @@ schema:
   headline: "Installation"
   description: "Install the package, set up NATS with Docker, and configure peer dependencies."
   datePublished: "2026-03-21"
-  dateModified: "2026-04-11"
+  dateModified: "2026-07-27"
 ---
 
 # Installation
@@ -46,13 +46,21 @@ yarn add @horizon-republic/nestjs-jetstream
 
 ## Peer dependencies
 
-The library requires the following NestJS packages as peer dependencies (they are part of any standard NestJS project):
+Required, and already present in any standard NestJS project:
 
-- `@nestjs/common` ^10.2.0 || ^11.0.0
-- `@nestjs/core` ^10.2.0 || ^11.0.0
-- `@nestjs/microservices` ^10.2.0 || ^11.0.0
+- `@nestjs/common`, `@nestjs/core`, `@nestjs/microservices`: `^10.2.0 || ^11.0.0 || ^12.0.0`
 - `reflect-metadata` ^0.2.0
 - `rxjs` ^7.8.0
+
+Optional, install only for the feature that needs it:
+
+- `msgpackr` `^1.11.0 || ^2.0.0` for the [MessagePack codec](/docs/guides/custom-codec#built-in-msgpackcodec)
+- `prom-client` ^15.0.0 for [Prometheus metrics](/docs/observability/metrics)
+- `@opentelemetry/api` ^1.9.0 for [distributed tracing](/docs/observability/tracing)
+
+:::note NestJS 12 prereleases
+The caret ranges above skip prereleases, so installing `@nestjs/common@next` needs a package manager override until 12.0.0 ships stable.
+:::
 
 ## Runtime requirements
 

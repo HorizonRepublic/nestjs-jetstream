@@ -2,10 +2,13 @@
 # Post-processes the auto-generated Root.js from @coffeecup_tech/docusaurus-plugin-structured-data.
 #
 # Fixes:
-#   1. Path lookup: strips baseUrl prefix and handles trailing slash mismatch
-#   2. Removes broken "image": "...undefined" entries
-#   3. Fixes the intro page path (/docs/// -> /docs/)
-#   4. Adds WebSite schema for homepage
+#   1. Path lookup: trailing slash mismatch
+#   2. Broken "image": "...undefined" entries
+#   3. Intro page path (/docs/// -> /docs/)
+#   4. Missing semicolons and a useless conditional
+#   5. JSON-LD into <Head>: a bare <script> only lands after hydration
+#   6. CommandPalette mount, since Docusaurus allows one theme/Root
+#   7. Author @id, which the generator points at a node that does not exist
 
 set -euo pipefail
 
@@ -34,10 +37,10 @@ sedi '/"image": "https:\/\/[^"]*\/undefined"/d' "$ROOT_JS"
 # 3. Fix intro page broken path
 sedi "s|'/docs///': {|'/docs/': {|" "$ROOT_JS"
 
-# 4. Add WebSite schema to homepage instead of empty object
-sedi 's|schemas\[homePath\] = {};|schemas[homePath] = { "@type": "WebSite", "name": "@horizon-republic/nestjs-jetstream", "description": "Production-grade NestJS transport for NATS JetStream — events, broadcast, ordered delivery, and RPC." };|' "$ROOT_JS"
+# The home page gets no page-level schema: WebSite comes from baseSchema and is
+# already in the graph on every route.
 
-# 5. Fix missing semicolons and useless conditional (flagged by code quality bots)
+# 4. Fix missing semicolons and useless conditional (flagged by code quality bots)
 perl -i -0777 -pe '
   # Add semicolon to schemas object closing brace (before for loop)
   s/(\n  \})\n(  for \(const homePath)/\1;\n\2/;
@@ -48,10 +51,26 @@ perl -i -0777 -pe '
   s/\n\s*\)\}//;
 ' "$ROOT_JS"
 
-# 6. Validate patches applied correctly
+# 5-6. <Head> for the JSON-LD, plus the CommandPalette mount.
+perl -i -0777 -pe '
+  s|import \{ useLocation \} from \x27\@docusaurus/router\x27;|import { useLocation } from \x27\@docusaurus/router\x27;\nimport Head from \x27\@docusaurus/Head\x27;\nimport CommandPalette from \x27\@site/src/components/CommandPalette\x27;|;
+  s|<script type="application/ld\+json">\s*\{JSON\.stringify\(graphData\)\}\s*</script>|<CommandPalette />\n      <Head>\n        <script type="application/ld+json">{JSON.stringify(graphData)}</script>\n      </Head>|;
+' "$ROOT_JS"
+
+# 7. Author is the organization: the generated #person node does not exist.
+perl -i -0777 -pe "s|contentData\.author = \{\n        '\@id': \`\\\$\{baseUrl\}/#person\`\n      \};|contentData.author = {\n        '\@id': \`\\\${baseUrl}/#organization\`\n      };|" "$ROOT_JS"
+
+# Validate
 errors=0
+grep -q '#person' "$ROOT_JS" && { echo "Error: dangling #person reference survived."; errors=$((errors + 1)); }
+grep -q "import Head from '@docusaurus/Head';" "$ROOT_JS" || { echo "Error: Head import patch did not apply."; errors=$((errors + 1)); }
+grep -q "<Head>" "$ROOT_JS" || { echo "Error: Head wrapper patch did not apply."; errors=$((errors + 1)); }
+grep -q "<CommandPalette />" "$ROOT_JS" || { echo "Error: CommandPalette mount patch did not apply."; errors=$((errors + 1)); }
+if [[ -e "src/theme/Root.jsx" ]] || [[ -e "src/theme/Root/index.jsx" ]]; then
+  echo "Error: a second theme/Root exists and will shadow this file."
+  errors=$((errors + 1))
+fi
 grep -q "const strippedPath = location.pathname" "$ROOT_JS" || { echo "Error: path-normalization patch did not apply."; errors=$((errors + 1)); }
-grep -q "schemas\[homePath\] = { \"@type\": \"WebSite\"" "$ROOT_JS" || { echo "Error: homepage schema patch did not apply."; errors=$((errors + 1)); }
 grep -q "'/docs/': {" "$ROOT_JS" || { echo "Error: intro path patch did not apply."; errors=$((errors + 1)); }
 
 if [ $errors -gt 0 ]; then

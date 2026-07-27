@@ -8,7 +8,7 @@ schema:
   headline: "JetstreamRecordBuilder: Headers, Message IDs & Deduplication"
   description: "Build NestJS NATS messages with custom headers, deterministic message IDs for publish-side deduplication, and per-request RPC timeouts."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
 import Since from '@site/src/components/Since';
@@ -74,7 +74,7 @@ JetStream has built-in **server-side deduplication**. When a message is publishe
 
 Each JetStream stream has a `duplicate_window` setting that controls how long the server remembers message IDs. The default window is **2 minutes** for event, broadcast, and ordered streams, and **30 seconds** for command (RPC) streams.
 
-If you do not set a message ID, the transport generates a random UUID for every publish. Deduplication is so off by default: each publish counts as a unique message.
+If you do not set a message ID, the transport generates a random UUID for every publish. Deduplication is off by default: each publish counts as a unique message.
 
 ### Setting a deterministic message ID
 
@@ -137,17 +137,21 @@ Scheduling requires NATS Server >= 2.12 and `allow_msg_schedules: true` on the e
 
 See [Scheduling (Delayed Jobs)](/docs/guides/scheduling) for the full guide, including configuration, how it works under the hood, and `max_age` considerations.
 
-## Reserved headers
+## Headers the transport sets itself
 
-The transport uses three headers internally for RPC correlation. These are **reserved** and cannot be set via the builder:
+The transport writes five headers of its own on outbound messages, and the builder treats them differently depending on whether overwriting one would break something:
 
-| Header | Purpose |
-|---|---|
-| `x-correlation-id` | Links an RPC request to its response |
-| `x-reply-to` | Inbox subject for the RPC response |
-| `x-error` | Marks error responses so the client can distinguish success from failure |
+| Header             | Set by the transport                       | `setHeader()`   |
+| ------------------ | ------------------------------------------ | --------------- |
+| `x-correlation-id` | Links an RPC request to its response       | Throws          |
+| `x-reply-to`       | Inbox subject for the RPC response         | Throws          |
+| `x-error`          | Marks a reply payload as an error envelope | Throws          |
+| `x-subject`        | The subject the message was published to   | Your value wins |
+| `x-caller-name`    | Internal name of the sending service       | Your value wins |
 
-Attempting to set a reserved header throws an error immediately on **`setHeader()` call**:
+The first three carry RPC correlation, so setting them by hand would misroute a reply. The last two are informational: the transport writes them before your custom headers are applied, so setting either one replaces the transport's value. Do that only when you are deliberately relabelling a message, because handlers read what arrived on the wire.
+
+Any header starting with `nats-` also throws, whatever the casing: those are read by the NATS server itself, and a stray `Nats-Rollup` purges every pending message on the subject. Use `setMessageId()`, `ttl()` and `scheduleAt()` to reach the ones the transport supports.
 
 ```typescript
 // Throws: Header "x-correlation-id" is reserved by the JetStream transport
@@ -160,17 +164,6 @@ new JetstreamRecordBuilder(data)
 :::note
 The error is thrown on `setHeader()`, not on `build()`. The failure surfaces at the call site.
 :::
-
-## Auto-set transport headers
-
-Also to reserved headers, the transport automatically sets two informational headers on every outbound message:
-
-| Header | Value | Description |
-|---|---|---|
-| `x-subject` | NATS subject | The original subject the message was published to |
-| `x-caller-name` | Service name | The internal name of the sending service |
-
-These headers are read-only from the handler's perspective: you can access them via `ctx.getHeader('x-subject')` but cannot override them via the builder.
 
 ## API summary
 
@@ -209,12 +202,12 @@ class JetstreamRecordBuilder<T = unknown> {
 }
 ```
 
-The `RESERVED_HEADERS` set is also exported from the package; use it in custom tooling (e.g., a header-sanitization helper) to check whether a key is blocked before calling `.setHeader()`:
+The `RESERVED_HEADERS` set is exported from the package; use it in custom tooling to check a key before calling `.setHeader()`. It holds the three RPC headers only, so a sanitizer needs the `nats-` prefix check alongside it:
 
 ```typescript
 import { RESERVED_HEADERS } from '@horizon-republic/nestjs-jetstream';
 
-if (RESERVED_HEADERS.has(key)) {
+if (RESERVED_HEADERS.has(key.toLowerCase()) || key.toLowerCase().startsWith('nats-')) {
   throw new Error(`${key} is reserved by the transport`);
 }
 ```

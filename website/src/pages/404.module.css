@@ -78,14 +78,14 @@
 
 .btnPrimary {
   background: var(--jt-accent);
-  color: oklch(0.14 0.02 145);
+  color: var(--jt-accent-fg);
   border: 1px solid var(--jt-accent);
 }
 
 .btnPrimary:hover {
   background: var(--jt-accent-hover);
   border-color: var(--jt-accent-hover);
-  color: oklch(0.14 0.02 145);
+  color: var(--jt-accent-fg);
   transform: translateY(-1px);
 }
 

@@ -6,7 +6,7 @@ schema:
   headline: Testing
   description: "Running unit and integration tests with Vitest and Testcontainers."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-26"
+  dateModified: "2026-07-27"
 ---
 
 # Testing
@@ -20,7 +20,7 @@ This library handles real-time message delivery, consumer lifecycle, and self-he
 - **Integration tests are first-class citizens.** Every message flow (events, RPC, broadcast, ordered) is tested against a real NATS server. No hand-waved "it works in production": if it's not tested end-to-end, it's not done.
 - **Each test suite gets its own NATS container.** No shared state between suites. No "run tests in order". Suites execute in parallel: because if your tests can't run in parallel, your architecture has a problem.
 - **Self-healing is proven, not assumed.** We delete consumers via the JetStream Management API and verify the transport recovers. The self-healing flow is tested with real NATS, not mocked RxJS streams.
-- **Unit tests fill the gaps.** Infrastructure error paths (defensive throws, catch blocks, exponential backoff) that can't be triggered through integration get targeted unit tests. Coverage is a tool, not a target: but we track it to make sure we're not lying to ourselves.
+- **Unit tests fill the gaps.** Infrastructure error paths (defensive throws, catch blocks, exponential backoff) that can't be triggered through integration get targeted unit tests. Coverage is a tool rather than a target: but we track it to make sure we're not lying to ourselves.
 
 ## Prerequisites
 
@@ -29,11 +29,11 @@ This library handles real-time message delivery, consumer lifecycle, and self-he
 
 ## Test Commands
 
-| Command | Description |
-|---------|-------------|
-| `pnpm test` | Run all tests (unit + integration, parallel) |
-| `pnpm test:watch` | Run tests in watch mode |
-| `pnpm test:cov` | Run all tests with coverage reporting |
+| Command           | Description                                  |
+| ----------------- | -------------------------------------------- |
+| `pnpm test`       | Run all tests (unit + integration, parallel) |
+| `pnpm test:watch` | Run tests in watch mode                      |
+| `pnpm test:cov`   | Run all tests with coverage reporting        |
 
 :::tip
 `docker compose up -d` is available for manual testing and debugging, but is **not needed** to run the test suite.
@@ -95,14 +95,14 @@ describe('My Feature', () => {
 
 Key helpers in `test/integration/`:
 
-| Helper | Purpose |
-|--------|---------|
-| `startNatsContainer()` | Start a NATS container with JetStream, return container + random port |
-| `createNatsConnection(port)` | Create a standalone NATS connection for assertions |
+| Helper                                                       | Purpose                                                                                                                                                                                          |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `startNatsContainer()`                                       | Start a NATS container with JetStream, return container + random port                                                                                                                            |
+| `createNatsConnection(port)`                                 | Create a standalone NATS connection for assertions                                                                                                                                               |
 | `createTestApp({ name, port }, controllers, clientTargets?)` | Bootstrap a full NestJS app with the transport. `clientTargets` is an array of service names that will be registered as `forFeature` clients; pass the names you need to `@Inject` in your test. |
-| `cleanupStreams(nc, serviceName)` | Delete streams/consumers created during a test |
-| `waitForCondition(fn, timeoutMs)` | Poll until an async condition is met |
-| `uniqueServiceName()` | Generate a unique service name per test |
+| `cleanupStreams(nc, serviceName)`                            | Delete streams/consumers created during a test                                                                                                                                                   |
+| `waitForCondition(fn, timeoutMs)`                            | Poll until an async condition is met                                                                                                                                                             |
+| `uniqueServiceName()`                                        | Generate a unique service name per test                                                                                                                                                          |
 
 ### Self-Healing Tests
 
@@ -140,7 +140,7 @@ import { createMock } from '@golevelup/ts-vitest';
 const mockConnection = createMock<ConnectionProvider>();
 ```
 
-:::caution
+:::warning
 `createMock<JsMsg>()` creates a Proxy where `'ack' in proxy` returns `false` unless you explicitly provide the `ack` property. If your code checks for property existence on `JsMsg`, provide it in the mock setup.
 :::
 
