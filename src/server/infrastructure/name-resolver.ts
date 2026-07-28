@@ -9,6 +9,7 @@ import {
   streamName,
   subjectPrefix,
 } from '../../jetstream.constants';
+import { dlqStreamOverrides } from './dlq-options';
 import { kindOptionsBlock } from './management';
 
 interface KindNames {
@@ -25,7 +26,7 @@ export class NameResolver {
   private readonly dlq: string;
 
   public constructor(private readonly options: JetstreamModuleOptions) {
-    this.dlq = options.dlq?.stream?.name ?? dlqStreamName(options.name);
+    this.dlq = dlqStreamOverrides(options).name ?? dlqStreamName(options.name);
     this.kinds = this.buildKindMap();
   }
 

@@ -92,10 +92,10 @@ export const DEFAULT_EVENT_STREAM_CONFIG: Partial<StreamConfig> = {
   ...baseStreamConfig,
   allow_rollup_hdrs: true,
   max_consumers: 100,
-  max_msg_size: 10 * MB,
-  max_msgs_per_subject: 5_000_000,
-  max_msgs: 50_000_000,
-  max_bytes: 5 * GB,
+  max_msg_size: MB,
+  max_msgs_per_subject: 100_000,
+  max_msgs: 1_000_000,
+  max_bytes: 512 * MB,
   max_age: toNanos(7, 'days'),
   duplicate_window: toNanos(2, 'minutes'),
 };
@@ -105,10 +105,10 @@ export const DEFAULT_COMMAND_STREAM_CONFIG: Partial<StreamConfig> = {
   ...baseStreamConfig,
   allow_rollup_hdrs: false,
   max_consumers: 50,
-  max_msg_size: 5 * MB,
-  max_msgs_per_subject: 100_000,
-  max_msgs: 1_000_000,
-  max_bytes: 100 * MB,
+  max_msg_size: MB,
+  max_msgs_per_subject: 10_000,
+  max_msgs: 100_000,
+  max_bytes: 64 * MB,
   max_age: toNanos(3, 'minutes'),
   duplicate_window: toNanos(30, 'seconds'),
 };
@@ -119,10 +119,10 @@ export const DEFAULT_BROADCAST_STREAM_CONFIG: Partial<StreamConfig> = {
   retention: RetentionPolicy.Limits,
   allow_rollup_hdrs: true,
   max_consumers: 200,
-  max_msg_size: 10 * MB,
-  max_msgs_per_subject: 1_000_000,
-  max_msgs: 10_000_000,
-  max_bytes: 2 * GB,
+  max_msg_size: MB,
+  max_msgs_per_subject: 50_000,
+  max_msgs: 500_000,
+  max_bytes: 256 * MB,
   max_age: toNanos(1, 'hours'),
   duplicate_window: toNanos(2, 'minutes'),
 };
@@ -133,10 +133,10 @@ export const DEFAULT_ORDERED_STREAM_CONFIG: Partial<StreamConfig> = {
   retention: RetentionPolicy.Limits,
   allow_rollup_hdrs: false,
   max_consumers: 100,
-  max_msg_size: 10 * MB,
-  max_msgs_per_subject: 5_000_000,
-  max_msgs: 50_000_000,
-  max_bytes: 5 * GB,
+  max_msg_size: MB,
+  max_msgs_per_subject: 500_000,
+  max_msgs: 5_000_000,
+  max_bytes: GB,
   max_age: toNanos(1, 'days'),
   duplicate_window: toNanos(2, 'minutes'),
 };
@@ -147,13 +147,24 @@ export const DEFAULT_DLQ_STREAM_CONFIG: Partial<StreamConfig> = {
   retention: RetentionPolicy.Limits,
   allow_rollup_hdrs: false,
   max_consumers: 100,
-  max_msg_size: 10 * MB,
-  max_msgs_per_subject: 5_000_000,
-  max_msgs: 50_000_000,
-  max_bytes: 5 * GB,
+  max_msg_size: MB,
+  max_msgs_per_subject: 50_000,
+  max_msgs: 500_000,
+  max_bytes: 256 * MB,
   max_age: toNanos(30, 'days'),
   duplicate_window: toNanos(2, 'minutes'),
 };
+
+/**
+ * Delay before each redelivery, in milliseconds. Index 0 is the first retry.
+ * A failing handler used to nak without a delay, which burned every attempt
+ * within milliseconds and dead-lettered before a transient fault could clear.
+ *
+ * Applied client-side through `nak(delay)`. Never mirror this into a consumer's
+ * `backoff`: JetStream overwrites `ack_wait` with the first backoff entry, which
+ * would cut the ack deadline to 2s and redeliver while the handler still runs.
+ */
+export const DEFAULT_RETRY_DELAYS_MS: readonly number[] = [2_000, 10_000];
 
 /** Default config for workqueue event consumers. */
 export const DEFAULT_EVENT_CONSUMER_CONFIG: Partial<ConsumerConfig> = {

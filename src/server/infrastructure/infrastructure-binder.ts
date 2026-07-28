@@ -8,6 +8,7 @@ import type { AckExtensionConfig, JetstreamModuleOptions } from '../../interface
 import type { ProvisioningEntity } from '../../otel';
 import { resolveAckExtensionInterval } from '../../utils/ack-extension';
 import { PatternRegistry } from '../routing';
+import { isDlqEnabled } from './dlq-options';
 import { kindOptionsBlock, type ManagedKind } from './management';
 import { NameResolver } from './name-resolver';
 import { NatsErrorCode } from './nats-error-codes';
@@ -255,14 +256,14 @@ export class InfrastructureBinder {
   }
 
   private warnOnUnlimitedDelivery(info: ConsumerInfo, kind: StreamKind): void {
-    if (!this.options.dlq) return;
+    if (!isDlqEnabled(this.options)) return;
 
     const maxDeliver = info.config.max_deliver;
 
     if (maxDeliver === undefined || maxDeliver <= 0) {
       this.logger.warn(
         `Consumer "${this.names.consumerName(kind)}" (kind=${String(kind)}) has unlimited ` +
-          `max_deliver but options.dlq is enabled; messages will never be dead-lettered. ` +
+          `max_deliver but the DLQ is enabled; messages will never be dead-lettered. ` +
           `Set max_deliver > 0 on the consumer.`,
       );
     }

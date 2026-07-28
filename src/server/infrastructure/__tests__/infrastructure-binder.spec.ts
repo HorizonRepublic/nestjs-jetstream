@@ -589,8 +589,11 @@ describe(InfrastructureBinder.name, () => {
         const ackExtensionMs = 10_000;
         const ackWaitNanos = 5_000_000_000;
 
+        // dlq is on by default, and this mock consumer has unlimited
+        // max_deliver, which would add a second unrelated warning.
         const options: JetstreamModuleOptions = {
           ...baseOptions,
+          dlq: false,
           events: { ackExtension: ackExtensionMs },
         };
 

@@ -25,7 +25,7 @@ This library handles real-time message delivery, consumer lifecycle, and self-he
 ## Prerequisites
 
 - **Docker**: Testcontainers starts NATS containers automatically. No manual `docker compose up` needed for tests.
-- **Node.js >= 20** and **pnpm**
+- **Node.js >= 22** and **pnpm**
 
 ## Test Commands
 

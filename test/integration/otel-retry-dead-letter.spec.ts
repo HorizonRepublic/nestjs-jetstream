@@ -101,7 +101,9 @@ describe('OTel retry + dead letter integration', () => {
         {
           name: serviceName,
           port,
-          events: { consumer: { max_deliver: 5, ack_wait: 2_000_000_000 } },
+          // These cases assert span shape, not pacing; the default curve
+          // would push the third attempt past the wait budget.
+          events: { consumer: { max_deliver: 5, ack_wait: 2_000_000_000 }, retry: [50, 50] },
         },
         [FlakyController],
         [serviceName],
@@ -191,7 +193,7 @@ describe('OTel retry + dead letter integration', () => {
         {
           name: serviceName,
           port,
-          events: { consumer: { max_deliver: 2, ack_wait: 2_000_000_000 } },
+          events: { consumer: { max_deliver: 2, ack_wait: 2_000_000_000 }, retry: [50] },
           onDeadLetter: async () => {
             controller.deadLetterSeen = true;
             await Promise.resolve();

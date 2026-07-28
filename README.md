@@ -80,7 +80,7 @@ queue with the original headers intact. A `traceparent` header rides through eve
 npm i @horizon-republic/nestjs-jetstream
 ```
 
-Requires Node >= 20, NestJS 10 to 12, and NATS Server >= 2.10 with JetStream
+Requires Node >= 22, NestJS 10 to 12, and NATS Server >= 2.10 with JetStream
 enabled.
 
 ## Where to go next

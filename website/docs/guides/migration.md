@@ -21,6 +21,18 @@ You will end up with durable delivery, automatic retries, dead letter handling, 
 See the [Release Notes](/docs/reference/release-notes) instead. This guide covers the one-time switch from `@nestjs/microservices`.
 :::
 
+## Upgrading to 3.0
+
+Four defaults changed, and each one can be restored.
+
+**Streams reserve far less storage.** `max_bytes` drops from 5 GB to 512 MB on events, from 5 GB to 1 GB on ordered, from 2 GB to 256 MB on broadcast and from 100 MB to 64 MB on commands, and `max_msg_size` drops to 1 MB everywhere to match the NATS server's own `max_payload` default. A service used to reserve up to 17 GB before it processed a single message, which exhausted a modest file store after one or two deployments. `max_bytes` is mutable, so existing streams pick the new value up on the next boot; set it back under `events.stream` if you need the old headroom.
+
+**Retries are paced.** A failing handler now naks with a delay from `[2000, 10000]` ms instead of immediately, so three attempts span roughly twelve seconds rather than milliseconds. Pass `events: { retry: false }` for the previous behaviour.
+
+**The dead-letter stream is on by default.** Exhausted messages land in `{service}__microservice_dlq-stream` instead of being dropped. Pass `dlq: false` to opt out. Under `provisioning: { management: Manual }` nothing changes unless you configure `dlq` explicitly.
+
+**Node 20 is no longer supported.** The minimum is Node 22.
+
 ## What changes
 
 The semantic shift is from at-most-once to at-least-once delivery:

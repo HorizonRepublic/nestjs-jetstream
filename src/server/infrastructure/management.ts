@@ -8,6 +8,7 @@ import type {
   StreamConfigOverrides,
 } from '../../interfaces';
 import { isJetStreamRpcMode } from '../../jetstream.constants';
+import { dlqOptions } from './dlq-options';
 
 /** Entity slot within a kind. */
 export type ManagedEntity = 'stream' | 'consumer';
@@ -51,7 +52,7 @@ const entityManagementFor = (
   options: JetstreamModuleOptions,
   kind: ManagedKind,
 ): EntityManagement | undefined => {
-  if (kind === 'dlq') return options.dlq?.management;
+  if (kind === 'dlq') return dlqOptions(options)?.management;
 
   return kindOptionsBlock(options, kind)?.management;
 };

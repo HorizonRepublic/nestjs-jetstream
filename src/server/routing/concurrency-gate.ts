@@ -61,10 +61,21 @@ export class ConcurrencyGate {
     }
   }
 
-  /** Stop parked timers and drop the backlog. */
+  /**
+   * Stop parked timers and hand the backlog back to the server. Dropping it
+   * silently left every parked message waiting out ack_wait before another
+   * pod could pick it up, which is the whole cost of a rolling deploy.
+   */
   public dispose(): void {
     for (const queued of this.backlog) {
       queued.stopAckExtension?.();
+
+      try {
+        queued.msg.nak();
+      } catch {
+        // A closing connection cannot carry the nak; the server redelivers
+        // once ack_wait expires either way.
+      }
     }
 
     this.backlog.length = 0;

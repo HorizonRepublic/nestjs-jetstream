@@ -14,6 +14,7 @@ import {
 } from '../../jetstream.constants';
 import { withDeadLetterSpan, type ResolvedOtelOptions, type ServerEndpoint } from '../../otel';
 import { settleQuietly } from '../../utils';
+import { dlqStreamOverrides, isDlqEnabled } from '../infrastructure/dlq-options';
 import { NameResolver } from '../infrastructure/name-resolver';
 import { PatternRegistry } from './pattern-registry';
 
@@ -81,7 +82,7 @@ export class DeadLetterCapture {
       async () => {
         this.eventBus.emit(TransportEvent.DeadLetter, info);
 
-        if (!this.options?.dlq) {
+        if (!this.options || !isDlqEnabled(this.options)) {
           await this.fallbackToOnDeadLetterCallback(info, msg);
         } else {
           await this.publishToDlq(msg, info, error);
@@ -107,7 +108,7 @@ export class DeadLetterCapture {
       return;
     }
 
-    const dlqStreamOverride = this.options.dlq?.stream?.name;
+    const dlqStreamOverride = dlqStreamOverrides(this.options).name;
     const destinationSubject = this.names
       ? this.names.dlqStreamName()
       : (dlqStreamOverride ?? dlqStreamName(serviceName));

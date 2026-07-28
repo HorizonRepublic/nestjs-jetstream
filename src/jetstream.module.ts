@@ -47,6 +47,7 @@ import {
   StreamProvider,
   type ConsumerRecoveryFn,
 } from './server';
+import { isDlqEnabled } from './server/infrastructure/dlq-options';
 import { InfrastructureBinder } from './server/infrastructure/infrastructure-binder';
 import { NameResolver } from './server/infrastructure/name-resolver';
 import { ShutdownManager } from './shutdown';
@@ -463,7 +464,7 @@ export class JetstreamModule implements OnApplicationShutdown {
           // Dead-letter detection is needed for both capture mechanisms:
           // the DLQ stream (options.dlq) and the onDeadLetter callback.
           const deadLetterConfig: DeadLetterConfig | undefined =
-            options.onDeadLetter || options.dlq
+            options.onDeadLetter || isDlqEnabled(options)
               ? {
                   maxDeliverByStream: new Map(),
                   onDeadLetter: options.onDeadLetter,
@@ -474,10 +475,12 @@ export class JetstreamModule implements OnApplicationShutdown {
             events: {
               concurrency: options.events?.concurrency,
               ackExtension: options.events?.ackExtension,
+              retry: options.events?.retry,
             },
             broadcast: {
               concurrency: options.broadcast?.concurrency,
               ackExtension: options.broadcast?.ackExtension,
+              retry: options.broadcast?.retry,
             },
           };
 

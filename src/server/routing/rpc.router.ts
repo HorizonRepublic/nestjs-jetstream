@@ -151,14 +151,22 @@ export class RpcRouter {
       );
     };
 
-    const publishReply = (replyTo: string, correlationId: string, payload: unknown): void => {
+    const publishReply = (
+      replyTo: string,
+      correlationId: string,
+      payload: unknown,
+      subject: string,
+    ): void => {
       try {
         const hdrs = headers();
 
         hdrs.set(JetstreamHeader.CorrelationId, correlationId);
         nc.publish(replyTo, codec.encode(payload), { headers: hdrs });
       } catch (publishErr) {
+        // Staying silent here left the caller waiting out its full timeout for
+        // a reply that was never going to be sent.
         logger.error(`Failed to publish RPC response`, publishErr);
+        publishErrorReply(replyTo, correlationId, subject, publishErr);
       }
     };
 
@@ -303,7 +311,7 @@ export class RpcRouter {
         settleQuietly(logger, `Failed to ack ${subject}:`, () => {
           msg.ack();
         });
-        publishReply(replyTo, correlationId, pending);
+        publishReply(replyTo, correlationId, pending, subject);
         reportHandlerCompleted(msg, startedAt, 'success');
 
         return undefined;
@@ -337,7 +345,7 @@ export class RpcRouter {
           settleQuietly(logger, `Failed to ack ${subject}:`, () => {
             msg.ack();
           });
-          publishReply(replyTo, correlationId, result);
+          publishReply(replyTo, correlationId, result, subject);
           reportHandlerCompleted(msg, startedAt, 'success');
         },
         (err: unknown) => {
