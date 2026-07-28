@@ -8,7 +8,7 @@ schema:
   headline: "Default Stream & Consumer Configs for NATS JetStream"
   description: "Default stream, consumer, and connection settings for every NestJS JetStream StreamKind (event, broadcast, ordered, command, DLQ)."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-27"
+  dateModified: "2026-07-28"
 ---
 
 # Default Configs
@@ -71,9 +71,8 @@ Every durable consumer uses `ack_policy: Explicit`, `deliver_policy: All` and `r
 | `ack_wait`        | `10 seconds` | `5 minutes` | `10 seconds` |
 | `max_deliver`     | `3`          | `1`         | `3`          |
 | `max_ack_pending` | `100`        | `100`       | `100`        |
-| `backoff`         | `2s, 10s`    | -           | `2s, 10s`    |
 
-An event that fails three times is [dead-lettered](/docs/guides/dead-letter-queue). Between attempts the transport naks with a delay taken from the retry curve, so the three attempts span roughly twelve seconds instead of burning out in milliseconds; `backoff` carries the same curve for redeliveries the server schedules itself after `ack_wait` expires. Tune it with `events.retry`, or pass `false` to nak immediately.
+An event that fails three times is [dead-lettered](/docs/guides/dead-letter-queue). Between attempts the transport naks with a delay taken from the retry curve, so the three attempts span roughly twelve seconds instead of burning out in milliseconds. The delay is applied client-side, so `ack_wait` keeps its full value and a slow handler is not redelivered while it still runs. Tune it with `events.retry`, or pass `false` to nak immediately.
 
 A command is delivered once and never retried, so an RPC failure reaches the caller instead of being repeated behind their back.
 

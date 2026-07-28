@@ -8,7 +8,14 @@ import { firstValueFrom } from 'rxjs';
 import type { StartedTestContainer } from 'testcontainers';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
-import { dlqStreamName, getClientToken } from '../../src';
+import {
+  consumerName,
+  dlqStreamName,
+  getClientToken,
+  StreamKind,
+  streamName,
+  toNanos,
+} from '../../src';
 import {
   cleanupStreams,
   createNatsConnection,
@@ -91,8 +98,38 @@ describe('Retry pacing and DLQ defaults', () => {
     const firstGap = sut.attemptsAt[1]! - sut.attemptsAt[0]!;
     const secondGap = sut.attemptsAt[2]! - sut.attemptsAt[1]!;
 
+    // Upper bounds matter: without them the default [2s, 10s] curve also passes,
+    // so the test would not prove that `events.retry` was applied at all.
     expect(firstGap).toBeGreaterThanOrEqual(800);
+    expect(firstGap).toBeLessThan(1_800);
     expect(secondGap).toBeGreaterThanOrEqual(1_800);
+    expect(secondGap).toBeLessThan(3_500);
+  });
+
+  it('should keep the full ack deadline on the event consumer', async () => {
+    // Given a service left on the default consumer configuration
+    serviceName = uniqueServiceName();
+
+    const created = await createTestApp(
+      { name: serviceName, port },
+      [QuietController],
+      [serviceName],
+    );
+
+    app = created.app;
+
+    // When the consumer it provisioned is inspected
+    const jsm = await jetstreamManager(nc);
+    const info = await jsm.consumers.info(
+      streamName(serviceName, StreamKind.Event),
+      consumerName(serviceName, StreamKind.Event),
+    );
+
+    // Then ack_wait is the configured 10s, not a value derived from a backoff curve.
+    // JetStream overwrites ack_wait with the first backoff entry, so setting both
+    // would silently cut the deadline to 2s and redeliver while a handler still runs.
+    expect(info.config.ack_wait).toBe(toNanos(10, 'seconds'));
+    expect(info.config.backoff ?? []).toEqual([]);
   });
 
   it('should provision a dead-letter stream without being asked', async () => {

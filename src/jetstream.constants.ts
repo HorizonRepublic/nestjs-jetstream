@@ -159,17 +159,17 @@ export const DEFAULT_DLQ_STREAM_CONFIG: Partial<StreamConfig> = {
  * Delay before each redelivery, in milliseconds. Index 0 is the first retry.
  * A failing handler used to nak without a delay, which burned every attempt
  * within milliseconds and dead-lettered before a transient fault could clear.
+ *
+ * Applied client-side through `nak(delay)`. Never mirror this into a consumer's
+ * `backoff`: JetStream overwrites `ack_wait` with the first backoff entry, which
+ * would cut the ack deadline to 2s and redeliver while the handler still runs.
  */
 export const DEFAULT_RETRY_DELAYS_MS: readonly number[] = [2_000, 10_000];
-
-/** {@link DEFAULT_RETRY_DELAYS_MS} as the nanosecond array a consumer's `backoff` takes. */
-const defaultBackoff: number[] = DEFAULT_RETRY_DELAYS_MS.map((ms) => toNanos(ms, 'ms'));
 
 /** Default config for workqueue event consumers. */
 export const DEFAULT_EVENT_CONSUMER_CONFIG: Partial<ConsumerConfig> = {
   ack_wait: toNanos(10, 'seconds'),
   max_deliver: 3,
-  backoff: defaultBackoff,
   max_ack_pending: 100,
   ack_policy: AckPolicy.Explicit,
   deliver_policy: DeliverPolicy.All,
@@ -190,7 +190,6 @@ export const DEFAULT_COMMAND_CONSUMER_CONFIG: Partial<ConsumerConfig> = {
 export const DEFAULT_BROADCAST_CONSUMER_CONFIG: Partial<ConsumerConfig> = {
   ack_wait: toNanos(10, 'seconds'),
   max_deliver: 3,
-  backoff: defaultBackoff,
   max_ack_pending: 100,
   ack_policy: AckPolicy.Explicit,
   deliver_policy: DeliverPolicy.All,

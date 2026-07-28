@@ -76,7 +76,9 @@ class AckExtensionPool {
     };
 
     this.entries.add(entry);
-    this.ensureWake(entry.nextFireAt);
+    // Wake at the deadline too: with `interval` longer than `maxTotalMs` an
+    // expired entry would otherwise linger until the next interval.
+    this.ensureWake(Math.min(entry.nextFireAt, entry.expiresAt));
 
     return entry;
   }
@@ -136,7 +138,9 @@ class AckExtensionPool {
         entry.nextFireAt = now + entry.interval;
       }
 
-      if (entry.nextFireAt < earliest) earliest = entry.nextFireAt;
+      const dueAt = Math.min(entry.nextFireAt, entry.expiresAt);
+
+      if (dueAt < earliest) earliest = dueAt;
     }
 
     if (earliest !== Infinity) this.ensureWake(earliest);

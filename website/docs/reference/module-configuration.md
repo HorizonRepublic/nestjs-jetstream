@@ -8,7 +8,7 @@ schema:
   headline: "Module Configuration Reference"
   description: "Reference for forRoot(), forRootAsync(), and forFeature() registration methods with stream, consumer, and connection options."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-27"
+  dateModified: "2026-07-28"
 ---
 
 import Since from '@site/src/components/Since';
@@ -267,7 +267,7 @@ Under `provisioning: { management: Manual }` the implicit default stands down, s
 
 #### `events.retry` / `broadcast.retry`, `readonly number[] | false`
 
-Default: `[2000, 10000]`. Delay in milliseconds before each redelivery after a handler throws or calls `ctx.retry()`; index 0 is the first retry and the last entry repeats once the curve runs out. `false` naks immediately, which burns every attempt as fast as the handler can fail. The same curve is written to the consumer's `backoff`, so redeliveries the server schedules after `ack_wait` expires follow it too. <Since version="3.0.0" />
+Default: `[2000, 10000]`. Delay in milliseconds before each redelivery after a handler throws or calls `ctx.retry()`; index 0 is the first retry and the last entry repeats once the curve runs out. `false` naks immediately, which burns every attempt as fast as the handler can fail. Delays are applied client-side when the message is naked, not through the consumer's `backoff`, so `ack_wait` keeps its configured value. <Since version="3.0.0" />
 
 ```typescript
 events: {

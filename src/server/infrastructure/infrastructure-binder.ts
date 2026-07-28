@@ -263,7 +263,7 @@ export class InfrastructureBinder {
     if (maxDeliver === undefined || maxDeliver <= 0) {
       this.logger.warn(
         `Consumer "${this.names.consumerName(kind)}" (kind=${String(kind)}) has unlimited ` +
-          `max_deliver but options.dlq is enabled; messages will never be dead-lettered. ` +
+          `max_deliver but the DLQ is enabled; messages will never be dead-lettered. ` +
           `Set max_deliver > 0 on the consumer.`,
       );
     }
