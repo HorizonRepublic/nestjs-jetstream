@@ -8,7 +8,7 @@ schema:
   headline: "Broadcast Events: NestJS JetStream Fan-Out Delivery"
   description: "Fan-out NATS JetStream events to every NestJS service instance via per-service durable consumers on a shared broadcast stream."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
 
 # Broadcast Events
@@ -16,7 +16,7 @@ schema:
 > **Use when:** every running service must react to the same message (cache invalidation, feature-flag flips, config reload).
 > **You get:** per-service durable consumers on a shared stream, late-joining replicas catch up automatically.
 
-Broadcast events implement **fan-out** delivery: every subscribing service receives a copy of each message. This is the opposite of [workqueue events](/docs/patterns/events) (one instance processes each message) and distinct from [ordered events](/docs/patterns/ordered-events) (every instance receives a full sequential replay).
+Broadcast events **fan out**: every subscribing service receives a copy of each message. This is the opposite of [workqueue events](/docs/patterns/events) (one instance processes each message) and distinct from [ordered events](/docs/patterns/ordered-events) (every instance receives a full sequential replay).
 
 ## When to use
 

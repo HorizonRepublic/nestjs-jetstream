@@ -28,11 +28,11 @@ If the connection is closed or the RTT ping fails, the indicator reports the con
 
 Wire the indicator to your **readiness** probe, never to liveness.
 
-A liveness probe that touches NATS turns a network blip into a pod restart at exactly the moment the transport is recovering — and since every replica sees the same blip, they restart together. Readiness watches the transport; liveness watches the process.
+A liveness probe that touches NATS turns a network blip into a pod restart at exactly the moment the transport is recovering, and since every replica sees the same blip, they restart together. Readiness watches the transport. Liveness watches the process.
 
 ## Multiple connections
 
-With [named connections](/docs/guides/multi-connection) the status gains two fields:
+With [connections](/docs/guides/multi-connection) the status gains two fields:
 
 ```json
 {
@@ -47,7 +47,7 @@ With [named connections](/docs/guides/multi-connection) the status gains two fie
 }
 ```
 
-- `connected` means every **critical** connection is alive; `isHealthy()` throws only when it is false.
+- `connected` means every **critical** connection is alive, and `isHealthy()` throws only when it is false.
 - `degraded` means at least one **non-critical** connection is down. It is orthogonal to `connected`, so a dead analytics cluster degrades the report without failing readiness.
 - `server` and `latency` describe the default connection, so the original fields keep their meaning.
 
@@ -219,7 +219,7 @@ export class MonitoringService {
 }
 ```
 
-No need to add it to any `providers` array or re-import `JetstreamModule`; it's available globally via `forRoot()`.
+No need to add it to any `providers` array or re-import `JetstreamModule`. `forRoot()` makes it available globally.
 
 ## See also
 

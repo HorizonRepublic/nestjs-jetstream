@@ -13,7 +13,7 @@ schema:
 
 # Handler Context
 
-Every `@EventPattern` and `@MessagePattern` handler can inject `RpcContext` to access message metadata, JetStream delivery info, and control message settlement.
+Every `@EventPattern` and `@MessagePattern` handler can inject `RpcContext`. It exposes the message metadata and JetStream delivery info, and it controls settlement.
 
 ## Injecting the context
 
@@ -230,7 +230,7 @@ if (ctx.isJetStream()) {
 ```
 
 :::note When is it not JetStream?
-This check is useful when writing code that works across both Core RPC mode (`Msg`) and JetStream mode (`JsMsg`). The new metadata getters (`getDeliveryCount()`, etc.) already handle this internally; they return `undefined` for Core messages.
+This check is useful when writing code that works across both Core RPC mode (`Msg`) and JetStream mode (`JsMsg`). The new metadata getters (`getDeliveryCount()`, etc.) already handle this internally, returning `undefined` for Core messages.
 :::
 
 ## Accessing the raw NATS message
@@ -246,7 +246,7 @@ if (ctx.isJetStream()) {
 ```
 
 :::warning Manual acknowledgment
-Calling `msg.ack()`, `msg.nak()`, or `msg.term()` directly bypasses the transport's settlement logic. Use `ctx.retry()` and `ctx.terminate()` instead: they integrate with ack extension, dead letter handling, and observability hooks.
+Calling `msg.ack()`, `msg.nak()`, or `msg.term()` directly bypasses the transport's settlement logic. Use `ctx.retry()` and `ctx.terminate()` instead: those run through ack extension, dead letter handling and the observability hooks.
 :::
 
 ## See also

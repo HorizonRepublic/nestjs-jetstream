@@ -8,7 +8,7 @@ schema:
   headline: "How to use a custom codec with NestJS JetStream"
   description: "Replace JSON with MessagePack, Protobuf, or a custom binary codec for NATS message serialization."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-26"
+  dateModified: "2026-08-03"
 ---
 
 # How to use a custom codec
@@ -47,7 +47,7 @@ Rule of thumb: stick with JSON until serialization shows up in CPU profiles or y
 
 ## Built-in: MsgpackCodec
 
-The library ships a ready-to-use [MessagePack](https://msgpack.org/) codec powered by [`msgpackr`](https://www.npmjs.com/package/msgpackr). MessagePack produces a smaller wire frame than JSON and decodes much faster on structured payloads, while staying cross-language, Python, Go, Java, Rust, and other runtimes all have MessagePack libraries.
+The library comes with a ready-to-use [MessagePack](https://msgpack.org/) codec powered by [`msgpackr`](https://www.npmjs.com/package/msgpackr). MessagePack produces a smaller wire frame than JSON and decodes much faster on structured payloads, while staying cross-language, Python, Go, Java, Rust, and other runtimes all have MessagePack libraries.
 
 ### When to use it
 

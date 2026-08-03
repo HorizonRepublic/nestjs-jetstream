@@ -15,7 +15,7 @@ schema:
 
 By default, the transport provisions and updates every JetStream stream and consumer it needs. If your organization owns the infrastructure layer (Terraform, ArgoCD, Helm, or a dedicated platform team) you can opt out of that auto-management and instead tell the library to bind to resources that already exist.
 
-In **Manual** mode the library never creates, updates, or migrates an entity. At startup it reads the live state from the NATS server, validates that it is suitable for the application's handlers, and fails fast with a detailed error when it is not.
+In **Manual** mode the library never creates, updates, or migrates an entity. At startup it reads the live state from the NATS server and checks it against the application's handlers, failing fast with a detailed error when the two do not match.
 
 ## When to use Manual mode
 
@@ -195,7 +195,7 @@ Binding validates that the external entity can carry this service's traffic. The
 | Ordered   | `{service}__microservice.ordered.{pattern}` unless a custom prefix is set                           | Nothing to configure: ordered consumers are ephemeral |
 | DLQ       | The DLQ stream's own name, since dead letters publish to a subject equal to it                      | Nothing: the transport creates no DLQ consumer        |
 
-Event and command streams should also carry `retention: workqueue`; anything else boots with a warning. And with `allow_msg_schedules: true` in the app config, the stream's subjects must cover `{prefix}_sch.>` as well, or scheduled publishes have nowhere to land.
+Event and command streams should also carry `retention: workqueue`. Anything else boots with a warning. And with `allow_msg_schedules: true` in the app config, the stream's subjects must cover `{prefix}_sch.>` as well, or scheduled publishes have nowhere to land.
 
 :::warning
 Setting broadcast to Manual means the cluster-wide `broadcast-stream` is externally owned. Every service in the cluster that uses broadcast events consumes from that same stream.
@@ -205,7 +205,7 @@ See [External DLQ](#external-dlq) below for a full example.
 
 ## Boot validation
 
-At startup the binder performs the following checks. Failures are thrown as `JetstreamProvisioningError` (or a plain `Error` for logic violations); warnings are logged by the `Jetstream:Binder` logger.
+At startup the binder performs the following checks. Failures are thrown as `JetstreamProvisioningError` (or a plain `Error` for logic violations), and the `Jetstream:Binder` logger carries the warnings.
 
 ### Throws (hard errors)
 
@@ -249,7 +249,7 @@ Consumer ext_orders_worker on ext_orders_stream is externally managed and curren
 
 Once your platform team (or Terraform) restores the consumer, the next retry succeeds and processing resumes automatically. No application restart is needed.
 
-Auto mode differs here: it recreates a missing consumer silently, in Manual mode the library waits, because recreating an externally owned resource would be a policy violation.
+Auto mode differs here: it recreates a missing consumer silently, while in Manual mode the library waits. Recreating an externally owned resource would be a policy violation.
 
 ## External DLQ
 
@@ -290,7 +290,7 @@ The `dlq.management` field accepts only a `stream` override: there is no consume
 
 ## Scheduling with a custom prefix
 
-When `allow_msg_schedules: true` is set and a custom `subjectPrefix` is configured, schedule holders live under `{prefix}_sch.` rather than the default `{service}__microservice._sch.` prefix. The external stream **must** cover this prefix, otherwise boot fails:
+When `allow_msg_schedules: true` is set and a custom `subjectPrefix` is configured, schedule holders live under `{prefix}_sch.` instead of the default `{service}__microservice._sch.` prefix. The external stream **must** cover this prefix, otherwise boot fails:
 
 ```bash
 # Stream must include the schedule wildcard alongside the regular subjects
@@ -318,7 +318,7 @@ If the default naming convention is used (no `subjectPrefix`), the schedule wild
 
 ## Per-connection management
 
-`provisioning` is a per-connection option, so with [named connections](/docs/guides/multi-connection) one connection can bind to externally managed infrastructure while another provisions its own:
+`provisioning` is a per-connection option, so with [connections](/docs/guides/multi-connection) one connection can bind to externally managed infrastructure while another provisions its own:
 
 ```typescript
 JetstreamModule.forRoot({
@@ -334,7 +334,7 @@ JetstreamModule.forRoot({
 })
 ```
 
-One caveat: the stream ownership stamp that detects two connections reaching the same cluster is not written under `Manual`, because those streams are not ours to write to. The configuration-level check — two connections declaring an identical server set — still applies, but two `Manual` connections addressing one cluster through different URLs remain undetectable. Keep them distinct by convention.
+The stream ownership stamp that detects two connections reaching the same cluster is not written under `Manual`, because those streams are not ours to write to. The configuration-level check (two connections declaring an identical server set) still applies, but two `Manual` connections addressing one cluster through different URLs remain undetectable. Keep them distinct by convention.
 
 ## Interaction with allowDestructiveMigration
 

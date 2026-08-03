@@ -70,9 +70,9 @@ JetstreamModule.forRoot({
 
 ### Defaults
 
-The stream is named `{service}__microservice_dlq-stream`, reserves **256 MB** and keeps messages for **30 days** under `Limits` retention, so reading a dead letter does not consume it. Everything else matches the other streams; the [full table](/docs/reference/default-configs#stream-defaults) has the exact values, and `DEFAULT_DLQ_STREAM_CONFIG` is exported if you want to compose overrides on top of it.
+The stream is `{service}__microservice_dlq-stream`, reserves **256 MB** and keeps messages for **30 days** under `Limits` retention, so reading a dead letter does not consume it. Everything else matches the other streams; the [full table](/docs/reference/default-configs#stream-defaults) has the exact values, and `DEFAULT_DLQ_STREAM_CONFIG` is exported if you want to compose overrides on top of it.
 
-Override through `dlq.stream`. A `name` there is ignored: the stream name is always derived from the service name, which keeps DLQ streams predictable across a fleet. Use the exported `dlqStreamName(serviceName)` helper rather than hardcoding the pattern.
+Override through `dlq.stream`. A `name` there is ignored: the stream name always comes from the service name, which keeps DLQ streams predictable across a fleet. Use the exported `dlqStreamName(serviceName)` helper instead of hardcoding the pattern.
 
 ### Tracking headers
 
@@ -133,10 +133,10 @@ JetstreamModule.forRoot({
 })
 ```
 
-Standalone flow: the handler fails on the final attempt, the transport builds `DeadLetterInfo`, the hook fires, the callback is awaited, and the message is either `term()`'d on success or `nak()`'d on failure.
+Standalone flow: the handler fails on the final attempt and the transport builds `DeadLetterInfo`. The hook fires, the callback is awaited, and the message is either `term()`'d on success or `nak()`'d on failure.
 
 :::warning A throwing callback keeps the message in the stream
-If the callback fails, the message is `nak`'d rather than terminated, so the data survives. NATS will not deliver it again, so it stays until manual recovery (`nats stream get`, a replay tool) or `max_age`. Pairing the callback with `dlq: { stream }` puts the retried DLQ publish first and leaves the callback as fallback.
+If the callback fails, the message is `nak`'d instead of terminated, so the data survives. NATS will not deliver it again. It stays until manual recovery (`nats stream get`, a replay tool) or until `max_age`. Pairing the callback with `dlq: { stream }` puts the retried DLQ publish first and leaves the callback as fallback.
 :::
 
 ### `DeadLetterInfo`
