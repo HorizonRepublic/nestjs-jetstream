@@ -273,7 +273,7 @@ JetstreamModule.forRoot({
   },
   dlq: {
     stream: { name: 'ext_dlq' },
-    management: { stream: ManagementMode.Manual },
+    management: ManagementMode.Manual,
   },
 })
 ```

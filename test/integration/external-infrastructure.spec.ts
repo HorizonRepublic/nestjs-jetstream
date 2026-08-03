@@ -593,7 +593,7 @@ describe('External Infrastructure (bind-only mode)', () => {
           },
           dlq: {
             stream: { name: dlqStreamName },
-            management: { stream: ManagementMode.Manual },
+            management: ManagementMode.Manual,
           },
         },
         [AlwaysFailingExternalController],

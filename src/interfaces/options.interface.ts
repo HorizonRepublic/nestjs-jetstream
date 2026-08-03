@@ -28,11 +28,21 @@ export interface EntityManagement {
 /**
  * Stream config overrides exposed to users.
  *
- * `retention` is excluded because it is controlled by the transport layer
- * (Workqueue for events/commands, Limits for broadcast/ordered).
- * Any `retention` value provided at runtime is silently stripped.
+ * Four fields are owned by the transport and excluded here, because setting
+ * them would be accepted and then overwritten:
+ *
+ * - `retention` follows the kind (Workqueue for events and commands, Limits
+ *   for broadcast and ordered), and a mismatch is an error rather than a
+ *   preference.
+ * - `subjects` and `description` are derived from the service name and the
+ *   kind, or from `subjectPrefix` when one is set.
+ *
+ * `name` stays settable: it is how a service binds to an externally
+ * provisioned stream.
  */
-export type StreamConfigOverrides = Partial<Omit<StreamConfig, 'retention'>>;
+export type StreamConfigOverrides = Partial<
+  Omit<StreamConfig, 'retention' | 'subjects' | 'description'>
+>;
 
 /**
  * Ack-deadline auto-extension setting.
@@ -104,8 +114,16 @@ export type RetryConfig = readonly number[] | false;
 export interface DlqOptions {
   /** Raw NATS StreamConfig overrides for the DLQ stream, `name` included. */
   stream?: StreamConfigOverrides;
-  /** Provisioning control for the DLQ stream. Falls back to provisioning.management. */
-  management?: EntityManagement;
+
+  /**
+   * Provisioning control for the DLQ stream. Falls back to
+   * `provisioning.management`.
+   *
+   * A scalar rather than {@link EntityManagement}: the transport creates no
+   * consumer on the dead-letter stream, so there is no consumer slot to
+   * control.
+   */
+  management?: ManagementMode;
 }
 
 /** Overrides for JetStream stream and consumer configuration. */
@@ -195,8 +213,15 @@ export interface OrderedEventOverrides {
    */
   replayPolicy?: ReplayPolicy;
 
-  /** Provisioning control for this kind's stream/consumer. Falls back to provisioning.management. */
-  management?: EntityManagement;
+  /**
+   * Provisioning control for the ordered stream. Falls back to
+   * `provisioning.management`.
+   *
+   * A scalar rather than {@link EntityManagement}: ordered consumers are
+   * ephemeral and owned by the nats.js client, so only the stream has a
+   * provisioning decision to make.
+   */
+  management?: ManagementMode;
 
   /** Custom subject prefix (trailing dot normalized), e.g. 'company.orders.'. */
   subjectPrefix?: string;
