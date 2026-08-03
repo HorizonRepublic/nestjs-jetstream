@@ -32,6 +32,9 @@ const DEAD_PORT = 14_931;
 /** Bound later in the recovery test, so it must be free until then. */
 const LATE_PORT = 14_932;
 
+/** A second dead port: must not collide with LATE_PORT, which gets a container. */
+const OTHER_DEAD_PORT = 14_933;
+
 @JetstreamConnection('analytics')
 @Controller()
 class AnalyticsController {
@@ -196,7 +199,7 @@ describe('multi-connection lifecycle', () => {
         connections: {
           primary: { servers: [`nats://localhost:${port}`] },
           audit: {
-            servers: [`nats://localhost:${DEAD_PORT + 1}`],
+            servers: [`nats://localhost:${OTHER_DEAD_PORT}`],
             connectionOptions: { maxReconnectAttempts: 1, timeout: 500 },
           },
         },

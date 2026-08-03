@@ -57,6 +57,19 @@ import { subjectCovers } from './subject-utils';
  *
  * All operations are idempotent: safe to call on every startup and reconnection.
  */
+/**
+ * Combine user-supplied stream metadata with the transport's ownership stamp.
+ *
+ * The stamp augments rather than replaces, so a `metadata` block in the kind's
+ * overrides survives. Returns `undefined` when neither side contributes, so the
+ * caller can omit the field entirely.
+ */
+const mergeOwnedMetadata = (
+  overrides: Record<string, string> | undefined,
+  ownership: Record<string, string> | undefined,
+): Record<string, string> | undefined =>
+  overrides || ownership ? { ...overrides, ...ownership } : undefined;
+
 export class StreamProvider {
   private readonly logger = new Logger('Jetstream:Stream');
   private readonly migration = new StreamMigration();
@@ -220,7 +233,17 @@ export class StreamProvider {
   ): Promise<void> {
     if (this.errorCodeOf(createErr) !== NatsErrorCode.StreamAlreadyExists) return;
 
-    this.assertOwnership(await jsm.streams.info(config.name), config);
+    let current: StreamInfo;
+
+    try {
+      current = await jsm.streams.info(config.name);
+    } catch {
+      // The re-read is a diagnostic nicety; if it fails, the caller still gets
+      // the original create error rather than this one.
+      return;
+    }
+
+    this.assertOwnership(current, config);
   }
 
   /** Ensure a dead-letter queue stream exists, creating or updating as needed. */
@@ -259,7 +282,14 @@ export class StreamProvider {
           ) {
             this.logger.log(`Creating DLQ stream: ${config.name}`);
 
-            return await this.runStreamOp(ctx, () => jsm.streams.add(config as StreamConfig));
+            try {
+              return await this.runStreamOp(ctx, () => jsm.streams.add(config as StreamConfig));
+            } catch (createErr) {
+              // The DLQ name is service-scoped too, so sibling connections can
+              // lose the same create race as on the event stream.
+              await this.rethrowAsOwnershipConflict(jsm, config, createErr);
+              throw createErr;
+            }
           }
 
           throw err;
@@ -522,10 +552,7 @@ export class StreamProvider {
     const overrides = this.getOverrides(kind);
     const ownership = this.ownershipMetadata(kind);
 
-    // The stamp augments user metadata rather than replacing it: a `metadata`
-    // block in the kind's stream overrides must survive.
-    const metadata =
-      ownership || overrides.metadata ? { ...overrides.metadata, ...ownership } : undefined;
+    const metadata = mergeOwnedMetadata(overrides.metadata, ownership);
 
     return {
       ...defaults,
@@ -602,9 +629,7 @@ export class StreamProvider {
     const safeOverrides = this.stripTransportControlled(overrides);
     // The DLQ name is service-scoped like the event and command streams, so two
     // connections of one service reaching the same cluster collide here too.
-    const ownership = this.ownershipStamp('dlq');
-    const metadata =
-      ownership || safeOverrides.metadata ? { ...safeOverrides.metadata, ...ownership } : undefined;
+    const metadata = mergeOwnedMetadata(safeOverrides.metadata, this.ownershipStamp('dlq'));
 
     return {
       ...DEFAULT_DLQ_STREAM_CONFIG,

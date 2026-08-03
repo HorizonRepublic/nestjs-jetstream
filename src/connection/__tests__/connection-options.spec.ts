@@ -135,6 +135,19 @@ describe('normalizeOptions', () => {
     expect(() => normalizeOptions(options)).toThrow(/defaultConnection is required/);
   });
 
+  it('should reject a name with surrounding whitespace', () => {
+    // Given a key that looks like "primary" but is not: the decorator would
+    // spell it trimmed and bind nowhere
+    const options: JetstreamModuleOptions = {
+      name: 'orders',
+      connections: { ' primary ': { servers: ['nats://a:4222'] } },
+      defaultConnection: ' primary ',
+    };
+
+    // When normalized, Then it fails fast
+    expect(() => normalizeOptions(options)).toThrow(/surrounding whitespace/);
+  });
+
   it('should reject an empty connections map', () => {
     // Given an empty map
     const options: JetstreamModuleOptions = { name: 'orders', connections: {} };

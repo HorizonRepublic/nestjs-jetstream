@@ -282,6 +282,13 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
         // backlog immediately, and a subject with no observers drops messages.
         await this.startRouters();
 
+        // close() already ran to completion, so nothing else will tear these
+        // down: the routers subscribed after it swept through.
+        if (this.closed) {
+          this.eventRouter.destroy();
+          this.rpcRouter.destroy();
+        }
+
         this.abortIfClosed();
 
         await this.startConsumption(consumers);

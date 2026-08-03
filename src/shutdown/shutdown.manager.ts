@@ -5,6 +5,9 @@ import type { ConnectionScope } from '../connection/connection.types';
 import { EventBus } from '../hooks';
 import { TransportEvent } from '../interfaces';
 
+const DRAINED = Symbol('drained');
+const TIMED_OUT = Symbol('timed-out');
+
 /** Minimal interface for anything that can be stopped during shutdown. */
 export interface Stoppable {
   close(): void;
@@ -88,12 +91,22 @@ export class ShutdownManager {
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
     try {
-      await Promise.race([
-        scope.connection.shutdown(),
-        new Promise<void>((resolve) => {
-          timeoutId = setTimeout(resolve, budget);
+      // The race resolves to a marker rather than setting a flag, so which side
+      // won is visible to the type checker as well as to us.
+      const outcome = await Promise.race([
+        scope.connection.shutdown().then(() => DRAINED),
+        new Promise<typeof TIMED_OUT>((resolve) => {
+          timeoutId = setTimeout(() => {
+            resolve(TIMED_OUT);
+          }, budget);
         }),
       ]);
+
+      if (outcome === TIMED_OUT) {
+        this.logger.warn(
+          `Connection "${scope.name}" did not drain within ${budget}ms; closing anyway`,
+        );
+      }
     } catch (err) {
       this.logger.warn(
         `Connection "${scope.name}" failed to drain: ${err instanceof Error ? err.message : String(err)}`,

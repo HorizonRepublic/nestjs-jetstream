@@ -1115,8 +1115,8 @@ describe(StreamProvider, () => {
     });
 
     it('should not drop operator metadata when the transport writes none', async () => {
-      // Given a Manual-managed broadcast stream carrying operator keys, where the
-      // transport contributes no metadata of its own
+      // Given a broadcast stream carrying operator keys. Broadcast streams are
+      // never stamped, so the transport contributes no metadata of its own here.
       options = resolvedOptions('analytics');
       sut = makeSut();
       mockStreamInfo(

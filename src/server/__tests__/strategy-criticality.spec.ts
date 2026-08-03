@@ -1,10 +1,13 @@
+import type { ConsumerInfo } from '@nats-io/jetstream';
+
 import { createMock } from '@golevelup/ts-vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ConnectionProvider } from '../../connection/connection.provider';
 import type { ResolvedConnectionOptions } from '../../interfaces';
-import type { MessageProvider, StreamProvider } from '../infrastructure';
-import type { PatternRegistry } from '../routing';
+import type { StreamKind } from '../../interfaces';
+import type { ConsumerProvider, MessageProvider, StreamProvider } from '../infrastructure';
+import type { EventRouter, PatternRegistry, RpcRouter } from '../routing';
 import { JetstreamStrategy } from '../strategy';
 
 const quietRegistry = (registerHandlers: () => void): PatternRegistry =>
@@ -20,6 +23,9 @@ const quietRegistry = (registerHandlers: () => void): PatternRegistry =>
 interface SutOverrides {
   streams?: StreamProvider;
   messages?: MessageProvider;
+  consumers?: ConsumerProvider;
+  eventRouter?: EventRouter;
+  rpcRouter?: RpcRouter;
 }
 
 const createSut = (
@@ -39,10 +45,10 @@ const createSut = (
     createMock<ConnectionProvider>(),
     patterns,
     overrides.streams ?? createMock(),
-    createMock(),
+    overrides.consumers ?? createMock(),
     overrides.messages ?? createMock(),
-    createMock(),
-    createMock(),
+    overrides.eventRouter ?? createMock(),
+    overrides.rpcRouter ?? createMock(),
     createMock(),
     new Map(),
     undefined,
@@ -153,6 +159,44 @@ describe('JetstreamStrategy criticality', () => {
     // and consumption is not started after the pipeline was torn down
     expect(sut.isStarted).toBe(false);
     expect(messages.start).not.toHaveBeenCalled();
+  });
+
+  it('should tear down routers that subscribed after close() swept through', async () => {
+    // Given a boot chain that is awaiting inside consumer provisioning, so the
+    // routers only subscribe after close() has already run
+    let releaseBoot: (() => void) | undefined;
+
+    const gate = new Promise<Map<StreamKind, ConsumerInfo>>((resolve) => {
+      releaseBoot = (): void => {
+        resolve(new Map());
+      };
+    });
+
+    const patterns = createMock<PatternRegistry>({
+      registerHandlers: vi.fn(),
+      hasEventHandlers: () => true,
+      hasBroadcastHandlers: () => false,
+      hasOrderedHandlers: () => false,
+      hasRpcHandlers: () => false,
+      hasMetadata: () => false,
+    });
+    const consumers = createMock<ConsumerProvider>({ ensureConsumers: () => gate });
+    const eventRouter = createMock<EventRouter>();
+    const rpcRouter = createMock<RpcRouter>();
+    const sut = createSut(false, patterns, { consumers, eventRouter, rpcRouter });
+
+    await sut.listen(vi.fn());
+
+    // When close() lands and the chain then resumes past router startup
+    sut.close();
+    releaseBoot?.();
+    await gate;
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // Then the routers do not stay subscribed with nothing left to close them
+    expect(eventRouter.destroy).toHaveBeenCalled();
+    expect(rpcRouter.destroy).toHaveBeenCalled();
   });
 
   it('should stop retrying once closed', async () => {

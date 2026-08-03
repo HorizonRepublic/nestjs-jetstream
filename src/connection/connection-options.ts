@@ -134,8 +134,13 @@ export const normalizeOptions = (options: JetstreamModuleOptions): NormalizedCon
   }
 
   for (const [name, connection] of entries) {
-    if (name.trim().length === 0) {
-      throw new Error('Connection names must be non-empty.');
+    // Surrounding whitespace would survive into the registry key while
+    // `@JetstreamConnection('primary')` matches the trimmed spelling, so a
+    // handler would silently bind nowhere.
+    if (name.length === 0 || name !== name.trim()) {
+      throw new Error(
+        `Connection names must be non-empty and free of surrounding whitespace; got "${name}".`,
+      );
     }
 
     if (connection.servers.length === 0) {

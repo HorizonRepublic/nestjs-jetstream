@@ -4,6 +4,9 @@ import type { ConnectionRegistry } from '../connection/connection-registry';
 import type { ConnectionScope } from '../connection/connection.types';
 import type { JetstreamConnectionHealth, JetstreamHealthStatus } from '../interfaces';
 
+/** Upper bound on a single connection's round-trip probe. */
+const PROBE_TIMEOUT_MS = 5_000;
+
 /**
  * Health indicator result compatible with @nestjs/terminus.
  *
@@ -74,10 +77,21 @@ export class JetstreamHealthIndicator {
       return { connected: false, critical: scope.critical, server: null, latency: null };
     }
 
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
     try {
       const start = performance.now();
 
-      await nc.rtt();
+      // A stalled rtt() would otherwise hold the whole check open, and with it
+      // the readiness probe that called it.
+      await Promise.race([
+        nc.rtt(),
+        new Promise<never>((_resolve, reject) => {
+          timeoutId = setTimeout(() => {
+            reject(new Error(`rtt did not answer within ${PROBE_TIMEOUT_MS}ms`));
+          }, PROBE_TIMEOUT_MS);
+        }),
+      ]);
 
       const latency = Math.round(performance.now() - start);
 
@@ -88,6 +102,8 @@ export class JetstreamHealthIndicator {
       );
 
       return { connected: false, critical: scope.critical, server: nc.getServer(), latency: null };
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
