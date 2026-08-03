@@ -73,7 +73,7 @@ export default function Root({ children }) {
   "headline": "Quick Start",
   "description": "Complete working example in four steps: register the module, connect the transport, define handlers, and send messages.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-07-27"
+  "dateModified": "2026-08-03"
 },
       
     '/docs/getting-started/why-jetstream/': {
@@ -105,7 +105,7 @@ export default function Root({ children }) {
   "headline": "Bring Your Own Infrastructure (bind-only mode)",
   "description": "Bind NestJS JetStream to externally managed NATS streams and consumers provisioned by Terraform, ArgoCD, or a platform team.",
   "datePublished": "2026-06-12",
-  "dateModified": "2026-07-27"
+  "dateModified": "2026-08-03"
 },
       
     '/docs/guides/graceful-shutdown/': {
@@ -113,7 +113,7 @@ export default function Root({ children }) {
   "headline": "Graceful Shutdown",
   "description": "Automatic shutdown handling with in-flight message completion and NATS connection drain.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-07-26"
+  "dateModified": "2026-08-03"
 },
       
     '/docs/guides/handler-context/': {
@@ -129,7 +129,7 @@ export default function Root({ children }) {
   "headline": "How to expose health checks for NATS JetStream",
   "description": "Expose NATS connection status and RTT latency as a Kubernetes readiness/liveness probe using JetstreamHealthIndicator.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-07-26"
+  "dateModified": "2026-08-03"
 },
       
     '/docs/guides/lifecycle-hooks/': {
@@ -137,7 +137,7 @@ export default function Root({ children }) {
   "headline": "How to register lifecycle hooks for NestJS JetStream",
   "description": "Subscribe to transport events for monitoring, alerting, and logging integration.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-07-27"
+  "dateModified": "2026-08-03"
 },
       
     '/docs/guides/migration/': {
@@ -145,7 +145,15 @@ export default function Root({ children }) {
   "headline": "How to migrate from @nestjs/microservices NATS to JetStream",
   "description": "Step-by-step migration from the built-in NestJS NATS transport to durable JetStream-backed delivery.",
   "datePublished": "2026-03-26",
-  "dateModified": "2026-07-27"
+  "dateModified": "2026-08-03"
+},
+      
+    '/docs/guides/multi-connection/': {
+  "@type": "Article",
+  "headline": "Multiple NATS connections in one NestJS service",
+  "description": "Named NATS connections in NestJS JetStream: configuration, handler binding, criticality, health, and shutdown.",
+  "datePublished": "2026-08-03",
+  "dateModified": "2026-08-03"
 },
       
     '/docs/guides/per-message-ttl/': {
@@ -281,7 +289,7 @@ export default function Root({ children }) {
   "headline": "Default Stream & Consumer Configs for NATS JetStream",
   "description": "Default stream, consumer, and connection settings for every NestJS JetStream StreamKind (event, broadcast, ordered, command, DLQ).",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-07-27"
+  "dateModified": "2026-07-28"
 },
       
     '/docs/reference/edge-cases/': {
@@ -305,7 +313,7 @@ export default function Root({ children }) {
   "headline": "Module Configuration Reference",
   "description": "Reference for forRoot(), forRootAsync(), and forFeature() registration methods with stream, consumer, and connection options.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-07-27"
+  "dateModified": "2026-08-03"
 },
       
     '/docs/reference/naming-conventions/': {
@@ -313,7 +321,7 @@ export default function Root({ children }) {
   "headline": "Naming Conventions",
   "description": "Stream, consumer, and subject naming patterns derived from the service name.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-07-27"
+  "dateModified": "2026-08-03"
 },
       
     '/docs/reference/release-notes/': {

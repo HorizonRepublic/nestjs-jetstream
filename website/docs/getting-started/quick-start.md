@@ -8,7 +8,7 @@ schema:
   headline: "Quick Start"
   description: "Complete working example in four steps: register the module, connect the transport, define handlers, and send messages."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
 
 # Quick Start
@@ -84,6 +84,10 @@ void bootstrap();
 
 :::warning Don't instantiate the strategy manually
 Unlike other NestJS transports, you must not create the strategy with `new JetstreamStrategy()`. The module creates it through DI with all required dependencies. Always use `app.get(JetstreamStrategy)` to retrieve it.
+:::
+
+:::tip Talking to more than one NATS cluster?
+Replace the `connectMicroservice` call with `connectJetstreamMicroservices(app)`, which attaches one microservice per configured connection. See [Multiple connections](/docs/guides/multi-connection).
 :::
 
 ## 3. Define handlers

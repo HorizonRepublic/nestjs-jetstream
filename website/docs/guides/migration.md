@@ -8,7 +8,7 @@ schema:
   headline: "How to migrate from @nestjs/microservices NATS to JetStream"
   description: "Step-by-step migration from the built-in NestJS NATS transport to durable JetStream-backed delivery."
   datePublished: "2026-03-26"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
 
 # How to migrate from `@nestjs/microservices` NATS to JetStream
@@ -18,20 +18,8 @@ Replacing the built-in NestJS NATS transport (`Transport.NATS` from `@nestjs/mic
 You will end up with durable delivery, automatic retries, dead letter handling, and W3C trace context for the same `@EventPattern` / `@MessagePattern` handlers you already have.
 
 :::tip Already using this library and upgrading to a newer version?
-See the [Release Notes](/docs/reference/release-notes) instead. This guide covers the one-time switch from `@nestjs/microservices`.
+Jump to [Upgrading between versions](#upgrading-between-versions) below, which lists what changes release by release. The [Release Notes](/docs/reference/release-notes) carry the full changelog. Everything before that section covers the one-time switch from `@nestjs/microservices`.
 :::
-
-## Upgrading to 3.0
-
-Four defaults changed, and each one can be restored.
-
-**Streams reserve far less storage.** `max_bytes` drops from 5 GB to 512 MB on events, from 5 GB to 1 GB on ordered, from 2 GB to 256 MB on broadcast and from 100 MB to 64 MB on commands, and `max_msg_size` drops to 1 MB everywhere to match the NATS server's own `max_payload` default. A service used to reserve up to 17 GB before it processed a single message, which exhausted a modest file store after one or two deployments. `max_bytes` is mutable, so existing streams pick the new value up on the next boot; set it back under `events.stream` if you need the old headroom.
-
-**Retries are paced.** A failing handler now naks with a delay from `[2000, 10000]` ms instead of immediately, so three attempts span roughly twelve seconds rather than milliseconds. Pass `events: { retry: false }` for the previous behaviour.
-
-**The dead-letter stream is on by default.** Exhausted messages land in `{service}__microservice_dlq-stream` instead of being dropped. Pass `dlq: false` to opt out. Under `provisioning: { management: Manual }` nothing changes unless you configure `dlq` explicitly.
-
-**Node 20 is no longer supported.** The minimum is Node 22.
 
 ## What changes
 
@@ -161,6 +149,28 @@ After migration, you get these capabilities for free:
 - Prometheus metrics out of the box: see [Prometheus Metrics](/docs/observability/metrics).
 
 ## Upgrading between versions
+
+Newest first. Each entry lists only what changes for you and how to restore the previous behaviour.
+
+### v2.13 → v3.0
+
+**Streams reserve far less storage.** `max_bytes` drops from 5 GB to 512 MB on events, from 5 GB to 1 GB on ordered, from 2 GB to 256 MB on broadcast and from 100 MB to 64 MB on commands, and `max_msg_size` drops to 1 MB everywhere to match the NATS server's own `max_payload` default. A service used to reserve up to 17 GB before it processed a single message, which exhausted a modest file store after one or two deployments. `max_bytes` is mutable, so existing streams pick the new value up on the next boot; set it back under `events.stream` if you need the old headroom.
+
+**Retries are paced.** A failing handler now naks with a delay from `[2000, 10000]` ms instead of immediately, so three attempts span roughly twelve seconds rather than milliseconds. Pass `events: { retry: false }` for the previous behaviour.
+
+**The dead-letter stream is on by default.** Exhausted messages land in `{service}__microservice_dlq-stream` instead of being dropped. Pass `dlq: false` to opt out. Under `provisioning: { management: Manual }` nothing changes unless you configure `dlq` explicitly.
+
+**Node 20 is no longer supported.** The minimum is Node 22.
+
+**`servers` is now optional, paired with `connections`.** Configuration accepts either the flat `servers` form or the new `connections` map, and rejects supplying both. Existing flat configurations are unchanged: they are rewritten internally into a single connection named `default`, and stream, consumer and subject names stay exactly as they were. See [Multiple connections](/docs/guides/multi-connection).
+
+**`getClientToken` takes an optional second argument.** `getClientToken(name)` returns the same bare token it always did; `getClientToken(name, connection)` returns a namespaced one for a client bound to a named connection. Existing injections resolve unchanged.
+
+**Lifecycle hooks receive a trailing connection name.** Every callback in `hooks` gains an optional final `connection?: string` parameter, populated only when more than one connection is configured. Hooks that ignore it are unaffected, and single-connection applications see the exact payloads they saw before.
+
+**Streams gain an ownership stamp.** Each provisioned stream carries a `nestjs-jetstream-owner` metadata entry of `{service}:{connection}`, used to catch two connections that reach the same cluster. Existing streams pick it up through one mutable update on the first boot after upgrading. Nothing is stamped under `provisioning: { management: Manual }`.
+
+A single-connection application upgrades with no source changes.
 
 ### v2.12 → v2.13
 

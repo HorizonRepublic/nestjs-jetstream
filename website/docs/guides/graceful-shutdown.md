@@ -6,7 +6,7 @@ schema:
   headline: "Graceful Shutdown"
   description: "Automatic shutdown handling with in-flight message completion and NATS connection drain."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-26"
+  dateModified: "2026-08-03"
 ---
 
 # Graceful Shutdown
@@ -70,6 +70,31 @@ Set `shutdownTimeout` to slightly more than your longest handler's expected dura
 :::
 
 If the timeout fires before drain completes, the transport closes the connection immediately. Any in-flight handlers that haven't finished will be interrupted: their messages will not be acknowledged, so NATS will redeliver them to another instance after the consumer's `ack_wait` expires.
+
+## Multiple connections
+
+With [named connections](/docs/guides/multi-connection) shutdown runs in two phases rather than draining one connection at a time:
+
+1. **Every** connection stops accepting new messages.
+2. **Then** every connection drains in parallel, each bounded by its own `shutdownTimeout`.
+
+The phases are separate on purpose: draining sequentially would let a connection keep taking work while its peers are already winding down.
+
+The ceiling for the whole SIGTERM is therefore `max(timeouts)`, not their sum. A connection that throws while draining does not stop the others from closing, and a non-critical connection that never connected is skipped.
+
+```typescript
+JetstreamModule.forRoot({
+  name: 'orders',
+  defaultConnection: 'primary',
+  shutdownTimeout: 10_000,             // fallback for connections that set none
+  connections: {
+    primary: { servers: ['nats://primary:4222'], shutdownTimeout: 30_000 },
+    analytics: { servers: ['nats://analytics:4222'], shutdownTimeout: 5_000 },
+  },
+})
+```
+
+Worst case above is 30 seconds, not 35.
 
 ## Enabling shutdown hooks
 

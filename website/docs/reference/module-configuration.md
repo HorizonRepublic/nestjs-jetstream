@@ -8,7 +8,7 @@ schema:
   headline: "Module Configuration Reference"
   description: "Reference for forRoot(), forRootAsync(), and forFeature() registration methods with stream, consumer, and connection options."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-28"
+  dateModified: "2026-08-03"
 ---
 
 import Since from '@site/src/components/Since';
@@ -221,9 +221,39 @@ Service name. Used for stream, consumer, and subject naming. Must be unique per 
 
 #### `servers`, `string[]`
 
-NATS server URLs (e.g., `['nats://localhost:4222']`).
+NATS server URLs (e.g., `['nats://localhost:4222']`). Required unless you use `connections` instead; supplying both fails at startup.
 
 ### Optional options
+
+#### `connections`, `Record<string, JetstreamConnectionOptions>`
+
+Named connections, one per NATS cluster. Mutually exclusive with `servers`. Each entry inherits every root-level field it does not set, and may override `critical`, `consumer`, `codec`, `connectionOptions`, `events`, `broadcast`, `ordered`, `rpc`, `dlq`, `metadata`, `provisioning`, `allowDestructiveMigration` and `shutdownTimeout`.
+
+```typescript
+JetstreamModule.forRoot({
+  name: 'orders',
+  defaultConnection: 'primary',
+  events: { concurrency: 4 },        // inherited by both
+  connections: {
+    primary: { servers: ['nats://primary:4222'] },
+    analytics: {
+      servers: ['nats://analytics:4222'],
+      critical: false,               // startup does not depend on it
+      events: { concurrency: 32 },   // overrides the root value
+    },
+  },
+})
+```
+
+`name`, `hooks`, `metrics`, `otel` and `onDeadLetter` stay at the root: they describe or observe the service as a whole. See [Multiple connections](/docs/guides/multi-connection).
+
+#### `defaultConnection`, `string`
+
+Which connection unqualified handlers and clients bind to. Optional when the `connections` map has a `default` key; required otherwise.
+
+#### `critical` (per connection), `boolean`
+
+Default: `true`. Whether startup depends on this connection. `false` connects lazily in the background, retries with exponential backoff capped at 30 s, and reports `degraded` health instead of failing readiness.
 
 #### `codec`, `Codec`
 
