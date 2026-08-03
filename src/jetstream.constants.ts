@@ -21,6 +21,15 @@ export const JETSTREAM_CONNECTION: unique symbol = Symbol('JETSTREAM_CONNECTION'
 /** Token for the ConnectionRegistry holding every named connection. */
 export const JETSTREAM_CONNECTIONS: unique symbol = Symbol('JETSTREAM_CONNECTIONS');
 
+/**
+ * Stream metadata key recording which service and connection provisioned a stream.
+ *
+ * Value format is `{service}:{connection}`. Two connections of one service that
+ * resolve the same stream name are pointing at the same cluster, which would
+ * silently overwrite each other's configuration.
+ */
+export const STREAM_OWNER_METADATA_KEY = 'nestjs-jetstream-owner';
+
 /** Token for the global Codec instance. */
 export const JETSTREAM_CODEC: unique symbol = Symbol('JETSTREAM_CODEC');
 
