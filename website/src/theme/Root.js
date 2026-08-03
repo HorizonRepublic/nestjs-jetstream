@@ -111,7 +111,7 @@ export default function Root({ children }) {
     '/docs/guides/graceful-shutdown/': {
   "@type": "Article",
   "headline": "Graceful Shutdown",
-  "description": "Automatic shutdown handling with in-flight message completion and NATS connection drain.",
+  "description": "Automatic shutdown handling: consumption stops, the NATS connection drains, and unfinished work is redelivered.",
   "datePublished": "2026-03-21",
   "dateModified": "2026-08-03"
 },
@@ -329,7 +329,7 @@ export default function Root({ children }) {
   "headline": "Release Notes: NestJS JetStream Transport",
   "description": "Version-by-version changelog covering new features, behavior changes, and breaking changes.",
   "datePublished": "2026-03-26",
-  "dateModified": "2026-07-27"
+  "dateModified": "2026-08-03"
 },
       
 

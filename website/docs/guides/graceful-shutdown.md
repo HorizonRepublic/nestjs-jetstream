@@ -4,23 +4,23 @@ title: "Graceful Shutdown"
 schema:
   type: Article
   headline: "Graceful Shutdown"
-  description: "Automatic shutdown handling with in-flight message completion and NATS connection drain."
+  description: "Automatic shutdown handling: consumption stops, the NATS connection drains, and unfinished work is redelivered."
   datePublished: "2026-03-21"
   dateModified: "2026-08-03"
 ---
 
 # Graceful Shutdown
 
-The transport handles shutdown automatically through the NestJS application lifecycle. When the application shuts down, in-flight message handlers are given time to complete before the NATS connection is closed. No manual shutdown code is needed.
+The transport handles shutdown automatically through the NestJS application lifecycle: consumption stops, the NATS connection drains, and anything still in flight is redelivered rather than lost. No manual shutdown code is needed.
 
 ## How it works
 
 The `JetstreamModule` implements NestJS's `OnApplicationShutdown` interface. When the application receives a termination signal (SIGTERM, SIGINT), NestJS calls the module's `onApplicationShutdown()` method, which triggers the following sequence:
 
 1. **Emit `ShutdownStart` hook**: notifies lifecycle hooks that shutdown has begun.
-2. **Stop consumers**: calls `strategy.close()`, which closes all RxJS subscriptions and stops JetStream consumer iterators. No new messages are accepted. In-flight handlers in the RxJS pipeline continue to run to completion.
-3. **Drain NATS connection**: calls `nc.drain()`, which flushes any pending publishes and waits for active subscriptions to finish, then closes the connection.
-4. **Safety timeout**: if drain doesn't complete within `shutdownTimeout` milliseconds, the transport proceeds with shutdown anyway. This prevents a stuck handler from blocking the process indefinitely.
+2. **Stop consumers**: calls `strategy.close()`, which closes all RxJS subscriptions and stops JetStream consumer iterators. No new messages are accepted, and the routing pipeline is torn down.
+3. **Drain NATS connection**: calls `nc.drain()`, which flushes any pending publishes and closes the connection.
+4. **Safety timeout**: if drain doesn't complete within `shutdownTimeout` milliseconds, the transport proceeds with shutdown anyway. This prevents a stuck connection from blocking the process indefinitely.
 5. **Emit `ShutdownComplete` hook**: notifies lifecycle hooks that shutdown is finished.
 
 ```mermaid
@@ -39,11 +39,14 @@ flowchart LR
 NATS `drain()` is a graceful shutdown primitive. When you drain a connection:
 
 - The client stops receiving new messages from all subscriptions.
-- Messages already delivered to handlers continue processing normally.
-- The client waits for all pending message handlers to complete and send their ack/nak.
-- Once all in-flight work is done, the connection closes cleanly.
+- Pending publishes are flushed.
+- Once the client's own subscription work is done, the connection closes cleanly.
 
-No message is dropped or left in an ambiguous state. A message that was being processed when shutdown started will either be acknowledged (if the handler succeeds) or nak'd (if it fails), so NATS can redeliver it to another instance.
+:::warning Handlers are not awaited
+Shutdown stops consumption before draining, which tears down the routing pipeline. A handler that was mid-execution is abandoned, not awaited: its message is never acked, so JetStream redelivers it after the consumer's `ack_wait` expires. Delivery is still at-least-once and nothing is lost, but a handler running at SIGTERM will run again on another instance.
+
+Design handlers to be idempotent and keep them short. If a unit of work must not be repeated, make it resumable or guard it with an idempotency key rather than relying on shutdown to let it finish.
+:::
 
 ## Configuring the timeout
 
@@ -66,10 +69,12 @@ export class AppModule {}
 ```
 
 :::tip Choosing a timeout value
-Set `shutdownTimeout` to slightly more than your longest handler's expected duration. If your slowest handler takes 20 seconds, a timeout of 25-30 seconds gives it room to finish. Too short, and handlers may be abandoned mid-execution; too long, and your deployment pipeline will wait unnecessarily.
+This budget covers the connection drain, not handler execution, so it does not need to exceed your slowest handler. The default of 10 seconds is ample for a healthy cluster; raise it only if you see drains hitting the ceiling against a slow or degraded one.
 :::
 
-If the timeout fires before drain completes, the transport closes the connection immediately. Any in-flight handlers that haven't finished will be interrupted: their messages will not be acknowledged, so NATS will redeliver them to another instance after the consumer's `ack_wait` expires.
+If the timeout fires before the drain completes, the transport closes the connection immediately. Anything unacked at that point is redelivered after the consumer's `ack_wait` expires.
+
+What actually governs redelivery overlap during a rolling deploy is `ack_wait`, not this timeout: a message abandoned at SIGTERM becomes available to another instance once that window passes.
 
 ## Multiple connections
 
@@ -162,4 +167,4 @@ See [Lifecycle Hooks](/docs/guides/lifecycle-hooks) for all available events.
 
 ## See also
 
-If a handler is still running when `shutdownTimeout` fires, its message is not acked; NATS redelivers it to another instance after `ack_wait` expires. Make sure your deployment strategy accounts for this overlap, and see [Dead Letter Queue](/docs/guides/dead-letter-queue) for what happens when a handler fails its final delivery attempt mid-shutdown.
+A handler still running at shutdown is abandoned and its message is not acked; NATS redelivers it to another instance after `ack_wait` expires. Make sure your deployment strategy accounts for this overlap, and see [Dead Letter Queue](/docs/guides/dead-letter-queue) for what happens when a handler fails its final delivery attempt mid-shutdown.

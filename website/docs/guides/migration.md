@@ -168,7 +168,7 @@ Newest first. Each entry lists only what changes for you and how to restore the 
 
 **Lifecycle hooks receive a trailing connection name.** Every callback in `hooks` gains an optional final `connection?: string` parameter, populated only when more than one connection is configured. Hooks that ignore it are unaffected, and single-connection applications see the exact payloads they saw before.
 
-**Streams gain an ownership stamp.** Each provisioned stream carries a `nestjs-jetstream-owner` metadata entry of `{service}:{connection}`, used to catch two connections that reach the same cluster. Existing streams pick it up through one mutable update on the first boot after upgrading. Nothing is stamped under `provisioning: { management: Manual }`.
+**Streams gain an ownership stamp.** Each provisioned stream carries a `nestjs-jetstream-owner` metadata entry of `{service}:{connection}`, the dead-letter stream included, used to catch two connections that reach the same cluster. Existing streams pick it up through one mutable update on the first boot after upgrading; messages already in the stream are untouched, and metadata written by anyone else is carried forward. Nothing is stamped under `provisioning: { management: Manual }`, and the shared broadcast stream is never stamped.
 
 A single-connection application upgrades with no source changes.
 

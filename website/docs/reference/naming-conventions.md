@@ -155,6 +155,8 @@ That makes one configuration mistake dangerous: two connections that reach the s
 
 **Config level, before any network call.** Two connections declaring an identical server set — normalized for ordering and the default `4222` port — fail at startup.
 
-**NATS level.** Every provisioned stream carries a `nestjs-jetstream-owner` metadata entry of `{service}:{connection}`. A stream already stamped by a different connection of the same service fails provisioning, with both connection names in the error. A stamp belonging to a different service is left alone.
+**NATS level.** Every provisioned stream carries a `nestjs-jetstream-owner` metadata entry of `{service}:{connection}`. This covers every stream whose name is derived from the service, the dead-letter stream included. A stream already stamped by a different connection of the same service fails provisioning, with both connection names in the error. A stamp belonging to a different service is left alone.
 
 The shared `broadcast-stream` is exempt: every service in the cluster shares it, so a per-connection stamp would flip-flop on each deploy. Under `provisioning: { management: Manual }` nothing is stamped and the second check does not apply, since those streams are not ours to write to.
+
+Metadata the transport did not author is preserved. An update carries forward whatever keys the stream already had, and a `metadata` block in your stream overrides is merged with the stamp rather than replaced by it.

@@ -148,8 +148,10 @@ await app.listen(3000);
 ```
 
 :::warning Configuring a second connection is not enough
-If you add a connection but keep the old single-strategy bootstrap, that connection's handlers are registered and never subscribed — no error, just events quietly not processed. The transport therefore fails at startup naming the connections that never started. Single-connection applications are unaffected.
+If you add a connection but keep the old single-strategy bootstrap, that connection's handlers are registered and never subscribed — no error, just events quietly not processed. The transport therefore fails at startup naming the connections the bootstrap skipped. Single-connection applications are unaffected.
 :::
+
+The check is on attachment, not on readiness: a connection that was attached but is still connecting is fine, which is what makes `critical: false` work. If your bootstrap calls `app.init()` before `app.startAllMicroservices()`, nothing is attached yet when the check runs, so it logs a warning instead of failing.
 
 Publisher-only connections have no strategy and are skipped automatically.
 
@@ -229,9 +231,9 @@ Stream, consumer and subject names **do not change** when you add connections. R
 The flip side is that two connections into one cluster would resolve identical stream names and silently overwrite each other's configuration. Two checks prevent that:
 
 1. **Config level, before any network call.** Two connections with an identical server set (normalized for order and default port) fail at startup.
-2. **NATS level.** Each provisioned stream carries a `nestjs-jetstream-owner` metadata stamp of `{service}:{connection}`. A stream already stamped by a different connection of the same service fails provisioning, naming both connections.
+2. **NATS level.** Each provisioned stream carries a `nestjs-jetstream-owner` metadata stamp of `{service}:{connection}`, the dead-letter stream included. A stream already stamped by a different connection of the same service fails provisioning, naming both connections. Two connections racing to create the same stream are caught the same way: the one that loses the race re-reads the stream and reports the conflict.
 
-The shared broadcast stream is exempt from the stamp — every service in the cluster shares it, so a per-connection stamp would flip-flop on each deploy.
+The shared broadcast stream is exempt from the stamp — every service in the cluster shares it, so a per-connection stamp would flip-flop on each deploy. Metadata written by anyone else is carried forward on update rather than replaced, so operator-set keys and a `metadata` block in your own stream overrides both survive.
 
 Under `provisioning: { management: ManagementMode.Manual }` the streams are externally owned, so nothing is stamped and the second check does not apply. The first still does.
 
