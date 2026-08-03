@@ -460,6 +460,14 @@ export interface JetstreamFeatureOptions {
   name: string;
 
   /**
+   * Connection this client publishes on.
+   *
+   * Defaults to the module's default connection. Inject the resulting client
+   * with `getClientToken(name, connection)`.
+   */
+  connection?: string;
+
+  /**
    * Override the global codec for this client.
    * Falls back to the root codec from `forRoot()` when omitted.
    */

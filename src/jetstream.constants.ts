@@ -37,17 +37,24 @@ export const JETSTREAM_EVENT_BUS: unique symbol = Symbol('JETSTREAM_EVENT_BUS');
  * Generate the injection token for a `forFeature()` client.
  *
  * Use with `@Inject()` to inject the client created by `JetstreamModule.forFeature()`.
+ * Omitting `connection` yields the bare service name, the token shape used before
+ * named connections existed.
  *
  * @param name - The service name passed to `forFeature({ name })`.
+ * @param connection - The connection passed to `forFeature({ connection })`; omit for the default.
  * @returns The DI token string.
  *
  * @example
  * ```typescript
  * @Inject(getClientToken('orders'))
  * private readonly ordersClient: JetstreamClient;
+ *
+ * @Inject(getClientToken('orders', 'analytics'))
+ * private readonly analyticsOrdersClient: JetstreamClient;
  * ```
  */
-export const getClientToken = (name: string): string => name;
+export const getClientToken = (name: string, connection?: string): string =>
+  connection === undefined ? name : `${connection}::${name}`;
 
 const KB = 1024;
 const MB = 1024 * KB;

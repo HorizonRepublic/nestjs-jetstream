@@ -152,40 +152,36 @@ export class JetstreamModule implements OnApplicationShutdown {
   /**
    * Register a lightweight client proxy for a target service.
    *
-   * Reuses the shared NATS connection from `forRoot()`.
-   * Import in each feature module that needs to communicate with a specific service.
+   * Reuses the NATS connection from `forRoot()`. Import in each feature module
+   * that needs to communicate with a specific service. Pass `connection` to
+   * publish on a named connection instead of the default one.
    *
    * @param options Feature options with target service name.
    * @returns Dynamic module with the client provider.
    */
   public static forFeature(options: JetstreamFeatureOptions): DynamicModule {
-    const clientToken = getClientToken(options.name);
+    const clientToken = getClientToken(options.name, options.connection);
 
     const clientProvider: Provider = {
       provide: clientToken,
-      inject: [
-        JETSTREAM_OPTIONS,
-        JETSTREAM_CONNECTION,
-        JETSTREAM_CODEC,
-        JETSTREAM_EVENT_BUS,
-        { token: NameResolver, optional: true },
-      ],
+      inject: [JETSTREAM_OPTIONS, JETSTREAM_CONNECTIONS, JETSTREAM_EVENT_BUS],
       useFactory: (
         rootOptions: JetstreamModuleOptions,
-        connection: ConnectionProvider,
-        rootCodec: Codec,
+        registry: ConnectionRegistry,
         eventBus: EventBus,
-        names: NameResolver | null,
-      ) => {
-        const codec = options.codec ?? rootCodec;
+      ): JetstreamClient => {
+        const scope =
+          options.connection === undefined
+            ? registry.getDefault()
+            : registry.get(options.connection);
 
         return new JetstreamClient(
           rootOptions,
           options.name,
-          connection,
-          codec,
+          scope.connection,
+          options.codec ?? scope.codec,
           eventBus,
-          names ?? undefined,
+          scope.names,
         );
       },
     };
