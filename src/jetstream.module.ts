@@ -306,7 +306,9 @@ export class JetstreamModule implements OnApplicationBootstrap, OnApplicationShu
 
           const known = new Set(normalized.connections.map((c) => c.connectionName));
           const publisherOnly = new Set(
-            normalized.connections.filter((c) => c.consumer === false).map((c) => c.connectionName),
+            normalized.connections
+              .filter((c) => c.publisherOnly === true)
+              .map((c) => c.connectionName),
           );
 
           const scopes = new Map(

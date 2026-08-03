@@ -44,7 +44,7 @@ export const createTestApp = async (
   const app = module.createNestApplication({ logger: false });
   const strategy: JetstreamStrategy | undefined = module.get(JetstreamStrategy, { strict: false });
 
-  // Publisher-only mode (consumer: false) has no strategy; skip microservice setup
+  // Publisher-only mode (publisherOnly: true) has no strategy; skip microservice setup
   if (strategy) {
     app.connectMicroservice<MicroserviceOptions>({ strategy } as MicroserviceOptions);
     await app.startAllMicroservices();

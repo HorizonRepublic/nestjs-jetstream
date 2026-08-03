@@ -38,8 +38,15 @@ export interface JetstreamConnectionOptions {
   /** Codec for this connection; falls back to the root codec. */
   codec?: Codec;
 
-  /** Set to `false` to make this connection publisher-only (no streams, no consumers). */
-  consumer?: false;
+  /**
+   * Skip consumer infrastructure on this connection.
+   *
+   * Unlike the root option this can go either way, so one connection may
+   * publish only while another consumes, or the reverse.
+   *
+   * @default inherited from the root option, which defaults to `false`
+   */
+  publisherOnly?: boolean;
 
   /** Workqueue event stream/consumer overrides for this connection. */
   events?: StreamConsumerOverrides;

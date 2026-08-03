@@ -102,7 +102,7 @@ export const createConnectionScope = (
   const names = new NameResolver(options);
   const ackWaitMap = new Map<StreamKind, number>();
 
-  if (options.consumer === false) {
+  if (options.publisherOnly === true) {
     return {
       name: options.connectionName,
       critical: options.critical,

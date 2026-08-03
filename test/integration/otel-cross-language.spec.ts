@@ -188,7 +188,7 @@ describe('OTel cross-language interop integration', () => {
       // When: emit through a publisher-side app
       const publisherSvc = uniqueServiceName();
       const { app: publisher, module: publisherModule } = await createTestApp(
-        { name: publisherSvc, port, consumer: false },
+        { name: publisherSvc, port, publisherOnly: true },
         [],
         [serviceName],
       );

@@ -88,7 +88,7 @@ const resolveDefaultName = (names: string[], requested: string | undefined): str
 const assertDistinctClusters = (connections: ResolvedConnectionOptions[]): void => {
   const seen = new Map<string, string>();
 
-  for (const connection of connections.filter((c) => c.consumer !== false)) {
+  for (const connection of connections.filter((c) => c.publisherOnly !== true)) {
     const key = serverSetKey(connection.servers);
     const previous = seen.get(key);
 

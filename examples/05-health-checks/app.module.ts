@@ -31,7 +31,7 @@ class HealthController {
     JetstreamModule.forRoot({
       name: 'monitoring',
       servers: ['localhost:4222'],
-      consumer: false, // health checks don't need consumer infrastructure
+      publisherOnly: true, // health checks don't need consumer infrastructure
     }),
   ],
   controllers: [HealthController],

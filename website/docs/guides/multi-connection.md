@@ -73,7 +73,7 @@ JetstreamModule.forRoot({
 })
 ```
 
-Every per-cluster knob is tunable this way: `events`, `broadcast`, `ordered`, `rpc`, `dlq`, `metadata`, `provisioning`, `allowDestructiveMigration`, `shutdownTimeout`, `codec`, `connectionOptions`, and `consumer: false` for a publish-only connection.
+Every per-cluster knob is tunable this way: `events`, `broadcast`, `ordered`, `rpc`, `dlq`, `metadata`, `provisioning`, `allowDestructiveMigration`, `shutdownTimeout`, `codec`, `connectionOptions`, and `publisherOnly` for a publish-only connection.
 
 :::warning A block you redeclare replaces the root one entirely
 The merge is one level deep, so naming `events` on a connection replaces the whole root `events` block instead of merging into it. In the example above, `analytics` gets `concurrency: 32` and **loses** any `events.retry` or `events.stream` set at the root. Repeat the parts you still want:
@@ -113,7 +113,7 @@ export class AnalyticsController {
 
 Most controllers belong to one cluster, so the class decorator is the common case. The method-level `{ connection }` extra covers the exceptions.
 
-**Typos fail at startup.** Naming a connection that is not configured (or one declared `consumer: false`) raises at bootstrap with the list of configured names, instead of silently routing to the default connection and surfacing in production.
+**Typos fail at startup.** Naming a connection that is not configured (or one declared `publisherOnly: true`) raises at bootstrap with the list of configured names, instead of silently routing to the default connection and surfacing in production.
 
 The same pattern may exist on two connections, which is what a cluster migration needs. The duplicate-handler check applies within a connection.
 
@@ -239,7 +239,7 @@ Stream, consumer and subject names **do not change** when you add connections. R
 
 The flip side is that two connections into one cluster would resolve identical stream names and silently overwrite each other's configuration. The transport catches that in the config and again at NATS:
 
-1. **Config level, before any network call.** Connections that share a server set (normalized for order and default port) fail at startup. Only connections that provision infrastructure are compared, so a `consumer: false` connection may share a cluster with another one.
+1. **Config level, before any network call.** Connections that share a server set (normalized for order and default port) fail at startup. Only connections that provision infrastructure are compared, so a `publisherOnly` connection may share a cluster with another one.
 2. **NATS level.** Each provisioned stream carries a `nestjs-jetstream-owner` metadata stamp of `{service}:{connection}`, the dead-letter stream included. A stream already stamped by a different connection of the same service fails provisioning, naming both connections. A race to create the same stream ends the same way: the connection that loses re-reads the stream and reports the conflict.
 
 The shared broadcast stream is exempt from the stamp. Every service in the cluster shares it, so a per-connection stamp would flip-flop on each deploy. Provisioning keeps metadata written by anyone else on update instead of replacing it, so operator-set keys and a `metadata` block in your own stream overrides both survive.

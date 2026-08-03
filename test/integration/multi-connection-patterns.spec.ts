@@ -274,7 +274,7 @@ describe('per-connection codec and publisher-only connections', () => {
       name: serviceName,
       connections: {
         plain: { servers: [`nats://localhost:${plainPort}`] },
-        packed: { servers: [`nats://localhost:${packedPort}`], consumer: false },
+        packed: { servers: [`nats://localhost:${packedPort}`], publisherOnly: true },
       },
       defaultConnection: 'plain',
       controllers: [PlainController],

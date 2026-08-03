@@ -180,7 +180,7 @@ describe('normalizeOptions', () => {
       name: 'orders',
       connections: {
         primary: { servers: ['nats://a:4222'] },
-        audit: { servers: ['nats://a:4222'], consumer: false },
+        audit: { servers: ['nats://a:4222'], publisherOnly: true },
       },
       defaultConnection: 'primary',
     };

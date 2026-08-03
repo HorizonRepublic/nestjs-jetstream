@@ -90,7 +90,7 @@ const bootstrapPair = async (
     {
       name: publisherServiceName,
       port,
-      consumer: false,
+      publisherOnly: true,
       otel: publisherOtel,
       ...(rpcMode ? { rpc: { mode: rpcMode } } : {}),
     },

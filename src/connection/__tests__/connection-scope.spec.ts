@@ -48,9 +48,9 @@ describe('createConnectionScope', () => {
   });
 
   it('should null out consumer infrastructure in publisher-only mode', () => {
-    // Given consumer: false
+    // Given publisherOnly: true
     // When the scope is created
-    const sut = createConnectionScope(options({ consumer: false }), shared());
+    const sut = createConnectionScope(options({ publisherOnly: true }), shared());
 
     // Then only the publish path survives
     expect(sut.connection).toBeDefined();

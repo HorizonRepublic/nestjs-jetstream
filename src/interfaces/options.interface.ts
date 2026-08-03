@@ -319,11 +319,15 @@ export interface JetstreamModuleOptions {
   rpc?: RpcConfig;
 
   /**
-   * Enable consumer infrastructure (streams, consumers, message routing).
-   * Set to `false` for publisher-only services (e.g., API gateways).
-   * @default true
+   * Skip all consumer infrastructure: no streams, no consumers, no message
+   * routing. For services that only publish, such as an API gateway.
+   *
+   * Named apart from the `consumer` block inside `events` and friends, which
+   * carries a raw NATS ConsumerConfig and means something else entirely.
+   *
+   * @default false
    */
-  consumer?: boolean;
+  publisherOnly?: boolean;
 
   /** Workqueue event stream/consumer overrides. */
   events?: StreamConsumerOverrides;

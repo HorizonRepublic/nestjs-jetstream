@@ -34,13 +34,13 @@ If you in detail need non-durable Core NATS `publish()` (truly ephemeral pub/sub
 
 **Q: My API gateway only publishes events but never handles them. Do I need consumers?**
 
-Set `consumer: false` in your `forRoot()` options. The transport will skip creating streams and consumers on the server side, and only initialize the client for publishing:
+Set `publisherOnly: true` in your `forRoot()` options. The transport will skip creating streams and consumers on the server side, and only initialize the client for publishing:
 
 ```typescript
 JetstreamModule.forRoot({
   name: 'api-gateway',
   servers: ['nats://localhost:4222'],
-  consumer: false, // no streams, no consumers, publish-only
+  publisherOnly: true, // no streams, no consumers, publish-only
 });
 ```
 

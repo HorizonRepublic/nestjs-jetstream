@@ -601,7 +601,7 @@ describe('Ordered Event Delivery', () => {
 
       // Step 2: start a publisher-only service
       const { app: publisherApp, module: publisherModule } = await createTestApp(
-        { name: serviceName, port, consumer: false },
+        { name: serviceName, port, publisherOnly: true },
         [],
         [serviceName],
       );
