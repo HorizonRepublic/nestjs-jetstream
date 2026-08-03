@@ -33,4 +33,4 @@ npx tsx --tsconfig examples/tsconfig.json examples/03-ordered-events/main.ts
 | 08  | [per-message-ttl](./08-per-message-ttl)         | 3007 | Per-message expiry (NATS >= 2.11)                                                                | `GET /token`                      |
 | 09  | [handler-metadata](./09-handler-metadata)       | 3008 | KV metadata registry, service discovery                                                          | none                              |
 | 10  | [distributed-tracing](./10-distributed-tracing) | 3009 | Built-in OpenTelemetry spans, ConsoleSpanExporter, full trace through publish + RPC + event flow | `GET /`                           |
-| 11  | [multi-connection](./11-multi-connection)       | 3010 | Two NATS clusters, @JetstreamConnection, critical vs degraded, hybrid bootstrap                   | `GET /place-order`, `/track`      |
+| 11  | [multi-connection](./11-multi-connection)       | 3010 | Two NATS clusters, @JetstreamConnection, critical vs degraded, hybrid bootstrap                  | `GET /place-order`, `/track`      |
