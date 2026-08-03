@@ -8,10 +8,13 @@ schema:
   headline: "Default Stream & Consumer Configs for NATS JetStream"
   description: "Default stream, consumer, and connection settings for every NestJS JetStream StreamKind (event, broadcast, ordered, command, DLQ)."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-28"
+  dateModified: "2026-08-03"
 ---
 
 # Default Configs
+
+> **Use when:** you need the exact value the transport starts from before overriding it.
+> **You get:** every stream, consumer and connection default, and the exported constant that holds it.
 
 Every stream and consumer the transport creates starts from the values below, taken from the source. Override any of them through [module configuration](/docs/reference/module-configuration).
 
@@ -31,7 +34,7 @@ Every stream is created with `storage: File`, `num_replicas: 1` (see [replicas i
 | `max_age`              | `7 days`    | `3 minutes`  | `1 hour`    | `1 day`     | `30 days`   |
 | `duplicate_window`     | `2 minutes` | `30 seconds` | `2 minutes` | `2 minutes` | `2 minutes` |
 
-`max_bytes` is what the account is charged for, not what the stream currently holds: JetStream counts it against the account's storage budget the moment the stream is created. A service that provisions events plus a DLQ reserves **768 MB**, and one that also uses ordered delivery reserves **1.75 GB**, so a 10 GB file store carries roughly a dozen services rather than one.
+`max_bytes` is what the account is charged for, not what the stream currently holds: JetStream counts it against the account's storage budget the moment the stream is created. A service that provisions events plus a DLQ reserves **768 MB**, and one that also uses ordered delivery reserves **1.75 GB**, so a 10 GB file store carries roughly a dozen services instead of one.
 
 `max_msg_size` matches the NATS server's own `max_payload` default of 1 MB. A larger value here has no effect until the server is reconfigured to accept larger payloads.
 
@@ -42,7 +45,7 @@ What each kind is for:
 - **Event** carries workqueue events. A message is removed once a consumer acks it.
 - **Command** carries RPC requests in [JetStream RPC mode](/docs/patterns/rpc) only. Everything about it is short-lived, because a request nobody answered within three minutes is a request nobody wants answered.
 - **Broadcast** is one stream shared by every service. An hour of `max_age` is enough catch-up for a pod that just started and short enough that config updates do not accumulate.
-- **Ordered** keeps messages for a day under `Limits` retention, because an ordered consumer replays a subject from the beginning rather than consuming it away.
+- **Ordered** keeps messages for a day under `Limits` retention, because an ordered consumer replays a subject from the beginning instead of consuming it away.
 - **DLQ** is created unless you pass `dlq: false`. Thirty days under `Limits` retention: reading a dead letter must not remove it. See [Dead Letter Queue](/docs/guides/dead-letter-queue#built-in-dlq-stream).
 
 :::note S2 compression
@@ -72,7 +75,9 @@ Every durable consumer uses `ack_policy: Explicit`, `deliver_policy: All` and `r
 | `max_deliver`     | `3`          | `1`         | `3`          |
 | `max_ack_pending` | `100`        | `100`       | `100`        |
 
-An event that fails three times is [dead-lettered](/docs/guides/dead-letter-queue). Between attempts the transport naks with a delay taken from the retry curve, so the three attempts span roughly twelve seconds instead of burning out in milliseconds. The delay is applied client-side, so `ack_wait` keeps its full value and a slow handler is not redelivered while it still runs. Tune it with `events.retry`, or pass `false` to nak immediately.
+An event that fails three times is [dead-lettered](/docs/guides/dead-letter-queue). Between attempts the transport naks with a delay taken from the retry curve, so the three attempts span roughly twelve seconds instead of burning out in milliseconds.
+
+The delay is applied client-side, which leaves `ack_wait` at its full value, so a slow handler is not redelivered while it still runs. Tune the curve with `events.retry`, or pass `false` to nak immediately.
 
 A command is delivered once and never retried, so an RPC failure reaches the caller instead of being repeated behind their back.
 
@@ -102,22 +107,17 @@ JetstreamModule.forRoot({
 })
 ```
 
-## RPC Timeouts
+## Timeouts
 
-| Mode                               | Default Timeout | Constant                        |
-| ---------------------------------- | --------------- | ------------------------------- |
-| Core (standard NATS request-reply) | `30 seconds`    | `DEFAULT_RPC_TIMEOUT`           |
-| JetStream (persistent RPC)         | `3 minutes`     | `DEFAULT_JETSTREAM_RPC_TIMEOUT` |
+| Timeout                           | Default      | Constant                        |
+| --------------------------------- | ------------ | ------------------------------- |
+| Core RPC (standard request-reply) | `30 seconds` | `DEFAULT_RPC_TIMEOUT`           |
+| JetStream RPC (persistent)        | `3 minutes`  | `DEFAULT_JETSTREAM_RPC_TIMEOUT` |
+| Graceful shutdown drain           | `10 seconds` | `DEFAULT_SHUTDOWN_TIMEOUT`      |
 
-The JetStream RPC timeout is intentionally longer because messages are persisted to a stream and the consumer may take time to process them.
+The JetStream RPC timeout is longer on purpose: the message is persisted to a stream first, and the consumer may take a while to reach it.
 
-## Graceful Shutdown Timeout
-
-| Property         | Value        |
-| ---------------- | ------------ |
-| Shutdown timeout | `10 seconds` |
-
-On shutdown, the transport calls `drain()` on the NATS connection and waits up to 10 seconds for it to complete before forcing the connection closed. Increase this timeout if your handlers have long-running I/O that must finish cleanly.
+The shutdown value bounds `drain()` on the NATS connection, after which the transport forces the connection closed. It covers the drain, not handler execution, so raise it only if drains are hitting the ceiling. See [Graceful Shutdown](/docs/guides/graceful-shutdown).
 
 ## Replicas in production
 
@@ -160,7 +160,7 @@ These properties can be **enabled** on an existing stream via a normal update, b
 | `deny_purge`          | `false` | Prevent stream purging via API                                                        |
 
 :::tip Enabling scheduling on existing streams
-You can safely add `allow_msg_schedules: true` to an existing stream config; NATS applies this as a regular update. Uptime, messages and the stream itself all survive. Just update `forRoot()` and restart.
+You can safely add `allow_msg_schedules: true` to an existing stream config, and NATS applies it as a regular update. Uptime, messages and the stream itself all survive. Just update `forRoot()` and restart.
 :::
 
 ### Immutable (locked after creation)

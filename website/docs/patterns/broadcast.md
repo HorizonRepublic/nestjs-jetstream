@@ -8,7 +8,7 @@ schema:
   headline: "Broadcast Events: NestJS JetStream Fan-Out Delivery"
   description: "Fan-out NATS JetStream events to every NestJS service instance via per-service durable consumers on a shared broadcast stream."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
 
 # Broadcast Events
@@ -16,7 +16,7 @@ schema:
 > **Use when:** every running service must react to the same message (cache invalidation, feature-flag flips, config reload).
 > **You get:** per-service durable consumers on a shared stream, late-joining replicas catch up automatically.
 
-Broadcast events implement **fan-out** delivery: every subscribing service receives a copy of each message. This is the opposite of [workqueue events](/docs/patterns/events) (one instance processes each message) and distinct from [ordered events](/docs/patterns/ordered-events) (every instance receives a full sequential replay).
+Broadcast events **fan out**: every subscribing service receives a copy of each message. This is the opposite of [workqueue events](/docs/patterns/events) (one instance processes each message) and distinct from [ordered events](/docs/patterns/ordered-events) (every instance receives a full sequential replay).
 
 ## When to use
 
@@ -133,15 +133,9 @@ The `broadcast:` prefix is used **only on the sending side** (`client.emit('broa
 
 ## Delivery semantics
 
-Each consumer processes broadcast messages with the same delivery guarantees as workqueue events:
+Every outcome in [workqueue delivery semantics](/docs/patterns/events#delivery-semantics) applies here unchanged, with one word added: each one happens **per consumer**. A nak redelivers to that service alone, and a decode error or an exhausted retry budget settles the message for that service alone.
 
-- **Handler succeeds**, `ack`. The consumer is marked as having processed the message.
-- **Handler throws an error**, `nak`. The message is redelivered to **that consumer only**.
-- **Payload cannot be decoded**, `term`. The message is terminated for that consumer.
-- **No handler for subject**, `term`. The message is terminated for that consumer.
-- **Max deliveries exhausted**, `term`. The dead letter callback is invoked for that consumer.
-
-The key difference from workqueue events: broadcast delivery is **at-least-once per consumer**. Every subscribing service receives every message at least once.
+That makes broadcast delivery **at-least-once per consumer**. Every subscribing service receives every message at least once.
 
 ## Per-service isolation
 
@@ -198,12 +192,14 @@ JetstreamModule.forRoot({
 ```
 
 :::warning Stream config is global
-Since all services share the same `broadcast-stream`, any service can update the stream config on startup, and the last service to start wins for mutable properties. Coordinate stream-level settings across your team, or let a single "infrastructure" service own them. The transport logs every applied change on startup so drift is detectable in your logs, and immutable conflicts (like `storage`) are surfaced as warnings unless `allowDestructiveMigration` is enabled.
+Since all services share the same `broadcast-stream`, any service can update the stream config on startup, and the last service to start wins for mutable properties. The way out is to let a single "infrastructure" service own the stream-level settings.
+
+The transport logs every applied change on startup, so drift shows up in your logs. An immutable conflict such as `storage` becomes a warning unless `allowDestructiveMigration` is on.
 :::
 
 ### Consumer-level config (per-service)
 
-Each service creates its own durable consumer (named `{service}__microservice_broadcast-consumer`). Consumer settings are scoped to that service:
+Each service creates its own durable consumer, `{service}__microservice_broadcast-consumer`. Consumer settings are scoped to that service:
 
 ```typescript
 // In the orders service -- only affects the orders broadcast consumer
@@ -313,4 +309,4 @@ handleFeatureFlag(@Payload() data: FeatureFlagEvent): void {
 
 ## See also
 
-Broadcast consumers compete with regular event consumers for the same concurrency budget, tune both via [Performance Tuning](/docs/guides/performance#concurrency-control). If a broadcast handler keeps failing, only _that_ service's consumer retries; see [Dead Letter Queue](/docs/guides/dead-letter-queue#scope) for per-consumer dead letter semantics.
+Broadcast consumers compete with regular event consumers for the same concurrency budget, tune both via [Performance Tuning](/docs/guides/performance#concurrency-control). If a broadcast handler keeps failing, only _that_ service's consumer retries. See [Dead Letter Queue](/docs/guides/dead-letter-queue#scope) for per-consumer dead letter semantics.

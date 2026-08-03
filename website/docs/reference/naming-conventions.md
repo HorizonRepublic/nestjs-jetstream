@@ -11,6 +11,9 @@ schema:
 
 # Naming Conventions
 
+> **Use when:** you need to predict a stream, consumer or subject name from the outside.
+> **You get:** the derivation rules from the single `name` value, and the helpers that compute them.
+
 Every NATS subject, stream and consumer name is derived from the single `name` value you pass to `forRoot()`, through helper functions the package exports.
 
 ## The `__microservice` Suffix
@@ -36,12 +39,12 @@ Everything below is written against `{internal}`, the internal name: `orders` be
 | Broadcast                                                 | `broadcast.{pattern}`          | `broadcast-stream`, shared  | `{internal}_broadcast-consumer` |
 | [DLQ](/docs/guides/dead-letter-queue#built-in-dlq-stream) | `{internal}_dlq-stream`        | `{internal}_dlq-stream`     | Yours to create                 |
 
-So a service named `orders` handling `order.created` consumes `orders__microservice.ev.order.created` from `orders__microservice_ev-stream` through `orders__microservice_ev-consumer`.
+A service called `orders` handling `order.created` ends up consuming `orders__microservice.ev.order.created` from `orders__microservice_ev-stream` through `orders__microservice_ev-consumer`.
 
-Ordered consumers are created and managed by the `@nats-io/jetstream` client at consumption time, so they never appear under a name you can look up. The DLQ stream publishes to a subject equal to its own name, and the transport creates no consumer on it: reading dead letters is your call, and the [DLQ guide](/docs/guides/dead-letter-queue#built-in-dlq-stream) covers how.
+Ordered consumers are created and managed by the `@nats-io/jetstream` client at consumption time, so they never appear under a name you can look up. The DLQ stream publishes to a subject equal to its own name, and the transport creates no consumer on it. Reading dead letters is your call, and the [DLQ guide](/docs/guides/dead-letter-queue#built-in-dlq-stream) covers how.
 
 :::note Overriding the convention
-`subjectPrefix`, `stream.name` and `consumer.durable_name` each override the derived value for one kind. That is how a service binds to infrastructure someone else provisioned; see [external infrastructure](/docs/guides/external-infrastructure).
+`subjectPrefix`, `stream.name` and `consumer.durable_name` each override the derived value for one kind. That is how a service binds to infrastructure someone else provisioned. See [external infrastructure](/docs/guides/external-infrastructure).
 :::
 
 ## Helper Functions
@@ -149,14 +152,14 @@ The `>` wildcard matches one or more tokens, so `orders__microservice.ev.>` capt
 
 ## Names and multiple connections
 
-Adding [named connections](/docs/guides/multi-connection) changes nothing here. Every name is derived from the service `name` alone, so two connections of one service resolve **identical** stream, consumer and subject names. Renaming them per connection would orphan existing streams and strand their messages, so the transport does not do it.
+Adding [connections](/docs/guides/multi-connection) changes nothing here. Every name is derived from the service `name` alone, so two connections of one service resolve **identical** stream, consumer and subject names. Renaming them per connection would orphan existing streams and strand their messages, so the transport does not do it.
 
-That makes one configuration mistake dangerous: two connections that reach the same cluster would provision the same stream and silently overwrite each other's configuration. Two checks prevent it.
+That makes one configuration mistake dangerous: two connections that reach the same cluster would provision the same stream and silently overwrite each other's configuration. The transport catches it in the config and again at NATS.
 
-**Config level, before any network call.** Two connections declaring an identical server set — normalized for ordering and the default `4222` port — fail at startup.
+**Config level, before any network call.** Connections that declare an identical server set, normalized for ordering and the default `4222` port, fail at startup.
 
 **NATS level.** Every provisioned stream carries a `nestjs-jetstream-owner` metadata entry of `{service}:{connection}`. This covers every stream whose name is derived from the service, the dead-letter stream included. A stream already stamped by a different connection of the same service fails provisioning, with both connection names in the error. A stamp belonging to a different service is left alone.
 
 The shared `broadcast-stream` is exempt: every service in the cluster shares it, so a per-connection stamp would flip-flop on each deploy. Under `provisioning: { management: Manual }` nothing is stamped and the second check does not apply, since those streams are not ours to write to.
 
-Metadata the transport did not author is preserved. An update carries forward whatever keys the stream already had, and a `metadata` block in your stream overrides is merged with the stamp rather than replaced by it.
+Metadata the transport did not author is preserved. An update carries forward whatever keys the stream already had, and a `metadata` block in your stream overrides is merged with the stamp instead of replacing it.

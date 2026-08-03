@@ -2,20 +2,19 @@
 sidebar_position: 5
 sidebar_label: "Handler Metadata"
 title: "Handler Metadata Registry: NATS KV Service Discovery for NestJS"
-description: "Publish NestJS handler metadata to a NATS KV bucket for service discovery at runtime, API gateway routing, and automatic catalog generation."
+description: "Publish NestJS handler metadata to a NATS KV bucket, so other services can discover handlers at runtime without a separate registry."
 schema:
   type: Article
   headline: "Handler Metadata Registry: NATS KV Service Discovery for NestJS"
   description: "Publish NestJS handler metadata to a NATS KV bucket for dynamic service discovery, API gateway routing, and automatic catalog generation."
   datePublished: "2026-04-02"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
-
-import Since from '@site/src/components/Since';
 
 # Handler Metadata Registry
 
-<Since version="2.9.0" />
+> **Use when:** something outside the service needs to know which handlers exist.
+> **You get:** a NATS KV bucket published at startup, its key format, and the metadata shape.
 
 Publish handler metadata to a NATS KV bucket at startup. External services (API gateways, dashboards, CLI tools) can read or watch the bucket for automatic service discovery.
 
@@ -109,10 +108,10 @@ JetstreamModule.forRoot({
 
 - **`bucket`**, `'handler_registry'`. KV bucket name.
 - **`replicas`**, `1`. Bucket replicas (1, 3, or 5).
-- **`ttl`**, `30_000`. Entry TTL in milliseconds; entries expire unless refreshed by heartbeat (minimum: `5_000` ms). Note: this field is in ms, not nanoseconds.
+- **`ttl`**, `30_000`. Entry TTL in milliseconds. Entries expire unless a heartbeat refreshes them, and the minimum is `5_000` ms. Note: this field is in ms, not nanoseconds.
 
 :::note Bucket configuration
-The KV bucket is created on first startup. Changing `ttl` or `replicas` after creation requires deleting the existing bucket; NATS KV does not update bucket config in place. Use the NATS CLI: `nats kv rm handler_registry`.
+The KV bucket is created on first startup. Changing `ttl` or `replicas` after creation means deleting the existing bucket, because NATS KV does not update bucket config in place. Use the NATS CLI: `nats kv rm handler_registry`.
 :::
 
 ## KV key format
@@ -163,9 +162,9 @@ Entries are managed via TTL + heartbeat: no explicit delete needed.
 
 - **Startup.** The transport writes all handler meta entries to KV and starts the heartbeat.
 - **Heartbeat.** Every `ttl / 2`, all entries are re-written to reset their TTL.
-- **Graceful shutdown.** Heartbeat stops; entries expire after TTL.
-- **Crash.** Heartbeat stops; entries expire after TTL (automatic cleanup).
-- **Rolling update.** The new pod writes entries immediately; old entries from removed handlers expire via TTL.
+- **Graceful shutdown.** The heartbeat stops, and entries expire after their TTL.
+- **Crash.** The heartbeat stops, and entries expire after their TTL, which cleans up on its own.
+- **Rolling update.** The new pod writes entries immediately, and old entries from removed handlers expire via TTL.
 - **Multi-pod.** All pods heartbeat the same keys: entries stay alive while any pod is running.
 
 ## Use cases

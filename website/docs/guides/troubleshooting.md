@@ -2,16 +2,19 @@
 sidebar_position: 6
 sidebar_label: "Troubleshooting"
 title: "Troubleshooting: NestJS JetStream Transport"
-description: "Fix common NestJS JetStream issues: NATS connection errors, consumer lag, RPC timeouts, DLQ publish failures, and stream migration recovery."
+description: "Fix common NestJS JetStream issues, from connection errors and consumer lag to RPC timeouts, DLQ publish failures and stream migration recovery."
 schema:
   type: Article
   headline: "Troubleshooting: NestJS JetStream Transport"
-  description: "Fix common NestJS JetStream issues: NATS connection errors, consumer lag, RPC timeouts, DLQ publish failures, and stream migration recovery."
+  description: "Fix common NestJS JetStream issues, from connection errors and consumer lag to RPC timeouts, DLQ publish failures and stream migration recovery."
   datePublished: "2026-03-26"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
 
 # Troubleshooting
+
+> **Use when:** something is already broken and you want the cause.
+> **You get:** symptoms grouped by area, each with its usual causes and the command that confirms them.
 
 If something isn't working, start here. The sections below are grouped by symptom, scan them before opening an issue.
 
@@ -100,7 +103,7 @@ Messages are redelivered when the `ack_wait` deadline expires before the handler
 
 ### Consumer lag growing
 
-If your consumer is falling behind (messages accumulating faster than they're processed):
+If messages accumulate faster than your consumer processes them:
 
 1. **Increase concurrency:** `events: { concurrency: 200 }`
 2. **Increase `max_ack_pending`:** `consumer: { max_ack_pending: 500 }`
@@ -207,7 +210,7 @@ The transport only publishes handler metadata when the handler has a `meta` fiel
 
 NATS KV buckets have immutable config for some fields (`replicas`, `ttl`). If you change these in `forRoot()` after the bucket already exists, startup fails.
 
-**Fix:** Delete your configured metadata bucket: the default name is `handler_registry`, but if you overrode `metadata.bucket` in `forRoot()`, substitute your own. Entries are re-published on the next startup, so the delete is safe.
+**Fix:** Delete your configured metadata bucket. The default name is `handler_registry`, so substitute your own if you overrode `metadata.bucket` in `forRoot()`. Entries are re-published on the next startup, which makes the delete safe.
 
 ```bash
 # Replace `handler_registry` with your metadata.bucket value if you overrode it
@@ -220,7 +223,9 @@ nats kv rm handler_registry
 
 ### Consumer self-healing waits on "migration in progress"
 
-If a previous migration was interrupted (process killed mid-phase, NATS crash), an orphaned `{stream}__migration_backup` stream exists. During **consumer self-healing** (after a live consumer's iterator breaks), the transport detects the backup stream and refuses to recreate the consumer until the backup is gone: the self-healing loop waits with exponential backoff. This check runs only in the recovery path, not during initial application startup.
+If a previous migration was interrupted, by a process killed mid-phase or a NATS crash, an orphaned `{stream}__migration_backup` stream is left behind.
+
+During **consumer self-healing**, which runs after a live consumer's iterator breaks, the transport spots that backup stream and refuses to recreate the consumer until it is gone. The self-healing loop waits with exponential backoff. This check runs only in the recovery path, never during initial startup.
 
 **Diagnosis:**
 
@@ -236,7 +241,7 @@ See [Stream Migration, Error handling](/docs/guides/stream-migration#error-handl
 
 During the brief window between Phase 2 (delete) and Phase 3 (create) of a stream migration, publishers may see "stream not found" errors. The window is effectively one NATS round-trip, but is not zero. Mitigations:
 
-- For `client.emit()` (fire-and-forget), accept the loss or implement caller-side retry.
+- For `client.emit()` (fire-and-forget), accept the loss or add caller-side retry.
 - For `client.send()` (RPC), the caller receives an error and can retry.
 - For zero-loss migrations, schedule migration during a maintenance window with publishers paused.
 

@@ -8,7 +8,7 @@ schema:
   headline: "NestJS NATS RPC: Core vs JetStream Request/Reply"
   description: "Synchronous NestJS NATS request-reply in Core NATS or JetStream mode, with timeout handling, error serialization, and per-request overrides."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
 
 # RPC (Request/Reply)
@@ -16,7 +16,7 @@ schema:
 > **Use when:** one service needs a response from another within a timeout window (queries, lookups, commands with results).
 > **You pick:** **Core** mode for sub-millisecond replies, **JetStream** mode for commands that must survive a restart. Same `@MessagePattern` either way.
 
-Your API gateway needs to fetch an order from the orders microservice. The client sends a command, the handler processes it, and the response travels back within a timeout window. This is request/reply (RPC), and the library offers two modes: **Core** for lowest latency, **JetStream** for persistence.
+Your API gateway needs to fetch an order from the orders microservice. The client sends a command and the handler processes it, with the response travelling back inside a timeout window. This is request/reply (RPC), and the library offers two modes: **Core** for lowest latency, **JetStream** for persistence.
 
 ## Core Mode (Default)
 
@@ -79,7 +79,7 @@ export class OrdersController {
 }
 ```
 
-Handlers can return a plain value, a `Promise`, or an `Observable`. For an Observable, the transport takes the **first emitted value** as the response.
+A handler can return a plain value or a `Promise`. It can also return an `Observable`, in which case the transport takes the **first emitted value** as the response.
 
 ### Error behavior
 
@@ -91,7 +91,7 @@ Handlers can return a plain value, a `Promise`, or an `Observable`. For an Obser
 
 **No handler registered for the subject.** An error response is returned to the caller immediately.
 
-**Decode failure.** An error response is returned to the caller; the handler is not invoked.
+**Decode failure.** An error response is returned to the caller, and the handler is never invoked.
 
 **Timeout exceeded.** NATS returns a timeout error to the client: no response was produced in time.
 
@@ -142,22 +142,22 @@ const order = await firstValueFrom(
 
 **Handler throws `RpcException`.** The error is published to the caller's inbox with the `x-error` header. The message is `term()`'d: no redelivery.
 
-**Handler throws a generic `Error`.** `{ message }` is published to the inbox; the message is `term()`'d.
+**Handler throws a generic `Error`.** `{ message }` is published to the inbox, and the message is `term()`'d.
 
-**Handler throws a plain object.** The object is forwarded to the inbox as-is; the message is `term()`'d.
+**Handler throws a plain object.** The object is forwarded to the inbox as-is, and the message is `term()`'d.
 
-**No handler registered.** The message is `term()`'d immediately; the client eventually times out.
+**No handler registered.** The message is `term()`'d immediately, and the client eventually times out.
 
-**Missing headers (`x-reply-to` / `x-correlation-id`).** The message is `term()`'d; the client times out.
+**Missing headers (`x-reply-to` / `x-correlation-id`).** The message is `term()`'d, and the client times out.
 
-**Decode failure.** The message is `term()`'d; the client times out.
+**Decode failure.** The message is `term()`'d, and the client times out.
 
-**Handler timeout exceeded.** The message is `term()`'d; no response is published.
+**Handler timeout exceeded.** The message is `term()`'d, and no response is published.
 
 **Response publish failure.** The message is still `ack()`'d (the handler succeeded), but the client times out because the reply never arrived on the inbox.
 
 :::note Why `term()` instead of `nak()`?
-RPC commands are **never** redelivered via `nak()`. Retrying a command could cause duplicate side effects (double charges, duplicate records). If the handler fails, the message is terminated and the error is returned to the caller, who can decide whether to retry.
+RPC commands are **never** redelivered via `nak()`, because retrying one could charge a card twice. A failing handler terminates the message, and the error goes back to the caller to decide on.
 :::
 
 ## Comparison: Core vs JetStream
@@ -283,7 +283,7 @@ handleStream(): Observable<string> {
 
 ### Double-settlement protection (JetStream mode)
 
-The JetStream RPC router uses a `settled` flag to prevent race conditions between the handler completing and the timeout firing. Once the message is settled (ack'd, term'd, or timed out), any later settlement attempt is a no-op:
+The JetStream RPC router uses a `settled` flag to prevent race conditions between the handler completing and the timeout firing. Once the message is settled, by an ack, a terminate or a timeout, any later settlement attempt is a no-op:
 
 - If the handler completes just as the timeout fires, only one path executes.
 - No duplicate responses are published to the client's inbox.

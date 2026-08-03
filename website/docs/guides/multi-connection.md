@@ -11,13 +11,12 @@ schema:
   dateModified: "2026-08-03"
 ---
 
-import Since from '@site/src/components/Since';
-
 # Multiple NATS connections in one service
 
-<Since version="3.0" />
+> **Use when:** one service has to reach more than one NATS cluster.
+> **You get:** named connections, per-connection handlers and clients, and how criticality, health and shutdown behave.
 
-One service, several NATS clusters. Each connection has its own streams, consumers, routers and backpressure budget; handlers and clients declare which one they belong to.
+One service, several NATS clusters. Each connection has its own streams, consumers, routers and backpressure budget. Handlers and clients declare which one they belong to.
 
 Typical reasons to reach for this:
 
@@ -29,7 +28,7 @@ If you only need one cluster, change nothing: the flat `servers` form is still t
 
 ## Configuration
 
-Replace `servers` with a `connections` map. The two forms are mutually exclusive — supplying both fails at startup.
+Replace `servers` with a `connections` map. Supplying both fails at startup.
 
 ```typescript
 import { JetstreamModule } from '@horizon-republic/nestjs-jetstream';
@@ -52,11 +51,11 @@ import { JetstreamModule } from '@horizon-republic/nestjs-jetstream';
 export class AppModule {}
 ```
 
-`defaultConnection` names the connection that unqualified handlers and clients bind to. It is optional when a key is literally `default`, or when there is only one connection. With several connections and no `default` key it is required — the transport will not guess.
+`defaultConnection` names the connection that unqualified handlers and clients bind to. It is optional when a key is literally `default`, or when there is only one connection. With more than one connection and no `default` key, you have to name it. The transport will not guess.
 
 ### Inheritance
 
-Connection options merge over root options one level deep. Set something once at the root and it applies everywhere; name the same option on a connection and that connection wins.
+Connection options merge over root options one level deep. Set something once at the root and it applies everywhere. Name the same option on a connection and that connection wins.
 
 ```typescript
 JetstreamModule.forRoot({
@@ -77,7 +76,7 @@ JetstreamModule.forRoot({
 Every per-cluster knob is tunable this way: `events`, `broadcast`, `ordered`, `rpc`, `dlq`, `metadata`, `provisioning`, `allowDestructiveMigration`, `shutdownTimeout`, `codec`, `connectionOptions`, and `consumer: false` for a publish-only connection.
 
 :::warning A block you redeclare replaces the root one entirely
-The merge is one level deep, so naming `events` on a connection replaces the whole root `events` block rather than merging into it. In the example above, `analytics` gets `concurrency: 32` and **loses** any `events.retry` or `events.stream` set at the root. Repeat the parts you still want:
+The merge is one level deep, so naming `events` on a connection replaces the whole root `events` block instead of merging into it. In the example above, `analytics` gets `concurrency: 32` and **loses** any `events.retry` or `events.stream` set at the root. Repeat the parts you still want:
 
 ```typescript
 events: { concurrency: 32, retry: rootRetry },   // on the connection
@@ -90,7 +89,7 @@ The same applies to `broadcast`, `ordered`, `rpc`, `dlq`, `metadata`, `provision
 
 ## Binding handlers
 
-Three levels, weakest to strongest: the default connection, a class decorator, a method-level override.
+The default connection binds anything unqualified. A class decorator overrides that, and a method-level extra overrides the class.
 
 ```typescript
 import { JetstreamConnection } from '@horizon-republic/nestjs-jetstream';
@@ -112,11 +111,11 @@ export class AnalyticsController {
 }
 ```
 
-A controller usually belongs to one cluster, so the class decorator is the common case; the method-level `{ connection }` extra is there for the exceptions.
+Most controllers belong to one cluster, so the class decorator is the common case. The method-level `{ connection }` extra covers the exceptions.
 
-**Typos fail at startup.** Naming a connection that is not configured — or one declared `consumer: false` — raises at bootstrap with the list of configured names, rather than silently routing to the default connection and surfacing in production.
+**Typos fail at startup.** Naming a connection that is not configured (or one declared `consumer: false`) raises at bootstrap with the list of configured names, instead of silently routing to the default connection and surfacing in production.
 
-The same pattern may exist on two connections. That is a legitimate migration scenario, not a duplicate; the duplicate-handler check applies within a connection.
+The same pattern may exist on two connections, which is what a cluster migration needs. The duplicate-handler check applies within a connection.
 
 ## Publishing
 
@@ -158,12 +157,12 @@ await app.listen(3000);
 ```
 
 :::warning Configuring a second connection is not enough
-If you add a connection but keep the old single-strategy bootstrap, that connection's handlers are registered and never subscribed — no error, just events quietly not processed. The transport therefore fails at startup naming the connections the bootstrap skipped. Single-connection applications are unaffected.
+If you add a connection but keep the old single-strategy bootstrap, that connection's handlers are registered and never subscribed, with no error and events quietly not processed. The transport fails at startup instead, naming the connections the bootstrap skipped. Single-connection applications are unaffected.
 :::
 
 The check is on attachment, not on readiness: a connection that was attached but is still connecting is fine, which is what makes `critical: false` work. If your bootstrap calls `app.init()` before `app.startAllMicroservices()`, nothing is attached yet when the check runs, so it logs a warning instead of failing.
 
-Publisher-only connections have no strategy and are skipped automatically.
+Publisher-only connections have no strategy, so the check skips them.
 
 ## Criticality
 
@@ -173,12 +172,12 @@ Publisher-only connections have no strategy and are skipped automatically.
 | -------------------- | ------------------------------------- | ----------------------------------------------- |
 | Boot                 | Blocks until the cluster is reachable | Returns immediately, connects in the background |
 | Cluster down at boot | Startup fails                         | Startup succeeds                                |
-| Retry                | —                                     | Exponential backoff, capped at 30 s             |
+| Retry                | n/a                                   | Exponential backoff, capped at 30 s             |
 | Health               | `connected: false`                    | `degraded: true`, readiness unaffected          |
 
 A dead analytics cluster must not stop the pod that serves the primary one. That is the whole point of `critical: false`.
 
-Because a connection with no handlers never touches NATS on its own, every critical connection is opened explicitly during bootstrap — otherwise the flag would have no effect on a publish-only connection, which is precisely the case it exists for.
+Because a connection with no handlers never touches NATS on its own, bootstrap opens every critical connection explicitly. Otherwise the flag would have no effect on a publish-only connection, which is precisely the case it exists for.
 
 ## Health
 
@@ -203,11 +202,11 @@ Because a connection with no handlers never touches NATS on its own, every criti
 
 With a single connection, `degraded` and `connections` are absent and the response is byte-for-byte what it was before.
 
-**Readiness watches critical connections; liveness watches the process.** Do not wire a liveness probe to NATS — a network blip then restarts the pod at exactly the moment the transport is recovering, turning a hiccup into a cascade.
+**Readiness watches critical connections. Liveness watches the process.** Do not wire a liveness probe to NATS. A network blip then restarts the pod at exactly the moment the transport is recovering, turning a hiccup into a cascade.
 
 ## Shutdown
 
-Draining connections one at a time has a bug: while the first drains, the others keep accepting work. Shutdown therefore runs in two phases.
+Draining connections one at a time has a bug: while the first drains, the others keep accepting work. Shutdown runs in two phases instead.
 
 1. Every connection stops accepting new messages.
 2. Every connection drains in parallel, each bounded by its own `shutdownTimeout`.
@@ -238,21 +237,21 @@ Prometheus metrics aggregate across connections and carry no `connection` label.
 
 Stream, consumer and subject names **do not change** when you add connections. Renaming would orphan existing streams and strand their messages.
 
-The flip side is that two connections into one cluster would resolve identical stream names and silently overwrite each other's configuration. Two checks prevent that:
+The flip side is that two connections into one cluster would resolve identical stream names and silently overwrite each other's configuration. The transport catches that in the config and again at NATS:
 
-1. **Config level, before any network call.** Two connections with an identical server set (normalized for order and default port) fail at startup. Only connections that provision infrastructure are compared, so a `consumer: false` connection may share a cluster with another one.
-2. **NATS level.** Each provisioned stream carries a `nestjs-jetstream-owner` metadata stamp of `{service}:{connection}`, the dead-letter stream included. A stream already stamped by a different connection of the same service fails provisioning, naming both connections. Two connections racing to create the same stream are caught the same way: the one that loses the race re-reads the stream and reports the conflict.
+1. **Config level, before any network call.** Connections that share a server set (normalized for order and default port) fail at startup. Only connections that provision infrastructure are compared, so a `consumer: false` connection may share a cluster with another one.
+2. **NATS level.** Each provisioned stream carries a `nestjs-jetstream-owner` metadata stamp of `{service}:{connection}`, the dead-letter stream included. A stream already stamped by a different connection of the same service fails provisioning, naming both connections. A race to create the same stream ends the same way: the connection that loses re-reads the stream and reports the conflict.
 
-The shared broadcast stream is exempt from the stamp — every service in the cluster shares it, so a per-connection stamp would flip-flop on each deploy. Metadata written by anyone else is carried forward on update rather than replaced, so operator-set keys and a `metadata` block in your own stream overrides both survive.
+The shared broadcast stream is exempt from the stamp. Every service in the cluster shares it, so a per-connection stamp would flip-flop on each deploy. Provisioning keeps metadata written by anyone else on update instead of replacing it, so operator-set keys and a `metadata` block in your own stream overrides both survive.
 
 Under `provisioning: { management: ManagementMode.Manual }` the streams are externally owned, so nothing is stamped and the second check does not apply. The first still does.
 
 ## Out of scope
 
-- **Cross-connection RPC.** The reply inbox lives on the connection that sent the request; bridging it makes timeouts meaningless. Cross-cluster routing belongs to a NATS leafnode or gateway.
+- **Cross-connection RPC.** The reply inbox lives on the connection that sent the request, and bridging it makes timeouts meaningless. Cross-cluster routing belongs to a NATS leafnode or gateway.
 - **Per-connection hooks or event bus.** One bus, tagged events.
 - **Automatic failover between connections.**
-- **Cross-connection transactional publish.** Publishing to two clusters is two independent operations; a failure between them leaves partial state.
+- **Cross-connection transactional publish.** Publishing to two clusters is two independent operations, and a failure between them leaves partial state.
 
 ## See also
 

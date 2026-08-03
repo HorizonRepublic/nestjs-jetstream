@@ -8,10 +8,13 @@ schema:
   headline: "Edge Cases & FAQ: NestJS JetStream Transport"
   description: "NestJS JetStream transport FAQ: publisher-only mode, consumer self-healing, NATS header limits, fire-and-forget messaging, and DeliverPolicy edge cases."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
 
 # Edge Cases & FAQ
+
+> **Use when:** the transport did something you did not expect.
+> **You get:** the non-obvious behaviors, each with the reason it works that way.
 
 Answers to common questions and non-obvious behaviors of the transport.
 
@@ -47,7 +50,7 @@ This is ideal for API gateways and services that act purely as event producers.
 
 **Q: Why does the broadcast stream name have no service prefix?**
 
-The broadcast stream is named `broadcast-stream` (no service prefix) because it is **shared across all services** in the cluster. Every service that registers `@EventPattern('...', { broadcast: true })` handlers creates its own durable consumer on this same stream, so:
+The broadcast stream is `broadcast-stream`, with no service prefix, because it is **shared across all services** in the cluster. Every service that registers `@EventPattern('...', { broadcast: true })` handlers creates its own durable consumer on this same stream, so:
 
 - Any service can publish to `broadcast.{pattern}`
 - Every service with a matching handler receives its own copy of the message
@@ -59,7 +62,7 @@ See [Broadcast Events](/docs/patterns/broadcast) for usage details.
 
 **Q: What happens if NATS is unreachable at startup?**
 
-The transport **throws immediately** on startup if the initial connection fails. This is intentional: your NestJS application will fail to bootstrap, which lets orchestrators (Kubernetes, Docker Compose) detect and restart the service.
+The transport **throws immediately** on startup if the initial connection fails. That is deliberate: the NestJS application fails to bootstrap, which is the signal Kubernetes or Docker Compose needs to restart the service.
 
 **After a successful initial connection**, the NATS client handles automatic reconnection transparently. The transport monitors connection status events and emits lifecycle hooks (`Disconnect`, `Reconnect`) so your application can react. See [Lifecycle Hooks](/docs/guides/lifecycle-hooks) for details.
 
@@ -99,7 +102,7 @@ Each consumer runs a self-healing loop with **exponential backoff**. When the pu
 3. Maximum delay is capped at **30 seconds**
 4. After a successful consumption cycle, the failure counter resets to zero
 
-The backoff formula is: `min(100ms * 2^failures, 30_000ms)`: so with 1 failure the delay is 200ms, with 2 failures it is 400ms, and so on.
+The backoff formula is `min(100ms * 2^failures, 30_000ms)`, so one failure delays 200ms and two delay 400ms.
 
 This applies to all consumer types: event, command, broadcast, and ordered. The transport emits a `TransportEvent.Error` hook on each failure so you can monitor consumer health. See [Lifecycle Hooks](/docs/guides/lifecycle-hooks).
 
@@ -111,7 +114,7 @@ This applies to all consumer types: event, command, broadcast, and ordered. The 
 
 The recovery is **migration-aware**: if a migration backup stream exists (another pod is mid-migration), the consumer is NOT recreated. Instead, self-healing waits with exponential backoff until migration completes and the backup is cleaned up. This prevents consumers from interfering with message restoration on workqueue streams.
 
-During rolling updates, recovery never recreates a consumer that already exists, if another pod has recreated it, self-healing uses the existing consumer as-is rather than issuing its own create/update call.
+During rolling updates, recovery never recreates a consumer that already exists, if another pod has recreated it, self-healing uses the existing consumer as-is instead of issuing its own create or update call.
 
 Ordered consumers are excluded from auto-recreation: they are ephemeral and managed internally by the nats.js client.
 
@@ -122,7 +125,7 @@ Ordered consumers are excluded from auto-recreation: they are ephemeral and mana
 NATS imposes a total header size limit (default 4 KB per message in most server configurations). The transport uses five [transport-managed headers](/docs/reference/api/enumerations/JetstreamHeader) that count toward this limit:
 
 - **Reserved**: `x-correlation-id`, `x-reply-to`, `x-error`. Setting these via `JetstreamRecordBuilder.setHeader()` throws immediately at the call site.
-- **Auto-set**: `x-subject`, `x-caller-name`. The transport populates these on every outbound message; any value you pass via the builder is silently replaced at publish time.
+- **Auto-set**: `x-subject`, `x-caller-name`. The transport populates these on every outbound message, and any value you pass through the builder is silently replaced at publish time.
 
 When using `JetstreamRecordBuilder.setHeader()`, keep in mind:
 
@@ -164,4 +167,4 @@ This affects:
 - `toNanos()` helper: output is accurate for typical config values (seconds, minutes), but sub-millisecond precision is not guaranteed
 - `msg.info.timestampNanos`: raw value from the SDK, already truncated before reaching this library
 
-This is a fundamental limitation of the NATS JavaScript SDK, not this library. Using `BigInt` internally would not help; the SDK converts to/from `number` at the boundary. For ordering and deduplication, NATS uses stream sequence numbers (integers, always safe) rather than timestamps.
+This is a fundamental limitation of the NATS JavaScript SDK, not this library. Using `BigInt` internally would not help, because the SDK converts to and from `number` at the boundary. For ordering and deduplication, NATS uses stream sequence numbers, which are integers and always safe, instead of timestamps.

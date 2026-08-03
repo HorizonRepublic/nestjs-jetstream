@@ -8,14 +8,15 @@ schema:
   headline: "RpcContext: Handler Context & Message Settlement"
   description: "Access JetStream metadata and control ack, retry, and terminate actions in NestJS message handlers via RpcContext."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-26"
+  dateModified: "2026-08-03"
 ---
-
-import Since from '@site/src/components/Since';
 
 # Handler Context
 
-Every `@EventPattern` and `@MessagePattern` handler can inject `RpcContext` to access message metadata, JetStream delivery info, and control message settlement.
+> **Use when:** a handler needs the message metadata, the delivery count or manual control over settlement.
+> **You get:** `RpcContext`, its getters, and the settlement methods to call instead of `msg.ack()`.
+
+Every `@EventPattern` and `@MessagePattern` handler can inject `RpcContext`. It exposes the message metadata and JetStream delivery info, and it controls settlement.
 
 ## Injecting the context
 
@@ -68,8 +69,6 @@ class RpcContext {
 
 ### JetStream message info
 
-<Since version="2.7.0" />
-
 These return `undefined` for Core NATS messages: no type guard needed.
 
 ```typescript
@@ -92,8 +91,6 @@ class RpcContext {
 ```
 
 ### Settlement actions
-
-<Since version="2.7.0" />
 
 Control how the transport acknowledges the message, without throwing errors.
 
@@ -236,7 +233,7 @@ if (ctx.isJetStream()) {
 ```
 
 :::note When is it not JetStream?
-This check is useful when writing code that works across both Core RPC mode (`Msg`) and JetStream mode (`JsMsg`). The new metadata getters (`getDeliveryCount()`, etc.) already handle this internally; they return `undefined` for Core messages.
+This check is useful when writing code that works across both Core RPC mode (`Msg`) and JetStream mode (`JsMsg`). The new metadata getters (`getDeliveryCount()`, etc.) already handle this internally, returning `undefined` for Core messages.
 :::
 
 ## Accessing the raw NATS message
@@ -252,7 +249,7 @@ if (ctx.isJetStream()) {
 ```
 
 :::warning Manual acknowledgment
-Calling `msg.ack()`, `msg.nak()`, or `msg.term()` directly bypasses the transport's settlement logic. Use `ctx.retry()` and `ctx.terminate()` instead: they integrate with ack extension, dead letter handling, and observability hooks.
+Calling `msg.ack()`, `msg.nak()`, or `msg.term()` directly bypasses the transport's settlement logic. Use `ctx.retry()` and `ctx.terminate()` instead: those run through ack extension, dead letter handling and the observability hooks.
 :::
 
 ## See also

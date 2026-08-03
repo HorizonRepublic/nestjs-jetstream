@@ -8,14 +8,13 @@ schema:
   headline: "How to schedule delayed messages with NestJS JetStream"
   description: "One-shot delayed message delivery via the Nats-Schedule header (NATS 2.12, ADR-51)."
   datePublished: "2026-04-01"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
-
-import Since from '@site/src/components/Since';
 
 # How to schedule delayed messages
 
-<Since version="2.8.0" />
+> **Use when:** a message should arrive later instead of now.
+> **You get:** one-shot delayed delivery through NATS 2.12 scheduling, and the limits around it.
 
 One-shot delayed message delivery powered by [NATS 2.12 message scheduling](https://github.com/nats-io/nats-architecture-and-design/blob/main/adr/ADR-51.md) (ADR-51).
 
@@ -70,7 +69,7 @@ handleReminder(@Payload() data: OrderReminder) {
 ## How it works
 
 1. `scheduleAt(date)` stores the delivery time in the record
-2. On publish, the library routes to a per-message unique `_sch` subject within the event stream (a library convention to separate scheduled messages from regular events). The unique suffix matters: the server stores schedules as rollup messages: one active schedule per subject ([ADR-51](https://github.com/nats-io/nats-architecture-and-design/blob/main/adr/ADR-51.md)): so a shared subject would silently replace a pending schedule on every publish
+2. On publish, the library routes to a per-message unique `_sch` subject within the event stream, a convention that keeps scheduled messages apart from regular events. That unique suffix is what makes it work, because the server stores schedules as rollup messages, one active schedule per subject ([ADR-51](https://github.com/nats-io/nats-architecture-and-design/blob/main/adr/ADR-51.md)), so a shared subject would silently replace a pending schedule on every publish
 3. The publish includes `Nats-Schedule` and `Nats-Schedule-Target` headers (ADR-51), which the server reads instead of the subject when managing schedules
 4. NATS holds the message until the scheduled time, then publishes a **new message** to the target event subject and purges the fired schedule holder, so unique `_sch` subjects do not accumulate
 5. The event consumer processes it normally

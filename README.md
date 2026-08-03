@@ -31,9 +31,9 @@
 
 ## The problem
 
-NestJS ships a built-in NATS transport that is fire-and-forget. A message in
-flight when a pod restarts is gone, a handler that throws is never retried, and
-when something goes wrong in production there is nothing to look at.
+NestJS includes a built-in NATS transport that is fire-and-forget. A pod restart
+loses whatever was in flight, a handler that throws is never retried, and when
+something goes wrong in production there is nothing to look at.
 
 ## The swap
 
@@ -58,9 +58,10 @@ export class OrdersController {
 }
 ```
 
-Every event is acknowledged only after the handler resolves. A throw is a `nak`
-with exponential backoff. Exhausted retries are routed to a typed dead-letter
-queue with the original headers intact. A `traceparent` header rides through every hop.
+The transport acknowledges an event only after its handler resolves. A throw is
+a `nak` with exponential backoff. Exhausted retries go to a typed dead-letter
+queue with the original headers intact. A `traceparent` header rides through
+every hop.
 
 ## What you get
 
@@ -85,16 +86,25 @@ enabled.
 
 ## Where to go next
 
-- **Evaluating?** [Why JetStream?](https://nestjs-jetstream.horizon-republic.dev/docs/getting-started/why-jetstream) states the trade-offs, including where the built-in transport is enough.
-- **Integrating?** The [reference](https://nestjs-jetstream.horizon-republic.dev/docs/reference/module-configuration) has every config key, default value and header name.
-- **Debugging?** [Troubleshooting](https://nestjs-jetstream.horizon-republic.dev/docs/guides/troubleshooting) documents the failure paths, from consumer lag to redelivery loops to DLQ traffic.
+- **Evaluating?**
+  [Why JetStream?](https://nestjs-jetstream.horizon-republic.dev/docs/getting-started/why-jetstream)
+  states the trade-offs, including where the built-in transport is enough.
+- **Integrating?** The
+  [reference](https://nestjs-jetstream.horizon-republic.dev/docs/reference/module-configuration)
+  has every config key, default value and header name.
+- **Debugging?**
+  [Troubleshooting](https://nestjs-jetstream.horizon-republic.dev/docs/guides/troubleshooting)
+  documents the failure paths, from consumer lag to redelivery loops to DLQ
+  traffic.
 
-One runnable example per pattern, ten in all, lives under [`examples/`](./examples).
+One runnable example per pattern, ten in all, lives under
+[`examples/`](./examples).
 
-Versioning follows semver: breaking changes land on majors, and the
+Versioning follows semver: breaking changes come only in majors, and the
 [header contract](https://nestjs-jetstream.horizon-republic.dev/docs/reference/header-contract)
-holds across minors.
+does not change across minors.
 
 ---
 
-MIT · © 2026 Horizon Republic · [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+MIT · © 2026 Horizon Republic · [Changelog](CHANGELOG.md) ·
+[Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)

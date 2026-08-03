@@ -6,10 +6,13 @@ schema:
   headline: Testing
   description: "Running unit and integration tests with Vitest and Testcontainers."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
 
 # Testing
+
+> **Use when:** you are contributing and need the suite running locally.
+> **You get:** the commands, the unit and integration split, and the conventions tests follow here.
 
 The project uses [Vitest](https://vitest.dev/) v4 with a dual-project configuration: **unit tests** run without external dependencies, **integration tests** spin up isolated NATS containers via [Testcontainers](https://testcontainers.com/).
 
@@ -20,7 +23,7 @@ This library handles real-time message delivery, consumer lifecycle, and self-he
 - **Integration tests are first-class citizens.** Every message flow (events, RPC, broadcast, ordered) is tested against a real NATS server. No hand-waved "it works in production": if it's not tested end-to-end, it's not done.
 - **Each test suite gets its own NATS container.** No shared state between suites. No "run tests in order". Suites execute in parallel: because if your tests can't run in parallel, your architecture has a problem.
 - **Self-healing is proven, not assumed.** We delete consumers via the JetStream Management API and verify the transport recovers. The self-healing flow is tested with real NATS, not mocked RxJS streams.
-- **Unit tests fill the gaps.** Infrastructure error paths (defensive throws, catch blocks, exponential backoff) that can't be triggered through integration get targeted unit tests. Coverage is a tool rather than a target: but we track it to make sure we're not lying to ourselves.
+- **Unit tests fill the gaps.** Infrastructure error paths (defensive throws, catch blocks, exponential backoff) that can't be triggered through integration get targeted unit tests. We track coverage to make sure we are not lying to ourselves, and stop short of chasing the number.
 
 ## Prerequisites
 
@@ -95,14 +98,14 @@ describe('My Feature', () => {
 
 Key helpers in `test/integration/`:
 
-| Helper                                                       | Purpose                                                                                                                                                                                          |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `startNatsContainer()`                                       | Start a NATS container with JetStream, return container + random port                                                                                                                            |
-| `createNatsConnection(port)`                                 | Create a standalone NATS connection for assertions                                                                                                                                               |
-| `createTestApp({ name, port }, controllers, clientTargets?)` | Bootstrap a full NestJS app with the transport. `clientTargets` is an array of service names that will be registered as `forFeature` clients; pass the names you need to `@Inject` in your test. |
-| `cleanupStreams(nc, serviceName)`                            | Delete streams/consumers created during a test                                                                                                                                                   |
-| `waitForCondition(fn, timeoutMs)`                            | Poll until an async condition is met                                                                                                                                                             |
-| `uniqueServiceName()`                                        | Generate a unique service name per test                                                                                                                                                          |
+| Helper                                                       | Purpose                                                                                                                                                                                |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `startNatsContainer()`                                       | Start a NATS container with JetStream, return container + random port                                                                                                                  |
+| `createNatsConnection(port)`                                 | Create a standalone NATS connection for assertions                                                                                                                                     |
+| `createTestApp({ name, port }, controllers, clientTargets?)` | Bootstrap a full NestJS app with the transport. `clientTargets` is an array of service names registered as `forFeature` clients, so pass the names you need to `@Inject` in your test. |
+| `cleanupStreams(nc, serviceName)`                            | Delete streams/consumers created during a test                                                                                                                                         |
+| `waitForCondition(fn, timeoutMs)`                            | Poll until an async condition is met                                                                                                                                                   |
+| `uniqueServiceName()`                                        | Generate a unique service name per test                                                                                                                                                |
 
 ### Self-Healing Tests
 
@@ -120,7 +123,7 @@ The test uses a 1-second heartbeat interval (vs 5s production default) for faste
 
 ### System Under Test (`sut`)
 
-The object being tested is always named `sut`:
+The object being tested is always `sut`:
 
 ```typescript
 let sut: StreamProvider;

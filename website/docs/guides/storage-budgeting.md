@@ -8,10 +8,13 @@ schema:
   headline: "Storage budgeting & provisioning"
   description: "How JetStream stream reservations relate to the server max_file_store, and how to read the boot-time provisioning summary."
   datePublished: "2026-06-02"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
 
 # Storage budgeting & provisioning
+
+> **Use when:** provisioning fails on storage, or you need to size a cluster before deploying.
+> **You get:** the arithmetic behind stream reservations, the boot summary, and the pre-flight check.
 
 When your service starts, the transport ensures its JetStream streams exist. Each stream
 reserves storage up front, and that reservation is charged against a budget shared by **every

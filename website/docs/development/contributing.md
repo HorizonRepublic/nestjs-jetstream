@@ -6,10 +6,13 @@ schema:
   headline: "Contributing"
   description: "How to contribute to the project."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
 
 # Contributing
+
+> **Use when:** you are opening a pull request against this repository.
+> **You get:** the setup, the commit format Release Please needs, and what review looks for.
 
 We welcome contributions from the community. The full contribution guidelines live in the [`CONTRIBUTING.md`](https://github.com/HorizonRepublic/nestjs-jetstream/blob/main/CONTRIBUTING.md) file at the repository root.
 

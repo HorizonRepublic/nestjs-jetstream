@@ -13,7 +13,10 @@ schema:
 
 # Quick Start
 
-Five minutes from now you'll have a NestJS service that emits `order.created`, survives a restart without losing the message, and responds to `order.get` RPCs, all over NATS JetStream. Registering the module, connecting the transport, defining handlers and sending messages: register the module, connect the transport, define handlers, send messages.
+> **Use when:** you want a working service before reading anything else.
+> **You get:** a module registration, a bootstrap, one event handler and one RPC handler, running in five minutes.
+
+Five minutes from now you'll have a NestJS service running on NATS JetStream. It emits `order.created` and answers `order.get` RPCs, and a restart no longer loses whatever was in flight. Register the module, connect the transport, define handlers, send messages.
 
 :::note Prerequisites
 Make sure you have [installed the library](/docs/getting-started/installation) and have a NATS server running with JetStream enabled.
@@ -138,7 +141,9 @@ export class OrdersController {
 }
 ```
 
-The decorators above cover the three handler shapes you'll meet first, workqueue events (one instance handles each message), broadcast events (all instances handle every message), and RPC commands (request/reply). Strict-order delivery uses `@EventPattern('...', { ordered: true })`. For the full picture of each, see [Events](/docs/patterns/events), [Broadcast](/docs/patterns/broadcast), [Ordered Events](/docs/patterns/ordered-events), and [RPC](/docs/patterns/rpc).
+The decorators above cover the handler shapes you'll meet first. A workqueue event goes to one instance, while a broadcast event goes to all of them. An RPC command gets a reply, and strict-order delivery is a fourth shape, reached with `@EventPattern('...', { ordered: true })`.
+
+For the full picture of each, see [Events](/docs/patterns/events), [Broadcast](/docs/patterns/broadcast), [Ordered Events](/docs/patterns/ordered-events), and [RPC](/docs/patterns/rpc).
 
 ## 4. Send messages
 
@@ -178,7 +183,7 @@ export class GatewayController {
 }
 ```
 
-Use `client.emit()` for fire-and-forget events; at-least-once delivery through JetStream, leaving the caller without a response. Use `client.send()` for request/reply RPC; it returns an `Observable<TResponse>` with the handler's reply.
+Use `client.emit()` for fire-and-forget events. Delivery is at-least-once through JetStream, and the caller gets no response back. Use `client.send()` for request/reply RPC, which returns an `Observable<TResponse>` with the handler's reply.
 
 :::note Broadcast prefix
 To send a broadcast event, prefix the pattern with `broadcast:` when calling `emit()`. On the handler side, use `{ broadcast: true }` in the decorator extras: no prefix needed.
@@ -204,7 +209,7 @@ curl http://localhost:3000/orders/42
 
 ## What's next?
 
-- [**Module Configuration**](/docs/reference/module-configuration): learn about all configuration options, async setup, and advanced connection settings
+- [**Module Configuration**](/docs/reference/module-configuration): every configuration option, from async setup to connection settings
 - [**RPC Patterns**](/docs/patterns/rpc): deep dive into Core vs JetStream RPC modes
-- [**Events & Broadcast**](/docs/patterns/events): workqueue events, broadcast fan-out, and ordered events
+- [**Events & Broadcast**](/docs/patterns/events): how workqueue events differ from broadcast fan-out and from ordered delivery
 - [**Record Builder & Deduplication**](/docs/guides/record-builder): custom headers, deterministic message IDs, per-request RPC timeouts, and deduplication

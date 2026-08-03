@@ -8,14 +8,13 @@ schema:
   headline: "How to migrate immutable stream properties"
   description: "Safely change immutable stream properties without losing messages via blue-green sourcing."
   datePublished: "2026-04-02"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
-
-import Since from '@site/src/components/Since';
 
 # How to migrate immutable stream properties
 
-<Since version="2.9.0" />
+> **Use when:** a stream property that JetStream will not let you change has to change anyway.
+> **You get:** blue-green stream recreation, what it costs, and when it refuses to run.
 
 Safely change immutable stream properties (like `storage`) without losing messages. The transport handles recreation automatically via NATS stream sourcing.
 
@@ -87,7 +86,7 @@ From the quiesce (Phase 1) until the restore completes, publishes to the migrati
 - **`client.emit()`** (fire-and-forget): the publish rejects with an error. Implement retry logic in the caller if you need delivery during migration.
 - **`client.send()`** (RPC): the caller receives an error and can retry.
 
-The rejection window lasts as long as the message copy does, milliseconds for small streams. This is deliberate: a rejected publish is retryable, while an acknowledged write into a stream that is about to be deleted would be silent data loss. If you need a zero-rejection migration, schedule it during a maintenance window with publishers paused.
+The rejection window lasts as long as the message copy does, milliseconds for small streams. That is deliberate, because a rejected publish can be retried while an acknowledged write into a stream about to be deleted is silent data loss. For a zero-rejection migration, schedule it during a maintenance window with publishers paused.
 
 ### To consumers on other pods (rolling updates)
 
@@ -118,11 +117,11 @@ Expect migration time to scale roughly linearly with message count. For small st
 - **Failure after the original is deleted.** The backup is the only copy of the data and is always preserved. Restoration resumes automatically on the next application startup.
 - **Sourcing timeout (30s default).** Same as above: the backup is preserved and the restore resumes on the next startup. Nothing is lost.
 - **Process killed mid-migration.** Detected on the next startup: a stranded backup is restored into the stream (recreating it first if the crash happened between delete and create), then cleaned up.
-- **Instances migrating concurrently (rolling deploy).** Backups carry a freshness stamp. An instance that finds another instance's live backup waits for that migration to finish instead of interfering; only stale leftovers are recovered.
+- **Instances migrating concurrently (rolling deploy).** Backups carry a freshness stamp. An instance that finds another instance's live backup waits for that migration to finish instead of interfering, and only stale leftovers are recovered.
 
 ## Manual streams are never migrated
 
-Streams managed in `ManagementMode.Manual` (externally provisioned) are never created, updated, or migrated by the library; regardless of `allowDestructiveMigration`. The library only binds to them and validates their configuration at boot.
+Streams managed in `ManagementMode.Manual` (externally provisioned) are never created, updated or migrated by the library, whatever `allowDestructiveMigration` says. The library only binds to them and validates their configuration at boot.
 
 Setting `allowDestructiveMigration: true` together with a global `provisioning.management: ManagementMode.Manual` is a no-op for all streams. The library logs a warning at boot when this combination is detected:
 

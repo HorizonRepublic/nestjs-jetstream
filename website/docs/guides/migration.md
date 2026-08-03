@@ -2,7 +2,7 @@
 sidebar_position: 5
 sidebar_label: "Migrate from built-in NATS"
 title: "How to migrate from @nestjs/microservices NATS to JetStream"
-description: "Step-by-step migration from the built-in NestJS NATS transport (@nestjs/microservices) to @horizon-republic/nestjs-jetstream: durable delivery, automatic retries, and dead letter handling."
+description: "Step-by-step migration from the built-in NestJS NATS transport (@nestjs/microservices) to @horizon-republic/nestjs-jetstream, keeping your existing handlers."
 schema:
   type: Article
   headline: "How to migrate from @nestjs/microservices NATS to JetStream"
@@ -13,9 +13,12 @@ schema:
 
 # How to migrate from `@nestjs/microservices` NATS to JetStream
 
+> **Use when:** you are replacing `Transport.NATS` from `/microservices`.
+> **You get:** five steps that keep your handlers, plus the acknowledgment semantics that change underneath.
+
 Replacing the built-in NestJS NATS transport (`Transport.NATS` from `@nestjs/microservices`) with `@horizon-republic/nestjs-jetstream` is configuration work: your `ClientProxy` already speaks NATS.
 
-You will end up with durable delivery, automatic retries, dead letter handling, and W3C trace context for the same `@EventPattern` / `@MessagePattern` handlers you already have.
+You will end up with durable delivery and automatic retries, plus dead letter handling and W3C trace context, all behind the same `@EventPattern` and `@MessagePattern` handlers you already have.
 
 :::tip Already using this library and upgrading to a newer version?
 Jump to [Upgrading between versions](#upgrading-between-versions) below, which lists what changes release by release. The [Release Notes](/docs/reference/release-notes) carry the full changelog. Everything before that section covers the one-time switch from `@nestjs/microservices`.
@@ -25,7 +28,7 @@ Jump to [Upgrading between versions](#upgrading-between-versions) below, which l
 
 The semantic shift is from at-most-once to at-least-once delivery:
 
-- **Delivery.** Built-in NATS is fire-and-forget; messages are lost if no subscriber is listening. JetStream persists every event in a stream so messages survive restarts.
+- **Delivery.** Built-in NATS is fire-and-forget, so a message with no subscriber listening is gone. JetStream persists every event in a stream, and messages survive restarts.
 - **Retention.** Built-in has no retention. JetStream keeps messages in a stream until acked (workqueue) or until the retention window expires.
 - **Replay.** Built-in does not support replay. JetStream consumers can be created to catch up on history.
 - **Retries.** Built-in does not retry. JetStream redelivers a message until the handler acks or `max_deliver` is exhausted.
@@ -154,21 +157,25 @@ Newest first. Each entry lists only what changes for you and how to restore the 
 
 ### v2.13 → v3.0
 
-**Streams reserve far less storage.** `max_bytes` drops from 5 GB to 512 MB on events, from 5 GB to 1 GB on ordered, from 2 GB to 256 MB on broadcast and from 100 MB to 64 MB on commands, and `max_msg_size` drops to 1 MB everywhere to match the NATS server's own `max_payload` default. A service used to reserve up to 17 GB before it processed a single message, which exhausted a modest file store after one or two deployments. `max_bytes` is mutable, so existing streams pick the new value up on the next boot; set it back under `events.stream` if you need the old headroom.
+**Streams reserve far less storage.** `max_bytes` drops from 5 GB to 512 MB on events, from 5 GB to 1 GB on ordered, from 2 GB to 256 MB on broadcast and from 100 MB to 64 MB on commands. `max_msg_size` drops to 1 MB everywhere, matching the NATS server's own `max_payload` default.
 
-**Retries are paced.** A failing handler now naks with a delay from `[2000, 10000]` ms instead of immediately, so three attempts span roughly twelve seconds rather than milliseconds. Pass `events: { retry: false }` for the previous behaviour.
+A service used to reserve up to 17 GB before processing a single message, which exhausted a modest file store after one or two deployments. `max_bytes` is mutable, so existing streams pick the new value up on the next boot. Set it back under `events.stream` if you need the old headroom.
 
-**The dead-letter stream is on by default.** Exhausted messages land in `{service}__microservice_dlq-stream` instead of being dropped. Pass `dlq: false` to opt out. Under `provisioning: { management: Manual }` nothing changes unless you configure `dlq` explicitly.
+**Retries are paced.** A failing handler now naks with a delay from `[2000, 10000]` ms instead of immediately, so three attempts span roughly twelve seconds instead of milliseconds. Pass `events: { retry: false }` for the previous behaviour.
+
+**The dead-letter stream is on by default.** Exhausted messages are republished to `{service}__microservice_dlq-stream` instead of being dropped. Pass `dlq: false` to opt out. Under `provisioning: { management: Manual }` nothing changes unless you configure `dlq` explicitly.
 
 **Node 20 is no longer supported.** The minimum is Node 22.
 
-**`servers` is now optional, paired with `connections`.** Configuration accepts either the flat `servers` form or the new `connections` map, and rejects supplying both. Existing flat configurations are unchanged: they are rewritten internally into a single connection named `default`, and stream, consumer and subject names stay exactly as they were. See [Multiple connections](/docs/guides/multi-connection).
+**`servers` is now optional, paired with `connections`.** Configuration accepts either the flat `servers` form or the new `connections` map, and rejects supplying both. Existing flat configurations are unchanged. Internally they become a single connection called `default`, and stream, consumer and subject names stay exactly as they were. See [Multiple connections](/docs/guides/multi-connection).
 
-**`getClientToken` takes an optional second argument.** `getClientToken(name)` returns the same bare token it always did; `getClientToken(name, connection)` returns a namespaced one for a client bound to a named connection. Existing injections resolve unchanged.
+**`getClientToken` takes an optional second argument.** `getClientToken(name)` returns the same bare token it always did. `getClientToken(name, connection)` returns a namespaced one, for a client bound to one connection. Existing injections resolve unchanged.
 
 **Lifecycle hooks receive a trailing connection name.** Every callback in `hooks` gains an optional final `connection?: string` parameter, populated only when more than one connection is configured. Hooks that ignore it are unaffected, and single-connection applications see the exact payloads they saw before.
 
-**Streams gain an ownership stamp.** Each provisioned stream carries a `nestjs-jetstream-owner` metadata entry of `{service}:{connection}`, the dead-letter stream included, used to catch two connections that reach the same cluster. Existing streams pick it up through one mutable update on the first boot after upgrading; messages already in the stream are untouched, and metadata written by anyone else is carried forward. Nothing is stamped under `provisioning: { management: Manual }`, and the shared broadcast stream is never stamped.
+**Streams gain an ownership stamp.** Each provisioned stream carries a `nestjs-jetstream-owner` metadata entry of `{service}:{connection}`, the dead-letter stream included. It catches two connections that reach the same cluster.
+
+Existing streams pick the stamp up through one mutable update on the first boot after upgrading. Messages already in the stream are untouched, and metadata written by anyone else is kept. Nothing is stamped under `provisioning: { management: Manual }`, and the shared broadcast stream is never stamped.
 
 A single-connection application upgrades with no source changes.
 

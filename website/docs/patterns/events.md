@@ -8,7 +8,7 @@ schema:
   headline: "Workqueue Events: NestJS JetStream At-Least-Once Delivery"
   description: "NestJS NATS JetStream workqueue events with at-least-once delivery, automatic retry, publish-side deduplication, and dead letter handling."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
 
 # Events (Workqueue)
@@ -99,7 +99,7 @@ If `handleOrderCreated` throws, the message is automatically `nak`'d and redeliv
 
 ## Consumer naming and `@EventPattern` extras
 
-At-least-once delivery is **on by default**: every event handler registered with `@EventPattern` is automatically backed by a **durable** JetStream pull consumer with explicit ack. You don't enable it; you configure it.
+At-least-once delivery is **on by default**: every event handler registered with `@EventPattern` is automatically backed by a **durable** JetStream pull consumer with explicit ack. You don't enable it, you configure it.
 
 ### Where the durable consumer name comes from
 
@@ -151,8 +151,8 @@ The transport uses explicit acknowledgement. The outcome depends on what happens
 
 - **Handler succeeds**, `ack`. Message is removed from the stream.
 - **Handler throws an error**, `nak`. Message is redelivered after backoff.
-- **Payload cannot be decoded**, `term`. Message is terminated immediately; no retry.
-- **No handler registered for subject**, `term`. Message is terminated; no retry.
+- **Payload cannot be decoded**, `term`. Message is terminated immediately, with no retry.
+- **No handler registered for subject**, `term`. Message is terminated, with no retry.
 - **Max deliveries exhausted**, `term`. Dead letter callback is invoked, then the message is terminated.
 
 :::warning Decode errors are terminal
@@ -261,7 +261,7 @@ This prevents duplicate publishes in scenarios like:
 - The publisher retries after a network timeout (but the first publish actually succeeded).
 - A controller endpoint is called twice with the same data.
 
-The default `duplicate_window` is **2 minutes**; messages with the same ID published within that window are deduplicated. To extend it, override `events.stream.duplicate_window` in `forRoot()` (e.g. `duplicate_window: toNanos(5, 'minutes')`). See [Custom configuration](#custom-configuration) for the full override pattern.
+The default `duplicate_window` is **2 minutes**, and messages with the same ID published inside that window are deduplicated. To extend it, override `events.stream.duplicate_window` in `forRoot()` (e.g. `duplicate_window: toNanos(5, 'minutes')`). See [Custom configuration](#custom-configuration) for the full override pattern.
 
 When no message ID is set explicitly, the transport generates a random UUID for each publish, meaning no deduplication occurs by default. Always set a deterministic message ID when duplicate publishes are a concern.
 
@@ -315,7 +315,7 @@ The default of 3 delivery attempts works well for transient errors (network blip
 
 - **`max_deliver`**, `3`. How many retry attempts before the message is marked dead.
 - **`ack_wait`**, 10 seconds. How long a handler has to ack before NATS redelivers.
-- **`max_ack_pending`**, `100`. In-flight cap; the primary backpressure control.
+- **`max_ack_pending`**, `100`. In-flight cap, and the primary backpressure control.
 - **`max_age`**, 7 days. How long events live in the stream before being purged.
 - **`duplicate_window`**, 2 minutes. Dedup window for [`setMessageId()`](/docs/guides/record-builder).
 
@@ -323,7 +323,7 @@ See [Default Configs](/docs/reference/default-configs#stream-defaults) for the e
 
 ## Error handling
 
-When a handler throws, the transport automatically `nak`'s the message for redelivery. For most cases, this is all you need. However, some errors are **non-recoverable**; retrying will never succeed. For these, use `ctx.terminate()` to permanently discard the message.
+When a handler throws, the transport automatically `nak`'s the message for redelivery. For most cases, this is all you need. Some errors are **non-recoverable**, though, and retrying them will never succeed. For these, use `ctx.terminate()` to permanently discard the message.
 
 ```typescript title="src/orders/orders.controller.ts"
 import { Controller, Logger } from '@nestjs/common';
@@ -373,7 +373,7 @@ Every message ends in one of three states:
 
 **Auto-ack** (no action needed). The handler returns successfully. The transport calls `ack()` on the underlying message automatically: the message is removed from the stream.
 
-**`ctx.retry()`**; for recoverable errors. The message is redelivered, optionally with a `{ delayMs }` delay. The transport applies the same retry semantics automatically when a handler throws, so you only need to call `ctx.retry()` manually when you want to return early without raising an exception.
+**`ctx.retry()`**, for recoverable errors. The message is redelivered, optionally with a `{ delayMs }` delay. The transport applies the same retry semantics automatically when a handler throws, so you only need to call `ctx.retry()` manually when you want to return early without raising an exception.
 
 **`ctx.terminate(reason)`**: for non-recoverable errors. The message is permanently discarded. Must be called manually in the handler.
 
@@ -384,7 +384,7 @@ When a message is `nak`'d repeatedly and reaches the `max_deliver` limit (defaul
 1. The `onDeadLetter` callback is invoked (if configured) with full message context.
 2. The message is terminated with `term()`.
 
-`ctx.terminate()` is for errors you **know** will never succeed (validation failures, schema mismatches), while `throw` is for errors that **might** succeed on retry (timeouts, temporary unavailability). For messages that exhaust all retries, the dead letter mechanism provides a safety net.
+`ctx.terminate()` is for errors you **know** will never succeed, such as a validation failure or a schema mismatch. `throw` is for errors that **might** succeed on retry, such as a timeout. For messages that exhaust all retries, the dead letter mechanism provides a safety net.
 
 See the [Dead Letter Queue](/docs/guides/dead-letter-queue) guide for how to configure and handle dead letters.
 

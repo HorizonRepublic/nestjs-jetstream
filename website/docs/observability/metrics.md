@@ -8,25 +8,28 @@ schema:
   headline: "Prometheus Metrics: NestJS JetStream Transport"
   description: "Built-in Prometheus metrics for NATS JetStream transport: throughput, handler latency, consumer lag, dead letters, and publish errors."
   datePublished: "2026-05-27"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
 
 # Prometheus Metrics
 
-The transport ships built-in Prometheus metrics covering throughput, handler latency, consumer lag, publish errors, dead letters, and connection health. Metrics are written to a `prom-client` registry, the de-facto standard in the NestJS ecosystem, which any `/metrics` exporter picks up without extra wiring.
+> **Use when:** you are putting this service on a Prometheus dashboard.
+> **You get:** the metric catalog, PromQL to start from, and what collection costs at runtime.
+
+The transport carries built-in Prometheus metrics for throughput, handler latency, consumer lag, publish errors, dead letters and connection health. Metrics are written to a `prom-client` registry, the de-facto standard in the NestJS ecosystem, which any `/metrics` exporter picks up without extra wiring.
 
 ## What it covers
 
-Traces tell you what happened to one message; metrics tell you what's happening to the system as a whole. NATS JetStream is a queue, a stream store, and an RPC bus rolled into one, and operators need to know things like "is my consumer falling behind?" or "what's the p99 handler latency for `orders.created` over the last hour?" Those are aggregate questions, Prometheus territory, not APM territory.
+Traces tell you what happened to one message. Metrics tell you what is happening to the system as a whole. NATS JetStream is a queue, a stream store and an RPC bus at once, so an operator needs to know whether a consumer is keeping up or "what's the p99 handler latency for `orders.created` over the last hour?" Those are aggregate questions, Prometheus territory, not APM territory.
 
 The library exposes everything an operator typically alerts on:
 
 - **Throughput**: messages received, processed, published, and dead-lettered per second.
-- **Latency**: handler duration, publish duration, and RPC round-trip duration as histograms.
+- **Latency**: histograms for handler duration, publish duration and the RPC round trip.
 - **Lag**: consumer `num_pending`, `num_ack_pending`, and stream size as gauges.
-- **Health**: connection state, RPC timeouts, transport errors classified by context.
+- **Health**: connection state and RPC timeouts, plus transport errors classified by context.
 
-Default labels stay bounded (declared patterns, enum-typed statuses, named kinds), so dashboards stay performant as your handler count grows.
+Default labels stay bounded, covering declared patterns, enum-typed statuses and the stream kinds, so dashboards keep up as your handler count grows.
 
 ## Setup
 
@@ -229,7 +232,7 @@ The polling loop pulls `consumer.info()` and `streams.info()` from the NATS serv
 - **Backpressure**: if a previous tick has not completed by the time the next interval fires, the new tick is skipped (no queueing). A warn log is emitted so operators can tell when the configured interval is too aggressive for the load.
 - **Per-target error isolation**: a failing `consumer.info()` call increments `jetstream_metrics_poll_errors_total{target="consumer.info"}` but does not abort the rest of the cycle. Streams and other consumers in the same tick still update.
 - **Graceful shutdown**: `OnModuleDestroy` cancels the timer and awaits the in-flight tick before resolving, so the process exits cleanly.
-- **Connection-loss tolerance**: while NATS is disconnected, polling fails fast and increments the poll-error counter. Gauges become stale (not zero): which is the correct semantic: we do not know the values, so we do not lie about them.
+- **Connection-loss tolerance**. Polling during a NATS disconnect fails fast and increments the poll-error counter. Gauges go stale instead of dropping to zero, because the values are unknown and the transport does not invent them.
 
 The Command (RPC) consumer is polled only in JetStream RPC mode, since Core RPC mode creates no JetStream stream for commands. Ordered consumers are ephemeral and do not have a stable durable name, so they are excluded from polling, use `jetstream_messages_processed_total{kind="ordered"}` to monitor ordered throughput instead.
 
@@ -241,7 +244,7 @@ Prometheus performance degrades sharply with high cardinality, so the design avo
 - `kind`, `status`, and `context` are all enum-typed with a small bounded set of values.
 - `stream` and `consumer` are deterministic functions of `serviceName` and `StreamKind`.
 - `server` is bounded by the NATS cluster size.
-- For unmatched messages, `subject="<unmatched>"` is used as a single sentinel rather than the actual subject: preventing an attacker from blowing up cardinality by publishing to random subjects.
+- For unmatched messages, `subject="<unmatched>"` is used as a single sentinel instead of the actual subject, so nobody can inflate cardinality by publishing to random subjects.
 
 If you set `defaultLabels` with high-cardinality values (e.g. per-request IDs), Prometheus performance is on you: the transport never injects unbounded labels itself.
 
@@ -250,7 +253,7 @@ If you set `defaultLabels` with high-cardinality values (e.g. per-request IDs), 
 Per-message overhead with metrics enabled:
 
 - 1× `performance.now()` at handler entry.
-- 1× `EventBus.emit(HandlerCompleted, ...)` after settlement; `Map.get` + callback invocation.
+- 1× `EventBus.emit(HandlerCompleted, ...)` after settlement, which is a `Map.get` and a callback.
 - 1× `PatternRegistry.resolveDeclared()` (a `Map.get`) inside the metrics service.
 - 1× `Counter.inc()` + 1× `Histogram.observe()` in `prom-client`.
 
