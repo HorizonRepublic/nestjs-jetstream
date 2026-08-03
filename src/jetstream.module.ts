@@ -4,6 +4,7 @@ import {
   Inject,
   Logger,
   Module,
+  OnApplicationBootstrap,
   OnApplicationShutdown,
   Optional,
   Provider,
@@ -74,14 +75,44 @@ export {
  * export class OrdersModule {}
  * ```
  */
+/**
+ * Fail when a configured connection never had `listen()` called.
+ *
+ * Without this a second connection's handlers are registered but never
+ * subscribed, so its messages are silently not processed. Skipped for
+ * single-connection applications, which may legitimately run without a hybrid
+ * bootstrap.
+ *
+ * @param registry Every configured connection.
+ * @throws Error naming the connections that never started.
+ */
+export const assertAllConnectionsStarted = (registry: ConnectionRegistry): void => {
+  if (registry.names().length < 2) return;
+
+  const unstarted = registry
+    .all()
+    .filter((scope) => scope.strategy !== null && !scope.strategy.isStarted)
+    .map((scope) => scope.name);
+
+  if (unstarted.length === 0) return;
+
+  throw new Error(
+    `Connections never started: ${unstarted.join(', ')}. ` +
+      `Their handlers are registered but not subscribed, so messages are silently not processed. ` +
+      `Call connectJetstreamMicroservices(app) before app.startAllMicroservices().`,
+  );
+};
+
 @Global()
 @Module({})
-export class JetstreamModule implements OnApplicationShutdown {
+export class JetstreamModule implements OnApplicationBootstrap, OnApplicationShutdown {
   public constructor(
     @Optional()
     @Inject(ShutdownManager)
     private readonly shutdownManager?: ShutdownManager | undefined,
-    @Optional() @Inject(JetstreamStrategy) private readonly strategy?: JetstreamStrategy | null,
+    @Optional()
+    @Inject(JETSTREAM_CONNECTIONS)
+    private readonly registry?: ConnectionRegistry | undefined,
   ) {}
 
   /**
@@ -350,11 +381,18 @@ export class JetstreamModule implements OnApplicationShutdown {
   }
 
   /**
+   * Verify every configured connection actually started.
+   *
+   * Runs after `startAllMicroservices()` in a hybrid application.
+   */
+  public onApplicationBootstrap(): void {
+    if (this.registry) assertAllConnectionsStarted(this.registry);
+  }
+
+  /**
    * Gracefully shut down the transport on application termination.
    */
   public async onApplicationShutdown(): Promise<void> {
-    if (this.shutdownManager) {
-      await this.shutdownManager.shutdown(this.strategy ?? undefined);
-    }
+    await this.shutdownManager?.shutdown(this.registry?.getDefault().strategy ?? undefined);
   }
 }

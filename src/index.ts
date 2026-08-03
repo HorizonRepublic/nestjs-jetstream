@@ -1,6 +1,11 @@
 // Module
 export { JetstreamModule } from './jetstream.module';
 
+// Bootstrap
+export { connectJetstreamMicroservices } from './bootstrap';
+
+export type { JetstreamBootstrapOptions } from './bootstrap';
+
 // Interfaces
 export { ManagementMode, MessageKind, StreamKind, TransportEvent } from './interfaces';
 

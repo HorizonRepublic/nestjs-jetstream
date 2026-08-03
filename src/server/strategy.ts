@@ -136,6 +136,11 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     return this.binding?.name ?? 'default';
   }
 
+  /** Whether `listen()` has run for this connection. */
+  public get isStarted(): boolean {
+    return this.started;
+  }
+
   /** Whether this strategy's connection owns the handler described by `extras`. */
   private acceptsConnection(extras: Record<string, unknown>): boolean {
     if (!this.binding) return true;
