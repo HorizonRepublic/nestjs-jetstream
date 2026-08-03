@@ -3,7 +3,8 @@ import type { MessageHandler, MsPattern } from '@nestjs/microservices';
 
 import type { ConsumerInfo } from '@nats-io/jetstream';
 
-import { ConnectionProvider } from '../connection';
+import type { ConnectionProvider } from '../connection/connection.provider';
+import type { ConnectionBinding } from '../connection/connection.types';
 import { StreamKind } from '../interfaces';
 import type { JetstreamModuleOptions } from '../interfaces';
 import { isCoreRpcMode, isJetStreamRpcMode } from '../jetstream.constants';
@@ -40,6 +41,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     private readonly coreRpcServer: CoreRpcServer,
     private readonly ackWaitMap: Map<StreamKind, number> = new Map(),
     private readonly metadataProvider?: MetadataProvider | undefined,
+    private readonly binding?: ConnectionBinding | undefined,
   ) {
     super();
   }
@@ -122,6 +124,11 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
   /** Access the pattern registry (for module-level introspection). */
   public getPatternRegistry(): PatternRegistry {
     return this.patternRegistry;
+  }
+
+  /** The connection this strategy serves; `default` when only one is configured. */
+  public get connectionName(): string {
+    return this.binding?.name ?? 'default';
   }
 
   private async doListen(callback: (...args: unknown[]) => void): Promise<void> {

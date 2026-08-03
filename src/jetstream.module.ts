@@ -16,7 +16,7 @@ import { JsonCodec } from './codec';
 import { ConnectionProvider } from './connection';
 import { JetstreamHealthIndicator } from './health';
 import { EventBus } from './hooks';
-import { ManagementMode, StreamKind } from './interfaces';
+import { StreamKind } from './interfaces';
 import type {
   Codec,
   DeadLetterConfig,
@@ -50,25 +50,16 @@ import {
 import { isDlqEnabled } from './server/infrastructure/dlq-options';
 import { InfrastructureBinder } from './server/infrastructure/infrastructure-binder';
 import { NameResolver } from './server/infrastructure/name-resolver';
+import { warnIfManualWithDestructive } from './server/infrastructure/provisioning-warnings';
 import { ShutdownManager } from './shutdown';
 
 /** DI token for the shared ackWaitMap instance (populated at runtime by strategy). */
 const JETSTREAM_ACK_WAIT_MAP = Symbol('JETSTREAM_ACK_WAIT_MAP');
 
-export const DESTRUCTIVE_MIGRATION_MANUAL_WARNING =
-  'allowDestructiveMigration has no effect under provisioning.management: Manual; the library never migrates externally managed streams.';
-
-export const warnIfManualWithDestructive = (
-  options: JetstreamModuleOptions,
-  logger: Logger,
-): void => {
-  if (
-    options.allowDestructiveMigration &&
-    options.provisioning?.management === ManagementMode.Manual
-  ) {
-    logger.warn(DESTRUCTIVE_MIGRATION_MANUAL_WARNING);
-  }
-};
+export {
+  DESTRUCTIVE_MIGRATION_MANUAL_WARNING,
+  warnIfManualWithDestructive,
+} from './server/infrastructure/provisioning-warnings';
 
 /**
  * Root module for the NestJS JetStream transport.
