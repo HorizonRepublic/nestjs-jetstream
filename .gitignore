@@ -153,3 +153,9 @@ benchmarks/results/
 benchmarks/baseline.json
 benchmarks/baseline.md
 
+
+# Local prose linting (Vale rules and policy) — tooling, not part of the package
+.vale/
+.vale.ini
+.stetignore
+.synced-.vale.ini

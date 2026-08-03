@@ -97,7 +97,7 @@ export default function Root({ children }) {
   "headline": "How to configure a Dead Letter Queue",
   "description": "Capture NestJS NATS JetStream messages that exhaust all delivery attempts via a DLQ stream or onDeadLetter callback.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-07-27"
+  "dateModified": "2026-08-03"
 },
       
     '/docs/guides/external-infrastructure/': {
@@ -121,7 +121,7 @@ export default function Root({ children }) {
   "headline": "RpcContext: Handler Context & Message Settlement",
   "description": "Access JetStream metadata and control ack, retry, and terminate actions in NestJS message handlers via RpcContext.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-07-26"
+  "dateModified": "2026-08-03"
 },
       
     '/docs/guides/health-checks/': {
@@ -161,7 +161,7 @@ export default function Root({ children }) {
   "headline": "How to set per-message TTL on NATS JetStream messages",
   "description": "Set individual message expiration via the Nats-TTL header (NATS 2.11, ADR-43).",
   "datePublished": "2026-04-02",
-  "dateModified": "2026-07-26"
+  "dateModified": "2026-08-03"
 },
       
     '/docs/guides/performance/': {
@@ -177,7 +177,7 @@ export default function Root({ children }) {
   "headline": "JetstreamRecordBuilder: Headers, Message IDs & Deduplication",
   "description": "Build NestJS NATS messages with custom headers, deterministic message IDs for publish-side deduplication, and per-request RPC timeouts.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-07-27"
+  "dateModified": "2026-08-03"
 },
       
     '/docs/guides/scheduling/': {
@@ -185,7 +185,7 @@ export default function Root({ children }) {
   "headline": "How to schedule delayed messages with NestJS JetStream",
   "description": "One-shot delayed message delivery via the Nats-Schedule header (NATS 2.12, ADR-51).",
   "datePublished": "2026-04-01",
-  "dateModified": "2026-07-27"
+  "dateModified": "2026-08-03"
 },
       
     '/docs/guides/storage-budgeting/': {
@@ -201,7 +201,7 @@ export default function Root({ children }) {
   "headline": "How to migrate immutable stream properties",
   "description": "Safely change immutable stream properties without losing messages via blue-green sourcing.",
   "datePublished": "2026-04-02",
-  "dateModified": "2026-07-27"
+  "dateModified": "2026-08-03"
 },
       
     '/docs/guides/troubleshooting/': {
@@ -265,7 +265,7 @@ export default function Root({ children }) {
   "headline": "Handler Metadata Registry: NATS KV Service Discovery for NestJS",
   "description": "Publish NestJS handler metadata to a NATS KV bucket for dynamic service discovery, API gateway routing, and automatic catalog generation.",
   "datePublished": "2026-04-02",
-  "dateModified": "2026-07-27"
+  "dateModified": "2026-08-03"
 },
       
     '/docs/patterns/ordered-events/': {
@@ -273,7 +273,7 @@ export default function Root({ children }) {
   "headline": "Ordered Events: Strict Sequential Delivery in NATS JetStream",
   "description": "Strict sequential NestJS NATS JetStream event delivery with ephemeral ordered consumers, deliver policies, and CQRS replay patterns.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-07-27"
+  "dateModified": "2026-08-03"
 },
       
     '/docs/patterns/rpc/': {

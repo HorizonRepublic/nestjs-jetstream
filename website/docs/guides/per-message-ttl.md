@@ -8,14 +8,10 @@ schema:
   headline: "How to set per-message TTL on NATS JetStream messages"
   description: "Set individual message expiration via the Nats-TTL header (NATS 2.11, ADR-43)."
   datePublished: "2026-04-02"
-  dateModified: "2026-07-26"
+  dateModified: "2026-08-03"
 ---
 
-import Since from '@site/src/components/Since';
-
 # How to set per-message TTL
-
-<Since version="2.9.0" />
 
 Individual message expiration via the `Nats-TTL` header ([ADR-43](https://github.com/nats-io/nats-architecture-and-design/blob/main/adr/ADR-43.md)). Each message can have its own lifetime, independent of the stream's `max_age`.
 

@@ -8,14 +8,10 @@ schema:
   headline: "How to migrate immutable stream properties"
   description: "Safely change immutable stream properties without losing messages via blue-green sourcing."
   datePublished: "2026-04-02"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
 
-import Since from '@site/src/components/Since';
-
 # How to migrate immutable stream properties
-
-<Since version="2.9.0" />
 
 Safely change immutable stream properties (like `storage`) without losing messages. The transport handles recreation automatically via NATS stream sourcing.
 

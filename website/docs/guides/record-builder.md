@@ -8,10 +8,8 @@ schema:
   headline: "JetstreamRecordBuilder: Headers, Message IDs & Deduplication"
   description: "Build NestJS NATS messages with custom headers, deterministic message IDs for publish-side deduplication, and per-request RPC timeouts."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
-
-import Since from '@site/src/components/Since';
 
 # Record Builder & Deduplication
 
@@ -66,8 +64,6 @@ const record = new JetstreamRecordBuilder(data)
 
 ## Message ID & JetStream deduplication
 
-<Since version="2.4.0" />
-
 JetStream has built-in **server-side deduplication**. When a message is published with a message ID, the server remembers that ID for a configurable time window. If a second message with the same ID arrives within the window, it is silently dropped: no duplicate processing occurs.
 
 ### How the dedup window works
@@ -116,8 +112,6 @@ const report = await lastValueFrom(
 The timeout only applies to RPC (`client.send()`). For fire-and-forget events (`client.emit()`), timeout has no effect since there is no response to wait for.
 
 ## Scheduled delivery
-
-<Since version="2.8.0" />
 
 Use `scheduleAt()` to delay message delivery to a future time. The message is held by the NATS server and delivered to the consumer at the specified time:
 

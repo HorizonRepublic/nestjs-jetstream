@@ -8,12 +8,8 @@ schema:
   headline: "Ordered Events: Strict Sequential Delivery in NATS JetStream"
   description: "Strict sequential NestJS NATS JetStream event delivery with ephemeral ordered consumers, deliver policies, and CQRS replay patterns."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
-
-import Since from '@site/src/components/Since';
-
-<Since version="2.4.0" />
 
 # Ordered Events
 

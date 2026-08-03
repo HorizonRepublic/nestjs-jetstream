@@ -8,14 +8,10 @@ schema:
   headline: "Handler Metadata Registry: NATS KV Service Discovery for NestJS"
   description: "Publish NestJS handler metadata to a NATS KV bucket for dynamic service discovery, API gateway routing, and automatic catalog generation."
   datePublished: "2026-04-02"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
 
-import Since from '@site/src/components/Since';
-
 # Handler Metadata Registry
-
-<Since version="2.9.0" />
 
 Publish handler metadata to a NATS KV bucket at startup. External services (API gateways, dashboards, CLI tools) can read or watch the bucket for automatic service discovery.
 

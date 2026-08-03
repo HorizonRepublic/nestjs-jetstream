@@ -11,11 +11,7 @@ schema:
   dateModified: "2026-08-03"
 ---
 
-import Since from '@site/src/components/Since';
-
 # Bring Your Own Infrastructure (bind-only mode)
-
-<Since version="2.10.0" />
 
 By default, the transport provisions and updates every JetStream stream and consumer it needs. If your organization owns the infrastructure layer (Terraform, ArgoCD, Helm, or a dedicated platform team) you can opt out of that auto-management and instead tell the library to bind to resources that already exist.
 

@@ -8,14 +8,10 @@ schema:
   headline: "How to schedule delayed messages with NestJS JetStream"
   description: "One-shot delayed message delivery via the Nats-Schedule header (NATS 2.12, ADR-51)."
   datePublished: "2026-04-01"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
 
-import Since from '@site/src/components/Since';
-
 # How to schedule delayed messages
-
-<Since version="2.8.0" />
 
 One-shot delayed message delivery powered by [NATS 2.12 message scheduling](https://github.com/nats-io/nats-architecture-and-design/blob/main/adr/ADR-51.md) (ADR-51).
 

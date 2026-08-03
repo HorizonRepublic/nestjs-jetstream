@@ -11,8 +11,6 @@ schema:
   dateModified: "2026-08-03"
 ---
 
-import Since from '@site/src/components/Since';
-
 # Module Configuration
 
 Reference for the three registration methods exposed by `JetstreamModule`: `forRoot()` for global setup, `forRootAsync()` for async/runtime configuration, and `forFeature()` for per-module client registration. Every option is listed below with its type and default. For a guided introduction see the [Quick Start](/docs/getting-started/quick-start).
@@ -269,7 +267,7 @@ Default: `true`. Enable consumer infrastructure. Set to `false` for publisher-on
 
 #### `events`, `StreamConsumerOverrides`
 
-Default: production defaults (see [Default Configs](/docs/reference/default-configs#stream-defaults)). Overrides for workqueue event stream and consumer config. To enable [message scheduling](/docs/guides/scheduling), set `events.stream.allow_msg_schedules: true` (requires NATS >= 2.12). <Since version="2.8.0" />
+Default: production defaults (see [Default Configs](/docs/reference/default-configs#stream-defaults)). Overrides for workqueue event stream and consumer config. To enable [message scheduling](/docs/guides/scheduling), set `events.stream.allow_msg_schedules: true` (requires NATS >= 2.12).
 
 #### `broadcast`, `StreamConsumerOverrides`
 
@@ -277,7 +275,7 @@ Default: production defaults. Overrides for broadcast event stream and consumer 
 
 #### `ordered`, `OrderedEventOverrides`
 
-Default: production defaults. Configuration for ordered event consumers. See [OrderedEventOverrides](#orderedeventoverrides) below. <Since version="2.4.0" />
+Default: production defaults. Configuration for ordered event consumers. See [OrderedEventOverrides](#orderedeventoverrides) below.
 
 #### `hooks`, `Partial<TransportHooks>`
 
@@ -285,11 +283,11 @@ Default: none. Transport lifecycle hook handlers. Unset hooks are silently ignor
 
 #### `onDeadLetter`, `(info: DeadLetterInfo) => Promise<void>`
 
-Default: none. Async callback for dead letter handling. Called and awaited when a message exhausts all delivery attempts. See [Dead Letter Queue](/docs/guides/dead-letter-queue). <Since version="2.2.0" />
+Default: none. Async callback for dead letter handling. Called and awaited when a message exhausts all delivery attempts. See [Dead Letter Queue](/docs/guides/dead-letter-queue).
 
 #### `dlq`, `DlqOptions | false`
 
-Default: enabled. Exhausted messages are republished to a dedicated DLQ stream with tracking headers. Pass `false` to turn it off and leave them where they land. `management` controls whether the stream is provisioned (`Auto`, default) or bound to an existing one (`Manual`). See [Built-in DLQ stream](/docs/guides/dead-letter-queue#built-in-dlq-stream) and [External DLQ](/docs/guides/external-infrastructure#external-dlq). <Since version="2.9.0" />
+Default: enabled. Exhausted messages are republished to a dedicated DLQ stream with tracking headers. Pass `false` to turn it off and leave them where they land. `management` controls whether the stream is provisioned (`Auto`, default) or bound to an existing one (`Manual`). See [Built-in DLQ stream](/docs/guides/dead-letter-queue#built-in-dlq-stream) and [External DLQ](/docs/guides/external-infrastructure#external-dlq).
 
 :::note Bind-only deployments
 Under `provisioning: { management: Manual }` the implicit default stands down, since a service that provisions nothing should not fail boot over a stream nobody asked for. Set `dlq` explicitly to bind to an externally provisioned one.
@@ -297,7 +295,7 @@ Under `provisioning: { management: Manual }` the implicit default stands down, s
 
 #### `events.retry` / `broadcast.retry`, `readonly number[] | false`
 
-Default: `[2000, 10000]`. Delay in milliseconds before each redelivery after a handler throws or calls `ctx.retry()`; index 0 is the first retry and the last entry repeats once the curve runs out. `false` naks immediately, which burns every attempt as fast as the handler can fail. Delays are applied client-side when the message is naked, not through the consumer's `backoff`, so `ack_wait` keeps its configured value. <Since version="3.0.0" />
+Default: `[2000, 10000]`. Delay in milliseconds before each redelivery after a handler throws or calls `ctx.retry()`; index 0 is the first retry and the last entry repeats once the curve runs out. `false` naks immediately, which burns every attempt as fast as the handler can fail. Delays are applied client-side when the message is naked, not through the consumer's `backoff`, so `ack_wait` keeps its configured value.
 
 ```typescript
 events: {
@@ -308,7 +306,7 @@ events: {
 
 #### `provisioning`, `ProvisioningOptions`
 
-Default: `{ management: ManagementMode.Auto }`. Controls global provisioning behavior. <Since version="2.10.0" />
+Default: `{ management: ManagementMode.Auto }`. Controls global provisioning behavior.
 
 The most important field is `management`:
 
@@ -335,15 +333,15 @@ The other field is `preflightStorageCheck` (default `false`): when on, the trans
 
 #### `metadata`, `MetadataRegistryOptions`
 
-Default: auto-enabled if any handler has `meta`. Handler metadata registry; publishes `@EventPattern` / `@MessagePattern` handler metadata to a NATS KV bucket for cross-service discovery. No-op when `consumer: false`. See [Handler Metadata](/docs/patterns/handler-metadata). <Since version="2.9.0" />
+Default: auto-enabled if any handler has `meta`. Handler metadata registry; publishes `@EventPattern` / `@MessagePattern` handler metadata to a NATS KV bucket for cross-service discovery. No-op when `consumer: false`. See [Handler Metadata](/docs/patterns/handler-metadata).
 
 #### `metrics`, `MetricsOption`
 
-Default: none. Built-in Prometheus metrics. Pass `true` for defaults or a `MetricsConfig` object for full control (custom registry, prefix, labels, polling interval, histogram buckets). Requires the optional `prom-client` peer dependency when enabled. See [Prometheus Metrics](/docs/observability/metrics). <Since version="2.11.0" />
+Default: none. Built-in Prometheus metrics. Pass `true` for defaults or a `MetricsConfig` object for full control (custom registry, prefix, labels, polling interval, histogram buckets). Requires the optional `prom-client` peer dependency when enabled. See [Prometheus Metrics](/docs/observability/metrics).
 
 #### `allowDestructiveMigration`, `boolean`
 
-Default: `false`. Allow automatic blue-green stream recreation for immutable property changes (e.g., `storage`). Without this flag, the transport logs a warning and keeps the existing stream config. See [Stream Migration](/docs/guides/stream-migration). <Since version="2.9.0" />
+Default: `false`. Allow automatic blue-green stream recreation for immutable property changes (e.g., `storage`). Without this flag, the transport logs a warning and keeps the existing stream config. See [Stream Migration](/docs/guides/stream-migration).
 
 #### `shutdownTimeout`, `number`
 
@@ -386,7 +384,7 @@ rpc: {
 The `timeout` value controls both the **client-side wait** (how long the caller waits for a response) and the **server-side handler limit** (how long the handler is allowed to run before being terminated). Both sides use the value from their own `forRoot()` configuration.
 :::
 
-The `mode: 'jetstream'` variant also accepts `management` and `subjectPrefix` fields with the same semantics as `StreamConsumerOverrides`. <Since version="2.10.0" />
+The `mode: 'jetstream'` variant also accepts `management` and `subjectPrefix` fields with the same semantics as `StreamConsumerOverrides`.
 
 See [RPC Patterns](/docs/patterns/rpc) for a full comparison of the two modes.
 
@@ -421,7 +419,7 @@ NATS JetStream uses nanoseconds for all time-based configuration. The library ex
 
 #### `stream.name`, `string`
 
-Default: derived from `name` + kind convention (e.g., `orders__microservice_ev-stream`). Set an explicit stream name to bind to an externally provisioned stream with a custom name. <Since version="2.10.0" />
+Default: derived from `name` + kind convention (e.g., `orders__microservice_ev-stream`). Set an explicit stream name to bind to an externally provisioned stream with a custom name.
 
 ```typescript
 events: {
@@ -431,7 +429,7 @@ events: {
 
 #### `consumer.durable_name`, `string`
 
-Default: derived from `name` + kind convention (e.g., `orders__microservice_ev-consumer`). Set an explicit durable name to bind to an externally provisioned consumer. <Since version="2.10.0" />
+Default: derived from `name` + kind convention (e.g., `orders__microservice_ev-consumer`). Set an explicit durable name to bind to an externally provisioned consumer.
 
 ```typescript
 events: {
@@ -441,7 +439,7 @@ events: {
 
 #### `management`, `EntityManagement`
 
-Default: falls back to `provisioning.management`, then `ManagementMode.Auto`. Per-kind provisioning control with separate overrides for the stream and consumer: <Since version="2.10.0" />
+Default: falls back to `provisioning.management`, then `ManagementMode.Auto`. Per-kind provisioning control with separate overrides for the stream and consumer:
 
 ```typescript
 import { ManagementMode } from '@horizon-republic/nestjs-jetstream';
@@ -456,7 +454,7 @@ events: {
 
 #### `subjectPrefix`, `string`
 
-Default: library convention (e.g., `orders__microservice.ev.`). Override the subject prefix for all subjects in this kind. The trailing dot is normalized automatically. When a custom prefix is set, subjects become `{prefix}{pattern}` and consumers use exact `filter_subjects` entries instead of a single wildcard filter. <Since version="2.10.0" />
+Default: library convention (e.g., `orders__microservice.ev.`). Override the subject prefix for all subjects in this kind. The trailing dot is normalized automatically. When a custom prefix is set, subjects become `{prefix}{pattern}` and consumers use exact `filter_subjects` entries instead of a single wildcard filter.
 
 ```typescript
 events: {
@@ -467,8 +465,6 @@ events: {
 See [Bring Your Own Infrastructure](/docs/guides/external-infrastructure#custom-names-and-subject-prefixes) for how custom prefixes interact with scheduling subjects.
 
 ### OrderedEventOverrides
-
-<Since version="2.4.0" />
 
 Ordered events use a separate stream with Limits retention and deliver messages in strict sequential order. Ordered consumers are ephemeral, so the configuration is smaller than workqueue or broadcast and auto-managed by the `@nats-io/jetstream` client.
 
@@ -509,11 +505,11 @@ Default: `ReplayPolicy.Instant`. Replay policy for historical messages.
 
 #### `management`, `EntityManagement`
 
-Default: falls back to `provisioning.management`, then `ManagementMode.Auto`. Per-kind provisioning control for the ordered stream. Same semantics as `StreamConsumerOverrides.management`. <Since version="2.10.0" />
+Default: falls back to `provisioning.management`, then `ManagementMode.Auto`. Per-kind provisioning control for the ordered stream. Same semantics as `StreamConsumerOverrides.management`.
 
 #### `subjectPrefix`, `string`
 
-Default: library convention. Custom subject prefix for ordered-event subjects. Same semantics as `StreamConsumerOverrides.subjectPrefix`. <Since version="2.10.0" />
+Default: library convention. Custom subject prefix for ordered-event subjects. Same semantics as `StreamConsumerOverrides.subjectPrefix`.
 
 See [Ordered Events](/docs/patterns/ordered-events) for detailed usage.
 

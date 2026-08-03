@@ -8,14 +8,10 @@ schema:
   headline: "How to configure a Dead Letter Queue"
   description: "Capture NestJS NATS JetStream messages that exhaust all delivery attempts via a DLQ stream or onDeadLetter callback."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
 
-import Since from '@site/src/components/Since';
-
 # How to configure a Dead Letter Queue
-
-<Since version="2.2.0" />
 
 A message that fails every delivery attempt and reaches `max_deliver` (default **3**) becomes a dead letter. These two mechanisms capture it, and they compose:
 
@@ -57,8 +53,6 @@ sequenceDiagram
 ```
 
 ## Built-in DLQ stream
-
-<Since version="2.9.0" />
 
 The stream is provisioned and exhausted messages are republished to it without any configuration. Override it when the defaults do not fit, or turn it off with `dlq: false`:
 

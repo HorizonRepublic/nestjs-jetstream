@@ -11,8 +11,6 @@ schema:
   dateModified: "2026-08-03"
 ---
 
-import Since from '@site/src/components/Since';
-
 # How to register lifecycle hooks
 
 The transport emits lifecycle events at key moments, connection changes, errors, message routing, shutdown, dead letters, and observability checkpoints. Register hook callbacks to integrate with your monitoring, alerting, or logging infrastructure.
@@ -21,21 +19,21 @@ The transport emits lifecycle events at key moments, connection changes, errors,
 
 The full event set is defined in the `TransportEvent` enum:
 
-| Event               | Signature                                                 | When it fires                                                                                     |
-| ------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `Connect`           | `(server: string) => void`                                | NATS connection established                                                                       |
-| `Disconnect`        | `() => void`                                              | NATS connection lost                                                                              |
-| `Reconnect`         | `(server: string) => void`                                | NATS connection re-established after a disconnect                                                 |
-| `Error`             | `(error: Error, context?: string) => void`                | Any transport-level error                                                                         |
-| `RpcTimeout`        | `(subject: string, correlationId: string) => void`        | A deadline expires on either side of an RPC call                                                  |
-| `MessageRouted`     | `(subject: string, kind: MessageKind) => void`            | A message is successfully routed to its handler                                                   |
-| `HandlerCompleted`  | `(subject, kind: StreamKind, durationMs, status) => void` | A handler returns or throws (success/error/retried/terminated). <Since version="2.11.0" />        |
-| `Published`         | `(subject, kind: StreamKind, durationMs, status) => void` | Every client-side publish leg completes (event emit or RPC publish). <Since version="2.11.0" />   |
-| `RpcCompleted`      | `(subject, durationMs, status) => void`                   | RPC round-trip settles on the caller side (success / error / timeout). <Since version="2.11.0" /> |
-| `ConsumerRecovered` | `(label, attempts: number) => void`                       | Self-healing recovers a consumer after one or more failed restarts                                |
-| `ShutdownStart`     | `() => void`                                              | Graceful shutdown sequence begins                                                                 |
-| `ShutdownComplete`  | `() => void`                                              | Graceful shutdown sequence finishes                                                               |
-| `DeadLetter`        | `(info: DeadLetterInfo) => void`                          | A message exhausts all delivery attempts                                                          |
+| Event               | Signature                                                 | When it fires                                                          |
+| ------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `Connect`           | `(server: string) => void`                                | NATS connection established                                            |
+| `Disconnect`        | `() => void`                                              | NATS connection lost                                                   |
+| `Reconnect`         | `(server: string) => void`                                | NATS connection re-established after a disconnect                      |
+| `Error`             | `(error: Error, context?: string) => void`                | Any transport-level error                                              |
+| `RpcTimeout`        | `(subject: string, correlationId: string) => void`        | A deadline expires on either side of an RPC call                       |
+| `MessageRouted`     | `(subject: string, kind: MessageKind) => void`            | A message is successfully routed to its handler                        |
+| `HandlerCompleted`  | `(subject, kind: StreamKind, durationMs, status) => void` | A handler returns or throws (success/error/retried/terminated).        |
+| `Published`         | `(subject, kind: StreamKind, durationMs, status) => void` | Every client-side publish leg completes (event emit or RPC publish).   |
+| `RpcCompleted`      | `(subject, durationMs, status) => void`                   | RPC round-trip settles on the caller side (success / error / timeout). |
+| `ConsumerRecovered` | `(label, attempts: number) => void`                       | Self-healing recovers a consumer after one or more failed restarts     |
+| `ShutdownStart`     | `() => void`                                              | Graceful shutdown sequence begins                                      |
+| `ShutdownComplete`  | `() => void`                                              | Graceful shutdown sequence finishes                                    |
+| `DeadLetter`        | `(info: DeadLetterInfo) => void`                          | A message exhausts all delivery attempts                               |
 
 The `MessageKind` enum on `MessageRouted` has two values, `Event` and `Rpc`, and is importable from `@horizon-republic/nestjs-jetstream`.
 

@@ -8,10 +8,8 @@ schema:
   headline: "RpcContext: Handler Context & Message Settlement"
   description: "Access JetStream metadata and control ack, retry, and terminate actions in NestJS message handlers via RpcContext."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-26"
+  dateModified: "2026-08-03"
 ---
-
-import Since from '@site/src/components/Since';
 
 # Handler Context
 
@@ -68,8 +66,6 @@ class RpcContext {
 
 ### JetStream message info
 
-<Since version="2.7.0" />
-
 These return `undefined` for Core NATS messages: no type guard needed.
 
 ```typescript
@@ -92,8 +88,6 @@ class RpcContext {
 ```
 
 ### Settlement actions
-
-<Since version="2.7.0" />
 
 Control how the transport acknowledges the message, without throwing errors.
 
