@@ -6,13 +6,14 @@ import { jetstreamManager, type JetStreamManager } from '@nats-io/jetstream';
 import { connect, type NatsConnection } from '@nats-io/transport-node';
 
 import {
+  connectJetstreamMicroservices,
   JetstreamModule,
   JetstreamStrategy,
   StreamKind,
   streamName,
   dlqStreamName,
 } from '../../src';
-import type { JetstreamModuleOptions } from '../../src';
+import type { JetstreamConnectionOptions, JetstreamModuleOptions } from '../../src';
 
 /** Unique service name per test to avoid stream/consumer collisions. */
 export const uniqueServiceName = (): string => `test-${Math.random().toString(36).slice(2, 10)}`;
@@ -49,6 +50,52 @@ export const createTestApp = async (
     await app.startAllMicroservices();
   }
 
+  await app.init();
+
+  return { app, module };
+};
+
+/** One `forFeature()` registration for the multi-connection harness. */
+export interface MultiConnectionClientTarget {
+  name: string;
+  connection?: string;
+}
+
+/** Options for a hybrid app wired to several NATS containers. */
+export interface MultiConnectionAppOptions {
+  name: string;
+  connections: Record<string, JetstreamConnectionOptions>;
+  defaultConnection?: string;
+  controllers?: Type[];
+  clients?: MultiConnectionClientTarget[];
+  root?: Partial<Omit<JetstreamModuleOptions, 'name' | 'servers' | 'connections'>>;
+}
+
+/** Bootstrap a hybrid NestJS app with one microservice per configured connection. */
+export const createMultiConnectionApp = async (
+  options: MultiConnectionAppOptions,
+): Promise<{ app: INestApplication; module: TestingModule }> => {
+  const featureImports = (options.clients ?? []).map((target) =>
+    JetstreamModule.forFeature({ name: target.name, connection: target.connection }),
+  );
+
+  const module = await Test.createTestingModule({
+    imports: [
+      JetstreamModule.forRoot({
+        ...options.root,
+        name: options.name,
+        connections: options.connections,
+        defaultConnection: options.defaultConnection,
+      }),
+      ...featureImports,
+    ],
+    controllers: options.controllers ?? [],
+  }).compile();
+
+  const app = module.createNestApplication({ logger: false });
+
+  connectJetstreamMicroservices(app);
+  await app.startAllMicroservices();
   await app.init();
 
   return { app, module };

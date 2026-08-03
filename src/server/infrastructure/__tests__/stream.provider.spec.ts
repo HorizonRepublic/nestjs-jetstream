@@ -9,12 +9,17 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vi
 
 import { ConnectionProvider } from '../../../connection';
 import { ManagementMode, StreamKind } from '../../../interfaces';
-import type { JetstreamModuleOptions, StreamConfigOverrides } from '../../../interfaces';
+import type {
+  JetstreamModuleOptions,
+  ResolvedConnectionOptions,
+  StreamConfigOverrides,
+} from '../../../interfaces';
 import {
   DEFAULT_BROADCAST_STREAM_CONFIG,
   DEFAULT_DLQ_STREAM_CONFIG,
   DEFAULT_EVENT_STREAM_CONFIG,
   internalName,
+  STREAM_OWNER_METADATA_KEY,
 } from '../../../jetstream.constants';
 import { PatternRegistry } from '../../routing';
 import { InfrastructureBinder } from '../infrastructure-binder';
@@ -330,6 +335,8 @@ describe(StreamProvider, () => {
             name,
             subjects: [`${internalName(options.name)}.ev.>`],
             description: `JetStream ev stream for ${options.name}`,
+            // A stream already provisioned by this connection carries its stamp.
+            metadata: { [STREAM_OWNER_METADATA_KEY]: `${options.name}:default` },
           },
         });
 
@@ -378,6 +385,8 @@ describe(StreamProvider, () => {
           subjects: [`${internalName(options.name)}.ev.>`],
           description: `JetStream ev stream for ${options.name}`,
           storage: StorageType.Memory,
+          // Already stamped, so the only diff is the immutable storage change.
+          metadata: { [STREAM_OWNER_METADATA_KEY]: `${options.name}:default` },
         };
 
         mockStreamInfo(createMock<StreamInfo>({ config: existingConfig }));
@@ -540,6 +549,8 @@ describe(StreamProvider, () => {
               name: `${options.name}__microservice_dlq-stream`,
               subjects: [`${options.name}__microservice_dlq-stream`],
               description: `JetStream DLQ stream for ${options.name}`,
+              // Already provisioned by this connection, so nothing to update.
+              metadata: { [STREAM_OWNER_METADATA_KEY]: `${options.name}:default` },
             } as StreamInfo['config'],
           });
 
@@ -962,6 +973,209 @@ describe(StreamProvider, () => {
 
         expect(addArg.max_age).toBe(30_000);
       });
+    });
+  });
+
+  describe('connection ownership', () => {
+    const resolvedOptions = (
+      connectionName: string,
+      extra: Partial<ResolvedConnectionOptions> = {},
+    ): ResolvedConnectionOptions => ({
+      name: 'orders',
+      servers: ['nats://localhost:4222'],
+      dlq: false,
+      connectionName,
+      critical: true,
+      ...extra,
+    });
+
+    /** An existing event stream matching the defaults, carrying the given metadata. */
+    const existingEventStream = (metadata: Record<string, string>): StreamInfo =>
+      createMock<StreamInfo>({
+        config: {
+          ...DEFAULT_EVENT_STREAM_CONFIG,
+          name: `${internalName('orders')}_ev-stream`,
+          subjects: [`${internalName('orders')}.ev.>`],
+          description: 'JetStream ev stream for orders',
+          metadata,
+        },
+      });
+
+    const ownedBy = (owner: string): StreamInfo =>
+      existingEventStream({ [STREAM_OWNER_METADATA_KEY]: owner });
+
+    it('should stamp a created stream with the owning connection', async () => {
+      // Given a connection-scoped provider whose stream does not exist yet
+      options = resolvedOptions('analytics');
+      sut = makeSut();
+      mockJsm.streams.info.mockRejectedValue(streamNotFound());
+      mockJsm.streams.add.mockResolvedValue(createMock<StreamInfo>());
+
+      // When the event stream is ensured
+      await sut.ensureStreams([StreamKind.Event]);
+
+      // Then the created config carries the ownership stamp
+      expect(mockJsm.streams.add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({ [STREAM_OWNER_METADATA_KEY]: 'orders:analytics' }),
+        }),
+      );
+    });
+
+    it('should not stamp the shared broadcast stream', async () => {
+      // Given the broadcast stream, which every service in the cluster shares
+      options = resolvedOptions('analytics');
+      sut = makeSut();
+      mockJsm.streams.info.mockRejectedValue(streamNotFound());
+      mockJsm.streams.add.mockResolvedValue(createMock<StreamInfo>());
+
+      // When it is ensured
+      await sut.ensureStreams([StreamKind.Broadcast]);
+
+      // Then no owner stamp is written, so deploys do not flip-flop it
+      const addArg = mockJsm.streams.add.mock.calls[0]![0] as {
+        metadata?: Record<string, string>;
+      };
+
+      expect(addArg.metadata?.[STREAM_OWNER_METADATA_KEY]).toBeUndefined();
+    });
+
+    it('should reject a stream owned by a different connection of the same service', async () => {
+      // Given an existing stream stamped by another connection of this service
+      options = resolvedOptions('analytics');
+      sut = makeSut();
+      mockStreamInfo(ownedBy('orders:primary'));
+
+      // When the stream is ensured, Then both connection names surface
+      await expect(sut.ensureStreams([StreamKind.Event])).rejects.toThrow(
+        /analytics[\s\S]*primary|primary[\s\S]*analytics/,
+      );
+    });
+
+    it('should accept a stream it already owns', async () => {
+      // Given a stream stamped by this very connection
+      options = resolvedOptions('analytics');
+      sut = makeSut();
+      mockStreamInfo(ownedBy('orders:analytics'));
+      mockJsm.streams.update.mockResolvedValue(createMock<StreamInfo>());
+
+      // When the stream is ensured, Then provisioning proceeds
+      await expect(sut.ensureStreams([StreamKind.Event])).resolves.toBeUndefined();
+    });
+
+    it('should ignore a stamp belonging to a different service', async () => {
+      // Given a stream stamped by another service entirely
+      options = resolvedOptions('analytics');
+      sut = makeSut();
+      mockStreamInfo(ownedBy('billing:primary'));
+      mockJsm.streams.update.mockResolvedValue(createMock<StreamInfo>());
+
+      // When the stream is ensured, Then cross-service ownership is not our business
+      await expect(sut.ensureStreams([StreamKind.Event])).resolves.toBeUndefined();
+    });
+
+    it('should preserve metadata the transport did not author', async () => {
+      // Given an existing stream carrying a foreign metadata key
+      options = resolvedOptions('analytics');
+      sut = makeSut();
+      mockStreamInfo(existingEventStream({ 'some-external-key': 'keep-me' }));
+      mockJsm.streams.update.mockResolvedValue(createMock<StreamInfo>());
+
+      // When the stream is updated
+      await sut.ensureStreams([StreamKind.Event]);
+
+      // Then the foreign key survives alongside the stamp
+      const updateArg = mockJsm.streams.update.mock.calls[0]?.[1] as
+        | { metadata?: Record<string, string> }
+        | undefined;
+
+      expect(updateArg?.metadata?.['some-external-key']).toBe('keep-me');
+      expect(updateArg?.metadata?.[STREAM_OWNER_METADATA_KEY]).toBe('orders:analytics');
+    });
+
+    it('should keep user-supplied stream metadata alongside the stamp', async () => {
+      // Given a kind override carrying its own metadata block
+      options = resolvedOptions('analytics', {
+        events: { stream: { metadata: { team: 'payments' } } },
+      });
+      sut = makeSut();
+      mockJsm.streams.info.mockRejectedValue(streamNotFound());
+      mockJsm.streams.add.mockResolvedValue(createMock<StreamInfo>());
+
+      // When the stream is created
+      await sut.ensureStreams([StreamKind.Event]);
+
+      // Then the stamp augments the user's keys instead of replacing them
+      const addArg = mockJsm.streams.add.mock.calls[0]![0] as {
+        metadata?: Record<string, string>;
+      };
+
+      expect(addArg.metadata?.team).toBe('payments');
+      expect(addArg.metadata?.[STREAM_OWNER_METADATA_KEY]).toBe('orders:analytics');
+    });
+
+    it('should not drop operator metadata when the transport writes none', async () => {
+      // Given a broadcast stream carrying operator keys. Broadcast streams are
+      // never stamped, so the transport contributes no metadata of its own here.
+      options = resolvedOptions('analytics');
+      sut = makeSut();
+      mockStreamInfo(
+        createMock<StreamInfo>({
+          config: {
+            ...DEFAULT_BROADCAST_STREAM_CONFIG,
+            name: 'broadcast-stream',
+            subjects: ['broadcast.>'],
+            description: 'JetStream broadcast stream (shared across services)',
+            // A mutable difference, so an update is guaranteed to be issued.
+            max_bytes: 1,
+            metadata: { 'operator-owned': 'keep-me' },
+          },
+        }),
+      );
+      mockJsm.streams.update.mockResolvedValue(createMock<StreamInfo>());
+
+      // When the stream is ensured
+      await sut.ensureStreams([StreamKind.Broadcast]);
+
+      // Then the update carries the operator's metadata forward rather than
+      // replacing the config without it
+      const updateArg = mockJsm.streams.update.mock.calls[0]![1] as {
+        metadata?: Record<string, string>;
+      };
+
+      expect(updateArg.metadata?.['operator-owned']).toBe('keep-me');
+    });
+
+    it('should stamp the DLQ stream, whose name is service-scoped too', async () => {
+      // Given DLQ provisioning enabled for a named connection
+      options = resolvedOptions('analytics', { dlq: {} });
+      sut = makeSut();
+      mockJsm.streams.info.mockRejectedValue(streamNotFound());
+      mockJsm.streams.add.mockResolvedValue(createMock<StreamInfo>());
+
+      // When streams are ensured
+      await sut.ensureStreams([StreamKind.Event]);
+
+      // Then the DLQ stream carries the same ownership stamp
+      const dlqCall = mockJsm.streams.add.mock.calls
+        .map(([config]) => config as { name: string; metadata?: Record<string, string> })
+        .find((config) => config.name.endsWith('_dlq-stream'));
+
+      expect(dlqCall).toBeDefined();
+      expect(dlqCall?.metadata?.[STREAM_OWNER_METADATA_KEY]).toBe('orders:analytics');
+    });
+
+    it('should not stamp streams under ManagementMode.Manual', async () => {
+      // Given externally managed streams
+      options = resolvedOptions('analytics', {
+        provisioning: { management: ManagementMode.Manual },
+      });
+      sut = makeSut();
+      mockStreamInfo(ownedBy('orders:primary'));
+
+      // When the stream is bound, Then a foreign stamp does not block it
+      await expect(sut.ensureStreams([StreamKind.Event])).resolves.toBeUndefined();
+      expect(mockJsm.streams.add).not.toHaveBeenCalled();
     });
   });
 });

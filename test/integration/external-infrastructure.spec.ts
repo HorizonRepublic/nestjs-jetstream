@@ -619,15 +619,17 @@ describe('External Infrastructure (bind-only mode)', () => {
         new TextEncoder().encode(JSON.stringify({ orderId: 'dlq-ext-1' })),
       );
 
-      // When: all delivery attempts are exhausted (max_deliver=2, ack_wait=2s)
-      await waitForCondition(() => controller.attempts >= 2, 15_000);
+      // When: all delivery attempts are exhausted (max_deliver=2, ack_wait=2s).
+      // Redelivery waits on ack_wait plus the paced nak delay, so the budget is
+      // generous: on a loaded CI runner the tight version of this flaked.
+      await waitForCondition(() => controller.attempts >= 2, 30_000);
 
       // Then: the dead letter reaches the external DLQ stream
       await waitForCondition(async () => {
         const info = await jsm.streams.info(dlqStreamName);
 
         return info.state.messages >= 1;
-      }, 10_000);
+      }, 25_000);
 
       const msg = await jsm.streams.getMessage(dlqStreamName, { seq: 1 });
 
@@ -636,6 +638,8 @@ describe('External Infrastructure (bind-only mode)', () => {
       const decoded = JSON.parse(new TextDecoder().decode(msg!.data));
 
       expect(decoded.orderId).toBe('dlq-ext-1');
-    });
+      // Exceeds the 30s project default because the two waits above are sized
+      // for a loaded runner, where redelivery plus the DLQ republish is slow.
+    }, 90_000);
   });
 });

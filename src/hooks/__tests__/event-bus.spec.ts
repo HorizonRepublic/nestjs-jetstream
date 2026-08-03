@@ -4,7 +4,7 @@ import { faker } from '@faker-js/faker';
 import { createMock } from '@golevelup/ts-vitest';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 
-import { TransportEvent } from '../../interfaces';
+import { MessageKind, TransportEvent } from '../../interfaces';
 import { EventBus } from '../event-bus';
 
 describe(EventBus, () => {
@@ -213,6 +213,71 @@ describe(EventBus, () => {
 
       // Then: hasHook returns true (so hot path runs emit)
       expect(sut.hasHook(TransportEvent.MessageRouted)).toBe(true);
+    });
+  });
+
+  describe('forConnection()', () => {
+    it('should not append a connection name on the root bus', () => {
+      // Given a bus with no connection view — the single-connection case
+      const hook = vi.fn();
+      const root = new EventBus(createMock<Logger>(), { [TransportEvent.Connect]: hook });
+
+      // When an event is emitted
+      root.emit(TransportEvent.Connect, 'nats://localhost:4222');
+
+      // Then the payload is byte-for-byte what it was before named connections
+      expect(hook).toHaveBeenCalledWith('nats://localhost:4222');
+    });
+
+    it('should append the connection name on a connection view', () => {
+      // Given a connection-scoped view of the bus
+      const hook = vi.fn();
+      const root = new EventBus(createMock<Logger>(), { [TransportEvent.Connect]: hook });
+
+      // When an event is emitted through the view
+      root.forConnection('analytics').emit(TransportEvent.Connect, 'nats://localhost:4222');
+
+      // Then the hook can tell which cluster it came from
+      expect(hook).toHaveBeenCalledWith('nats://localhost:4222', 'analytics');
+    });
+
+    it('should share subscribers registered on the root after the view was created', () => {
+      // Given a view created before a subscriber exists
+      const root = new EventBus(createMock<Logger>());
+      const view = root.forConnection('analytics');
+      const subscriber = vi.fn();
+
+      root.subscribe(TransportEvent.Connect, subscriber);
+
+      // When the view emits
+      view.emit(TransportEvent.Connect, 'nats://localhost:4222');
+
+      // Then the later subscriber still fires — registration order must not matter
+      expect(subscriber).toHaveBeenCalledWith('nats://localhost:4222', 'analytics');
+    });
+
+    it('should tag the hot-path MessageRouted emission too', () => {
+      // Given a connection view with a MessageRouted hook
+      const hook = vi.fn();
+      const root = new EventBus(createMock<Logger>(), { [TransportEvent.MessageRouted]: hook });
+
+      // When the hot path emits
+      root.forConnection('analytics').emitMessageRouted('orders.created', MessageKind.Event);
+
+      // Then the connection is present
+      expect(hook).toHaveBeenCalledWith('orders.created', MessageKind.Event, 'analytics');
+    });
+
+    it('should report hooks through a view', () => {
+      // Given a hook registered on the root
+      const root = new EventBus(createMock<Logger>(), { [TransportEvent.Connect]: vi.fn() });
+
+      // When the view is asked
+      const view = root.forConnection('analytics');
+
+      // Then it sees the same registrations
+      expect(view.hasHook(TransportEvent.Connect)).toBe(true);
+      expect(view.hasHook(TransportEvent.Disconnect)).toBe(false);
     });
   });
 });

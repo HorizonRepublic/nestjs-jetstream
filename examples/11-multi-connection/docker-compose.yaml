@@ -1,0 +1,12 @@
+# Second NATS cluster for the multi-connection example.
+# The primary cluster is the one from the repository-root compose file on 4222;
+# this adds an independent cluster on 4223 so the two never share a JetStream domain.
+services:
+  nats-analytics:
+    image: nats:2.14.3
+    container_name: nestjs_jetstream_nats_analytics
+    ports:
+      - '4223:4222'
+      - '8223:8222'
+    command: '--js --http_port 8222'
+    restart: unless-stopped

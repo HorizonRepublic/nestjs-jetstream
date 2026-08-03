@@ -8,7 +8,7 @@ schema:
   headline: "How to expose health checks for NATS JetStream"
   description: "Expose NATS connection status and RTT latency as a Kubernetes readiness/liveness probe using JetstreamHealthIndicator."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-26"
+  dateModified: "2026-08-03"
 ---
 
 import Since from '@site/src/components/Since';
@@ -27,6 +27,35 @@ Every health check call performs two things:
 2. **RTT latency**: a round-trip ping to the NATS server via `nc.rtt()`, measuring actual network latency in milliseconds.
 
 If the connection is closed or the RTT ping fails, the indicator reports the connection as unhealthy.
+
+## Readiness versus liveness
+
+Wire the indicator to your **readiness** probe, never to liveness.
+
+A liveness probe that touches NATS turns a network blip into a pod restart at exactly the moment the transport is recovering — and since every replica sees the same blip, they restart together. Readiness watches the transport; liveness watches the process.
+
+## Multiple connections
+
+With [named connections](/docs/guides/multi-connection) the status gains two fields:
+
+```json
+{
+  "connected": true,
+  "server": "nats://primary:4222",
+  "latency": 1,
+  "degraded": true,
+  "connections": {
+    "primary":   { "connected": true,  "critical": true,  "server": "nats://primary:4222", "latency": 1 },
+    "analytics": { "connected": false, "critical": false, "server": null, "latency": null }
+  }
+}
+```
+
+- `connected` means every **critical** connection is alive; `isHealthy()` throws only when it is false.
+- `degraded` means at least one **non-critical** connection is down. It is orthogonal to `connected`, so a dead analytics cluster degrades the report without failing readiness.
+- `server` and `latency` describe the default connection, so the original fields keep their meaning.
+
+With a single connection both fields are absent and the response is byte-for-byte what it was before.
 
 ## Two APIs
 

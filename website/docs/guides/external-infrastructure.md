@@ -8,7 +8,7 @@ schema:
   headline: "Bring Your Own Infrastructure (bind-only mode)"
   description: "Bind NestJS JetStream to externally managed NATS streams and consumers provisioned by Terraform, ArgoCD, or a platform team."
   datePublished: "2026-06-12"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
 
 import Since from '@site/src/components/Since';
@@ -319,6 +319,26 @@ nats stream add ext_orders_stream \
 ```
 
 If the default naming convention is used (no `subjectPrefix`), the schedule wildcard is `{service}__microservice._sch.>` and must appear in the external stream's subjects.
+
+## Per-connection management
+
+`provisioning` is a per-connection option, so with [named connections](/docs/guides/multi-connection) one connection can bind to externally managed infrastructure while another provisions its own:
+
+```typescript
+JetstreamModule.forRoot({
+  name: 'orders',
+  defaultConnection: 'primary',
+  connections: {
+    primary: { servers: ['nats://primary:4222'] },              // Auto, provisions itself
+    regulated: {
+      servers: ['nats://regulated:4222'],
+      provisioning: { management: ManagementMode.Manual },      // bound, never provisioned
+    },
+  },
+})
+```
+
+One caveat: the stream ownership stamp that detects two connections reaching the same cluster is not written under `Manual`, because those streams are not ours to write to. The configuration-level check — two connections declaring an identical server set — still applies, but two `Manual` connections addressing one cluster through different URLs remain undetectable. Keep them distinct by convention.
 
 ## Interaction with allowDestructiveMigration
 

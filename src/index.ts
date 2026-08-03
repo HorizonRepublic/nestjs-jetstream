@@ -1,6 +1,11 @@
 // Module
 export { JetstreamModule } from './jetstream.module';
 
+// Bootstrap
+export { connectJetstreamMicroservices } from './bootstrap';
+
+export type { JetstreamBootstrapOptions } from './bootstrap';
+
 // Interfaces
 export { ManagementMode, MessageKind, StreamKind, TransportEvent } from './interfaces';
 
@@ -8,6 +13,8 @@ export type {
   Codec,
   DeadLetterInfo,
   EntityManagement,
+  JetstreamConnectionHealth,
+  JetstreamConnectionOptions,
   JetstreamFeatureOptions,
   JetstreamHealthStatus,
   JetstreamModuleAsyncOptions,
@@ -49,8 +56,10 @@ export {
   JetstreamHeader,
   JetstreamDlqHeader,
   dlqStreamName,
+  STREAM_OWNER_METADATA_KEY,
   JETSTREAM_CODEC,
   JETSTREAM_CONNECTION,
+  JETSTREAM_CONNECTIONS,
   JETSTREAM_OPTIONS,
   PatternPrefix,
   toNanos,
@@ -82,7 +91,7 @@ export { NatsErrorCode } from './server/infrastructure/nats-error-codes';
 export { JetstreamProvisioningError } from './server/infrastructure/provisioning-error';
 
 // Server (for advanced use cases)
-export { JetstreamStrategy } from './server';
+export { JetstreamConnection, JetstreamStrategy } from './server';
 
 // Prometheus metrics
 export type { HistogramBuckets, MetricsConfig, MetricsOption } from './metrics/metrics.config';

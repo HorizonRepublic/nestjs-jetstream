@@ -6,7 +6,7 @@ schema:
   headline: Naming Conventions
   description: "Stream, consumer, and subject naming patterns derived from the service name."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
 
 # Naming Conventions
@@ -146,3 +146,17 @@ Each stream subscribes to a wildcard subject that captures every message of its 
 The `>` wildcard matches one or more tokens, so `orders__microservice.ev.>` captures `orders__microservice.ev.order.created`, `orders__microservice.ev.payment.processed` and everything else under that prefix.
 
 `_sch` is this library's convention for keeping a scheduled message out of the filter its own consumer watches, until the server publishes it for real. NATS scheduling itself runs on headers (`Nats-Schedule`, `Nats-Schedule-Target` per [ADR-51](https://github.com/nats-io/nats-architecture-and-design/blob/main/adr/ADR-51.md)), not on subjects. You never address a `_sch` subject yourself.
+
+## Names and multiple connections
+
+Adding [named connections](/docs/guides/multi-connection) changes nothing here. Every name is derived from the service `name` alone, so two connections of one service resolve **identical** stream, consumer and subject names. Renaming them per connection would orphan existing streams and strand their messages, so the transport does not do it.
+
+That makes one configuration mistake dangerous: two connections that reach the same cluster would provision the same stream and silently overwrite each other's configuration. Two checks prevent it.
+
+**Config level, before any network call.** Two connections declaring an identical server set — normalized for ordering and the default `4222` port — fail at startup.
+
+**NATS level.** Every provisioned stream carries a `nestjs-jetstream-owner` metadata entry of `{service}:{connection}`. This covers every stream whose name is derived from the service, the dead-letter stream included. A stream already stamped by a different connection of the same service fails provisioning, with both connection names in the error. A stamp belonging to a different service is left alone.
+
+The shared `broadcast-stream` is exempt: every service in the cluster shares it, so a per-connection stamp would flip-flop on each deploy. Under `provisioning: { management: Manual }` nothing is stamped and the second check does not apply, since those streams are not ours to write to.
+
+Metadata the transport did not author is preserved. An update carries forward whatever keys the stream already had, and a `metadata` block in your stream overrides is merged with the stamp rather than replaced by it.

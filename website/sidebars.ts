@@ -48,6 +48,7 @@ const sidebars: SidebarsConfig = {
         'guides/per-message-ttl',
         'guides/storage-budgeting',
         'guides/stream-migration',
+        'guides/multi-connection',
         'guides/external-infrastructure',
         'guides/performance',
       ],

@@ -8,14 +8,85 @@ schema:
   headline: "Release Notes: NestJS JetStream Transport"
   description: "Version-by-version changelog covering new features, behavior changes, and breaking changes."
   datePublished: "2026-03-26"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
 
 # Release Notes
 
 Version-by-version changelog. New features, peer-dependency requirements, behavior changes, and the small list of breaking changes are tracked here. For instructions on how to switch from the built-in `@nestjs/microservices` NATS transport to this library, see the [Migration Guide](/docs/guides/migration).
 
-## v2.10 → v2.11
+## v2.13 → v3.0
+
+**New features**
+
+- [**Multiple connections**](/docs/guides/multi-connection): one service can talk to several NATS clusters through a `connections` map, each with its own streams, consumers, routers and backpressure budget. Bind a controller with `@JetstreamConnection('name')` or a single handler with `{ connection }` in the pattern extras, publish through `forFeature({ connection })`, and attach every connection at bootstrap with `connectJetstreamMicroservices(app)`. Mark a connection `critical: false` and a dead secondary cluster degrades health instead of blocking startup.
+- **Health reports per connection.** `check()` gains `degraded` and a `connections` breakdown once more than one connection is configured. `connected` now means "every critical connection is alive", so `isHealthy()` keeps passing while a non-critical cluster is down.
+- **Shutdown drains connections in parallel.** Every connection stops accepting before any of them drains, and each is bounded by its own `shutdownTimeout`, so the ceiling for SIGTERM is `max(timeouts)` rather than their sum.
+- **Colliding connections fail fast.** Two connections that resolve the same stream are caught at startup, either by their server sets matching or by the `nestjs-jetstream-owner` stamp the transport writes into stream metadata.
+
+**Behavior changes**
+
+- **Streams reserve far less storage.** `max_bytes` drops to 512 MB on events, 1 GB on ordered, 256 MB on broadcast and 64 MB on commands, and `max_msg_size` drops to 1 MB. `max_bytes` is mutable, so existing streams pick the new value up on the next boot.
+- **Retries are paced.** A failing handler naks with a delay from `[2000, 10000]` ms instead of immediately. Pass `events: { retry: false }` for the previous behavior.
+- **The dead-letter stream is on by default**, so exhausted messages land in `{service}__microservice_dlq-stream` instead of being dropped. Pass `dlq: false` to opt out.
+- **Streams gain an ownership stamp.** Every service-scoped stream, the DLQ included, carries `nestjs-jetstream-owner` metadata. Existing streams pick it up through one mutable update on the first boot after upgrading; the shared broadcast stream is never stamped.
+- **Hooks receive a trailing connection name**, populated only when more than one connection is configured. Hooks that ignore the extra argument are unaffected.
+
+**Breaking changes**
+
+- **Node 20 is no longer supported.** The minimum is Node 22.
+- **`servers` is optional in the options type**, paired with the mutually exclusive `connections`. Supplying both, or neither, fails at startup. Flat configurations keep working untouched.
+
+A single-connection application upgrades with no source changes: stream, consumer and subject names are identical, `check()` returns the same shape, and hook payloads are unchanged. See [Upgrading between versions](/docs/guides/migration#upgrading-between-versions) for the step-by-step notes.
+
+## Earlier releases
+
+Every 2.x release, newest first.
+
+<details>
+<summary>v2.12 → v2.13</summary>
+
+**New features**
+
+- [**Bring your own infrastructure**](/docs/guides/external-infrastructure): `provisioning: { management: ManagementMode.Manual }` binds to streams and consumers provisioned by Terraform, ArgoCD, or a platform team. The transport validates what it finds and never creates or updates it.
+- **Custom names are honored.** `stream.name`, `consumer.durable_name` and subject prefixes set in a kind's overrides are now read and applied, instead of being silently ignored in favor of the naming conventions.
+
+**Behavior changes**
+
+- If you had `stream.name` or `consumer.durable_name` set by accident, the transport now uses those names instead of the convention-derived ones. Review your `overrides` blocks before upgrading.
+
+**Bug fixes**
+
+- Consumer filters that would swallow scheduled messages are rejected at boot rather than silently dropping them.
+- Unfiltered consumers are treated as covering every handler subject, so binding to them no longer fails validation.
+- Self-RPC, broadcast publishing and metric labels all resolve names through the same resolver, so custom names apply consistently.
+
+</details>
+
+<details>
+<summary>v2.11 → v2.12</summary>
+
+**New features**
+
+- **Provisioning boot summary and actionable errors.** Startup logs what each stream reserves, and provisioning failures name the entity, the limits involved, and what to do about it. Opt into a storage preflight to catch an over-committed file store before it bites.
+
+**Bug fixes**
+
+This release closed a set of silent data-loss and reliability gaps. The ones worth knowing about:
+
+- **Destructive stream migration no longer has data-loss windows**, and services can no longer clobber the shared broadcast stream.
+- **Routers subscribe before consumers start delivering**, so a consumer flushing its backlog at startup no longer drops messages onto a subject nobody is watching yet.
+- **Dead-letter handling engages when `dlq` is configured without `onDeadLetter`**, unroutable messages are captured in the DLQ instead of being terminated, and `ctx.retry()` on the final delivery escalates to dead-letter handling rather than vanishing.
+- **The DLQ publish is retried in-process**, and the transport no longer promises redelivery it cannot make.
+- **Ack extension keeps running for backlogged messages**, and settlement failures on a degraded connection are contained instead of taking the pipeline down.
+- **Scheduling fixes:** per-message TTL applies to the delivered message rather than the schedule holder, each scheduled message goes to a unique subject, and `scheduleAt` is rejected for ordered patterns.
+- **NATS control headers set by user code are blocked** and stripped from DLQ republishes.
+- The DLQ stream retention changed to `Limits`, and empty payloads decode as `undefined`.
+
+</details>
+
+<details>
+<summary>v2.10 → v2.11</summary>
 
 **New features**
 
@@ -31,7 +102,10 @@ Version-by-version changelog. New features, peer-dependency requirements, behavi
 
 No breaking API changes. Existing applications upgrade by bumping the dependency.
 
-## v2.9 → v2.10
+</details>
+
+<details>
+<summary>v2.9 → v2.10</summary>
 
 **New features**
 
@@ -51,7 +125,10 @@ No breaking API changes. Existing applications upgrade by bumping the dependency
 
 No breaking API changes. Existing applications upgrade by bumping the dependency.
 
-## v2.8 → v2.9
+</details>
+
+<details>
+<summary>v2.8 → v2.9</summary>
 
 **Notable change**
 
@@ -76,7 +153,10 @@ broadcast: { stream: { max_age: toNanos(1, 'days') } }
 
 No breaking changes.
 
-## v2.7 → v2.8
+</details>
+
+<details>
+<summary>v2.7 → v2.8</summary>
 
 **Breaking change:** migrated from `nats` package to `@nats-io/*` scoped packages (v3.x).
 
@@ -93,7 +173,10 @@ This is an internal change: the library re-exports everything users need. If you
 - [Message scheduling](/docs/guides/scheduling): one-shot delayed delivery via `scheduleAt()` (requires NATS >= 2.12)
 - `allow_msg_schedules` stream config option
 
-## v2.6 → v2.7
+</details>
+
+<details>
+<summary>v2.6 → v2.7</summary>
 
 v2.7 shipped handler-controlled settlement, a way to ack, nak, or terminate a message without throwing.
 
@@ -104,7 +187,10 @@ v2.7 shipped handler-controlled settlement, a way to ack, nak, or terminate a me
 
 No breaking changes.
 
-## v2.5 → v2.6
+</details>
+
+<details>
+<summary>v2.5 → v2.6</summary>
 
 v2.6 was the performance release, concurrency control, ack extension, and reworked defaults for reconnection and compression.
 
@@ -119,7 +205,10 @@ v2.6 was the performance release, concurrency control, ack extension, and rework
 
 No breaking changes.
 
-## v2.4 → v2.5
+</details>
+
+<details>
+<summary>v2.4 → v2.5</summary>
 
 **Breaking change:** `nanos()` renamed to `toNanos()`.
 
@@ -133,7 +222,10 @@ No breaking changes.
   }
 ```
 
-## v2.3 → v2.4
+</details>
+
+<details>
+<summary>v2.3 → v2.4</summary>
 
 **New features**
 
@@ -143,7 +235,10 @@ No breaking changes.
 
 No breaking changes.
 
-## v2.1 → v2.2
+</details>
+
+<details>
+<summary>v2.1 → v2.2</summary>
 
 **New features**
 
@@ -151,6 +246,8 @@ No breaking changes.
 - `DeadLetterInfo` interface with full message context
 
 No breaking changes.
+
+</details>
 
 ## See also
 

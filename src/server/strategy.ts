@@ -3,7 +3,8 @@ import type { MessageHandler, MsPattern } from '@nestjs/microservices';
 
 import type { ConsumerInfo } from '@nats-io/jetstream';
 
-import { ConnectionProvider } from '../connection';
+import type { ConnectionProvider } from '../connection/connection.provider';
+import type { ConnectionBinding } from '../connection/connection.types';
 import { StreamKind } from '../interfaces';
 import type { JetstreamModuleOptions } from '../interfaces';
 import { isCoreRpcMode, isJetStreamRpcMode } from '../jetstream.constants';
@@ -16,6 +17,9 @@ import {
 } from './infrastructure';
 import { EventRouter, PatternRegistry, RpcRouter } from './routing';
 
+const RETRY_BASE_DELAY_MS = 1_000;
+const RETRY_MAX_DELAY_MS = 30_000;
+
 /**
  * NestJS custom transport strategy for NATS JetStream.
  *
@@ -27,6 +31,10 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
   // oxlint-disable-next-line typescript/no-unsafe-function-type
   private readonly listeners = new Map<string, Function[]>();
   private started = false;
+  private attached = false;
+  private closed = false;
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private retryAttempt = 0;
 
   public constructor(
     private readonly options: JetstreamModuleOptions,
@@ -40,6 +48,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     private readonly coreRpcServer: CoreRpcServer,
     private readonly ackWaitMap: Map<StreamKind, number> = new Map(),
     private readonly metadataProvider?: MetadataProvider | undefined,
+    private readonly binding?: ConnectionBinding | undefined,
   ) {
     super();
   }
@@ -47,20 +56,43 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
   /**
    * Start the transport: register handlers, create infrastructure, begin consumption.
    *
-   * Called by NestJS when `connectMicroservice()` is used, or internally by the module.
+   * A critical connection blocks startup and reports failures through the
+   * callback. A non-critical one returns immediately and retries in the
+   * background, so a dead secondary cluster cannot stop the pod from serving
+   * its primary one.
    */
   public async listen(callback: (...args: unknown[]) => void): Promise<void> {
-    try {
-      await this.doListen(callback);
-    } catch (err) {
-      // NestJS bridges listen() via a callback; forward errors there so
-      // startAllMicroservices() rejects instead of leaving an unhandled rejection.
-      callback(err);
+    // Recorded before any awaiting: this marks that the bootstrap attached this
+    // connection, which is what the startup guard checks. Completion is tracked
+    // separately by `started`, because a non-critical connection may still be
+    // retrying long after it was attached.
+    this.attached = true;
+
+    if (this.isCritical()) {
+      try {
+        await this.doListen(callback);
+      } catch (err) {
+        // NestJS bridges listen() via a callback; forward errors there so
+        // startAllMicroservices() rejects instead of leaving an unhandled rejection.
+        callback(err);
+      }
+
+      return;
     }
+
+    void this.attemptBackgroundStart();
+    callback();
   }
 
   /** Stop all consumers, routers, subscriptions, and metadata heartbeat. Called during shutdown. */
   public close(): void {
+    this.closed = true;
+
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
+
     this.metadataProvider?.destroy();
     this.eventRouter.destroy();
     this.rpcRouter.destroy();
@@ -70,11 +102,14 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
   }
 
   /**
-   * Override NestJS `Server.addHandler` to fail fast on duplicate pattern registration.
+   * Override NestJS `Server.addHandler` to route by connection and fail fast on
+   * duplicate pattern registration.
    *
-   * The base class silently overwrites duplicate RPC handlers and chains duplicate event
-   * handlers, which would double-ack the same JetStream message. Any collision is treated
-   * as a fatal misconfiguration so it surfaces at bootstrap, not in production traffic.
+   * Every strategy in a hybrid application sees all handlers; each keeps only
+   * the ones bound to its own connection. The base class silently overwrites
+   * duplicate RPC handlers and chains duplicate event handlers, which would
+   * double-ack the same JetStream message, so a collision within one connection
+   * is treated as a fatal misconfiguration and surfaces at bootstrap.
    */
   public override addHandler(
     pattern: unknown,
@@ -82,6 +117,8 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     isEventHandler = false,
     extras: Record<string, unknown> = {},
   ): void {
+    if (!this.acceptsConnection(extras)) return;
+
     const normalizedPattern = this.normalizePattern(pattern as MsPattern);
 
     if (this.messageHandlers.has(normalizedPattern)) {
@@ -124,6 +161,92 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     return this.patternRegistry;
   }
 
+  /** The connection this strategy serves; `default` when only one is configured. */
+  public get connectionName(): string {
+    return this.binding?.name ?? 'default';
+  }
+
+  /** Whether the boot chain completed and this connection is consuming. */
+  public get isStarted(): boolean {
+    return this.started;
+  }
+
+  /** Whether the bootstrap called `listen()` on this connection at all. */
+  public get isAttached(): boolean {
+    return this.attached;
+  }
+
+  /** Bail out of a boot chain the strategy was closed out from under. */
+  private abortIfClosed(): void {
+    if (this.closed) {
+      throw new Error('Transport closed while the connection was starting');
+    }
+  }
+
+  private isCritical(): boolean {
+    return (this.options as { critical?: boolean }).critical !== false;
+  }
+
+  /** Run the boot chain off the startup path, retrying with exponential backoff. */
+  private async attemptBackgroundStart(): Promise<void> {
+    if (this.closed) return;
+
+    try {
+      await this.doListen(() => undefined);
+      this.retryAttempt = 0;
+      this.logger.log(`Connection "${this.connectionName}" started`);
+    } catch (err) {
+      this.started = false;
+
+      const delay = Math.min(RETRY_BASE_DELAY_MS * 2 ** this.retryAttempt, RETRY_MAX_DELAY_MS);
+
+      this.retryAttempt += 1;
+      this.logger.warn(
+        `Non-critical connection "${this.connectionName}" failed to start ` +
+          `(${err instanceof Error ? err.message : String(err)}); retrying in ${delay}ms`,
+      );
+
+      this.scheduleRetry(delay);
+    }
+  }
+
+  private scheduleRetry(delay: number): void {
+    if (this.closed) return;
+
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      void this.attemptBackgroundStart();
+    }, delay);
+
+    // A pending retry must not hold the event loop open.
+    this.retryTimer.unref();
+  }
+
+  /** Whether this strategy's connection owns the handler described by `extras`. */
+  private acceptsConnection(extras: Record<string, unknown>): boolean {
+    if (!this.binding) return true;
+
+    const requested = typeof extras.connection === 'string' ? extras.connection : null;
+
+    if (requested === null) return this.binding.name === this.binding.defaultName;
+
+    if (!this.binding.known.has(requested)) {
+      throw new Error(
+        `Unknown connection "${requested}" in handler extras. ` +
+          `Configured connections: ${[...this.binding.known].join(', ')}.`,
+      );
+    }
+
+    if (this.binding.publisherOnly.has(requested)) {
+      throw new Error(
+        `Connection "${requested}" is publisher-only (consumer: false) and cannot host handlers. ` +
+          `Remove consumer: false from that connection or bind the handler elsewhere.`,
+      );
+    }
+
+    return requested === this.binding.name;
+  }
+
   private async doListen(callback: (...args: unknown[]) => void): Promise<void> {
     if (this.started) {
       this.logger.warn('listen() called more than once; ignoring');
@@ -133,35 +256,56 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
 
     this.started = true;
 
-    this.patternRegistry.registerHandlers(this.getHandlers());
+    try {
+      this.patternRegistry.registerHandlers(this.getHandlers());
 
-    const { streams: streamKinds, durableConsumers: durableKinds } = this.resolveRequiredKinds();
+      const { streams: streamKinds, durableConsumers: durableKinds } = this.resolveRequiredKinds();
 
-    if (streamKinds.length > 0) {
-      await this.streamProvider.ensureStreams(streamKinds);
+      if (streamKinds.length > 0) {
+        await this.streamProvider.ensureStreams(streamKinds);
 
-      let consumers: Map<StreamKind, ConsumerInfo> | null = null;
+        let consumers: Map<StreamKind, ConsumerInfo> | null = null;
 
-      if (durableKinds.length > 0) {
-        consumers = await this.consumerProvider.ensureConsumers(durableKinds);
+        if (durableKinds.length > 0) {
+          consumers = await this.consumerProvider.ensureConsumers(durableKinds);
 
-        this.populateAckWaitMap(consumers);
-        this.eventRouter.updateMaxDeliverMap(this.buildMaxDeliverMap(consumers));
+          this.populateAckWaitMap(consumers);
+          this.eventRouter.updateMaxDeliverMap(this.buildMaxDeliverMap(consumers));
+        }
+
+        // close() can land while provisioning is awaiting. Starting routers and
+        // consumers now would leave live consumers behind a torn-down pipeline,
+        // with no further close() coming to clean them up.
+        this.abortIfClosed();
+
+        // Routers must subscribe before consumption starts: consumers flush their
+        // backlog immediately, and a subject with no observers drops messages.
+        await this.startRouters();
+
+        // close() already ran to completion, so nothing else will tear these
+        // down: the routers subscribed after it swept through.
+        if (this.closed) {
+          this.eventRouter.destroy();
+          this.rpcRouter.destroy();
+        }
+
+        this.abortIfClosed();
+
+        await this.startConsumption(consumers);
       }
 
-      // Routers must subscribe before consumption starts: consumers flush their
-      // backlog immediately, and a subject with no observers drops messages.
-      await this.startRouters();
+      if (isCoreRpcMode(this.options.rpc) && this.patternRegistry.hasRpcHandlers()) {
+        await this.coreRpcServer.start();
+      }
 
-      await this.startConsumption(consumers);
-    }
-
-    if (isCoreRpcMode(this.options.rpc) && this.patternRegistry.hasRpcHandlers()) {
-      await this.coreRpcServer.start();
-    }
-
-    if (this.metadataProvider && this.patternRegistry.hasMetadata()) {
-      await this.metadataProvider.publish(this.patternRegistry.getMetadataEntries());
+      if (this.metadataProvider && this.patternRegistry.hasMetadata()) {
+        await this.metadataProvider.publish(this.patternRegistry.getMetadataEntries());
+      }
+    } catch (err) {
+      // Leave the strategy restartable: a non-critical connection retries this
+      // whole chain, and `started` guards re-entry.
+      this.started = false;
+      throw err;
     }
 
     callback();

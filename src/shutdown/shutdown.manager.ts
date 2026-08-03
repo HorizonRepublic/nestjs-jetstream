@@ -1,8 +1,12 @@
 import { Logger } from '@nestjs/common';
 
-import { ConnectionProvider } from '../connection';
+import type { ConnectionRegistry } from '../connection/connection-registry';
+import type { ConnectionScope } from '../connection/connection.types';
 import { EventBus } from '../hooks';
 import { TransportEvent } from '../interfaces';
+
+const DRAINED = Symbol('drained');
+const TIMED_OUT = Symbol('timed-out');
 
 /** Minimal interface for anything that can be stopped during shutdown. */
 export interface Stoppable {
@@ -10,13 +14,17 @@ export interface Stoppable {
 }
 
 /**
- * Orchestrates graceful transport shutdown.
+ * Orchestrates graceful transport shutdown across every connection.
  *
  * Shutdown sequence:
  * 1. Emit onShutdownStart hook
- * 2. Stop accepting new messages (close subscriptions, stop consumers)
- * 3. Drain and close NATS connection (with timeout safety net)
+ * 2. Phase one: every connection stops accepting new messages
+ * 3. Phase two: every connection drains in parallel, each bounded by its own
+ *    budget, so the ceiling is `max(timeouts)` rather than their sum
  * 4. Emit onShutdownComplete hook
+ *
+ * The phases are separate on purpose: draining connections one by one would let
+ * a connection keep accepting work while its peers are already winding down.
  *
  * Idempotent: concurrent or repeated calls return the same promise.
  * This is critical because NestJS may call `onApplicationShutdown` on
@@ -28,7 +36,7 @@ export class ShutdownManager {
   private shutdownPromise?: Promise<void>;
 
   public constructor(
-    private readonly connection: ConnectionProvider,
+    private readonly registry: ConnectionRegistry,
     private readonly eventBus: EventBus,
     private readonly timeout: number,
   ) {}
@@ -37,39 +45,74 @@ export class ShutdownManager {
    * Execute the full shutdown sequence.
    *
    * Idempotent: concurrent or repeated calls return the same promise.
-   *
-   * @param strategy Optional stoppable to close (stops consumers and subscriptions).
    */
-  public async shutdown(strategy?: Stoppable): Promise<void> {
-    this.shutdownPromise ??= this.doShutdown(strategy);
+  public async shutdown(): Promise<void> {
+    this.shutdownPromise ??= this.doShutdown();
 
     return this.shutdownPromise;
   }
 
-  private async doShutdown(strategy?: Stoppable): Promise<void> {
+  private async doShutdown(): Promise<void> {
     this.eventBus.emit(TransportEvent.ShutdownStart);
     this.logger.log(`Graceful shutdown started (timeout: ${this.timeout}ms)`);
 
-    // 1. Stop accepting new messages (close subscriptions, stop consumers)
-    strategy?.close();
+    const scopes = this.registry.all();
 
-    // 2. Drain and close NATS connection.
-    //    NATS drain() waits for in-flight messages and pending subscriptions,
-    //    then closes the connection. We add a timeout as a safety net.
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-
-    try {
-      await Promise.race([
-        this.connection.shutdown(),
-        new Promise<void>((resolve) => {
-          timeoutId = setTimeout(resolve, this.timeout);
-        }),
-      ]);
-    } finally {
-      clearTimeout(timeoutId);
+    // Phase 1: stop accepting new messages everywhere before anything drains.
+    // A strategy that throws here must not abort the loop: the remaining
+    // connections would never close, never drain, and the shared shutdown
+    // promise would stay rejected for every later caller.
+    for (const scope of scopes) {
+      try {
+        scope.strategy?.close();
+      } catch (err) {
+        this.logger.warn(
+          `Connection "${scope.name}" failed to stop accepting messages: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
     }
+
+    // Phase 2: drain in parallel. allSettled rather than all, so a connection
+    // that throws while draining cannot stop the others from closing.
+    await Promise.allSettled(scopes.map(async (scope) => this.drainScope(scope)));
 
     this.eventBus.emit(TransportEvent.ShutdownComplete);
     this.logger.log('Graceful shutdown complete');
+  }
+
+  /**
+   * Drain one connection, bounded by its own budget.
+   *
+   * NATS `drain()` waits for in-flight messages and pending subscriptions, then
+   * closes the connection; the timeout is a safety net for a drain that hangs.
+   */
+  private async drainScope(scope: ConnectionScope): Promise<void> {
+    const budget = scope.options.shutdownTimeout ?? this.timeout;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+    try {
+      // The race resolves to a marker rather than setting a flag, so which side
+      // won is visible to the type checker as well as to us.
+      const outcome = await Promise.race([
+        scope.connection.shutdown().then(() => DRAINED),
+        new Promise<typeof TIMED_OUT>((resolve) => {
+          timeoutId = setTimeout(() => {
+            resolve(TIMED_OUT);
+          }, budget);
+        }),
+      ]);
+
+      if (outcome === TIMED_OUT) {
+        this.logger.warn(
+          `Connection "${scope.name}" did not drain within ${budget}ms; closing anyway`,
+        );
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Connection "${scope.name}" failed to drain: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }
 }

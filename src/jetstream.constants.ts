@@ -15,8 +15,20 @@ import type { JetStreamRpcConfig, RpcConfig, SubjectKind } from './interfaces';
 /** Token for the resolved JetstreamModuleOptions. */
 export const JETSTREAM_OPTIONS: unique symbol = Symbol('JETSTREAM_OPTIONS');
 
-/** Token for the shared ConnectionProvider instance. */
+/** Token for the shared ConnectionProvider instance (the default connection). */
 export const JETSTREAM_CONNECTION: unique symbol = Symbol('JETSTREAM_CONNECTION');
+
+/** Token for the ConnectionRegistry holding every named connection. */
+export const JETSTREAM_CONNECTIONS: unique symbol = Symbol('JETSTREAM_CONNECTIONS');
+
+/**
+ * Stream metadata key recording which service and connection provisioned a stream.
+ *
+ * Value format is `{service}:{connection}`. Two connections of one service that
+ * resolve the same stream name are pointing at the same cluster, which would
+ * silently overwrite each other's configuration.
+ */
+export const STREAM_OWNER_METADATA_KEY = 'nestjs-jetstream-owner';
 
 /** Token for the global Codec instance. */
 export const JETSTREAM_CODEC: unique symbol = Symbol('JETSTREAM_CODEC');
@@ -34,17 +46,24 @@ export const JETSTREAM_EVENT_BUS: unique symbol = Symbol('JETSTREAM_EVENT_BUS');
  * Generate the injection token for a `forFeature()` client.
  *
  * Use with `@Inject()` to inject the client created by `JetstreamModule.forFeature()`.
+ * Omitting `connection` yields the bare service name, the token shape used before
+ * named connections existed.
  *
  * @param name - The service name passed to `forFeature({ name })`.
+ * @param connection - The connection passed to `forFeature({ connection })`; omit for the default.
  * @returns The DI token string.
  *
  * @example
  * ```typescript
  * @Inject(getClientToken('orders'))
  * private readonly ordersClient: JetstreamClient;
+ *
+ * @Inject(getClientToken('orders', 'analytics'))
+ * private readonly analyticsOrdersClient: JetstreamClient;
  * ```
  */
-export const getClientToken = (name: string): string => name;
+export const getClientToken = (name: string, connection?: string): string =>
+  connection === undefined ? name : `${connection}::${name}`;
 
 const KB = 1024;
 const MB = 1024 * KB;

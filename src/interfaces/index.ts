@@ -1,5 +1,12 @@
 export type { Codec } from './codec.interface';
 
+export type {
+  JetstreamConnectionHealth,
+  JetstreamConnectionOptions,
+  NormalizedConnectionsConfig,
+  ResolvedConnectionOptions,
+} from './connection.interface';
+
 export { MessageKind, TransportEvent } from './hooks.interface';
 
 export type {

@@ -6,13 +6,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ManagementMode } from '../interfaces';
 import type { JetstreamModuleOptions } from '../interfaces';
-import { JETSTREAM_OPTIONS } from '../jetstream.constants';
+import {
+  JETSTREAM_CONNECTIONS,
+  JETSTREAM_EVENT_BUS,
+  JETSTREAM_OPTIONS,
+} from '../jetstream.constants';
 import {
   DESTRUCTIVE_MIGRATION_MANUAL_WARNING,
   JetstreamModule,
   warnIfManualWithDestructive,
 } from '../jetstream.module';
-import { NameResolver } from '../server/infrastructure/name-resolver';
 
 type ModuleFactoryProvider = Extract<Provider, { provide: unknown; useFactory: unknown }>;
 
@@ -73,11 +76,11 @@ describe('warnIfManualWithDestructive', () => {
   });
 });
 
-describe('NameResolver factory wiring', () => {
+describe('connection scope wiring', () => {
   afterEach(vi.resetAllMocks);
 
-  it('should invoke warnIfManualWithDestructive via the NameResolver provider factory', async () => {
-    // Given
+  it('should invoke warnIfManualWithDestructive while building a connection scope', async () => {
+    // Given a Manual-managed service that also asks for destructive migration
     const warnSpy = vi.spyOn(Logger.prototype, 'warn');
     const options: JetstreamModuleOptions = {
       ...baseOptions(),
@@ -86,18 +89,17 @@ describe('NameResolver factory wiring', () => {
     };
 
     const { providers = [] } = JetstreamModule.forRoot(options);
-    const nameResolverProvider = (providers as Provider[]).find(
-      (p): p is ModuleFactoryProvider => 'provide' in p && p.provide === NameResolver,
+    const scopeProviders = (providers as Provider[]).filter(
+      (p): p is ModuleFactoryProvider =>
+        'provide' in p &&
+        (p.provide === JETSTREAM_CONNECTIONS || p.provide === JETSTREAM_EVENT_BUS),
     );
 
-    expect(nameResolverProvider).toBeDefined();
+    expect(scopeProviders).toHaveLength(2);
 
-    // When: compile a minimal module with the options value and the real NameResolver factory
+    // When: compile a minimal module so the registry factory actually runs
     await Test.createTestingModule({
-      providers: [
-        { provide: JETSTREAM_OPTIONS, useValue: options },
-        nameResolverProvider as Provider,
-      ],
+      providers: [{ provide: JETSTREAM_OPTIONS, useValue: options }, ...scopeProviders],
     }).compile();
 
     // Then: the factory ran and issued the warn through a real Logger instance

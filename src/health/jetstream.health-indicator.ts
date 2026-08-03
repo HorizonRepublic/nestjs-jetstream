@@ -1,7 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 
-import { ConnectionProvider } from '../connection';
-import type { JetstreamHealthStatus } from '../interfaces';
+import type { ConnectionRegistry } from '../connection/connection-registry';
+import type { ConnectionScope } from '../connection/connection.types';
+import type { JetstreamConnectionHealth, JetstreamHealthStatus } from '../interfaces';
+
+/** Upper bound on a single connection's round-trip probe. */
+const PROBE_TIMEOUT_MS = 5_000;
 
 /**
  * Health indicator result compatible with @nestjs/terminus.
@@ -22,34 +26,84 @@ import type { JetstreamHealthStatus } from '../interfaces';
 export class JetstreamHealthIndicator {
   private readonly logger = new Logger('Jetstream:Health');
 
-  public constructor(private readonly connection: ConnectionProvider) {}
+  public constructor(private readonly registry: ConnectionRegistry) {}
 
   /**
    * Plain health status check.
    *
-   * Returns the current connection status without throwing.
-   * Use this for custom health endpoints or monitoring integrations.
+   * Returns the current connection status without throwing. `connected` means
+   * every critical connection is alive; `degraded` means at least one
+   * non-critical connection is not. With a single connection the
+   * multi-connection fields are omitted entirely, so the response shape is
+   * unchanged from before named connections existed.
    *
    * @returns Connection status with server URL and RTT latency.
    */
   public async check(): Promise<JetstreamHealthStatus> {
-    const nc = this.connection.unwrap;
+    const entries = await Promise.all(
+      this.registry.all().map(async (scope) => [scope.name, await this.probe(scope)] as const),
+    );
+
+    const fallback: JetstreamConnectionHealth = {
+      connected: false,
+      critical: true,
+      server: null,
+      latency: null,
+    };
+    const defaultHealth =
+      entries.find(([name]) => name === this.registry.defaultName)?.[1] ?? fallback;
+
+    if (entries.length === 1) {
+      return {
+        connected: defaultHealth.connected,
+        server: defaultHealth.server,
+        latency: defaultHealth.latency,
+      };
+    }
+
+    return {
+      connected: entries.every(([, health]) => !health.critical || health.connected),
+      server: defaultHealth.server,
+      latency: defaultHealth.latency,
+      degraded: entries.some(([, health]) => !health.critical && !health.connected),
+      connections: Object.fromEntries(entries),
+    };
+  }
+
+  private async probe(scope: ConnectionScope): Promise<JetstreamConnectionHealth> {
+    const nc = scope.connection.unwrap;
 
     if (!nc || nc.isClosed()) {
-      return { connected: false, server: null, latency: null };
+      return { connected: false, critical: scope.critical, server: null, latency: null };
     }
+
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
     try {
       const start = performance.now();
 
-      await nc.rtt();
+      // A stalled rtt() would otherwise hold the whole check open, and with it
+      // the readiness probe that called it.
+      await Promise.race([
+        nc.rtt(),
+        new Promise<never>((_resolve, reject) => {
+          timeoutId = setTimeout(() => {
+            reject(new Error(`rtt did not answer within ${PROBE_TIMEOUT_MS}ms`));
+          }, PROBE_TIMEOUT_MS);
+        }),
+      ]);
 
       const latency = Math.round(performance.now() - start);
 
-      return { connected: true, server: nc.getServer(), latency };
+      return { connected: true, critical: scope.critical, server: nc.getServer(), latency };
     } catch (err) {
-      this.logger.warn(`Health check failed: ${err instanceof Error ? err.message : String(err)}`);
-      return { connected: false, server: nc.getServer(), latency: null };
+      this.logger.warn(
+        `Health check failed for "${scope.name}": ${err instanceof Error ? err.message : String(err)}`,
+      );
+
+      return { connected: false, critical: scope.critical, server: nc.getServer(), latency: null };
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
@@ -58,6 +112,9 @@ export class JetstreamHealthIndicator {
    *
    * Returns `{ [key]: { status: 'up', ... } }` on success.
    * Throws an error with `{ [key]: { status: 'down', ... } }` on failure.
+   *
+   * Throws only when a critical connection is down, so a dead secondary cluster
+   * degrades the report without failing readiness.
    *
    * The thrown error sets `isHealthCheckError: true` and `causes`, the
    * duck-type contract that Terminus `HealthCheckExecutor` uses to distinguish
@@ -76,6 +133,9 @@ export class JetstreamHealthIndicator {
       server: status.server,
       latency: status.latency,
     };
+
+    if (status.degraded !== undefined) details.degraded = status.degraded;
+    if (status.connections !== undefined) details.connections = status.connections;
 
     if (!status.connected) {
       const causes = { [key]: details };

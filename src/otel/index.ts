@@ -32,7 +32,7 @@ export type { HeaderMatcher, ResolvedOtelOptions } from './config';
 
 export { deriveOtelAttrs, parseServerAddress, safelyInvokeHook } from './internal-utils';
 
-export type { DerivedOtelAttrs } from './internal-utils';
+export type { DerivedOtelAttrs, OtelAttrSource } from './internal-utils';
 
 export { injectContext, extractContext } from './propagator';
 

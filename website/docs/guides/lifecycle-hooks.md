@@ -8,7 +8,7 @@ schema:
   headline: "How to register lifecycle hooks for NestJS JetStream"
   description: "Subscribe to transport events for monitoring, alerting, and logging integration."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
 
 import Since from '@site/src/components/Since';
@@ -170,6 +170,31 @@ JetstreamModule.forRoot({
   },
 })
 ```
+
+## Hooks with multiple connections
+
+Hooks are registered once, at the root, and fire for every [named connection](/docs/guides/multi-connection). Each callback receives the originating connection name as a trailing argument when more than one connection is configured:
+
+```typescript
+JetstreamModule.forRoot({
+  name: 'orders',
+  defaultConnection: 'primary',
+  hooks: {
+    [TransportEvent.Error]: (error, context, connection) => {
+      sentry.captureException(error, { tags: { connection } });
+    },
+    [TransportEvent.HandlerCompleted]: (subject, kind, durationMs, status, connection) => {
+      metrics.histogram('handler_ms', durationMs, { subject, connection });
+    },
+  },
+  connections: {
+    primary: { servers: ['nats://primary:4222'] },
+    analytics: { servers: ['nats://analytics:4222'] },
+  },
+})
+```
+
+`connection` is the last parameter of every hook and is `undefined` for single-connection applications, so existing hooks keep receiving exactly the payloads they always did.
 
 ## No hook = silence
 
