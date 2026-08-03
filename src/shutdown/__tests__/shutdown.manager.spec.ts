@@ -3,6 +3,8 @@ import { createMock } from '@golevelup/ts-vitest';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 
 import { ConnectionProvider } from '../../connection';
+import { ConnectionRegistry } from '../../connection/connection-registry';
+import type { ConnectionScope } from '../../connection/connection.types';
 import { EventBus } from '../../hooks';
 import { TransportEvent } from '../../interfaces';
 import { JetstreamStrategy } from '../../server/strategy';
@@ -21,7 +23,16 @@ describe(ShutdownManager, () => {
     });
     eventBus = createMock<EventBus>();
     timeout = faker.number.int({ min: 1000, max: 30000 });
-    sut = new ShutdownManager(connection, eventBus, timeout);
+    sut = new ShutdownManager(
+      new ConnectionRegistry(
+        new Map([
+          ['default', createMock<ConnectionScope>({ name: 'default', critical: true, connection })],
+        ]),
+        'default',
+      ),
+      eventBus,
+      timeout,
+    );
   });
 
   afterEach(vi.resetAllMocks);

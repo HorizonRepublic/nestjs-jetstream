@@ -9,18 +9,15 @@ import {
   Provider,
 } from '@nestjs/common';
 
-import type { ConsumeOptions, ConsumerInfo } from '@nats-io/jetstream';
-
 import { JetstreamClient } from './client';
 import { JsonCodec } from './codec';
-import { ConnectionProvider } from './connection';
+import { ConnectionRegistry, createConnectionScope, normalizeOptions } from './connection';
+import type { ConnectionProvider } from './connection/connection.provider';
+import type { ConnectionSharedContext } from './connection/connection.types';
 import { JetstreamHealthIndicator } from './health';
 import { EventBus } from './hooks';
-import { StreamKind } from './interfaces';
 import type {
   Codec,
-  DeadLetterConfig,
-  EventProcessingConfig,
   JetstreamFeatureOptions,
   JetstreamModuleAsyncOptions,
   JetstreamModuleOptions,
@@ -30,31 +27,14 @@ import {
   getClientToken,
   JETSTREAM_CODEC,
   JETSTREAM_CONNECTION,
+  JETSTREAM_CONNECTIONS,
   JETSTREAM_EVENT_BUS,
   JETSTREAM_OPTIONS,
 } from './jetstream.constants';
 import { JetstreamMetricsModule } from './metrics/metrics.module';
-import { deriveOtelAttrs, withSelfHealingSpan } from './otel';
-import {
-  CoreRpcServer,
-  ConsumerProvider,
-  EventRouter,
-  JetstreamStrategy,
-  MessageProvider,
-  MetadataProvider,
-  PatternRegistry,
-  RpcRouter,
-  StreamProvider,
-  type ConsumerRecoveryFn,
-} from './server';
-import { isDlqEnabled } from './server/infrastructure/dlq-options';
-import { InfrastructureBinder } from './server/infrastructure/infrastructure-binder';
+import { JetstreamStrategy, PatternRegistry } from './server';
 import { NameResolver } from './server/infrastructure/name-resolver';
-import { warnIfManualWithDestructive } from './server/infrastructure/provisioning-warnings';
 import { ShutdownManager } from './shutdown';
-
-/** DI token for the shared ackWaitMap instance (populated at runtime by strategy). */
-const JETSTREAM_ACK_WAIT_MAP = Symbol('JETSTREAM_ACK_WAIT_MAP');
 
 export {
   DESTRUCTIVE_MIGRATION_MANUAL_WARNING,
@@ -123,6 +103,7 @@ export class JetstreamModule implements OnApplicationShutdown {
       providers,
       exports: [
         JETSTREAM_CONNECTION,
+        JETSTREAM_CONNECTIONS,
         JETSTREAM_CODEC,
         JETSTREAM_EVENT_BUS,
         JETSTREAM_OPTIONS,
@@ -155,6 +136,7 @@ export class JetstreamModule implements OnApplicationShutdown {
       providers: [...asyncProviders, ...coreProviders],
       exports: [
         JETSTREAM_CONNECTION,
+        JETSTREAM_CONNECTIONS,
         JETSTREAM_CODEC,
         JETSTREAM_EVENT_BUS,
         JETSTREAM_OPTIONS,
@@ -231,390 +213,95 @@ export class JetstreamModule implements OnApplicationShutdown {
       {
         provide: JETSTREAM_EVENT_BUS,
         inject: [JETSTREAM_OPTIONS],
-        useFactory: (options: JetstreamModuleOptions): EventBus => {
-          const logger = new Logger('Jetstream:Module');
+        useFactory: (options: JetstreamModuleOptions): EventBus =>
+          new EventBus(new Logger('Jetstream:Module'), options.hooks),
+      },
 
-          return new EventBus(logger, options.hooks);
+      {
+        provide: JETSTREAM_CONNECTIONS,
+        inject: [JETSTREAM_OPTIONS, JETSTREAM_EVENT_BUS],
+        useFactory: (options: JetstreamModuleOptions, eventBus: EventBus): ConnectionRegistry => {
+          const normalized = normalizeOptions(options);
+          const shared: ConnectionSharedContext = {
+            eventBus,
+            rootCodec: options.codec ?? new JsonCodec(),
+          };
+
+          const known = new Set(normalized.connections.map((c) => c.connectionName));
+          const publisherOnly = new Set(
+            normalized.connections.filter((c) => c.consumer === false).map((c) => c.connectionName),
+          );
+
+          const scopes = new Map(
+            normalized.connections.map((connectionOptions) => [
+              connectionOptions.connectionName,
+              createConnectionScope(connectionOptions, shared, {
+                name: connectionOptions.connectionName,
+                defaultName: normalized.defaultConnection,
+                known,
+                publisherOnly,
+              }),
+            ]),
+          );
+
+          return new ConnectionRegistry(scopes, normalized.defaultConnection);
         },
+      },
+
+      // Compatibility delegates: the pre-3.0 tokens resolve to the default connection.
+      {
+        provide: JETSTREAM_CONNECTION,
+        inject: [JETSTREAM_CONNECTIONS],
+        useFactory: (registry: ConnectionRegistry): ConnectionProvider =>
+          registry.getDefault().connection,
       },
 
       {
         provide: JETSTREAM_CODEC,
-        inject: [JETSTREAM_OPTIONS],
-        useFactory: (options: JetstreamModuleOptions): Codec => {
-          return options.codec ?? new JsonCodec();
-        },
+        inject: [JETSTREAM_CONNECTIONS],
+        useFactory: (registry: ConnectionRegistry): Codec => registry.getDefault().codec,
       },
 
-      {
-        provide: JETSTREAM_CONNECTION,
-        inject: [JETSTREAM_OPTIONS, JETSTREAM_EVENT_BUS],
-        useFactory: (options: JetstreamModuleOptions, eventBus: EventBus): ConnectionProvider => {
-          return new ConnectionProvider(options, eventBus);
-        },
-      },
-
-      {
-        provide: JetstreamHealthIndicator,
-        inject: [JETSTREAM_CONNECTION],
-        useFactory: (connection: ConnectionProvider): JetstreamHealthIndicator => {
-          return new JetstreamHealthIndicator(connection);
-        },
-      },
-
-      {
-        provide: ShutdownManager,
-        inject: [JETSTREAM_CONNECTION, JETSTREAM_EVENT_BUS, JETSTREAM_OPTIONS],
-        useFactory: (
-          connection: ConnectionProvider,
-          eventBus: EventBus,
-          options: JetstreamModuleOptions,
-        ): ShutdownManager => {
-          return new ShutdownManager(
-            connection,
-            eventBus,
-            options.shutdownTimeout ?? DEFAULT_SHUTDOWN_TIMEOUT,
-          );
-        },
-      },
-
-      // Consumer infrastructure providers below return null when consumer === false
-      // (publisher-only mode). NameResolver is the exception: clients need it too.
       {
         provide: NameResolver,
-        inject: [JETSTREAM_OPTIONS],
-        useFactory: (options: JetstreamModuleOptions): NameResolver => {
-          const logger = new Logger('Jetstream:Module');
-
-          warnIfManualWithDestructive(options, logger);
-
-          return new NameResolver(options);
-        },
+        inject: [JETSTREAM_CONNECTIONS],
+        useFactory: (registry: ConnectionRegistry): NameResolver => registry.getDefault().names,
       },
 
       {
         provide: PatternRegistry,
-        inject: [JETSTREAM_OPTIONS, NameResolver],
-        useFactory: (
-          options: JetstreamModuleOptions,
-          names: NameResolver,
-        ): PatternRegistry | null => {
-          if (options.consumer === false) return null;
-
-          return new PatternRegistry(options, names);
-        },
-      },
-
-      {
-        provide: InfrastructureBinder,
-        inject: [JETSTREAM_OPTIONS, NameResolver, PatternRegistry],
-        useFactory: (
-          options: JetstreamModuleOptions,
-          names: NameResolver,
-          registry: PatternRegistry,
-        ): InfrastructureBinder | null => {
-          if (options.consumer === false) return null;
-
-          return new InfrastructureBinder(options, names, registry);
-        },
-      },
-
-      {
-        provide: StreamProvider,
-        inject: [JETSTREAM_OPTIONS, JETSTREAM_CONNECTION, NameResolver, InfrastructureBinder],
-        useFactory: (
-          options: JetstreamModuleOptions,
-          connection: ConnectionProvider,
-          names: NameResolver,
-          binder: InfrastructureBinder,
-        ): StreamProvider | null => {
-          if (options.consumer === false) return null;
-
-          return new StreamProvider(options, connection, names, binder);
-        },
-      },
-
-      // ConsumerProvider needs PatternRegistry for broadcast filtering.
-      {
-        provide: ConsumerProvider,
-        inject: [
-          JETSTREAM_OPTIONS,
-          JETSTREAM_CONNECTION,
-          StreamProvider,
-          PatternRegistry,
-          NameResolver,
-          InfrastructureBinder,
-        ],
-        useFactory: (
-          options: JetstreamModuleOptions,
-          connection: ConnectionProvider,
-          streamProvider: StreamProvider,
-          patternRegistry: PatternRegistry,
-          names: NameResolver,
-          binder: InfrastructureBinder,
-        ): ConsumerProvider | null => {
-          if (options.consumer === false) return null;
-
-          return new ConsumerProvider(
-            options,
-            connection,
-            streamProvider,
-            patternRegistry,
-            names,
-            binder,
-          );
-        },
-      },
-
-      // Shared ack_wait map, populated by the strategy after ensureConsumers().
-      {
-        provide: JETSTREAM_ACK_WAIT_MAP,
-        useFactory: (): Map<StreamKind, number> => new Map(),
-      },
-
-      {
-        provide: MessageProvider,
-        inject: [
-          JETSTREAM_OPTIONS,
-          JETSTREAM_CONNECTION,
-          JETSTREAM_EVENT_BUS,
-          ConsumerProvider,
-          StreamProvider,
-        ],
-        useFactory: (
-          options: JetstreamModuleOptions,
-          connection: ConnectionProvider,
-          eventBus: EventBus,
-          consumerProvider: ConsumerProvider | null,
-          streamProvider: StreamProvider | null,
-        ): MessageProvider | null => {
-          if (options.consumer === false) return null;
-
-          const consumeOptionsMap = new Map<StreamKind, Partial<ConsumeOptions>>();
-
-          if (options.events?.consume)
-            consumeOptionsMap.set(StreamKind.Event, options.events.consume);
-          if (options.broadcast?.consume)
-            consumeOptionsMap.set(StreamKind.Broadcast, options.broadcast.consume);
-
-          if (options.rpc?.mode === 'jetstream' && options.rpc.consume) {
-            consumeOptionsMap.set(StreamKind.Command, options.rpc.consume);
-          }
-
-          // Recreates the consumer when self-healing hits "consumer not found".
-          const derived = deriveOtelAttrs(options);
-          const { otel, serverEndpoint: otelEndpoint, serviceName: otelServiceName } = derived;
-          const consumerRecoveryFn: ConsumerRecoveryFn | undefined =
-            consumerProvider && streamProvider
-              ? async (kind: StreamKind): Promise<ConsumerInfo> =>
-                  withSelfHealingSpan(
-                    otel,
-                    {
-                      serviceName: otelServiceName,
-                      endpoint: otelEndpoint,
-                      consumer: consumerProvider.getConsumerName(kind),
-                      stream: streamProvider.getStreamName(kind),
-                      reason: 'consumer not found',
-                    },
-                    async () => {
-                      const jsm = await connection.getJetStreamManager();
-
-                      return consumerProvider.recoverConsumer(jsm, kind);
-                    },
-                  )
-              : undefined;
-
-          return new MessageProvider(connection, eventBus, consumeOptionsMap, consumerRecoveryFn);
-        },
-      },
-
-      {
-        provide: EventRouter,
-        inject: [
-          JETSTREAM_OPTIONS,
-          MessageProvider,
-          PatternRegistry,
-          JETSTREAM_CODEC,
-          JETSTREAM_EVENT_BUS,
-          JETSTREAM_ACK_WAIT_MAP,
-          JETSTREAM_CONNECTION,
-          NameResolver,
-        ],
-        useFactory: (
-          options: JetstreamModuleOptions,
-          messageProvider: MessageProvider,
-          patternRegistry: PatternRegistry,
-          codec: Codec,
-          eventBus: EventBus,
-          ackWaitMap: Map<StreamKind, number>,
-          connection: ConnectionProvider,
-          names: NameResolver,
-        ): EventRouter | null => {
-          if (options.consumer === false) return null;
-
-          // Dead-letter detection is needed for both capture mechanisms:
-          // the DLQ stream (options.dlq) and the onDeadLetter callback.
-          const deadLetterConfig: DeadLetterConfig | undefined =
-            options.onDeadLetter || isDlqEnabled(options)
-              ? {
-                  maxDeliverByStream: new Map(),
-                  onDeadLetter: options.onDeadLetter,
-                }
-              : undefined;
-
-          const processingConfig: EventProcessingConfig = {
-            events: {
-              concurrency: options.events?.concurrency,
-              ackExtension: options.events?.ackExtension,
-              retry: options.events?.retry,
-            },
-            broadcast: {
-              concurrency: options.broadcast?.concurrency,
-              ackExtension: options.broadcast?.ackExtension,
-              retry: options.broadcast?.retry,
-            },
-          };
-
-          return new EventRouter(
-            messageProvider,
-            patternRegistry,
-            codec,
-            eventBus,
-            deadLetterConfig,
-            processingConfig,
-            ackWaitMap,
-            connection,
-            options,
-            names,
-          );
-        },
-      },
-
-      {
-        provide: RpcRouter,
-        inject: [
-          JETSTREAM_OPTIONS,
-          MessageProvider,
-          PatternRegistry,
-          JETSTREAM_CONNECTION,
-          JETSTREAM_CODEC,
-          JETSTREAM_EVENT_BUS,
-          JETSTREAM_ACK_WAIT_MAP,
-        ],
-        useFactory: (
-          options: JetstreamModuleOptions,
-          messageProvider: MessageProvider,
-          patternRegistry: PatternRegistry,
-          connection: ConnectionProvider,
-          codec: Codec,
-          eventBus: EventBus,
-          ackWaitMap: Map<StreamKind, number>,
-        ): RpcRouter | null => {
-          if (options.consumer === false) return null;
-
-          const rpcOptions =
-            options.rpc?.mode === 'jetstream'
-              ? {
-                  timeout: options.rpc.timeout,
-                  concurrency: options.rpc.concurrency,
-                  ackExtension: options.rpc.ackExtension,
-                }
-              : undefined;
-
-          return new RpcRouter(
-            messageProvider,
-            patternRegistry,
-            connection,
-            codec,
-            eventBus,
-            rpcOptions,
-            ackWaitMap,
-            options,
-          );
-        },
-      },
-
-      {
-        provide: CoreRpcServer,
-        inject: [
-          JETSTREAM_OPTIONS,
-          JETSTREAM_CONNECTION,
-          PatternRegistry,
-          JETSTREAM_CODEC,
-          JETSTREAM_EVENT_BUS,
-          NameResolver,
-        ],
-        useFactory: (
-          options: JetstreamModuleOptions,
-          connection: ConnectionProvider,
-          patternRegistry: PatternRegistry,
-          codec: Codec,
-          eventBus: EventBus,
-          names: NameResolver,
-        ): CoreRpcServer | null => {
-          if (options.consumer === false) return null;
-
-          return new CoreRpcServer(options, connection, patternRegistry, codec, eventBus, names);
-        },
-      },
-
-      {
-        provide: MetadataProvider,
-        inject: [JETSTREAM_OPTIONS, JETSTREAM_CONNECTION],
-        useFactory: (
-          options: JetstreamModuleOptions,
-          connection: ConnectionProvider,
-        ): MetadataProvider | null => {
-          if (options.consumer === false) return null;
-
-          return new MetadataProvider(options, connection);
-        },
+        inject: [JETSTREAM_CONNECTIONS],
+        useFactory: (registry: ConnectionRegistry): PatternRegistry | null =>
+          registry.getDefault().patterns,
       },
 
       {
         provide: JetstreamStrategy,
-        inject: [
-          JETSTREAM_OPTIONS,
-          JETSTREAM_CONNECTION,
-          PatternRegistry,
-          StreamProvider,
-          ConsumerProvider,
-          MessageProvider,
-          EventRouter,
-          RpcRouter,
-          CoreRpcServer,
-          JETSTREAM_ACK_WAIT_MAP,
-          MetadataProvider,
-        ],
-        useFactory: (
-          options: JetstreamModuleOptions,
-          connection: ConnectionProvider,
-          patternRegistry: PatternRegistry,
-          streamProvider: StreamProvider,
-          consumerProvider: ConsumerProvider,
-          messageProvider: MessageProvider,
-          eventRouter: EventRouter,
-          rpcRouter: RpcRouter,
-          coreRpcServer: CoreRpcServer,
-          ackWaitMap: Map<StreamKind, number>,
-          metadataProvider: MetadataProvider,
-        ): JetstreamStrategy | null => {
-          if (options.consumer === false) return null;
+        inject: [JETSTREAM_CONNECTIONS],
+        useFactory: (registry: ConnectionRegistry): JetstreamStrategy | null =>
+          registry.getDefault().strategy,
+      },
 
-          return new JetstreamStrategy(
-            options,
-            connection,
-            patternRegistry,
-            streamProvider,
-            consumerProvider,
-            messageProvider,
-            eventRouter,
-            rpcRouter,
-            coreRpcServer,
-            ackWaitMap,
-            metadataProvider,
-          );
-        },
+      {
+        provide: JetstreamHealthIndicator,
+        inject: [JETSTREAM_CONNECTIONS],
+        useFactory: (registry: ConnectionRegistry): JetstreamHealthIndicator =>
+          new JetstreamHealthIndicator(registry),
+      },
+
+      {
+        provide: ShutdownManager,
+        inject: [JETSTREAM_CONNECTIONS, JETSTREAM_EVENT_BUS, JETSTREAM_OPTIONS],
+        useFactory: (
+          registry: ConnectionRegistry,
+          eventBus: EventBus,
+          options: JetstreamModuleOptions,
+        ): ShutdownManager =>
+          new ShutdownManager(
+            registry,
+            eventBus,
+            options.shutdownTimeout ?? DEFAULT_SHUTDOWN_TIMEOUT,
+          ),
       },
     ];
   }

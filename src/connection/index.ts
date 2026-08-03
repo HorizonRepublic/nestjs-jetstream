@@ -1,5 +1,7 @@
 export { normalizeOptions } from './connection-options';
 
+export { ConnectionRegistry } from './connection-registry';
+
 export { createConnectionScope } from './connection-scope';
 
 export type {

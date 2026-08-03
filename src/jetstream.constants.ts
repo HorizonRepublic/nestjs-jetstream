@@ -15,8 +15,11 @@ import type { JetStreamRpcConfig, RpcConfig, SubjectKind } from './interfaces';
 /** Token for the resolved JetstreamModuleOptions. */
 export const JETSTREAM_OPTIONS: unique symbol = Symbol('JETSTREAM_OPTIONS');
 
-/** Token for the shared ConnectionProvider instance. */
+/** Token for the shared ConnectionProvider instance (the default connection). */
 export const JETSTREAM_CONNECTION: unique symbol = Symbol('JETSTREAM_CONNECTION');
+
+/** Token for the ConnectionRegistry holding every named connection. */
+export const JETSTREAM_CONNECTIONS: unique symbol = Symbol('JETSTREAM_CONNECTIONS');
 
 /** Token for the global Codec instance. */
 export const JETSTREAM_CODEC: unique symbol = Symbol('JETSTREAM_CODEC');

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 
-import { ConnectionProvider } from '../connection';
+import type { ConnectionRegistry } from '../connection/connection-registry';
 import type { JetstreamHealthStatus } from '../interfaces';
 
 /**
@@ -22,7 +22,7 @@ import type { JetstreamHealthStatus } from '../interfaces';
 export class JetstreamHealthIndicator {
   private readonly logger = new Logger('Jetstream:Health');
 
-  public constructor(private readonly connection: ConnectionProvider) {}
+  public constructor(private readonly registry: ConnectionRegistry) {}
 
   /**
    * Plain health status check.
@@ -33,7 +33,7 @@ export class JetstreamHealthIndicator {
    * @returns Connection status with server URL and RTT latency.
    */
   public async check(): Promise<JetstreamHealthStatus> {
-    const nc = this.connection.unwrap;
+    const nc = this.registry.getDefault().connection.unwrap;
 
     if (!nc || nc.isClosed()) {
       return { connected: false, server: null, latency: null };

@@ -1,6 +1,6 @@
 import { Logger } from '@nestjs/common';
 
-import { ConnectionProvider } from '../connection';
+import type { ConnectionRegistry } from '../connection/connection-registry';
 import { EventBus } from '../hooks';
 import { TransportEvent } from '../interfaces';
 
@@ -28,7 +28,7 @@ export class ShutdownManager {
   private shutdownPromise?: Promise<void>;
 
   public constructor(
-    private readonly connection: ConnectionProvider,
+    private readonly registry: ConnectionRegistry,
     private readonly eventBus: EventBus,
     private readonly timeout: number,
   ) {}
@@ -60,7 +60,7 @@ export class ShutdownManager {
 
     try {
       await Promise.race([
-        this.connection.shutdown(),
+        this.registry.getDefault().connection.shutdown(),
         new Promise<void>((resolve) => {
           timeoutId = setTimeout(resolve, this.timeout);
         }),

@@ -5,6 +5,8 @@ import { createMock } from '@golevelup/ts-vitest';
 import { afterEach, describe, expect, it, vi, type Mocked } from 'vitest';
 
 import { ConnectionProvider } from '../../connection';
+import { ConnectionRegistry } from '../../connection/connection-registry';
+import type { ConnectionScope } from '../../connection/connection.types';
 import { JetstreamHealthIndicator } from '../jetstream.health-indicator';
 
 describe(JetstreamHealthIndicator, () => {
@@ -14,6 +16,14 @@ describe(JetstreamHealthIndicator, () => {
 
   const mockServer = faker.internet.url();
 
+  const registryOf = (connection: ConnectionProvider): ConnectionRegistry =>
+    new ConnectionRegistry(
+      new Map([
+        ['default', createMock<ConnectionScope>({ name: 'default', critical: true, connection })],
+      ]),
+      'default',
+    );
+
   const setupConnected = (): void => {
     const nc = createMock<NatsConnection>({
       isClosed: vi.fn().mockReturnValue(false),
@@ -22,12 +32,12 @@ describe(JetstreamHealthIndicator, () => {
     });
 
     connectionProvider = createMock<ConnectionProvider>({ unwrap: nc });
-    sut = new JetstreamHealthIndicator(connectionProvider);
+    sut = new JetstreamHealthIndicator(registryOf(connectionProvider));
   };
 
   const setupDisconnected = (nc: NatsConnection | null = null): void => {
     connectionProvider = createMock<ConnectionProvider>({ unwrap: nc });
-    sut = new JetstreamHealthIndicator(connectionProvider);
+    sut = new JetstreamHealthIndicator(registryOf(connectionProvider));
   };
 
   afterEach(vi.resetAllMocks);
