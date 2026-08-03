@@ -212,23 +212,40 @@ See [Custom Codec](/docs/guides/custom-codec) for how to implement the `Codec` i
 
 ## Full options reference
 
-Every field in `JetstreamModuleOptions` with its type, default, and guidance on when to change it.
+Every field in `JetstreamModuleOptions`. The blocks that need more than a line have a section of their own below.
 
-### Required options
+### Root options
 
-#### `name`, `string`
+| Option                      | Type                                         | Default                | What it does                                                                                          |
+| --------------------------- | -------------------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------- |
+| `name`                      | `string`                                     | required               | Drives stream, consumer and subject naming. Unique per service.                                       |
+| `servers`                   | `string[]`                                   | required               | NATS server URLs. Required unless you use `connections`, and supplying both fails at startup.         |
+| `connections`               | `Record<string, JetstreamConnectionOptions>` | none                   | One entry per NATS cluster, mutually exclusive with `servers`. See [connections](#connections).       |
+| `defaultConnection`         | `string`                                     | none                   | Which connection unqualified handlers and clients bind to.                                            |
+| `codec`                     | `Codec`                                      | `JsonCodec`            | Message serializer. See [Custom Codec](/docs/guides/custom-codec).                                    |
+| `consumer`                  | `boolean`                                    | `true`                 | Consumer infrastructure. `false` gives a [publisher-only](#publisher-only-mode) service.              |
+| `rpc`                       | `RpcConfig`                                  | `{ mode: 'core' }`     | RPC transport mode. See [RpcConfig](#rpcconfig).                                                      |
+| `events`                    | `StreamConsumerOverrides`                    | production defaults    | Workqueue event stream and consumer. See [StreamConsumerOverrides](#streamconsumeroverrides).         |
+| `broadcast`                 | `StreamConsumerOverrides`                    | production defaults    | Broadcast event stream and consumer, same shape as `events`.                                          |
+| `ordered`                   | `OrderedEventOverrides`                      | production defaults    | Ordered event consumers. See [OrderedEventOverrides](#orderedeventoverrides).                         |
+| `dlq`                       | `DlqOptions \| false`                        | enabled                | Republishes exhausted messages to a dedicated stream. See [dlq](#dlq).                                |
+| `onDeadLetter`              | `(info: DeadLetterInfo) => Promise<void>`    | none                   | Awaited when a message exhausts every delivery attempt.                                               |
+| `hooks`                     | `Partial<TransportHooks>`                    | none                   | Lifecycle hook handlers. Unset hooks are ignored in silence.                                          |
+| `metrics`                   | `MetricsOption`                              | none                   | Prometheus metrics. `true` for defaults, or a `MetricsConfig`. Needs the optional `prom-client` peer. |
+| `otel`                      | `OtelOptions \| boolean`                     | enabled                | Tracing. `false` turns it off entirely.                                                               |
+| `metadata`                  | `MetadataRegistryOptions`                    | auto                   | Handler metadata in NATS KV, on when any handler has `meta`. No-op when `consumer: false`.            |
+| `provisioning`              | `ProvisioningOptions`                        | `{ management: Auto }` | Who owns streams and consumers. See [provisioning](#provisioning).                                    |
+| `allowDestructiveMigration` | `boolean`                                    | `false`                | Permits blue-green recreation when an immutable property changes.                                     |
+| `shutdownTimeout`           | `number`                                     | `10_000`               | Drain budget in milliseconds.                                                                         |
+| `connectionOptions`         | `Partial<ConnectionOptions>`                 | none                   | Raw NATS options for TLS, auth and reconnection. See [connectionOptions](#connectionoptions).         |
 
-Service name. Used for stream, consumer, and subject naming. Must be unique per service in your system.
+`name`, `hooks`, `metrics`, `otel` and `onDeadLetter` stay at the root even when you use `connections`: they describe or observe the service as a whole.
 
-#### `servers`, `string[]`
+### connections
 
-NATS server URLs (e.g., `['nats://localhost:4222']`). Required unless you use `connections` instead; supplying both fails at startup.
+Each entry inherits every root field it does not name, and may override `critical`, `consumer`, `codec`, `connectionOptions`, `events`, `broadcast`, `ordered`, `rpc`, `dlq`, `metadata`, `provisioning`, `allowDestructiveMigration` and `shutdownTimeout`.
 
-### Optional options
-
-#### `connections`, `Record<string, JetstreamConnectionOptions>`
-
-Named connections, one per NATS cluster. Mutually exclusive with `servers`. Each entry inherits every root-level field it does not name, and may override `critical`, `consumer`, `codec`, `connectionOptions`, `events`, `broadcast`, `ordered`, `rpc`, `dlq`, `metadata`, `provisioning`, `allowDestructiveMigration` and `shutdownTimeout`. The merge is one level deep: naming a block such as `events` replaces the root block entirely rather than merging into it.
+`critical` defaults to `true`. A `false` connection connects lazily in the background, retrying with exponential backoff capped at 30 s. It reports `degraded` health instead of failing readiness.
 
 ```typescript
 JetstreamModule.forRoot({
@@ -246,59 +263,27 @@ JetstreamModule.forRoot({
 })
 ```
 
-`name`, `hooks`, `metrics`, `otel` and `onDeadLetter` stay at the root: they describe or observe the service as a whole. See [Multiple connections](/docs/guides/multi-connection).
+:::warning The merge is one level deep
+Naming a block such as `events` replaces the root block entirely instead of merging into it. Above, `analytics` gets `concurrency: 32` and loses any other `events` key set at the root. Repeat the parts you still want.
+:::
 
-#### `defaultConnection`, `string`
+`defaultConnection` is optional when the map has a `default` key, and required otherwise. See [Multiple connections](/docs/guides/multi-connection).
 
-Which connection unqualified handlers and clients bind to. Optional when the `connections` map has a `default` key; required otherwise.
+### dlq
 
-#### `critical` (per connection), `boolean`
+Exhausted messages are republished to a dedicated DLQ stream with tracking headers. Pass `false` to turn it off and leave them where they land. `management` controls whether the stream is provisioned (`Auto`, the default) or bound to an existing one (`Manual`).
 
-Default: `true`. Whether startup depends on this connection. `false` connects lazily in the background, retries with exponential backoff capped at 30 s, and reports `degraded` health instead of failing readiness.
-
-#### `codec`, `Codec`
-
-Default: `JsonCodec`. Global message serializer/deserializer. Swap for MessagePack, Protobuf, or any custom binary format. See [Custom Codec](/docs/guides/custom-codec).
-
-#### `rpc`, `RpcConfig`
-
-Default: `{ mode: 'core' }`. RPC transport mode and configuration. See [RpcConfig](#rpcconfig) below.
-
-#### `consumer`, `boolean`
-
-Default: `true`. Enable consumer infrastructure. Set to `false` for publisher-only services (e.g., API gateways).
-
-#### `events`, `StreamConsumerOverrides`
-
-Default: production defaults (see [Default Configs](/docs/reference/default-configs#stream-defaults)). Overrides for workqueue event stream and consumer config. To enable [message scheduling](/docs/guides/scheduling), set `events.stream.allow_msg_schedules: true` (requires NATS >= 2.12).
-
-#### `broadcast`, `StreamConsumerOverrides`
-
-Default: production defaults. Overrides for broadcast event stream and consumer config.
-
-#### `ordered`, `OrderedEventOverrides`
-
-Default: production defaults. Configuration for ordered event consumers. See [OrderedEventOverrides](#orderedeventoverrides) below.
-
-#### `hooks`, `Partial<TransportHooks>`
-
-Default: none. Transport lifecycle hook handlers. Unset hooks are silently ignored. See [Lifecycle Hooks](/docs/guides/lifecycle-hooks).
-
-#### `onDeadLetter`, `(info: DeadLetterInfo) => Promise<void>`
-
-Default: none. Async callback for dead letter handling. Called and awaited when a message exhausts all delivery attempts. See [Dead Letter Queue](/docs/guides/dead-letter-queue).
-
-#### `dlq`, `DlqOptions | false`
-
-Default: enabled. Exhausted messages are republished to a dedicated DLQ stream with tracking headers. Pass `false` to turn it off and leave them where they land. `management` controls whether the stream is provisioned (`Auto`, default) or bound to an existing one (`Manual`). See [Built-in DLQ stream](/docs/guides/dead-letter-queue#built-in-dlq-stream) and [External DLQ](/docs/guides/external-infrastructure#external-dlq).
+See [Built-in DLQ stream](/docs/guides/dead-letter-queue#built-in-dlq-stream) and [External DLQ](/docs/guides/external-infrastructure#external-dlq).
 
 :::note Bind-only deployments
 Under `provisioning: { management: Manual }` the implicit default stands down, since a service that provisions nothing should not fail boot over a stream nobody asked for. Set `dlq` explicitly to bind to an externally provisioned one.
 :::
 
-#### `events.retry` / `broadcast.retry`, `readonly number[] | false`
+### events.retry and broadcast.retry
 
-Default: `[2000, 10000]`. Delay in milliseconds before each redelivery after a handler throws or calls `ctx.retry()`; index 0 is the first retry and the last entry repeats once the curve runs out. `false` naks immediately, which burns every attempt as fast as the handler can fail. Delays are applied client-side when the message is naked, not through the consumer's `backoff`, so `ack_wait` keeps its configured value.
+`readonly number[] | false`, default `[2000, 10000]`. Delay in milliseconds before each redelivery after a handler throws or calls `ctx.retry()`. Index 0 is the first retry, and the last entry repeats once the curve runs out. `false` naks immediately, which burns every attempt as fast as the handler can fail.
+
+The delays are applied client-side when the message is naked, not through the consumer's `backoff`, so `ack_wait` keeps its configured value.
 
 ```typescript
 events: {
@@ -307,68 +292,23 @@ events: {
 }
 ```
 
-#### `provisioning`, `ProvisioningOptions`
+### provisioning
 
-Default: `{ management: ManagementMode.Auto }`. Controls global provisioning behavior.
+| Field                   | Type             | Default               | What it does                                                                                                               |
+| ----------------------- | ---------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `management`            | `ManagementMode` | `ManagementMode.Auto` | `Auto` creates and updates every entity. `Manual` binds to existing ones and fails at boot if any are absent.              |
+| `preflightStorageCheck` | `boolean`        | `false`               | Calls `getAccountInfo()` before provisioning and warns if the streams would not fit the account budget. Never blocks boot. |
 
-The most important field is `management`:
-
-```typescript
-import { ManagementMode } from '@horizon-republic/nestjs-jetstream';
-
-JetstreamModule.forRoot({
-  name: 'orders',
-  servers: ['nats://localhost:4222'],
-  provisioning: {
-    management: ManagementMode.Manual, // bind to all entities; never create or update
-  },
-})
-```
-
-| `management` value      | Behavior                                                             |
-| ----------------------- | -------------------------------------------------------------------- |
-| `ManagementMode.Auto`   | Library creates and updates every entity. **Default.**               |
-| `ManagementMode.Manual` | Library binds to existing entities; fails at boot if any are absent. |
-
-The global value can be overridden per entity via `events.management`, `broadcast.management`, etc. Resolution order: per-entity -> global -> `Auto`. See [Bring Your Own Infrastructure](/docs/guides/external-infrastructure) for a complete guide.
-
-The other field is `preflightStorageCheck` (default `false`): when on, the transport calls `getAccountInfo()` before provisioning and warns if the streams it is about to create would not fit the account's storage budget. It never blocks boot.
-
-#### `metadata`, `MetadataRegistryOptions`
-
-Default: auto-enabled if any handler has `meta`. Handler metadata registry; publishes `@EventPattern` / `@MessagePattern` handler metadata to a NATS KV bucket for cross-service discovery. No-op when `consumer: false`. See [Handler Metadata](/docs/patterns/handler-metadata).
-
-#### `metrics`, `MetricsOption`
-
-Default: none. Built-in Prometheus metrics. Pass `true` for defaults or a `MetricsConfig` object for full control (custom registry, prefix, labels, polling interval, histogram buckets). Requires the optional `prom-client` peer dependency when enabled. See [Prometheus Metrics](/docs/observability/metrics).
-
-#### `allowDestructiveMigration`, `boolean`
-
-Default: `false`. Allow automatic blue-green stream recreation for immutable property changes (e.g., `storage`). Without this flag, the transport logs a warning and keeps the existing stream config. See [Stream Migration](/docs/guides/stream-migration).
-
-#### `shutdownTimeout`, `number`
-
-Default: `10_000` (10 s). Graceful shutdown timeout in milliseconds. Handlers exceeding this are abandoned.
-
-#### `connectionOptions`, `Partial<ConnectionOptions>`
-
-Default: none. Raw NATS `ConnectionOptions` pass-through for TLS, auth, reconnection, etc. See [connectionOptions](#connectionoptions) below.
-
-#### `otel`, `OtelOptions | boolean`
-
-Default: enabled. Pass `false` to turn tracing off entirely, `true` for the defaults, or an object to configure it. See [Distributed Tracing](/docs/observability/tracing).
+Override `management` per entity through `events.management`, `broadcast.management` and so on. Resolution order is per-entity, then global, then `Auto`. See [Bring Your Own Infrastructure](/docs/guides/external-infrastructure).
 
 ### RpcConfig
 
-RPC configuration is a discriminated union on `mode`. Pick the mode based on whether commands must survive handler downtime:
+A discriminated union on `mode`. Pick by whether commands must survive handler downtime.
 
-**`mode: 'core'`**, default. NATS native request/reply, leaving the message unpersisted. Lowest latency. Default timeout `30_000` ms (30 s). Best for low-latency queries and lookups where in-flight requests can simply error on failure.
-
-**`mode: 'jetstream'`**, commands persisted in a JetStream stream before delivery. Default timeout `180_000` ms (3 min). Best for commands that must survive a handler restart (payments, state changes).
-
-:::note Timeout unit
-The `timeout` field is specified in **milliseconds**, not seconds. Writing `timeout: 30` means 30 ms, which is a bug in almost every case. Use `timeout: 30_000` for 30 seconds.
-:::
+| `mode`        | Persistence                        | Default timeout   | Best for                                                           |
+| ------------- | ---------------------------------- | ----------------- | ------------------------------------------------------------------ |
+| `'core'`      | none, NATS native request/reply    | `30_000` (30 s)   | Low-latency queries and lookups where in-flight requests can error |
+| `'jetstream'` | commands persisted before delivery | `180_000` (3 min) | Commands that must survive a handler restart (payments, state)     |
 
 ```typescript
 // Core mode (default) -- NATS native request/reply
@@ -383,136 +323,70 @@ rpc: {
 }
 ```
 
-:::note Timeout applies to both sides
-The `timeout` value controls both the **client-side wait** (how long the caller waits for a response) and the **server-side handler limit** (how long the handler is allowed to run before being terminated). Both sides use the value from their own `forRoot()` configuration.
-:::
+The `'jetstream'` variant also accepts `management` and `subjectPrefix`, with the same meaning as in `StreamConsumerOverrides`.
 
-The `mode: 'jetstream'` variant also accepts `management` and `subjectPrefix` fields with the same semantics as `StreamConsumerOverrides`.
+:::note Timeout is milliseconds, and applies to both sides
+Writing `timeout: 30` means 30 ms, which is a bug in almost every case. Use `timeout: 30_000` for 30 seconds. The value bounds both the caller's wait and the handler's run, each side reading it from its own `forRoot()`.
+:::
 
 See [RPC Patterns](/docs/patterns/rpc) for a full comparison of the two modes.
 
 ### StreamConsumerOverrides
 
-The `events` and `broadcast` fields accept stream and consumer configuration overrides:
+Accepted by `events` and `broadcast`. Overrides merge with the [production defaults](/docs/reference/default-configs), so name only what you want to change.
+
+| Field                   | Type                         | Default                                              | What it does                                                           |
+| ----------------------- | ---------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------- |
+| `stream`                | `Partial<StreamConfig>`      | production defaults                                  | Stream overrides such as `max_age` and `max_bytes`.                    |
+| `consumer`              | `Partial<ConsumerConfig>`    | production defaults                                  | Consumer overrides such as `max_deliver` and `ack_wait`.               |
+| `consume`               | `ConsumeOptions`             | production defaults                                  | Fetch-loop options such as `idle_heartbeat`.                           |
+| `concurrency`           | `number`                     | production default                                   | How many messages this kind processes at once.                         |
+| `ackExtension`          | `boolean`                    | `false`                                              | Keeps extending the ack deadline while a slow handler runs.            |
+| `retry`                 | `readonly number[] \| false` | `[2000, 10000]`                                      | Redelivery curve. See [events.retry](#eventsretry-and-broadcastretry). |
+| `stream.name`           | `string`                     | `{service}__microservice_ev-stream` and friends      | Bind to an externally provisioned stream with a custom name.           |
+| `consumer.durable_name` | `string`                     | `{service}__microservice_ev-consumer` and friends    | Bind to an externally provisioned consumer.                            |
+| `management`            | `EntityManagement`           | falls back to `provisioning.management`, then `Auto` | Per-kind control, with separate `stream` and `consumer` entries.       |
+| `subjectPrefix`         | `string`                     | `{service}__microservice.ev.` and friends            | Custom subject prefix. The trailing dot is normalized.                 |
 
 ```typescript
-import { toNanos } from '@horizon-republic/nestjs-jetstream';
+import { ManagementMode, toNanos } from '@horizon-republic/nestjs-jetstream';
 
-JetstreamModule.forRoot({
-  name: 'orders',
-  servers: ['nats://localhost:4222'],
-  events: {
-    stream: {
-      max_age: toNanos(3, 'days'), // 3 days instead of default 7
-      max_bytes: 512 * 1024 * 1024,              // 512 MB instead of default 5 GB
-    },
-    consumer: {
-      max_deliver: 5,          // retry 5 times instead of default 3
-      ack_wait: toNanos(30, 'seconds'), // 30s ack timeout instead of default 10s
-    },
-  },
-})
+events: {
+  stream: { max_age: toNanos(3, 'days'), name: 'platform_orders_stream' },
+  consumer: { max_deliver: 5, ack_wait: toNanos(30, 'seconds') },
+  management: { stream: ManagementMode.Manual, consumer: ManagementMode.Auto },
+  subjectPrefix: 'company.orders.',   // publishes to company.orders.{pattern}
+}
 ```
 
-These overrides are merged with the [production defaults](/docs/reference/default-configs). You only need to specify the fields you want to change.
+A custom prefix turns subjects into `{prefix}{pattern}`, and consumers then use exact `filter_subjects` entries instead of a single wildcard filter. See [Bring Your Own Infrastructure](/docs/guides/external-infrastructure#custom-names-and-subject-prefixes) for how prefixes interact with scheduling subjects.
 
 :::tip The toNanos() helper
-NATS JetStream uses nanoseconds for all time-based configuration. The library exports a `toNanos(value, unit)` helper that converts human-readable durations to nanoseconds. Supported units: `'ms'`, `'seconds'`, `'minutes'`, `'hours'`, `'days'`.
+NATS JetStream uses nanoseconds for every time-based setting. `toNanos(value, unit)` converts a readable duration, taking `'ms'`, `'seconds'`, `'minutes'`, `'hours'` or `'days'`.
 :::
-
-#### `stream.name`, `string`
-
-Default: derived from `name` + kind convention (e.g., `orders__microservice_ev-stream`). Set an explicit stream name to bind to an externally provisioned stream with a custom name.
-
-```typescript
-events: {
-  stream: { name: 'platform_orders_stream' },
-}
-```
-
-#### `consumer.durable_name`, `string`
-
-Default: derived from `name` + kind convention (e.g., `orders__microservice_ev-consumer`). Set an explicit durable name to bind to an externally provisioned consumer.
-
-```typescript
-events: {
-  consumer: { durable_name: 'platform_orders_worker' },
-}
-```
-
-#### `management`, `EntityManagement`
-
-Default: falls back to `provisioning.management`, then `ManagementMode.Auto`. Per-kind provisioning control with separate overrides for the stream and consumer:
-
-```typescript
-import { ManagementMode } from '@horizon-republic/nestjs-jetstream';
-
-events: {
-  management: {
-    stream:   ManagementMode.Manual, // bind to external stream
-    consumer: ManagementMode.Auto,   // library manages the consumer
-  },
-}
-```
-
-#### `subjectPrefix`, `string`
-
-Default: library convention (e.g., `orders__microservice.ev.`). Override the subject prefix for all subjects in this kind. The trailing dot is normalized automatically. When a custom prefix is set, subjects become `{prefix}{pattern}` and consumers use exact `filter_subjects` entries instead of a single wildcard filter.
-
-```typescript
-events: {
-  subjectPrefix: 'company.orders.', // publishes to company.orders.{pattern}
-}
-```
-
-See [Bring Your Own Infrastructure](/docs/guides/external-infrastructure#custom-names-and-subject-prefixes) for how custom prefixes interact with scheduling subjects.
 
 ### OrderedEventOverrides
 
-Ordered events use a separate stream with Limits retention and deliver messages in strict sequential order. Ordered consumers are ephemeral, so the configuration is smaller than workqueue or broadcast and auto-managed by the `@nats-io/jetstream` client.
+Ordered events use a separate stream with Limits retention and deliver in strict sequence. The consumers are ephemeral and managed by the `@nats-io/jetstream` client, so this block is smaller than the two above.
+
+| Field           | Type                    | Default                                              | What it does                                                           |
+| --------------- | ----------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------- |
+| `stream`        | `Partial<StreamConfig>` | production defaults                                  | Stream overrides such as `max_age` and `max_bytes`.                    |
+| `deliverPolicy` | `DeliverPolicy`         | `DeliverPolicy.All`                                  | Where to start reading when the consumer is created.                   |
+| `optStartSeq`   | `number`                | none                                                 | Start sequence, used only with `DeliverPolicy.StartSequence`.          |
+| `optStartTime`  | `string`                | none                                                 | Start time as an ISO string, used only with `DeliverPolicy.StartTime`. |
+| `replayPolicy`  | `ReplayPolicy`          | `ReplayPolicy.Instant`                               | Replay policy for historical messages.                                 |
+| `management`    | `EntityManagement`      | falls back to `provisioning.management`, then `Auto` | Per-kind provisioning control for the ordered stream.                  |
+| `subjectPrefix` | `string`                | library convention                                   | Custom subject prefix for ordered-event subjects.                      |
 
 ```typescript
 import { DeliverPolicy } from '@nats-io/jetstream';
 
-JetstreamModule.forRoot({
-  name: 'orders',
-  servers: ['nats://localhost:4222'],
-  ordered: {
-    deliverPolicy: DeliverPolicy.New,   // only new messages (default: All)
-    stream: {
-      max_age: toNanos(12, 'hours'), // 12 hours
-    },
-  },
-})
+ordered: {
+  deliverPolicy: DeliverPolicy.New,        // only new messages
+  stream: { max_age: toNanos(12, 'hours') },
+}
 ```
-
-#### `stream`, `Partial<StreamConfig>`
-
-Default: production defaults. Stream overrides (e.g., `max_age`, `max_bytes`).
-
-#### `deliverPolicy`, `DeliverPolicy`
-
-Default: `DeliverPolicy.All`. Where to start reading when the consumer is created.
-
-#### `optStartSeq`, `number`
-
-Default: none. Start sequence number. Only used with `DeliverPolicy.StartSequence`.
-
-#### `optStartTime`, `string`
-
-Default: none. Start time as an ISO string. Only used with `DeliverPolicy.StartTime`.
-
-#### `replayPolicy`, `ReplayPolicy`
-
-Default: `ReplayPolicy.Instant`. Replay policy for historical messages.
-
-#### `management`, `EntityManagement`
-
-Default: falls back to `provisioning.management`, then `ManagementMode.Auto`. Per-kind provisioning control for the ordered stream. Same semantics as `StreamConsumerOverrides.management`.
-
-#### `subjectPrefix`, `string`
-
-Default: library convention. Custom subject prefix for ordered-event subjects. Same semantics as `StreamConsumerOverrides.subjectPrefix`.
 
 See [Ordered Events](/docs/patterns/ordered-events) for detailed usage.
 
@@ -597,7 +471,7 @@ void bootstrap();
 
 ## What's next?
 
-- [**RPC Patterns**](/docs/patterns/rpc): Core vs JetStream mode, error handling, and timeouts
+- [**RPC Patterns**](/docs/patterns/rpc): how Core and JetStream mode differ on errors and timeouts
 - [**Events & Broadcast**](/docs/patterns/events): workqueue events and fan-out delivery
 - [**Scheduling (Delayed Jobs)**](/docs/guides/scheduling): one-shot delayed delivery via NATS 2.12
 - [**Lifecycle Hooks**](/docs/guides/lifecycle-hooks): monitor connection state and transport events
