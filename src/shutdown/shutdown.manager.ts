@@ -56,8 +56,17 @@ export class ShutdownManager {
     const scopes = this.registry.all();
 
     // Phase 1: stop accepting new messages everywhere before anything drains.
+    // A strategy that throws here must not abort the loop: the remaining
+    // connections would never close, never drain, and the shared shutdown
+    // promise would stay rejected for every later caller.
     for (const scope of scopes) {
-      scope.strategy?.close();
+      try {
+        scope.strategy?.close();
+      } catch (err) {
+        this.logger.warn(
+          `Connection "${scope.name}" failed to stop accepting messages: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
     }
 
     // Phase 2: drain in parallel. allSettled rather than all, so a connection

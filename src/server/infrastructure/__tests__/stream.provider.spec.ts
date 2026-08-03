@@ -549,6 +549,8 @@ describe(StreamProvider, () => {
               name: `${options.name}__microservice_dlq-stream`,
               subjects: [`${options.name}__microservice_dlq-stream`],
               description: `JetStream DLQ stream for ${options.name}`,
+              // Already provisioned by this connection, so nothing to update.
+              metadata: { [STREAM_OWNER_METADATA_KEY]: `${options.name}:default` },
             } as StreamInfo['config'],
           });
 
@@ -1089,6 +1091,78 @@ describe(StreamProvider, () => {
 
       expect(updateArg?.metadata?.['some-external-key']).toBe('keep-me');
       expect(updateArg?.metadata?.[STREAM_OWNER_METADATA_KEY]).toBe('orders:analytics');
+    });
+
+    it('should keep user-supplied stream metadata alongside the stamp', async () => {
+      // Given a kind override carrying its own metadata block
+      options = resolvedOptions('analytics', {
+        events: { stream: { metadata: { team: 'payments' } } },
+      });
+      sut = makeSut();
+      mockJsm.streams.info.mockRejectedValue(streamNotFound());
+      mockJsm.streams.add.mockResolvedValue(createMock<StreamInfo>());
+
+      // When the stream is created
+      await sut.ensureStreams([StreamKind.Event]);
+
+      // Then the stamp augments the user's keys instead of replacing them
+      const addArg = mockJsm.streams.add.mock.calls[0]![0] as {
+        metadata?: Record<string, string>;
+      };
+
+      expect(addArg.metadata?.team).toBe('payments');
+      expect(addArg.metadata?.[STREAM_OWNER_METADATA_KEY]).toBe('orders:analytics');
+    });
+
+    it('should not drop operator metadata when the transport writes none', async () => {
+      // Given a Manual-managed broadcast stream carrying operator keys, where the
+      // transport contributes no metadata of its own
+      options = resolvedOptions('analytics');
+      sut = makeSut();
+      mockStreamInfo(
+        createMock<StreamInfo>({
+          config: {
+            ...DEFAULT_BROADCAST_STREAM_CONFIG,
+            name: 'broadcast-stream',
+            subjects: ['broadcast.>'],
+            description: 'JetStream broadcast stream (shared across services)',
+            // A mutable difference, so an update is guaranteed to be issued.
+            max_bytes: 1,
+            metadata: { 'operator-owned': 'keep-me' },
+          },
+        }),
+      );
+      mockJsm.streams.update.mockResolvedValue(createMock<StreamInfo>());
+
+      // When the stream is ensured
+      await sut.ensureStreams([StreamKind.Broadcast]);
+
+      // Then the update carries the operator's metadata forward rather than
+      // replacing the config without it
+      const updateArg = mockJsm.streams.update.mock.calls[0]![1] as {
+        metadata?: Record<string, string>;
+      };
+
+      expect(updateArg.metadata?.['operator-owned']).toBe('keep-me');
+    });
+
+    it('should stamp the DLQ stream, whose name is service-scoped too', async () => {
+      // Given DLQ provisioning enabled for a named connection
+      options = resolvedOptions('analytics', { dlq: {} });
+      sut = makeSut();
+      mockJsm.streams.info.mockRejectedValue(streamNotFound());
+      mockJsm.streams.add.mockResolvedValue(createMock<StreamInfo>());
+
+      // When streams are ensured
+      await sut.ensureStreams([StreamKind.Event]);
+
+      // Then the DLQ stream carries the same ownership stamp
+      const dlqCall = mockJsm.streams.add.mock.calls
+        .map(([config]) => config as { name: string; metadata?: Record<string, string> })
+        .find((config) => config.name.endsWith('_dlq-stream'));
+
+      expect(dlqCall).toBeDefined();
+      expect(dlqCall?.metadata?.[STREAM_OWNER_METADATA_KEY]).toBe('orders:analytics');
     });
 
     it('should not stamp streams under ManagementMode.Manual', async () => {

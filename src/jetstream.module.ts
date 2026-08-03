@@ -76,28 +76,49 @@ export {
  * ```
  */
 /**
- * Fail when a configured connection never had `listen()` called.
+ * Fail when the bootstrap attached some connections but not others.
  *
- * Without this a second connection's handlers are registered but never
- * subscribed, so its messages are silently not processed. Skipped for
- * single-connection applications, which may legitimately run without a hybrid
- * bootstrap.
+ * Without this a forgotten connection's handlers are registered and never
+ * subscribed, so its messages are silently not processed.
+ *
+ * The check is on attachment, not on completion: a `critical: false` connection
+ * is attached immediately and may still be retrying in the background, and even
+ * a critical one can be mid-boot when this runs. Faulting on completion would
+ * abort startup for exactly the connections that are allowed to lag.
+ *
+ * When nothing is attached at all the check stays silent, because NestJS runs
+ * `onApplicationBootstrap` from `init()` and the documented hybrid order calls
+ * `init()` before `startAllMicroservices()` — there, this hook simply runs too
+ * early to judge. A warning is logged instead so the case is still visible.
  *
  * @param registry Every configured connection.
- * @throws Error naming the connections that never started.
+ * @throws Error naming the connections the bootstrap skipped.
  */
 export const assertAllConnectionsStarted = (registry: ConnectionRegistry): void => {
-  if (registry.names().length < 2) return;
+  const consumers = registry.all().filter((scope) => scope.strategy !== null);
 
-  const unstarted = registry
-    .all()
-    .filter((scope) => scope.strategy !== null && !scope.strategy.isStarted)
+  if (consumers.length < 2) return;
+
+  const attached = consumers.filter((scope) => scope.strategy?.isAttached);
+
+  if (attached.length === 0) {
+    new Logger('Jetstream:Module').warn(
+      `No connection was attached when the application bootstrapped. If you call ` +
+        `app.init() before app.startAllMicroservices(), this is expected. Otherwise ` +
+        `call connectJetstreamMicroservices(app) so every connection subscribes.`,
+    );
+
+    return;
+  }
+
+  const skipped = consumers
+    .filter((scope) => !scope.strategy?.isAttached)
     .map((scope) => scope.name);
 
-  if (unstarted.length === 0) return;
+  if (skipped.length === 0) return;
 
   throw new Error(
-    `Connections never started: ${unstarted.join(', ')}. ` +
+    `Connections never started: ${skipped.join(', ')}. ` +
       `Their handlers are registered but not subscribed, so messages are silently not processed. ` +
       `Call connectJetstreamMicroservices(app) before app.startAllMicroservices().`,
   );

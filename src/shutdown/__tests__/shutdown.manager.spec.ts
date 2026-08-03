@@ -188,6 +188,28 @@ describe(ShutdownManager, () => {
         expect(eventBus.emit).toHaveBeenCalledWith(TransportEvent.ShutdownComplete);
       });
 
+      it('should keep going when one strategy throws while closing', async () => {
+        // Given a strategy whose close() throws
+        const failing = makeScope('failing');
+        const healthy = makeScope('healthy');
+
+        failing.strategy.close.mockImplementation(() => {
+          throw new Error('close exploded');
+        });
+
+        sut = new ShutdownManager(registryOf([failing, healthy]), eventBus, timeout);
+
+        // When shutdown runs
+        await expect(sut.shutdown()).resolves.toBeUndefined();
+
+        // Then the other connection still closed and drained, and the sequence
+        // completed rather than poisoning the shared shutdown promise
+        expect(healthy.strategy.close).toHaveBeenCalled();
+        expect(healthy.connection.shutdown).toHaveBeenCalled();
+        expect(failing.connection.shutdown).toHaveBeenCalled();
+        expect(eventBus.emit).toHaveBeenCalledWith(TransportEvent.ShutdownComplete);
+      });
+
       it('should keep draining the rest when one connection throws', async () => {
         // Given a connection whose drain rejects
         const failing = makeScope('failing', {}, () => Promise.reject(new Error('boom')));

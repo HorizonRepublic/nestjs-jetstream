@@ -74,6 +74,50 @@ describe('JetstreamConnection', () => {
     expect(extrasOf(Sut.prototype, 'helper').connection).toBeUndefined();
   });
 
+  it('should tag handlers inherited from a base controller', () => {
+    // Given a base class holding the pattern and a subclass carrying the decorator
+    class BaseController {
+      @EventPattern('base.happened')
+      public onBase(): void {}
+    }
+
+    @JetstreamConnection('analytics')
+    class Sut extends BaseController {
+      @EventPattern('own.happened')
+      public onOwn(): void {}
+    }
+
+    // When metadata is read
+    // Then the inherited handler is bound too, not silently left on the default
+    expect(extrasOf(Sut.prototype, 'onOwn').connection).toBe('analytics');
+    expect(
+      (Reflect.getMetadata(PATTERN_EXTRAS_METADATA, BaseController.prototype.onBase) ?? {}) as {
+        connection?: string;
+      },
+    ).toMatchObject({ connection: 'analytics' });
+  });
+
+  it('should not invoke accessors while scanning the prototype', () => {
+    // Given a controller exposing a getter with a side effect
+    let touched = 0;
+
+    @JetstreamConnection('analytics')
+    class Sut {
+      public get danger(): string {
+        touched += 1;
+        throw new Error('accessor must not run during decoration');
+      }
+
+      @EventPattern('safe.happened')
+      public onSafe(): void {}
+    }
+
+    // When the class is decorated (which already happened above)
+    // Then the accessor was never evaluated
+    expect(touched).toBe(0);
+    expect(extrasOf(Sut.prototype, 'onSafe').connection).toBe('analytics');
+  });
+
   it('should depend on metadata keys that NestJS still exports', () => {
     // Given the constants the decorator reads
     // When their values are checked

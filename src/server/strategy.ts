@@ -31,6 +31,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
   // oxlint-disable-next-line typescript/no-unsafe-function-type
   private readonly listeners = new Map<string, Function[]>();
   private started = false;
+  private attached = false;
   private closed = false;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private retryAttempt = 0;
@@ -61,6 +62,12 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
    * its primary one.
    */
   public async listen(callback: (...args: unknown[]) => void): Promise<void> {
+    // Recorded before any awaiting: this marks that the bootstrap attached this
+    // connection, which is what the startup guard checks. Completion is tracked
+    // separately by `started`, because a non-critical connection may still be
+    // retrying long after it was attached.
+    this.attached = true;
+
     if (this.isCritical()) {
       try {
         await this.doListen(callback);
@@ -159,9 +166,21 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     return this.binding?.name ?? 'default';
   }
 
-  /** Whether `listen()` has run for this connection. */
+  /** Whether the boot chain completed and this connection is consuming. */
   public get isStarted(): boolean {
     return this.started;
+  }
+
+  /** Whether the bootstrap called `listen()` on this connection at all. */
+  public get isAttached(): boolean {
+    return this.attached;
+  }
+
+  /** Bail out of a boot chain the strategy was closed out from under. */
+  private abortIfClosed(): void {
+    if (this.closed) {
+      throw new Error('Transport closed while the connection was starting');
+    }
   }
 
   private isCritical(): boolean {
@@ -254,9 +273,16 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
           this.eventRouter.updateMaxDeliverMap(this.buildMaxDeliverMap(consumers));
         }
 
+        // close() can land while provisioning is awaiting. Starting routers and
+        // consumers now would leave live consumers behind a torn-down pipeline,
+        // with no further close() coming to clean them up.
+        this.abortIfClosed();
+
         // Routers must subscribe before consumption starts: consumers flush their
         // backlog immediately, and a subject with no observers drops messages.
         await this.startRouters();
+
+        this.abortIfClosed();
 
         await this.startConsumption(consumers);
       }

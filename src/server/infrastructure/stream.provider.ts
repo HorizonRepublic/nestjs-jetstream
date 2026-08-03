@@ -282,9 +282,13 @@ export class StreamProvider {
 
     this.assertOwnership(currentInfo, config);
 
-    // Preserve metadata the transport did not author, such as migration markers.
-    if (config.metadata) {
-      config.metadata = { ...currentInfo.config.metadata, ...config.metadata };
+    // Preserve metadata the transport did not author, such as migration markers
+    // or operator-set keys. An update replaces the whole config, so omitting the
+    // field would drop them — merge even when the transport contributes nothing.
+    const mergedMetadata = { ...currentInfo.config.metadata, ...config.metadata };
+
+    if (Object.keys(mergedMetadata).length > 0) {
+      config.metadata = mergedMetadata;
     }
 
     const diff = compareStreamConfig(currentInfo.config, config);
@@ -518,13 +522,18 @@ export class StreamProvider {
     const overrides = this.getOverrides(kind);
     const ownership = this.ownershipMetadata(kind);
 
+    // The stamp augments user metadata rather than replacing it: a `metadata`
+    // block in the kind's stream overrides must survive.
+    const metadata =
+      ownership || overrides.metadata ? { ...overrides.metadata, ...ownership } : undefined;
+
     return {
       ...defaults,
       ...overrides,
       name,
       subjects,
       description,
-      ...(ownership ? { metadata: ownership } : {}),
+      ...(metadata ? { metadata } : {}),
     };
   }
 
@@ -538,6 +547,12 @@ export class StreamProvider {
    */
   private ownershipMetadata(kind: StreamKind): Record<string, string> | undefined {
     if (kind === StreamKind.Broadcast) return undefined;
+
+    return this.ownershipStamp(kind);
+  }
+
+  /** The stamp itself, for any entity whose name is scoped to this service. */
+  private ownershipStamp(kind: StreamKind | 'dlq'): Record<string, string> | undefined {
     if (resolveManagementMode(this.options, kind, 'stream') === ManagementMode.Manual) {
       return undefined;
     }
@@ -585,6 +600,11 @@ export class StreamProvider {
     const description = `JetStream DLQ stream for ${this.options.name}`;
     const overrides = dlqStreamOverrides(this.options);
     const safeOverrides = this.stripTransportControlled(overrides);
+    // The DLQ name is service-scoped like the event and command streams, so two
+    // connections of one service reaching the same cluster collide here too.
+    const ownership = this.ownershipStamp('dlq');
+    const metadata =
+      ownership || safeOverrides.metadata ? { ...safeOverrides.metadata, ...ownership } : undefined;
 
     return {
       ...DEFAULT_DLQ_STREAM_CONFIG,
@@ -592,6 +612,7 @@ export class StreamProvider {
       name,
       subjects,
       description,
+      ...(metadata ? { metadata } : {}),
     };
   }
 

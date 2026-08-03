@@ -23,21 +23,32 @@ import { PATTERN_EXTRAS_METADATA, PATTERN_METADATA } from '@nestjs/microservices
 export const JetstreamConnection =
   (name: string): ClassDecorator =>
   (target): void => {
-    const proto = (target as unknown as { prototype: Record<string, unknown> }).prototype;
+    const root = (target as unknown as { prototype: object | null }).prototype;
 
-    for (const key of Object.getOwnPropertyNames(proto)) {
-      const handler = proto[key];
+    // Walk the chain so handlers declared on a base controller are bound too;
+    // NestJS discovers those, and leaving them untagged would silently route
+    // them to the default connection.
+    for (
+      let proto = root;
+      proto && proto !== Object.prototype;
+      proto = Object.getPrototypeOf(proto)
+    ) {
+      for (const key of Object.getOwnPropertyNames(proto)) {
+        // Read the descriptor rather than the property: a getter on the
+        // prototype would otherwise run during class decoration.
+        const handler = Object.getOwnPropertyDescriptor(proto, key)?.value as unknown;
 
-      if (typeof handler !== 'function') continue;
-      if (!Reflect.hasMetadata(PATTERN_METADATA, handler)) continue;
+        if (typeof handler !== 'function') continue;
+        if (!Reflect.hasMetadata(PATTERN_METADATA, handler)) continue;
 
-      const extras = (Reflect.getMetadata(PATTERN_EXTRAS_METADATA, handler) ?? {}) as Record<
-        string,
-        unknown
-      >;
+        const extras = (Reflect.getMetadata(PATTERN_EXTRAS_METADATA, handler) ?? {}) as Record<
+          string,
+          unknown
+        >;
 
-      if (extras.connection !== undefined) continue;
+        if (extras.connection !== undefined) continue;
 
-      Reflect.defineMetadata(PATTERN_EXTRAS_METADATA, { ...extras, connection: name }, handler);
+        Reflect.defineMetadata(PATTERN_EXTRAS_METADATA, { ...extras, connection: name }, handler);
+      }
     }
   };

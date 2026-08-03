@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ConnectionProvider } from '../../connection/connection.provider';
 import type { ResolvedConnectionOptions } from '../../interfaces';
+import type { MessageProvider, StreamProvider } from '../infrastructure';
 import type { PatternRegistry } from '../routing';
 import { JetstreamStrategy } from '../strategy';
 
@@ -16,7 +17,16 @@ const quietRegistry = (registerHandlers: () => void): PatternRegistry =>
     hasMetadata: () => false,
   });
 
-const createSut = (critical: boolean, patterns: PatternRegistry): JetstreamStrategy => {
+interface SutOverrides {
+  streams?: StreamProvider;
+  messages?: MessageProvider;
+}
+
+const createSut = (
+  critical: boolean,
+  patterns: PatternRegistry,
+  overrides: SutOverrides = {},
+): JetstreamStrategy => {
   const connectionName = critical ? 'primary' : 'analytics';
   const options = createMock<ResolvedConnectionOptions>({
     name: 'orders',
@@ -28,9 +38,9 @@ const createSut = (critical: boolean, patterns: PatternRegistry): JetstreamStrat
     options,
     createMock<ConnectionProvider>(),
     patterns,
+    overrides.streams ?? createMock(),
     createMock(),
-    createMock(),
-    createMock(),
+    overrides.messages ?? createMock(),
     createMock(),
     createMock(),
     createMock(),
@@ -108,6 +118,41 @@ describe('JetstreamStrategy criticality', () => {
     // Then the boot chain ran again and succeeded
     expect(registerHandlers).toHaveBeenCalledTimes(2);
     expect(sut.isStarted).toBe(true);
+  });
+
+  it('should tear down when closed while the boot chain is still running', async () => {
+    // Given a connection whose stream provisioning is still in flight
+    let releaseBoot: (() => void) | undefined;
+
+    const gate = new Promise<void>((resolve) => {
+      releaseBoot = resolve;
+    });
+
+    const patterns = createMock<PatternRegistry>({
+      registerHandlers: vi.fn(),
+      hasEventHandlers: () => true,
+      hasBroadcastHandlers: () => false,
+      hasOrderedHandlers: () => false,
+      hasRpcHandlers: () => false,
+      hasMetadata: () => false,
+    });
+    const streams = createMock<StreamProvider>({ ensureStreams: () => gate });
+    const messages = createMock<MessageProvider>();
+    const sut = createSut(false, patterns, { streams, messages });
+
+    await sut.listen(vi.fn());
+
+    // When close() lands before provisioning resolves
+    sut.close();
+    releaseBoot?.();
+    await gate;
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // Then the strategy does not end up "started" with consumers it just began,
+    // and consumption is not started after the pipeline was torn down
+    expect(sut.isStarted).toBe(false);
+    expect(messages.start).not.toHaveBeenCalled();
   });
 
   it('should stop retrying once closed', async () => {
