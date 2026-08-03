@@ -8,6 +8,11 @@ import { PATTERN_EXTRAS_METADATA, PATTERN_METADATA } from '@nestjs/microservices
  * decorators run before class decorators, so pattern metadata is already in
  * place by the time this runs.
  *
+ * Handlers inherited from a base controller are tagged too. Metadata lives on
+ * the function itself, so if two decorated subclasses extend the same base, the
+ * base's handlers keep the binding of whichever subclass was decorated first.
+ * Declare the pattern on the subclass when two clusters must share a base.
+ *
  * @param name Connection name as declared in `forRoot({ connections })`.
  *
  * @example
