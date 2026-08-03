@@ -204,7 +204,7 @@ describe('Ordered Event Delivery', () => {
       serviceName = uniqueServiceName();
 
       ({ app, module } = await createTestApp(
-        { name: serviceName, port, ordered: { deliverPolicy: DeliverPolicy.All } },
+        { name: serviceName, port, ordered: { consumer: { deliver_policy: DeliverPolicy.All } } },
         [OrderedController],
         [serviceName],
       ));
@@ -238,7 +238,7 @@ describe('Ordered Event Delivery', () => {
       serviceName = uniqueServiceName();
 
       ({ app, module } = await createTestApp(
-        { name: serviceName, port, ordered: { deliverPolicy: DeliverPolicy.New } },
+        { name: serviceName, port, ordered: { consumer: { deliver_policy: DeliverPolicy.New } } },
         [OrderedController],
         [serviceName],
       ));
@@ -286,7 +286,7 @@ describe('Ordered Event Delivery', () => {
 
       // Step 2: restart with DeliverPolicy.Last, expecting only the last message
       ({ app, module } = await createTestApp(
-        { name: serviceName, port, ordered: { deliverPolicy: DeliverPolicy.Last } },
+        { name: serviceName, port, ordered: { consumer: { deliver_policy: DeliverPolicy.Last } } },
         [OrderedController],
         [serviceName],
       ));
@@ -323,7 +323,11 @@ describe('Ordered Event Delivery', () => {
 
       // Step 2: restart with DeliverPolicy.LastPerSubject
       ({ app, module } = await createTestApp(
-        { name: serviceName, port, ordered: { deliverPolicy: DeliverPolicy.LastPerSubject } },
+        {
+          name: serviceName,
+          port,
+          ordered: { consumer: { deliver_policy: DeliverPolicy.LastPerSubject } },
+        },
         [MultiPatternOrderedController],
         [serviceName],
       ));
@@ -367,7 +371,7 @@ describe('Ordered Event Delivery', () => {
         {
           name: serviceName,
           port,
-          ordered: { deliverPolicy: DeliverPolicy.StartSequence, optStartSeq: 2 },
+          ordered: { consumer: { deliver_policy: DeliverPolicy.StartSequence, opt_start_seq: 2 } },
         },
         [OrderedController],
         [serviceName],
@@ -433,7 +437,9 @@ describe('Ordered Event Delivery', () => {
         {
           name: serviceName,
           port,
-          ordered: { deliverPolicy: DeliverPolicy.StartTime, optStartTime: startTime },
+          ordered: {
+            consumer: { deliver_policy: DeliverPolicy.StartTime, opt_start_time: startTime },
+          },
         },
         [OrderedController],
         [serviceName],

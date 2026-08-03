@@ -1,7 +1,11 @@
 import { FactoryProvider, ModuleMetadata, Type } from '@nestjs/common';
 
-import { DeliverPolicy, ReplayPolicy } from '@nats-io/jetstream';
-import type { ConsumerConfig, ConsumeOptions, StreamConfig } from '@nats-io/jetstream';
+import type {
+  ConsumerConfig,
+  ConsumeOptions,
+  OrderedConsumerOptions,
+  StreamConfig,
+} from '@nats-io/jetstream';
 import type { ConnectionOptions } from '@nats-io/transport-node';
 
 import type { MetricsOption } from '../metrics/metrics.config';
@@ -68,33 +72,11 @@ export type RpcConfig =
       /** Request timeout in ms. Default: 30_000. */
       timeout?: number;
     }
-  | {
+  | ({
       mode: 'jetstream';
       /** Handler timeout in ms. Default: 180_000 (3 min). */
       timeout?: number;
-      /** Raw NATS StreamConfig overrides for the command stream. */
-      stream?: StreamConfigOverrides;
-      /** Raw NATS ConsumerConfig overrides for the command consumer. */
-      consumer?: Partial<ConsumerConfig>;
-
-      /** Options passed to the nats.js `consumer.consume()` call for the command consumer. */
-      consume?: Partial<ConsumeOptions>;
-
-      /** Maximum number of concurrent RPC handler executions. */
-      concurrency?: number;
-
-      /**
-       * Auto-extend ack deadline via `msg.working()` during RPC handler execution.
-       * The RPC handler timeout (`setTimeout` + `msg.term()`) still acts as the hard cap.
-       */
-      ackExtension?: AckExtensionConfig;
-
-      /** Provisioning control for RPC stream/consumer. Falls back to provisioning.management. */
-      management?: EntityManagement;
-
-      /** Custom subject prefix (trailing dot normalized), e.g. 'company.orders.'. */
-      subjectPrefix?: string;
-    };
+    } & Omit<StreamConsumerOverrides, 'retry'>);
 
 /** The JetStream variant of {@link RpcConfig}. */
 export type JetStreamRpcConfig = Extract<RpcConfig, { mode: 'jetstream' }>;
@@ -179,6 +161,14 @@ export interface StreamConsumerOverrides {
 }
 
 /**
+ * Ordered-consumer options a user may set.
+ *
+ * `filter_subjects` is owned by the transport, which builds it from the
+ * registered handlers.
+ */
+export type OrderedConsumerOverrides = Partial<Omit<OrderedConsumerOptions, 'filter_subjects'>>;
+
+/**
  * Configuration for ordered event consumers.
  *
  * Ordered consumers use Limits retention and deliver messages in strict
@@ -192,26 +182,14 @@ export interface OrderedEventOverrides {
   stream?: StreamConfigOverrides;
 
   /**
-   * Where to start reading when the consumer is (re)created.
-   * @default DeliverPolicy.All
+   * Raw nats.js ordered-consumer options, in the same place and the same
+   * spelling the other kinds use for their consumer block.
+   *
+   * `filter_subjects` is derived from the registered handlers and is not
+   * settable. Leaving `deliver_policy` unset reads from the beginning, which
+   * is what {@link DeliverPolicy.All} means.
    */
-  deliverPolicy?: DeliverPolicy;
-
-  /**
-   * Start sequence number. Only used when `deliverPolicy` is `StartSequence`.
-   */
-  optStartSeq?: number;
-
-  /**
-   * Start time (ISO string). Only used when `deliverPolicy` is `StartTime`.
-   */
-  optStartTime?: string;
-
-  /**
-   * Replay policy for historical messages.
-   * @default ReplayPolicy.Instant
-   */
-  replayPolicy?: ReplayPolicy;
+  consumer?: OrderedConsumerOverrides;
 
   /**
    * Provisioning control for the ordered stream. Falls back to

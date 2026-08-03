@@ -120,7 +120,7 @@ The policy decides where a consumer starts reading when created or recreated, an
 | `New`            | Stream head at creation          | Skips whatever arrived while down    | Live dashboards, metrics       |
 | `Last`           | Most recent message              | Delivers the latest again, then live | Single-value config caches     |
 | `LastPerSubject` | Latest message of each subject   | Same as first start                  | Per-entity state maps          |
-| `StartSequence`  | `optStartSeq`                    | Depends on the offset you store      | Resumable projections          |
+| `StartSequence`  | `consumer.opt_start_seq`         | Depends on the offset you store      | Resumable projections          |
 | `StartTime`      | First message at or after a time | Replays from the same timestamp      | Debugging, time-based recovery |
 
 `All` needs idempotent handlers, since a restart after a week replays a week. `New` loses messages published during downtime. `LastPerSubject` groups by the full NATS subject, so publishing to one subject makes it behave like `Last`. Publish to `ordered:order.status.{orderId}` for per-entity delivery.
@@ -132,15 +132,17 @@ The policy decides where a consumer starts reading when created or recreated, an
 import { DeliverPolicy } from '@nats-io/jetstream';
 
 // New: live only
-ordered: { deliverPolicy: DeliverPolicy.New }
+ordered: { consumer: { deliver_policy: DeliverPolicy.New } }
 
 // Last, or LastPerSubject for per-entity
-ordered: { deliverPolicy: DeliverPolicy.LastPerSubject }
+ordered: { consumer: { deliver_policy: DeliverPolicy.LastPerSubject } }
 
 // StartTime, fixed or computed
 ordered: {
-  deliverPolicy: DeliverPolicy.StartTime,
-  optStartTime: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+  consumer: {
+    deliver_policy: DeliverPolicy.StartTime,
+    opt_start_time: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+  },
 }
 ```
 
@@ -154,8 +156,10 @@ JetstreamModule.forRootAsync({
   useFactory: (config: ConfigService, offsets: OffsetService) => ({
     servers: [config.getOrThrow('NATS_URL')],
     ordered: {
-      deliverPolicy: DeliverPolicy.StartSequence,
-      optStartSeq: offsets.getLastProcessedSequence('projections'),
+      consumer: {
+        deliver_policy: DeliverPolicy.StartSequence,
+        opt_start_seq: offsets.getLastProcessedSequence('projections'),
+      },
     },
   }),
 })
@@ -199,7 +203,7 @@ ordered: {
     max_bytes: 10 * 1024 * 1024 * 1024,   // default 5 GB
     max_msg_size: 1024 * 1024,            // default 10 MB
   },
-  replayPolicy: ReplayPolicy.Original,     // default Instant
+  consumer: { replay_policy: ReplayPolicy.Original },   // default Instant
 }
 ```
 

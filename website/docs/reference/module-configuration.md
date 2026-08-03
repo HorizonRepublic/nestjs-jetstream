@@ -323,7 +323,7 @@ rpc: {
 }
 ```
 
-The `'jetstream'` variant also accepts `management` and `subjectPrefix`, with the same meaning as in `StreamConsumerOverrides`.
+The `'jetstream'` variant is `StreamConsumerOverrides` plus `mode` and `timeout`, so `stream`, `consumer`, `consume`, `concurrency`, `ackExtension`, `management` and `subjectPrefix` all mean what they mean elsewhere. `retry` is absent: a command is delivered once.
 
 :::note Timeout is milliseconds, and applies to both sides
 Writing `timeout: 30` means 30 ms, which is a bug in almost every case. Use `timeout: 30_000` for 30 seconds. The value bounds both the caller's wait and the handler's run, each side reading it from its own `forRoot()`.
@@ -369,21 +369,18 @@ NATS JetStream uses nanoseconds for every time-based setting. `toNanos(value, un
 
 Ordered events use a separate stream with Limits retention and deliver in strict sequence. The consumers are ephemeral and managed by the `@nats-io/jetstream` client, so this block is smaller than the two above.
 
-| Field           | Type                    | Default                                              | What it does                                                           |
-| --------------- | ----------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------- |
-| `stream`        | `Partial<StreamConfig>` | production defaults                                  | Stream overrides such as `max_age` and `max_bytes`.                    |
-| `deliverPolicy` | `DeliverPolicy`         | `DeliverPolicy.All`                                  | Where to start reading when the consumer is created.                   |
-| `optStartSeq`   | `number`                | none                                                 | Start sequence, used only with `DeliverPolicy.StartSequence`.          |
-| `optStartTime`  | `string`                | none                                                 | Start time as an ISO string, used only with `DeliverPolicy.StartTime`. |
-| `replayPolicy`  | `ReplayPolicy`          | `ReplayPolicy.Instant`                               | Replay policy for historical messages.                                 |
-| `management`    | `ManagementMode`        | falls back to `provisioning.management`, then `Auto` | Ordered consumers are ephemeral, so only the stream has a mode.        |
-| `subjectPrefix` | `string`                | library convention                                   | Custom subject prefix for ordered-event subjects.                      |
+| Field           | Type                       | Default                                              | What it does                                                                                                                                                                                             |
+| --------------- | -------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `stream`        | `Partial<StreamConfig>`    | production defaults                                  | Stream overrides such as `max_age` and `max_bytes`.                                                                                                                                                      |
+| `consumer`      | `OrderedConsumerOverrides` | nats.js defaults                                     | Ordered-consumer options in raw nats.js spelling: `deliver_policy`, `opt_start_seq`, `opt_start_time`, `replay_policy`, `inactive_threshold`, `headers_only`. `filter_subjects` comes from the handlers. |
+| `management`    | `ManagementMode`           | falls back to `provisioning.management`, then `Auto` | Ordered consumers are ephemeral, so only the stream has a mode.                                                                                                                                          |
+| `subjectPrefix` | `string`                   | library convention                                   | Custom subject prefix for ordered-event subjects.                                                                                                                                                        |
 
 ```typescript
 import { DeliverPolicy } from '@nats-io/jetstream';
 
 ordered: {
-  deliverPolicy: DeliverPolicy.New,        // only new messages
+  consumer: { deliver_policy: DeliverPolicy.New },   // only new messages
   stream: { max_age: toNanos(12, 'hours') },
 }
 ```

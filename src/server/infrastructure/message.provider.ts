@@ -114,29 +114,19 @@ export class MessageProvider {
     filterSubjects: string[],
     orderedConfig?: OrderedEventOverrides,
   ): Promise<void> {
-    const consumerOpts: Partial<OrderedConsumerOptions> = { filter_subjects: filterSubjects };
+    const { deliver_policy: deliverPolicy, ...rest } = orderedConfig?.consumer ?? {};
+
+    const consumerOpts: Partial<OrderedConsumerOptions> = {
+      ...rest,
+      filter_subjects: filterSubjects,
+    };
 
     // Workaround: in nats.js (v2.29.x), explicitly passing DeliverPolicy.All to an
     // ordered consumer leaves opt_start_seq in the config, causing consume() to hang.
     // Omitting deliver_policy lets nats.js use its internal default (same All behavior).
     // See: nats.js/lib/jetstream/consumer.js, OrderedPullConsumerImpl.resetConsumer()
-    if (
-      orderedConfig?.deliverPolicy !== undefined &&
-      orderedConfig.deliverPolicy !== DeliverPolicy.All
-    ) {
-      consumerOpts.deliver_policy = orderedConfig.deliverPolicy;
-    }
-
-    if (orderedConfig?.optStartSeq !== undefined) {
-      consumerOpts.opt_start_seq = orderedConfig.optStartSeq;
-    }
-
-    if (orderedConfig?.optStartTime !== undefined) {
-      consumerOpts.opt_start_time = orderedConfig.optStartTime;
-    }
-
-    if (orderedConfig?.replayPolicy !== undefined) {
-      consumerOpts.replay_policy = orderedConfig.replayPolicy;
+    if (deliverPolicy !== undefined && deliverPolicy !== DeliverPolicy.All) {
+      consumerOpts.deliver_policy = deliverPolicy;
     }
 
     // Resolve/reject when the ordered consumer connects or fails on first attempt
