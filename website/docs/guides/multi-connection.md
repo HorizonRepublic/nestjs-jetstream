@@ -157,12 +157,12 @@ Publisher-only connections have no strategy and are skipped automatically.
 
 `critical` decides whether the application's startup depends on a connection.
 
-| | `critical: true` (default) | `critical: false` |
-| --- | --- | --- |
-| Boot | Blocks until the cluster is reachable | Returns immediately, connects in the background |
-| Cluster down at boot | Startup fails | Startup succeeds |
-| Retry | — | Exponential backoff, capped at 30 s |
-| Health | `connected: false` | `degraded: true`, readiness unaffected |
+|                      | `critical: true` (default)            | `critical: false`                               |
+| -------------------- | ------------------------------------- | ----------------------------------------------- |
+| Boot                 | Blocks until the cluster is reachable | Returns immediately, connects in the background |
+| Cluster down at boot | Startup fails                         | Startup succeeds                                |
+| Retry                | —                                     | Exponential backoff, capped at 30 s             |
+| Health               | `connected: false`                    | `degraded: true`, readiness unaffected          |
 
 A dead analytics cluster must not stop the pod that serves the primary one. That is the whole point of `critical: false`.
 
