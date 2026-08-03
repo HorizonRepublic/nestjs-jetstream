@@ -2,9 +2,7 @@ import { Logger } from '@nestjs/common';
 
 import type { MessageKind, TransportEventSubscriber, TransportHooks } from '../interfaces';
 import { TransportEvent } from '../interfaces';
-
-/** Type-erased callable used internally to store hooks and subscribers homogeneously. */
-type AnyTransportListener = (...args: unknown[]) => unknown;
+import type { TransportListener, TransportSubscriberRegistry } from './hooks.types';
 
 /**
  * Central event bus for transport lifecycle notifications.
@@ -20,11 +18,31 @@ type AnyTransportListener = (...args: unknown[]) => unknown;
 export class EventBus {
   private readonly hooks: Partial<TransportHooks>;
   private readonly logger: Logger;
-  private readonly subscribers = new Map<keyof TransportHooks, AnyTransportListener[]>();
+  private readonly subscribers: TransportSubscriberRegistry;
+  private readonly connectionName: string | null;
 
-  public constructor(logger: Logger, hooks?: Partial<TransportHooks>) {
+  public constructor(
+    logger: Logger,
+    hooks?: Partial<TransportHooks> | undefined,
+    connectionName?: string | undefined,
+    subscribers?: TransportSubscriberRegistry | undefined,
+  ) {
     this.logger = logger;
     this.hooks = hooks ?? {};
+    this.connectionName = connectionName ?? null;
+    this.subscribers = subscribers ?? new Map();
+  }
+
+  /**
+   * A view of this bus that tags every emission with a connection name.
+   *
+   * Hooks and the subscriber registry are shared with the parent by reference,
+   * so a subscriber registered after the view was created still fires through it.
+   *
+   * @param name Connection name appended as the trailing hook argument.
+   */
+  public forConnection(name: string): EventBus {
+    return new EventBus(this.logger, this.hooks, name, this.subscribers);
   }
 
   /**
@@ -37,7 +55,7 @@ export class EventBus {
   ): void {
     const list = this.subscribers.get(event) ?? [];
 
-    list.push(handler as AnyTransportListener);
+    list.push(handler as TransportListener);
     this.subscribers.set(event, list);
   }
 
@@ -70,6 +88,10 @@ export class EventBus {
   }
 
   private dispatch(event: keyof TransportHooks, args: unknown[]): void {
+    // The root bus allocates nothing: a single-connection application never
+    // creates a view, so its hot path is unchanged.
+    const payload = this.connectionName === null ? args : [...args, this.connectionName];
+
     const subs = this.subscribers.get(event);
 
     if (subs?.length) {
@@ -77,18 +99,18 @@ export class EventBus {
       // event during dispatch cannot extend the live iteration.
       // oxlint-disable-next-line unicorn/no-useless-spread
       for (const sub of [...subs]) {
-        this.callHook(event, sub, ...args);
+        this.callHook(event, sub, ...payload);
       }
     }
 
     const hook = this.hooks[event];
 
     if (hook) {
-      this.callHook(event, hook as AnyTransportListener, ...args);
+      this.callHook(event, hook as TransportListener, ...payload);
     }
   }
 
-  private callHook(event: string, hook: AnyTransportListener, ...args: unknown[]): void {
+  private callHook(event: string, hook: TransportListener, ...args: unknown[]): void {
     try {
       const result = hook(...args);
 

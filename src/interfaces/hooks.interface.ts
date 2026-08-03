@@ -49,6 +49,10 @@ export enum TransportEvent {
  * Register hooks via `forRoot({ hooks: { ... } })` for monitoring,
  * alerting, or custom observability integration.
  *
+ * Hooks are registered once and fire for every connection. Each callback
+ * receives the originating connection name as a trailing argument when more
+ * than one connection is configured, and nothing extra otherwise.
+ *
  * @example
  * ```typescript
  * JetstreamModule.forRoot({
@@ -61,31 +65,31 @@ export enum TransportEvent {
  */
 export interface TransportHooks {
   /** Fired when NATS connection is established. */
-  [TransportEvent.Connect](server: string): void;
+  [TransportEvent.Connect](server: string, connection?: string): void;
 
   /** Fired when NATS connection is lost. */
-  [TransportEvent.Disconnect](): void;
+  [TransportEvent.Disconnect](connection?: string): void;
 
   /** Fired when NATS connection is re-established after a disconnect. */
-  [TransportEvent.Reconnect](server: string): void;
+  [TransportEvent.Reconnect](server: string, connection?: string): void;
 
   /** Fired on any transport-level error. */
-  [TransportEvent.Error](error: Error, context?: string): void;
+  [TransportEvent.Error](error: Error, context?: string, connection?: string): void;
 
   /** Fired when an RPC handler exceeds its timeout. */
-  [TransportEvent.RpcTimeout](subject: string, correlationId: string): void;
+  [TransportEvent.RpcTimeout](subject: string, correlationId: string, connection?: string): void;
 
   /** Fired after a message is successfully routed to its handler. */
-  [TransportEvent.MessageRouted](subject: string, kind: MessageKind): void;
+  [TransportEvent.MessageRouted](subject: string, kind: MessageKind, connection?: string): void;
 
   /** Fired at the start of the graceful shutdown sequence. */
-  [TransportEvent.ShutdownStart](): void;
+  [TransportEvent.ShutdownStart](connection?: string): void;
 
   /** Fired after graceful shutdown completes. */
-  [TransportEvent.ShutdownComplete](): void;
+  [TransportEvent.ShutdownComplete](connection?: string): void;
 
   /** Fired when a message exhausts all delivery attempts (dead letter). */
-  [TransportEvent.DeadLetter](info: DeadLetterInfo): void;
+  [TransportEvent.DeadLetter](info: DeadLetterInfo, connection?: string): void;
 
   /**
    * Fired when a consumer's self-healing flow successfully recovers after
@@ -96,7 +100,7 @@ export interface TransportHooks {
    *                or consumer name passed to `createSelfHealingFlow`.
    * @param attempts How many consecutive failed attempts preceded the recovery.
    */
-  [TransportEvent.ConsumerRecovered](label: string, attempts: number): void;
+  [TransportEvent.ConsumerRecovered](label: string, attempts: number, connection?: string): void;
 
   /**
    * Fired immediately after a handler returns or throws.
@@ -114,6 +118,7 @@ export interface TransportHooks {
     kind: StreamKind,
     durationMs: number,
     status: HandlerStatus,
+    connection?: string,
   ): void;
 
   /**
@@ -132,6 +137,7 @@ export interface TransportHooks {
     kind: StreamKind,
     durationMs: number,
     status: PublishStatus,
+    connection?: string,
   ): void;
 
   /**
@@ -149,6 +155,7 @@ export interface TransportHooks {
     subject: string,
     durationMs: number,
     status: RpcOutcomeStatus,
+    connection?: string,
   ): void;
 }
 

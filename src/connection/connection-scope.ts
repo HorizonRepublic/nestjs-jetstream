@@ -86,7 +86,13 @@ export const createConnectionScope = (
   binding?: ConnectionBinding | undefined,
 ): ConnectionScope => {
   const logger = new Logger('Jetstream:Module');
-  const { eventBus, rootCodec } = shared;
+  const { rootCodec } = shared;
+  // Single-connection applications keep the untagged bus, so their hook
+  // payloads stay byte-for-byte what they were.
+  const eventBus =
+    binding && binding.known.size > 1
+      ? shared.eventBus.forConnection(options.connectionName)
+      : shared.eventBus;
 
   const codec: Codec = options.codec ?? rootCodec;
   const connection = new ConnectionProvider(options, eventBus);

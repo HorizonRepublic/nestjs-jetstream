@@ -9,7 +9,13 @@ import { connect } from '@nats-io/transport-node';
 import type { StartedTestContainer } from 'testcontainers';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
-import { getClientToken, JetstreamConnection, StreamKind, streamName } from '../../src';
+import {
+  getClientToken,
+  JetstreamConnection,
+  StreamKind,
+  streamName,
+  TransportEvent,
+} from '../../src';
 import { createMultiConnectionApp, uniqueServiceName, waitForCondition } from './helpers';
 import { startNatsContainer } from './nats-container';
 
@@ -38,6 +44,19 @@ class TwinController {
   public onTwin(@Payload() data: { id: string }): void {
     received.push(`twin-analytics:${data.id}`);
   }
+}
+
+@Controller()
+class HookPrimaryController {
+  @EventPattern('hook.primary')
+  public onPrimary(@Payload() _data: unknown): void {}
+}
+
+@JetstreamConnection('analytics')
+@Controller()
+class HookAnalyticsController {
+  @EventPattern('hook.analytics')
+  public onAnalytics(@Payload() _data: unknown): void {}
 }
 
 describe('multi-connection routing', () => {
@@ -125,6 +144,42 @@ describe('multi-connection routing', () => {
     // Then the analytics handler never sees it
     await new Promise((resolve) => setTimeout(resolve, 2_000));
     expect(received).not.toContain('analytics:v-cross');
+  });
+
+  it('should tag hook events with the originating connection', async () => {
+    // Given hooks registered once for the whole application
+    const routed: string[] = [];
+    const hookServiceName = uniqueServiceName();
+    const { app: hookApp } = await createMultiConnectionApp({
+      name: hookServiceName,
+      root: {
+        hooks: {
+          [TransportEvent.MessageRouted]: (_subject, _kind, connection) => {
+            if (connection) routed.push(connection);
+          },
+        },
+      },
+      connections: {
+        primary: { servers: [`nats://localhost:${primaryPort}`] },
+        analytics: { servers: [`nats://localhost:${analyticsPort}`] },
+      },
+      defaultConnection: 'primary',
+      controllers: [HookPrimaryController, HookAnalyticsController],
+      clients: [{ name: hookServiceName, connection: 'analytics' }],
+    });
+
+    try {
+      // When an event is routed on the named connection
+      hookApp
+        .get<ClientProxy>(getClientToken(hookServiceName, 'analytics'))
+        .emit('hook.analytics', { id: 'h-1' });
+
+      // Then the hook can attribute it to that connection
+      await waitForCondition(() => routed.includes('analytics'), 10_000);
+      expect(routed).toContain('analytics');
+    } finally {
+      await hookApp.close();
+    }
   });
 
   it('should create each connection its own streams on its own cluster', async () => {
