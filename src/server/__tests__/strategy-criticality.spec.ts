@@ -102,6 +102,10 @@ describe('JetstreamStrategy criticality', () => {
     // Then startup is not blocked and no error is reported
     expect(callback).toHaveBeenCalledWith();
     expect(sut.isStarted).toBe(false);
+
+    // The failed attempt scheduled a retry; cancel it so it cannot fire into a
+    // later test.
+    sut.close();
   });
 
   it('should retry a failed non-critical boot in the background', async () => {
