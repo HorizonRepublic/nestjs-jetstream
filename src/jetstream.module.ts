@@ -425,6 +425,6 @@ export class JetstreamModule implements OnApplicationBootstrap, OnApplicationShu
    * Gracefully shut down the transport on application termination.
    */
   public async onApplicationShutdown(): Promise<void> {
-    await this.shutdownManager?.shutdown(this.registry?.getDefault().strategy ?? undefined);
+    await this.shutdownManager?.shutdown();
   }
 }
