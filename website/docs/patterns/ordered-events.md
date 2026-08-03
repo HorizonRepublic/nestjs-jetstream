@@ -37,7 +37,7 @@ Nothing triggers a retry. The consumer always advances:
 | Decode error               | Error logged, message skipped |
 | No handler for the subject | Error logged, message skipped |
 
-Retrying would block every later message, since order has to hold, and one poison message would stop the pipeline. That is the trade-off strict ordering buys.
+Retrying would block every later message, because order has to hold. One poison message would stop the pipeline. That is the trade-off strict ordering buys.
 
 :::warning A throw loses the message
 Neither `nak()` nor `term()` exists here. Catch errors inside the handler if a failure needs to reach a dead letter table or a retry queue.
@@ -123,7 +123,7 @@ The policy decides where a consumer starts reading when created or recreated, an
 | `StartSequence`  | `optStartSeq`                    | Depends on the offset you store      | Resumable projections          |
 | `StartTime`      | First message at or after a time | Replays from the same timestamp      | Debugging, time-based recovery |
 
-`All` needs idempotent handlers, since a restart after a week replays a week. `New` loses messages published during downtime. `LastPerSubject` groups by the full NATS subject, so publishing to one subject makes it behave like `Last`; publish to `ordered:order.status.{orderId}` for per-entity delivery.
+`All` needs idempotent handlers, since a restart after a week replays a week. `New` loses messages published during downtime. `LastPerSubject` groups by the full NATS subject, so publishing to one subject makes it behave like `Last`. Publish to `ordered:order.status.{orderId}` for per-entity delivery.
 
 <details>
 <summary>Configuring each policy</summary>
@@ -216,7 +216,7 @@ flowchart LR
     Stream --> C["Instance C<br/>(own consumer)"]
 ```
 
-That is the design: ordered consumers build per-instance state such as caches, projections and in-memory indexes. For exactly one handler across the cluster, run one replica; the transport has no leader election. Distributed exclusive processing with ordering needs workqueue events over a single partition, or coordination outside the transport.
+That is the design. Ordered consumers build per-instance state, such as a cache, a projection or an in-memory index. For exactly one handler across the cluster, run one replica, since the transport has no leader election. Distributed exclusive processing with ordering needs workqueue events over a single partition, or coordination outside the transport.
 
 Because instances share the stream and restarts replay it, handlers have to be idempotent:
 
@@ -256,7 +256,9 @@ Reach for workqueue when processing must be guaranteed and order does not matter
 
 ## Caveats
 
-**`DeliverPolicy.All` hangs the SDK.** Passing `All` explicitly leaves a residual `opt_start_seq` in the consumer configuration, which conflicts with the ordered consumer protocol and makes `consume()` hang. Observed in `nats` v2.29.x, still worked around for `@nats-io/jetstream` v3.x: the transport omits `deliver_policy` when the policy is `All` or unset, which the SDK treats identically. Every other policy passes through untouched. That absence shows up when you inspect the consumer with `nats consumer info`.
+**`DeliverPolicy.All` hangs the SDK.** Passing `All` explicitly leaves a residual `opt_start_seq` in the consumer configuration, which conflicts with the ordered consumer protocol and makes `consume()` hang. This was seen in `nats` v2.29.x and is still worked around for `@nats-io/jetstream` v3.x.
+
+The transport omits `deliver_policy` when the policy is `All` or unset, which the SDK treats identically. Every other policy passes through untouched. That absence is what you see when you inspect the consumer with `nats consumer info`.
 
 **No partial replay.** A reconnect recreates the consumer at the position the deliver policy dictates, not at the last message processed. Resumable processing needs `StartSequence` with your own offset storage.
 

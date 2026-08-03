@@ -75,7 +75,9 @@ Every durable consumer uses `ack_policy: Explicit`, `deliver_policy: All` and `r
 | `max_deliver`     | `3`          | `1`         | `3`          |
 | `max_ack_pending` | `100`        | `100`       | `100`        |
 
-An event that fails three times is [dead-lettered](/docs/guides/dead-letter-queue). Between attempts the transport naks with a delay taken from the retry curve, so the three attempts span roughly twelve seconds instead of burning out in milliseconds. The delay is applied client-side, so `ack_wait` keeps its full value and a slow handler is not redelivered while it still runs. Tune it with `events.retry`, or pass `false` to nak immediately.
+An event that fails three times is [dead-lettered](/docs/guides/dead-letter-queue). Between attempts the transport naks with a delay taken from the retry curve, so the three attempts span roughly twelve seconds instead of burning out in milliseconds.
+
+The delay is applied client-side, which leaves `ack_wait` at its full value, so a slow handler is not redelivered while it still runs. Tune the curve with `events.retry`, or pass `false` to nak immediately.
 
 A command is delivered once and never retried, so an RPC failure reaches the caller instead of being repeated behind their back.
 

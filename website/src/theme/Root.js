@@ -207,7 +207,7 @@ export default function Root({ children }) {
     '/docs/guides/troubleshooting/': {
   "@type": "Article",
   "headline": "Troubleshooting: NestJS JetStream Transport",
-  "description": "Fix common NestJS JetStream issues: NATS connection errors, consumer lag, RPC timeouts, DLQ publish failures, and stream migration recovery.",
+  "description": "Fix common NestJS JetStream issues, from connection errors and consumer lag to RPC timeouts, DLQ publish failures and stream migration recovery.",
   "datePublished": "2026-03-26",
   "dateModified": "2026-08-03"
 },

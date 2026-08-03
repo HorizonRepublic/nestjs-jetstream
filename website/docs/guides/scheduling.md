@@ -69,7 +69,7 @@ handleReminder(@Payload() data: OrderReminder) {
 ## How it works
 
 1. `scheduleAt(date)` stores the delivery time in the record
-2. On publish, the library routes to a per-message unique `_sch` subject within the event stream (a library convention to separate scheduled messages from regular events). The unique suffix matters: the server stores schedules as rollup messages: one active schedule per subject ([ADR-51](https://github.com/nats-io/nats-architecture-and-design/blob/main/adr/ADR-51.md)): so a shared subject would silently replace a pending schedule on every publish
+2. On publish, the library routes to a per-message unique `_sch` subject within the event stream, a convention that keeps scheduled messages apart from regular events. That unique suffix is what makes it work, because the server stores schedules as rollup messages, one active schedule per subject ([ADR-51](https://github.com/nats-io/nats-architecture-and-design/blob/main/adr/ADR-51.md)), so a shared subject would silently replace a pending schedule on every publish
 3. The publish includes `Nats-Schedule` and `Nats-Schedule-Target` headers (ADR-51), which the server reads instead of the subject when managing schedules
 4. NATS holds the message until the scheduled time, then publishes a **new message** to the target event subject and purges the fired schedule holder, so unique `_sch` subjects do not accumulate
 5. The event consumer processes it normally

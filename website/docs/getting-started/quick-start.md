@@ -141,7 +141,9 @@ export class OrdersController {
 }
 ```
 
-The decorators above cover the three handler shapes you'll meet first, workqueue events (one instance handles each message), broadcast events (all instances handle every message), and RPC commands (request/reply). Strict-order delivery uses `@EventPattern('...', { ordered: true })`. For the full picture of each, see [Events](/docs/patterns/events), [Broadcast](/docs/patterns/broadcast), [Ordered Events](/docs/patterns/ordered-events), and [RPC](/docs/patterns/rpc).
+The decorators above cover the handler shapes you'll meet first. A workqueue event goes to one instance, while a broadcast event goes to all of them. An RPC command gets a reply, and strict-order delivery is a fourth shape, reached with `@EventPattern('...', { ordered: true })`.
+
+For the full picture of each, see [Events](/docs/patterns/events), [Broadcast](/docs/patterns/broadcast), [Ordered Events](/docs/patterns/ordered-events), and [RPC](/docs/patterns/rpc).
 
 ## 4. Send messages
 
