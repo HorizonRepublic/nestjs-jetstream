@@ -18,10 +18,14 @@ export const isDlqEnabled = (options: JetstreamModuleOptions): boolean => {
   return options.provisioning?.management !== ManagementMode.Manual;
 };
 
+/** The configured block, or `undefined` when the DLQ is off or takes the defaults. */
+const configured = (options: JetstreamModuleOptions): DlqOptions | undefined =>
+  typeof options.dlq === 'object' ? options.dlq : undefined;
+
 /** User overrides for the DLQ stream, empty when the defaults apply. */
 export const dlqStreamOverrides = (options: JetstreamModuleOptions): StreamConfigOverrides =>
-  (options.dlq === false ? undefined : options.dlq?.stream) ?? {};
+  configured(options)?.stream ?? {};
 
 /** DLQ provisioning options, or `undefined` when the DLQ is off. */
 export const dlqOptions = (options: JetstreamModuleOptions): DlqOptions | undefined =>
-  options.dlq === false ? undefined : options.dlq;
+  options.dlq === false ? undefined : configured(options);

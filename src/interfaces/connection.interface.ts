@@ -61,16 +61,13 @@ export interface JetstreamConnectionOptions {
   rpc?: RpcConfig;
 
   /** Dead-letter queue configuration for this connection. */
-  dlq?: DlqOptions | false;
+  dlq?: DlqOptions | boolean;
 
   /** Handler metadata KV registry configuration for this connection. */
   metadata?: MetadataRegistryOptions;
 
   /** Provisioning behavior for this connection. */
   provisioning?: ProvisioningOptions;
-
-  /** Allow destructive stream migration for this connection. */
-  allowDestructiveMigration?: boolean;
 
   /** Graceful shutdown budget in ms for this connection. */
   shutdownTimeout?: number;

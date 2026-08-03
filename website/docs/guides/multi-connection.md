@@ -73,7 +73,7 @@ JetstreamModule.forRoot({
 })
 ```
 
-Every per-cluster knob is tunable this way: `events`, `broadcast`, `ordered`, `rpc`, `dlq`, `metadata`, `provisioning`, `allowDestructiveMigration`, `shutdownTimeout`, `codec`, `connectionOptions`, and `publisherOnly` for a publish-only connection.
+Every per-cluster knob is tunable this way: `events`, `broadcast`, `ordered`, `rpc`, `dlq`, `metadata`, `provisioning`, `shutdownTimeout`, `codec`, `connectionOptions`, and `publisherOnly` for a publish-only connection.
 
 :::warning A block you redeclare replaces the root one entirely
 The merge is one level deep, so naming `events` on a connection replaces the whole root `events` block instead of merging into it. In the example above, `analytics` gets `concurrency: 32` and **loses** any `events.retry` or `events.stream` set at the root. Repeat the parts you still want:

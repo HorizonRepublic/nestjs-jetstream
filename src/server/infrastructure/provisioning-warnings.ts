@@ -10,9 +10,11 @@ export const warnIfManualWithDestructive = (
   options: JetstreamModuleOptions,
   logger: Logger,
 ): void => {
+  const { provisioning } = options;
+
   if (
-    options.allowDestructiveMigration &&
-    options.provisioning?.management === ManagementMode.Manual
+    provisioning?.allowDestructiveMigration &&
+    provisioning.management === ManagementMode.Manual
   ) {
     logger.warn(DESTRUCTIVE_MIGRATION_MANUAL_WARNING);
   }

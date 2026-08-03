@@ -169,12 +169,12 @@ You can safely add `allow_msg_schedules: true` to an existing stream config, and
 | ----------- | ------------------------- | ---------- | ---------------------------------------------------------- |
 | `name`      | derived from service name | No         | Cannot be renamed                                          |
 | `retention` | `Workqueue` or `Limits`   | **No**     | Controlled by the transport: a mismatch is always an error |
-| `storage`   | `File`                    | **Yes**    | Can be migrated with `allowDestructiveMigration: true`     |
+| `storage`   | `File`                    | **Yes**    | Migrated with `provisioning.allowDestructiveMigration`     |
 
 The transport can automatically migrate `storage` via blue-green stream recreation. See the full **[Stream Migration guide](/docs/guides/stream-migration)** for how it works, rolling update behavior, performance benchmarks, and limitations.
 
 :::warning retention is never migratable
-`retention` is controlled by the transport (`Workqueue` for events/commands, `Limits` for broadcast/ordered). A mismatch between the running stream and the expected retention policy always throws an error on startup, regardless of `allowDestructiveMigration`.
+`retention` is controlled by the transport (`Workqueue` for events/commands, `Limits` for broadcast/ordered). A mismatch between the running stream and the expected retention policy always throws an error on startup, whatever `provisioning.allowDestructiveMigration` says.
 :::
 
 ## Overriding Defaults

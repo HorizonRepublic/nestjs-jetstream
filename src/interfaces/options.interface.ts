@@ -92,7 +92,7 @@ export type JetStreamRpcConfig = Extract<RpcConfig, { mode: 'jetstream' }>;
  */
 export type RetryConfig = readonly number[] | false;
 
-/** Built-in dead-letter stream, or `false` to leave exhausted messages in place. */
+/** Built-in dead-letter stream. `true` takes the defaults, `false` leaves exhausted messages in place. */
 export interface DlqOptions {
   /** Raw NATS StreamConfig overrides for the DLQ stream, `name` included. */
   stream?: StreamConfigOverrides;
@@ -250,6 +250,24 @@ export interface ProvisioningOptions {
 
   /** Default management mode for every stream and consumer. @default ManagementMode.Auto */
   management?: ManagementMode;
+
+  /**
+   * Allow destructive stream migration when immutable config changes are detected.
+   *
+   * When `true`, the transport recreates streams via blue-green sourcing if an
+   * immutable property such as `storage` differs from the running stream.
+   * Messages are preserved during migration.
+   *
+   * `retention` is NOT migratable: it is controlled by the transport
+   * (Workqueue for events, Limits for broadcast/ordered) and a mismatch is
+   * always an error regardless of this flag.
+   *
+   * When `false` (default), immutable conflicts are logged as warnings and the
+   * stream keeps its existing configuration.
+   *
+   * @default false
+   */
+  allowDestructiveMigration?: boolean;
 }
 
 /**
@@ -369,7 +387,7 @@ export interface JetstreamModuleOptions {
    * })
    * ```
    */
-  dlq?: DlqOptions | false;
+  dlq?: DlqOptions | boolean;
 
   /**
    * Graceful shutdown timeout in ms.
@@ -377,24 +395,6 @@ export interface JetstreamModuleOptions {
    * @default 10_000
    */
   shutdownTimeout?: number;
-
-  /**
-   * Allow destructive stream migration when immutable config changes are detected.
-   *
-   * When `true`, the transport will recreate streams (via blue-green sourcing)
-   * if immutable properties like `storage` differ from the running stream.
-   * Messages are preserved during migration.
-   *
-   * `retention` is NOT migratable: it is controlled by the transport
-   * (Workqueue for events, Limits for broadcast/ordered) and a mismatch
-   * is always treated as an error regardless of this flag.
-   *
-   * When `false` (default), immutable conflicts are logged as warnings and
-   * the stream continues with its existing configuration.
-   *
-   * @default false
-   */
-  allowDestructiveMigration?: boolean;
 
   /**
    * Handler metadata KV registry configuration.

@@ -339,7 +339,7 @@ JetstreamModule.forRoot({
 
 The stream ownership stamp that detects two connections reaching the same cluster is not written under `Manual`, because those streams are not ours to write to. The configuration-level check (two connections declaring an identical server set) still applies, but two `Manual` connections addressing one cluster through different URLs remain undetectable. Keep them distinct by convention.
 
-## Interaction with allowDestructiveMigration
+## Interaction with provisioning.allowDestructiveMigration
 
 :::warning
 Setting `allowDestructiveMigration: true` in the same run as a global `provisioning.management: Manual` is contradictory, Manual streams are never migrated regardless of the flag. The library logs a warning at boot:
@@ -350,7 +350,7 @@ allowDestructiveMigration has no effect under provisioning.management: Manual; t
 
 :::
 
-The `allowDestructiveMigration` flag only applies to `Auto`-managed streams. See [Stream Migration](/docs/guides/stream-migration#manual-streams-are-never-migrated) for details.
+The `provisioning.allowDestructiveMigration` flag only applies to `Auto`-managed streams. See [Stream Migration](/docs/guides/stream-migration#manual-streams-are-never-migrated) for details.
 
 ## What's next?
 

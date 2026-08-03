@@ -283,7 +283,7 @@ describe(StreamProvider, () => {
 
     it('should refuse destructive migration of the shared broadcast stream', async () => {
       // Given: an immutable diff on the shared stream and the migration flag on
-      options.allowDestructiveMigration = true;
+      options.provisioning = { ...options.provisioning, allowDestructiveMigration: true };
       sut = makeSut();
 
       mockStreamInfo(
@@ -819,7 +819,7 @@ describe(StreamProvider, () => {
 
     it('should bind the DLQ stream externally when dlq management is Manual', async () => {
       // Given: DLQ Manual; Event Auto (does not exist -> created)
-      options.dlq = { management: { stream: ManagementMode.Manual } };
+      options.dlq = { management: ManagementMode.Manual };
       sut = makeSut();
 
       const dlqName = `${options.name}__microservice_dlq-stream`;
