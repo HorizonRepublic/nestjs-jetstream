@@ -50,6 +50,28 @@ describe('normalizeOptions', () => {
     expect(analytics?.critical).toBe(false);
   });
 
+  it('should replace a redeclared block rather than merging into it', () => {
+    // Given a root block with two keys and a connection that names the block
+    const options: JetstreamModuleOptions = {
+      name: 'orders',
+      events: { concurrency: 4, ackExtension: { enabled: false } },
+      connections: {
+        primary: { servers: ['nats://a:4222'] },
+        analytics: { servers: ['nats://b:4222'], events: { concurrency: 16 } },
+      },
+      defaultConnection: 'primary',
+    };
+
+    // When normalized
+    const sut = normalizeOptions(options);
+    const analytics = sut.connections.find((c) => c.connectionName === 'analytics');
+
+    // Then the sibling key is gone: the merge is one level deep, and this is the
+    // documented behaviour rather than an accident
+    expect(analytics?.events).toEqual({ concurrency: 16 });
+    expect(analytics?.events?.ackExtension).toBeUndefined();
+  });
+
   it('should default to the connection named "default" when defaultConnection is omitted', () => {
     // Given a connections map that contains a "default" key
     const options: JetstreamModuleOptions = {
@@ -136,6 +158,37 @@ describe('normalizeOptions', () => {
     expect(() => normalizeOptions(options)).toThrow(
       /"primary"[\s\S]*"clone"|"clone"[\s\S]*"primary"/,
     );
+  });
+
+  it('should allow a publisher-only connection to share a cluster with a consumer', () => {
+    // Given a consumer and a publish-only connection on the same cluster: the
+    // latter provisions nothing, so there is no stream to collide over
+    const options: JetstreamModuleOptions = {
+      name: 'orders',
+      connections: {
+        primary: { servers: ['nats://a:4222'] },
+        audit: { servers: ['nats://a:4222'], consumer: false },
+      },
+      defaultConnection: 'primary',
+    };
+
+    // When normalized, Then it is accepted
+    expect(() => normalizeOptions(options)).not.toThrow();
+  });
+
+  it('should still reject two consumer connections sharing a cluster', () => {
+    // Given two connections that both provision streams on one cluster
+    const options: JetstreamModuleOptions = {
+      name: 'orders',
+      connections: {
+        primary: { servers: ['nats://a:4222'] },
+        clone: { servers: ['nats://a:4222'] },
+      },
+      defaultConnection: 'primary',
+    };
+
+    // When normalized, Then the collision is caught
+    expect(() => normalizeOptions(options)).toThrow(/same NATS cluster/);
   });
 
   it('should reject a connection with an empty servers list', () => {

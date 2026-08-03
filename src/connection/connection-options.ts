@@ -20,7 +20,11 @@ const serverSetKey = (servers: string[]): string =>
   [...new Set(servers.map(canonicalizeServer))].toSorted().join(',');
 
 /**
- * Merge one connection over the root options.
+ * Merge one connection over the root options, one level deep.
+ *
+ * A block the connection declares replaces the root block outright rather than
+ * merging into it: `events: { concurrency: 32 }` on a connection drops any
+ * root-level `events.retry`. Repeat the parts that should survive.
  *
  * `name`, `hooks`, `metrics`, `otel` and `onDeadLetter` describe the service as
  * a whole; a connection never overrides them because they observe and aggregate
@@ -74,10 +78,17 @@ const resolveDefaultName = (names: string[], requested: string | undefined): str
   );
 };
 
+/**
+ * Reject two connections that would provision the same streams on one cluster.
+ *
+ * Only consumer connections are compared: a publisher-only connection creates
+ * no streams and no consumers, so it can legitimately share a cluster with
+ * another connection, for instance to publish through a different codec.
+ */
 const assertDistinctClusters = (connections: ResolvedConnectionOptions[]): void => {
   const seen = new Map<string, string>();
 
-  for (const connection of connections) {
+  for (const connection of connections.filter((c) => c.consumer !== false)) {
     const key = serverSetKey(connection.servers);
     const previous = seen.get(key);
 

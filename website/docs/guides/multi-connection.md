@@ -52,11 +52,11 @@ import { JetstreamModule } from '@horizon-republic/nestjs-jetstream';
 export class AppModule {}
 ```
 
-`defaultConnection` names the connection that unqualified handlers and clients bind to. It is optional when one of the keys is literally `default`, and required otherwise — the transport will not guess.
+`defaultConnection` names the connection that unqualified handlers and clients bind to. It is optional when a key is literally `default`, or when there is only one connection. With several connections and no `default` key it is required — the transport will not guess.
 
 ### Inheritance
 
-Connection options merge over root options. Set something once at the root and it applies everywhere; set it again on a connection and that connection wins.
+Connection options merge over root options one level deep. Set something once at the root and it applies everywhere; name the same option on a connection and that connection wins.
 
 ```typescript
 JetstreamModule.forRoot({
@@ -75,6 +75,16 @@ JetstreamModule.forRoot({
 ```
 
 Every per-cluster knob is tunable this way: `events`, `broadcast`, `ordered`, `rpc`, `dlq`, `metadata`, `provisioning`, `allowDestructiveMigration`, `shutdownTimeout`, `codec`, `connectionOptions`, and `consumer: false` for a publish-only connection.
+
+:::warning A block you redeclare replaces the root one entirely
+The merge is one level deep, so naming `events` on a connection replaces the whole root `events` block rather than merging into it. In the example above, `analytics` gets `concurrency: 32` and **loses** any `events.retry` or `events.stream` set at the root. Repeat the parts you still want:
+
+```typescript
+events: { concurrency: 32, retry: rootRetry },   // on the connection
+```
+
+The same applies to `broadcast`, `ordered`, `rpc`, `dlq`, `metadata`, `provisioning` and `connectionOptions`.
+:::
 
 **Root-only fields.** `name`, `hooks`, `metrics`, `otel` and `onDeadLetter` stay at the root. They describe or observe the service as a whole, so a connection never overrides them.
 
@@ -230,7 +240,7 @@ Stream, consumer and subject names **do not change** when you add connections. R
 
 The flip side is that two connections into one cluster would resolve identical stream names and silently overwrite each other's configuration. Two checks prevent that:
 
-1. **Config level, before any network call.** Two connections with an identical server set (normalized for order and default port) fail at startup.
+1. **Config level, before any network call.** Two connections with an identical server set (normalized for order and default port) fail at startup. Only connections that provision infrastructure are compared, so a `consumer: false` connection may share a cluster with another one.
 2. **NATS level.** Each provisioned stream carries a `nestjs-jetstream-owner` metadata stamp of `{service}:{connection}`, the dead-letter stream included. A stream already stamped by a different connection of the same service fails provisioning, naming both connections. Two connections racing to create the same stream are caught the same way: the one that loses the race re-reads the stream and reports the conflict.
 
 The shared broadcast stream is exempt from the stamp — every service in the cluster shares it, so a per-connection stamp would flip-flop on each deploy. Metadata written by anyone else is carried forward on update rather than replaced, so operator-set keys and a `metadata` block in your own stream overrides both survive.

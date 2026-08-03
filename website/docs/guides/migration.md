@@ -172,7 +172,8 @@ Newest first. Each entry lists only what changes for you and how to restore the 
 
 A single-connection application upgrades with no source changes.
 
-### v2.12 → v2.13
+<details>
+<summary>v2.12 → v2.13</summary>
 
 **Behavior change: `stream.name` and `consumer.durable_name` overrides are now honored.**
 
@@ -184,6 +185,8 @@ In previous releases, setting `stream.name` or `consumer.durable_name` inside a 
 - If you had `stream.name` or `consumer.durable_name` set by accident (copy-pasted config, leftover experiments), the library will now attempt to use or create streams and consumers under those names instead of the convention-derived ones. **Review your `overrides` blocks before upgrading**: remove any unintentional name fields to keep the previous behavior.
 
 No other breaking changes. Applications that do not set `stream.name` or `consumer.durable_name` are unaffected.
+
+</details>
 
 ## See also
 

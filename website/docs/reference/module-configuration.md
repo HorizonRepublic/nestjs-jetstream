@@ -227,7 +227,7 @@ NATS server URLs (e.g., `['nats://localhost:4222']`). Required unless you use `c
 
 #### `connections`, `Record<string, JetstreamConnectionOptions>`
 
-Named connections, one per NATS cluster. Mutually exclusive with `servers`. Each entry inherits every root-level field it does not set, and may override `critical`, `consumer`, `codec`, `connectionOptions`, `events`, `broadcast`, `ordered`, `rpc`, `dlq`, `metadata`, `provisioning`, `allowDestructiveMigration` and `shutdownTimeout`.
+Named connections, one per NATS cluster. Mutually exclusive with `servers`. Each entry inherits every root-level field it does not name, and may override `critical`, `consumer`, `codec`, `connectionOptions`, `events`, `broadcast`, `ordered`, `rpc`, `dlq`, `metadata`, `provisioning`, `allowDestructiveMigration` and `shutdownTimeout`. The merge is one level deep: naming a block such as `events` replaces the root block entirely rather than merging into it.
 
 ```typescript
 JetstreamModule.forRoot({

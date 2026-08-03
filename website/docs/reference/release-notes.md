@@ -39,7 +39,12 @@ Version-by-version changelog. New features, peer-dependency requirements, behavi
 
 A single-connection application upgrades with no source changes: stream, consumer and subject names are identical, `check()` returns the same shape, and hook payloads are unchanged. See [Upgrading between versions](/docs/guides/migration#upgrading-between-versions) for the step-by-step notes.
 
-## v2.12 → v2.13
+## Earlier releases
+
+Every 2.x release, newest first.
+
+<details>
+<summary>v2.12 → v2.13</summary>
 
 **New features**
 
@@ -56,7 +61,10 @@ A single-connection application upgrades with no source changes: stream, consume
 - Unfiltered consumers are treated as covering every handler subject, so binding to them no longer fails validation.
 - Self-RPC, broadcast publishing and metric labels all resolve names through the same resolver, so custom names apply consistently.
 
-## v2.11 → v2.12
+</details>
+
+<details>
+<summary>v2.11 → v2.12</summary>
 
 **New features**
 
@@ -75,7 +83,10 @@ This release closed a set of silent data-loss and reliability gaps. The ones wor
 - **NATS control headers set by user code are blocked** and stripped from DLQ republishes.
 - The DLQ stream retention changed to `Limits`, and empty payloads decode as `undefined`.
 
-## v2.10 → v2.11
+</details>
+
+<details>
+<summary>v2.10 → v2.11</summary>
 
 **New features**
 
@@ -91,7 +102,10 @@ This release closed a set of silent data-loss and reliability gaps. The ones wor
 
 No breaking API changes. Existing applications upgrade by bumping the dependency.
 
-## v2.9 → v2.10
+</details>
+
+<details>
+<summary>v2.9 → v2.10</summary>
 
 **New features**
 
@@ -111,7 +125,10 @@ No breaking API changes. Existing applications upgrade by bumping the dependency
 
 No breaking API changes. Existing applications upgrade by bumping the dependency.
 
-## v2.8 → v2.9
+</details>
+
+<details>
+<summary>v2.8 → v2.9</summary>
 
 **Notable change**
 
@@ -136,7 +153,10 @@ broadcast: { stream: { max_age: toNanos(1, 'days') } }
 
 No breaking changes.
 
-## v2.7 → v2.8
+</details>
+
+<details>
+<summary>v2.7 → v2.8</summary>
 
 **Breaking change:** migrated from `nats` package to `@nats-io/*` scoped packages (v3.x).
 
@@ -153,7 +173,10 @@ This is an internal change: the library re-exports everything users need. If you
 - [Message scheduling](/docs/guides/scheduling): one-shot delayed delivery via `scheduleAt()` (requires NATS >= 2.12)
 - `allow_msg_schedules` stream config option
 
-## v2.6 → v2.7
+</details>
+
+<details>
+<summary>v2.6 → v2.7</summary>
 
 v2.7 shipped handler-controlled settlement, a way to ack, nak, or terminate a message without throwing.
 
@@ -164,7 +187,10 @@ v2.7 shipped handler-controlled settlement, a way to ack, nak, or terminate a me
 
 No breaking changes.
 
-## v2.5 → v2.6
+</details>
+
+<details>
+<summary>v2.5 → v2.6</summary>
 
 v2.6 was the performance release, concurrency control, ack extension, and reworked defaults for reconnection and compression.
 
@@ -179,7 +205,10 @@ v2.6 was the performance release, concurrency control, ack extension, and rework
 
 No breaking changes.
 
-## v2.4 → v2.5
+</details>
+
+<details>
+<summary>v2.4 → v2.5</summary>
 
 **Breaking change:** `nanos()` renamed to `toNanos()`.
 
@@ -193,7 +222,10 @@ No breaking changes.
   }
 ```
 
-## v2.3 → v2.4
+</details>
+
+<details>
+<summary>v2.3 → v2.4</summary>
 
 **New features**
 
@@ -203,7 +235,10 @@ No breaking changes.
 
 No breaking changes.
 
-## v2.1 → v2.2
+</details>
+
+<details>
+<summary>v2.1 → v2.2</summary>
 
 **New features**
 
@@ -211,6 +246,8 @@ No breaking changes.
 - `DeadLetterInfo` interface with full message context
 
 No breaking changes.
+
+</details>
 
 ## See also
 
