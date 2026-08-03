@@ -103,6 +103,35 @@ export const assertAllConnectionsStarted = (registry: ConnectionRegistry): void 
   );
 };
 
+/**
+ * Open every critical connection before the application is considered started.
+ *
+ * A connection with no handlers never touches NATS on its own — the boot chain
+ * only provisions what handlers require — so without this `critical: true`
+ * would have no effect on a publish-only connection, which is precisely the
+ * case it exists for.
+ *
+ * Skipped for single-connection applications so a publisher-only service keeps
+ * its lazy-connect behaviour and still boots while NATS is down.
+ *
+ * @param registry Every configured connection.
+ * @throws Error when a critical connection cannot be reached.
+ */
+export const ensureCriticalConnectionsLive = async (
+  registry: ConnectionRegistry,
+): Promise<void> => {
+  if (registry.names().length < 2) return;
+
+  await Promise.all(
+    registry
+      .all()
+      .filter((scope) => scope.critical)
+      .map(async (scope) => {
+        await scope.connection.getConnection();
+      }),
+  );
+};
+
 @Global()
 @Module({})
 export class JetstreamModule implements OnApplicationBootstrap, OnApplicationShutdown {
@@ -385,8 +414,11 @@ export class JetstreamModule implements OnApplicationBootstrap, OnApplicationShu
    *
    * Runs after `startAllMicroservices()` in a hybrid application.
    */
-  public onApplicationBootstrap(): void {
-    if (this.registry) assertAllConnectionsStarted(this.registry);
+  public async onApplicationBootstrap(): Promise<void> {
+    if (!this.registry) return;
+
+    assertAllConnectionsStarted(this.registry);
+    await ensureCriticalConnectionsLive(this.registry);
   }
 
   /**

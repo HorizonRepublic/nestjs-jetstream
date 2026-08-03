@@ -17,6 +17,9 @@ import {
 } from './infrastructure';
 import { EventRouter, PatternRegistry, RpcRouter } from './routing';
 
+const RETRY_BASE_DELAY_MS = 1_000;
+const RETRY_MAX_DELAY_MS = 30_000;
+
 /**
  * NestJS custom transport strategy for NATS JetStream.
  *
@@ -28,6 +31,9 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
   // oxlint-disable-next-line typescript/no-unsafe-function-type
   private readonly listeners = new Map<string, Function[]>();
   private started = false;
+  private closed = false;
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private retryAttempt = 0;
 
   public constructor(
     private readonly options: JetstreamModuleOptions,
@@ -49,20 +55,37 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
   /**
    * Start the transport: register handlers, create infrastructure, begin consumption.
    *
-   * Called by NestJS when `connectMicroservice()` is used, or internally by the module.
+   * A critical connection blocks startup and reports failures through the
+   * callback. A non-critical one returns immediately and retries in the
+   * background, so a dead secondary cluster cannot stop the pod from serving
+   * its primary one.
    */
   public async listen(callback: (...args: unknown[]) => void): Promise<void> {
-    try {
-      await this.doListen(callback);
-    } catch (err) {
-      // NestJS bridges listen() via a callback; forward errors there so
-      // startAllMicroservices() rejects instead of leaving an unhandled rejection.
-      callback(err);
+    if (this.isCritical()) {
+      try {
+        await this.doListen(callback);
+      } catch (err) {
+        // NestJS bridges listen() via a callback; forward errors there so
+        // startAllMicroservices() rejects instead of leaving an unhandled rejection.
+        callback(err);
+      }
+
+      return;
     }
+
+    void this.attemptBackgroundStart();
+    callback();
   }
 
   /** Stop all consumers, routers, subscriptions, and metadata heartbeat. Called during shutdown. */
   public close(): void {
+    this.closed = true;
+
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
+
     this.metadataProvider?.destroy();
     this.eventRouter.destroy();
     this.rpcRouter.destroy();
@@ -141,6 +164,45 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     return this.started;
   }
 
+  private isCritical(): boolean {
+    return (this.options as { critical?: boolean }).critical !== false;
+  }
+
+  /** Run the boot chain off the startup path, retrying with exponential backoff. */
+  private async attemptBackgroundStart(): Promise<void> {
+    if (this.closed) return;
+
+    try {
+      await this.doListen(() => undefined);
+      this.retryAttempt = 0;
+      this.logger.log(`Connection "${this.connectionName}" started`);
+    } catch (err) {
+      this.started = false;
+
+      const delay = Math.min(RETRY_BASE_DELAY_MS * 2 ** this.retryAttempt, RETRY_MAX_DELAY_MS);
+
+      this.retryAttempt += 1;
+      this.logger.warn(
+        `Non-critical connection "${this.connectionName}" failed to start ` +
+          `(${err instanceof Error ? err.message : String(err)}); retrying in ${delay}ms`,
+      );
+
+      this.scheduleRetry(delay);
+    }
+  }
+
+  private scheduleRetry(delay: number): void {
+    if (this.closed) return;
+
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      void this.attemptBackgroundStart();
+    }, delay);
+
+    // A pending retry must not hold the event loop open.
+    this.retryTimer.unref();
+  }
+
   /** Whether this strategy's connection owns the handler described by `extras`. */
   private acceptsConnection(extras: Record<string, unknown>): boolean {
     if (!this.binding) return true;
@@ -175,35 +237,42 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
 
     this.started = true;
 
-    this.patternRegistry.registerHandlers(this.getHandlers());
+    try {
+      this.patternRegistry.registerHandlers(this.getHandlers());
 
-    const { streams: streamKinds, durableConsumers: durableKinds } = this.resolveRequiredKinds();
+      const { streams: streamKinds, durableConsumers: durableKinds } = this.resolveRequiredKinds();
 
-    if (streamKinds.length > 0) {
-      await this.streamProvider.ensureStreams(streamKinds);
+      if (streamKinds.length > 0) {
+        await this.streamProvider.ensureStreams(streamKinds);
 
-      let consumers: Map<StreamKind, ConsumerInfo> | null = null;
+        let consumers: Map<StreamKind, ConsumerInfo> | null = null;
 
-      if (durableKinds.length > 0) {
-        consumers = await this.consumerProvider.ensureConsumers(durableKinds);
+        if (durableKinds.length > 0) {
+          consumers = await this.consumerProvider.ensureConsumers(durableKinds);
 
-        this.populateAckWaitMap(consumers);
-        this.eventRouter.updateMaxDeliverMap(this.buildMaxDeliverMap(consumers));
+          this.populateAckWaitMap(consumers);
+          this.eventRouter.updateMaxDeliverMap(this.buildMaxDeliverMap(consumers));
+        }
+
+        // Routers must subscribe before consumption starts: consumers flush their
+        // backlog immediately, and a subject with no observers drops messages.
+        await this.startRouters();
+
+        await this.startConsumption(consumers);
       }
 
-      // Routers must subscribe before consumption starts: consumers flush their
-      // backlog immediately, and a subject with no observers drops messages.
-      await this.startRouters();
+      if (isCoreRpcMode(this.options.rpc) && this.patternRegistry.hasRpcHandlers()) {
+        await this.coreRpcServer.start();
+      }
 
-      await this.startConsumption(consumers);
-    }
-
-    if (isCoreRpcMode(this.options.rpc) && this.patternRegistry.hasRpcHandlers()) {
-      await this.coreRpcServer.start();
-    }
-
-    if (this.metadataProvider && this.patternRegistry.hasMetadata()) {
-      await this.metadataProvider.publish(this.patternRegistry.getMetadataEntries());
+      if (this.metadataProvider && this.patternRegistry.hasMetadata()) {
+        await this.metadataProvider.publish(this.patternRegistry.getMetadataEntries());
+      }
+    } catch (err) {
+      // Leave the strategy restartable: a non-critical connection retries this
+      // whole chain, and `started` guards re-entry.
+      this.started = false;
+      throw err;
     }
 
     callback();
