@@ -102,7 +102,7 @@ export type RetryConfig = readonly number[] | false;
 
 /** Built-in dead-letter stream, or `false` to leave exhausted messages in place. */
 export interface DlqOptions {
-  /** Raw NATS StreamConfig overrides for the DLQ stream. `name` is ignored. */
+  /** Raw NATS StreamConfig overrides for the DLQ stream, `name` included. */
   stream?: StreamConfigOverrides;
   /** Provisioning control for the DLQ stream. Falls back to provisioning.management. */
   management?: EntityManagement;

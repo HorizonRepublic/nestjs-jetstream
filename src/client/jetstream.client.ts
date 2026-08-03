@@ -81,8 +81,10 @@ const eventStreamKind = (kind: EventPublishKind): StreamKind => {
  * NestJS ClientProxy implementation for the JetStream transport.
  *
  * Supports two operational modes:
- * - **Core mode** (default): Uses `nc.request()` for RPC, `nc.publish()` for events.
+ * - **Core mode** (default): Uses `nc.request()` for RPC.
  * - **JetStream mode**: Uses `js.publish()` for RPC commands + inbox for responses.
+ *
+ * Events always publish through JetStream and await a PubAck, in either mode.
  *
  * Events always go through JetStream publish for guaranteed delivery.
  * The mode only affects RPC (request/reply) behavior.
