@@ -13,7 +13,7 @@ schema:
 
 # Quick Start
 
-Five minutes from now you'll have a NestJS service that emits `order.created`, survives a restart without losing the message, and responds to `order.get` RPCs, all over NATS JetStream. Registering the module, connecting the transport, defining handlers and sending messages: register the module, connect the transport, define handlers, send messages.
+Five minutes from now you'll have a NestJS service running on NATS JetStream. It emits `order.created` and answers `order.get` RPCs, and a restart no longer loses whatever was in flight. Register the module, connect the transport, define handlers, send messages.
 
 :::note Prerequisites
 Make sure you have [installed the library](/docs/getting-started/installation) and have a NATS server running with JetStream enabled.
@@ -178,7 +178,7 @@ export class GatewayController {
 }
 ```
 
-Use `client.emit()` for fire-and-forget events; at-least-once delivery through JetStream, leaving the caller without a response. Use `client.send()` for request/reply RPC; it returns an `Observable<TResponse>` with the handler's reply.
+Use `client.emit()` for fire-and-forget events. Delivery is at-least-once through JetStream, and the caller gets no response back. Use `client.send()` for request/reply RPC, which returns an `Observable<TResponse>` with the handler's reply.
 
 :::note Broadcast prefix
 To send a broadcast event, prefix the pattern with `broadcast:` when calling `emit()`. On the handler side, use `{ broadcast: true }` in the decorator extras: no prefix needed.
@@ -204,7 +204,7 @@ curl http://localhost:3000/orders/42
 
 ## What's next?
 
-- [**Module Configuration**](/docs/reference/module-configuration): learn about all configuration options, async setup, and advanced connection settings
+- [**Module Configuration**](/docs/reference/module-configuration): every configuration option, from async setup to connection settings
 - [**RPC Patterns**](/docs/patterns/rpc): deep dive into Core vs JetStream RPC modes
-- [**Events & Broadcast**](/docs/patterns/events): workqueue events, broadcast fan-out, and ordered events
+- [**Events & Broadcast**](/docs/patterns/events): how workqueue events differ from broadcast fan-out and from ordered delivery
 - [**Record Builder & Deduplication**](/docs/guides/record-builder): custom headers, deterministic message IDs, per-request RPC timeouts, and deduplication

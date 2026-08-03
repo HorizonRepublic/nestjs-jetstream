@@ -8,7 +8,7 @@ schema:
   headline: "Installation"
   description: "Install the package, set up NATS with Docker, and configure peer dependencies."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
 
 # Installation
@@ -59,7 +59,7 @@ Optional, install only for the feature that needs it:
 - `@opentelemetry/api` ^1.9.0 for [distributed tracing](/docs/observability/tracing)
 
 :::note NestJS 12 prereleases
-The caret ranges above skip prereleases, so installing `@nestjs/common@next` needs a package manager override until 12.0.0 ships stable.
+The caret ranges above skip prereleases, so installing `@nestjs/common@next` needs a package manager override until 12.0.0 has a stable release.
 :::
 
 ## Runtime requirements

@@ -9,7 +9,7 @@ schema:
   headline: "NestJS NATS Transport with JetStream: Introduction"
   description: "A NestJS NATS microservice transport backed by JetStream: durable events, broadcast, ordered delivery, RPC, and dead letter queues."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
 
 # What do you need right now?
@@ -44,5 +44,5 @@ By symptom:
 [Quick start](/docs/getting-started/quick-start) gets a consumer running in ten minutes, then [events](/docs/patterns/events) is the delivery pattern everything else builds on. Coming from the built-in transport, [migrating](/docs/guides/migration) maps each old option to its replacement.
 
 :::tip Runnable examples
-The repository ships [ten self-contained demos](https://github.com/HorizonRepublic/nestjs-jetstream/tree/main/examples): events, RPC, ordered delivery, DLQ, health checks, scheduling, publisher-only mode, per-message TTL, handler metadata and distributed tracing. Clone and run.
+The repository has [ten self-contained demos](https://github.com/HorizonRepublic/nestjs-jetstream/tree/main/examples): events, RPC, ordered delivery, DLQ, health checks, scheduling, publisher-only mode, per-message TTL, handler metadata and distributed tracing. Clone and run.
 :::

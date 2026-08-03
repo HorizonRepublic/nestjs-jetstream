@@ -8,7 +8,7 @@ schema:
   headline: "Why JetStream? NestJS NATS Transport Comparison"
   description: "When the built-in NestJS NATS transport is enough, and when your system outgrows Core NATS and needs JetStream for durable messaging."
   datePublished: "2026-04-11"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
 
 # Why JetStream?
@@ -17,7 +17,7 @@ The [built-in NestJS NATS transport](https://docs.nestjs.com/microservices/nats)
 
 ## Stay on the built-in transport when
 
-- Messages are idempotent hints: cache invalidations, notification fan-out, metric updates.
+- Messages are idempotent hints, like a cache invalidation or a metric update.
 - Losing one is acceptable, because retrying or recomputing is cheap.
 - No consumer needs history.
 - Latency is the thing you tune for, ahead of durability.
@@ -78,7 +78,7 @@ Every item sits behind `@EventPattern`, `@MessagePattern` and `ClientProxy`.
 | Core NATS | Low-latency in-cluster RPC           | No persistence                                                            |
 | JetStream | Work that must not be lost           | Disk I/O, stream and consumer state                                       |
 
-Most systems run all three: HTTP at the edge, Core NATS for hot internal calls, JetStream for durable events. RPC mode is per module (`rpc.mode: 'core'` or `'jetstream'`) while `@EventPattern` stays on durable delivery.
+Most systems run all three. HTTP serves the edge, and internally the split is Core NATS for hot calls against JetStream for durable events. RPC mode is per module (`rpc.mode: 'core'` or `'jetstream'`) while `@EventPattern` stays on durable delivery.
 
 ## Other NestJS NATS packages
 
@@ -91,7 +91,7 @@ Most systems run all three: HTTP at the edge, Core NATS for hot internal calls, 
 
 ## Don't use this library when
 
-- **You don't run NATS.** Operating it costs real time; solve the problem you have now.
+- **You don't run NATS.** Operating it costs real time. Solve the problem you have now.
 - **Your workload is request/response without durability.** The built-in transport is lighter.
 - **You need cross-region replication under strict latency SLAs.** Mirrors and sources exist, though tuning them for multi-region is its own project.
 - **You're prototyping.**
