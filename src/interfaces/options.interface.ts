@@ -7,6 +7,7 @@ import type { ConnectionOptions } from '@nats-io/transport-node';
 import type { MetricsOption } from '../metrics/metrics.config';
 import type { OtelOptions } from '../otel';
 import { Codec } from './codec.interface';
+import type { JetstreamConnectionOptions } from './connection.interface';
 import type { DeadLetterInfo } from './hooks.interface';
 import { TransportHooks } from './hooks.interface';
 
@@ -258,8 +259,27 @@ export interface JetstreamModuleOptions {
   /** Service name. Used for stream/consumer/subject naming. */
   name: string;
 
-  /** NATS server URLs. */
-  servers: string[];
+  /**
+   * NATS server URLs. Single-connection form.
+   *
+   * Mutually exclusive with {@link JetstreamModuleOptions.connections}.
+   */
+  servers?: string[];
+
+  /**
+   * Named connections. Multi-connection form.
+   *
+   * Mutually exclusive with {@link JetstreamModuleOptions.servers}. Each entry
+   * inherits every root-level field it does not set.
+   */
+  connections?: Record<string, JetstreamConnectionOptions>;
+
+  /**
+   * Which connection unqualified handlers and clients bind to.
+   *
+   * Optional when the `connections` map has a `default` key; required otherwise.
+   */
+  defaultConnection?: string;
 
   /**
    * Global message codec.

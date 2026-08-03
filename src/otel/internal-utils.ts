@@ -111,17 +111,20 @@ export interface DerivedOtelAttrs {
   readonly serverEndpoint: ServerEndpoint | null;
 }
 
+/** The subset of module options {@link deriveOtelAttrs} reads. */
+export interface OtelAttrSource {
+  readonly otel?: OtelOptions | boolean;
+  readonly name: string;
+  readonly servers?: readonly string[] | undefined;
+}
+
 /**
  * Derive the OTel attribute bundle every router / provider holds onto.
  * `serverEndpoint` is `null` when the configured NATS URL can't be parsed;
  * attribute builders then skip the `server.*` keys.
  */
-export const deriveOtelAttrs = (options: {
-  readonly otel?: OtelOptions | boolean;
-  readonly name: string;
-  readonly servers: readonly string[];
-}): DerivedOtelAttrs => ({
+export const deriveOtelAttrs = (options: OtelAttrSource): DerivedOtelAttrs => ({
   otel: resolveOtelOptions(options.otel),
   serviceName: internalName(options.name),
-  serverEndpoint: parseServerAddress(options.servers),
+  serverEndpoint: parseServerAddress(options.servers ?? []),
 });
