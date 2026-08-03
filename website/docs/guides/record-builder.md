@@ -13,7 +13,7 @@ schema:
 
 # Record Builder & Deduplication
 
-> **Use when:** a message needs custom headers, its own timeout, or a deduplication ID.
+> **Use when:** a message needs custom headers, its own timeout or a deduplication ID.
 > **You get:** `JetstreamRecordBuilder`, the server-side dedup window, and the headers the transport sets itself.
 
 `JetstreamRecordBuilder` is a fluent builder for attaching custom headers, per-request timeouts, and deduplication IDs to outbound messages. It follows the same record-builder pattern used by other NestJS transports (`RmqRecord`, `NatsRecord`).
@@ -146,7 +146,9 @@ The transport writes five headers of its own on outbound messages, and the build
 | `x-subject`        | The subject the message was published to   | Your value wins |
 | `x-caller-name`    | Internal name of the sending service       | Your value wins |
 
-The first three carry RPC correlation, so setting them by hand would misroute a reply. The last two are informational: the transport writes them before your custom headers are applied, so setting either one replaces the transport's value. Do that only when you are deliberately relabelling a message, because handlers read what arrived on the wire.
+The first three carry RPC correlation, so setting them by hand would misroute a reply.
+
+The last two are informational. The transport writes them before your custom headers apply, which means setting either one replaces the transport's value. Reach for that only when you are deliberately relabelling a message, since handlers read what arrived on the wire.
 
 Any header starting with `nats-` also throws, whatever the casing: those are read by the NATS server itself, and a stray `Nats-Rollup` purges every pending message on the subject. Use `setMessageId()`, `ttl()` and `scheduleAt()` to reach the ones the transport supports.
 
@@ -199,7 +201,7 @@ class JetstreamRecordBuilder<T = unknown> {
 }
 ```
 
-The `RESERVED_HEADERS` set is exported from the package; use it in custom tooling to check a key before calling `.setHeader()`. It holds the three RPC headers only, so a sanitizer needs the `nats-` prefix check alongside it:
+The `RESERVED_HEADERS` set is exported from the package, so custom tooling can check a key before calling `.setHeader()`. It holds the three RPC headers only, so a sanitizer needs the `nats-` prefix check alongside it:
 
 ```typescript
 import { RESERVED_HEADERS } from '@horizon-republic/nestjs-jetstream';

@@ -174,7 +174,7 @@ JetstreamModule.forRoot({
 
 ## Hooks with multiple connections
 
-Hooks are registered once, at the root, and fire for every [named connection](/docs/guides/multi-connection). Each callback receives the originating connection name as a trailing argument when more than one connection is configured:
+Hooks are registered once, at the root, and fire for every [connection](/docs/guides/multi-connection). Each callback receives the originating connection name as a trailing argument when more than one connection is configured:
 
 ```typescript
 JetstreamModule.forRoot({

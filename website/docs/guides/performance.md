@@ -26,7 +26,7 @@ The message flow through the system:
 NATS Server -> pull consumer (max_ack_pending) -> consume() buffer -> concurrency gate -> handler -> ack -> frees slot
 ```
 
-The primary flow control knob is `max_ack_pending` on the consumer. It limits how many messages can be in-flight (delivered but not yet acknowledged) at any time. When the limit is reached, the server stops delivering new messages until existing ones are acknowledged, creating natural backpressure.
+The primary flow control knob is `max_ack_pending` on the consumer. It caps how many messages are in flight, meaning delivered but not yet acknowledged. At the limit the server stops delivering until existing messages are acknowledged, which is backpressure for free.
 
 ### Configuration options
 
@@ -42,7 +42,7 @@ The primary flow control knob is `max_ack_pending` on the consumer. It limits ho
 
 - **`max_ack_pending`** is the ceiling. The server will never deliver more than this many unacked messages.
 - **`concurrency`** controls how many messages are processed in parallel by your handlers. If `concurrency` is lower than `max_ack_pending`, excess messages wait in the internal buffer.
-- **`consume.max_messages`** and **`consume.threshold_messages`** control the prefetch buffer; how many messages the `@nats-io/jetstream` client requests from the server in a single batch and when it requests more.
+- **`consume.max_messages`** and **`consume.threshold_messages`** control the prefetch buffer: how many messages the `@nats-io/jetstream` client requests from the server in one batch, and when it asks for more.
 
 For most workloads, tuning `max_ack_pending` and `concurrency` is enough.
 
@@ -152,13 +152,13 @@ In the meantime, here is what you can rely on without numbers:
 - **The bottleneck is almost always the handler**, not the transport. Database writes, external API calls, and serialization dominate. Profile the handler first.
 - **Core NATS RPC is the lowest-latency path of the two RPC modes**: skipping the stream write and the inbox routing. Use it when in-cluster latency is the priority.
 - **JetStream RPC adds a stream persist plus an inbox reply** on top of Core NATS. You trade a fixed amount of added latency for the guarantee that the command survives a server restart. Quantify the trade-off on your own workload before planning around it.
-- **Event handler throughput scales with [`concurrency`](/docs/guides/performance#concurrency-control)** up to the point where your downstream dependencies become the bottleneck. CPU-bound handlers generally scale with core count; I/O-bound handlers gain from higher concurrency and a larger `max_ack_pending`.
+- **Event handler throughput scales with [`concurrency`](/docs/guides/performance#concurrency-control)** up to the point where your downstream dependencies become the bottleneck. CPU-bound handlers scale with core count, while I/O-bound handlers gain from higher concurrency and a larger `max_ack_pending`.
 - **Broadcast is not a throughput hit**: each instance processes its copy independently through its own consumer.
 
 ### Measuring your throughput
 
 1. **NATS monitoring:** Enable the [NATS monitoring endpoint](https://docs.nats.io/running-a-nats-service/configuration/monitoring) (`-m 8222`) and check `msgs_in`/`msgs_out` rates.
-2. **Consumer lag:** `nats consumer info <stream> <consumer>`: watch "Num Pending" to detect falling behind.
+2. **Consumer lag:** run `nats consumer info <stream> <consumer>` and watch "Num Pending" climb.
 3. **Application metrics:** Use [Lifecycle Hooks](/docs/guides/lifecycle-hooks) to emit Prometheus counters for `MessageRouted`, `Error`, and `RpcTimeout` events.
 
 ## See also

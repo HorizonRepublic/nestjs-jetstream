@@ -23,7 +23,7 @@ This library handles real-time message delivery, consumer lifecycle, and self-he
 - **Integration tests are first-class citizens.** Every message flow (events, RPC, broadcast, ordered) is tested against a real NATS server. No hand-waved "it works in production": if it's not tested end-to-end, it's not done.
 - **Each test suite gets its own NATS container.** No shared state between suites. No "run tests in order". Suites execute in parallel: because if your tests can't run in parallel, your architecture has a problem.
 - **Self-healing is proven, not assumed.** We delete consumers via the JetStream Management API and verify the transport recovers. The self-healing flow is tested with real NATS, not mocked RxJS streams.
-- **Unit tests fill the gaps.** Infrastructure error paths (defensive throws, catch blocks, exponential backoff) that can't be triggered through integration get targeted unit tests. Coverage is a tool rather than a target: but we track it to make sure we're not lying to ourselves.
+- **Unit tests fill the gaps.** Infrastructure error paths (defensive throws, catch blocks, exponential backoff) that can't be triggered through integration get targeted unit tests. We track coverage to make sure we are not lying to ourselves, and stop short of chasing the number.
 
 ## Prerequisites
 
@@ -98,14 +98,14 @@ describe('My Feature', () => {
 
 Key helpers in `test/integration/`:
 
-| Helper                                                       | Purpose                                                                                                                                                                                          |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `startNatsContainer()`                                       | Start a NATS container with JetStream, return container + random port                                                                                                                            |
-| `createNatsConnection(port)`                                 | Create a standalone NATS connection for assertions                                                                                                                                               |
-| `createTestApp({ name, port }, controllers, clientTargets?)` | Bootstrap a full NestJS app with the transport. `clientTargets` is an array of service names that will be registered as `forFeature` clients; pass the names you need to `@Inject` in your test. |
-| `cleanupStreams(nc, serviceName)`                            | Delete streams/consumers created during a test                                                                                                                                                   |
-| `waitForCondition(fn, timeoutMs)`                            | Poll until an async condition is met                                                                                                                                                             |
-| `uniqueServiceName()`                                        | Generate a unique service name per test                                                                                                                                                          |
+| Helper                                                       | Purpose                                                                                                                                                                                |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `startNatsContainer()`                                       | Start a NATS container with JetStream, return container + random port                                                                                                                  |
+| `createNatsConnection(port)`                                 | Create a standalone NATS connection for assertions                                                                                                                                     |
+| `createTestApp({ name, port }, controllers, clientTargets?)` | Bootstrap a full NestJS app with the transport. `clientTargets` is an array of service names registered as `forFeature` clients, so pass the names you need to `@Inject` in your test. |
+| `cleanupStreams(nc, serviceName)`                            | Delete streams/consumers created during a test                                                                                                                                         |
+| `waitForCondition(fn, timeoutMs)`                            | Poll until an async condition is met                                                                                                                                                   |
+| `uniqueServiceName()`                                        | Generate a unique service name per test                                                                                                                                                |
 
 ### Self-Healing Tests
 
@@ -123,7 +123,7 @@ The test uses a 1-second heartbeat interval (vs 5s production default) for faste
 
 ### System Under Test (`sut`)
 
-The object being tested is always named `sut`:
+The object being tested is always `sut`:
 
 ```typescript
 let sut: StreamProvider;

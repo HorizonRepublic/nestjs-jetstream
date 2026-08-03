@@ -2,7 +2,7 @@
 sidebar_position: 5
 sidebar_label: "Header Contract"
 title: "Header Contract: NATS Message Headers Used by the Transport"
-description: "Stable contract for NATS message headers the transport reads and writes: W3C Trace Context, JetStream metadata, and library-internal markers."
+description: "Stable contract for the NATS message headers this transport reads and writes, from W3C Trace Context to JetStream metadata and library-internal markers."
 schema:
   type: Article
   headline: "Header Contract: NATS Message Headers Used by the Transport"
@@ -45,7 +45,7 @@ Calling `JetstreamRecordBuilder.setHeader()` with any of these throws a reserved
 
 - `x-correlation-id` · `x-reply-to` · `x-error`
 
-The builder accepts `x-subject` and `x-caller-name`. The transport writes both before your custom headers are applied, so a value you set for either one **wins**. Set them only when you are deliberately relabelling a message; the consume span and `ctx.getCallerName()` read what arrives on the wire.
+The builder accepts `x-subject` and `x-caller-name`. The transport writes both before your custom headers are applied, so a value you set for either one **wins**. Set them only when you are deliberately relabelling a message, because the consume span and `ctx.getCallerName()` read what arrives on the wire.
 
 User-defined headers should use a distinct prefix or name (`x-tenant-id`, `x-request-id`, `application-foo`) and avoid the reserved names above.
 

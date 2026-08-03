@@ -14,13 +14,13 @@ schema:
 # Distributed Tracing
 
 > **Use when:** a request crosses services and you need one trace across the hops.
-> **You get:** OpenTelemetry spans for publish, consume and RPC, and what lands in their attributes.
+> **You get:** OpenTelemetry spans for publish, consume and RPC, and the attributes each one carries.
 
 The transport produces OpenTelemetry spans for every publish, every consume, and every RPC round-trip. Trace context propagates through NATS message headers using the W3C Trace Context standard, so a single trace flows end-to-end across services regardless of language or runtime.
 
 ## What it covers
 
-Aggregate metrics tell you the system is slow; traces tell you _which_ message was slow and _where_ it spent its time. When a customer reports a failed order, you want a single waterfall view that follows the request from `client.emit('orders.created')` through every consumer, RPC hop, and dead-letter branch, across multiple services if needed. That's what tracing is for.
+Aggregate metrics tell you the system is slow. Traces tell you _which_ message was slow and _where_ it spent its time. When a customer reports a failed order, you want a single waterfall view that follows the request from `client.emit('orders.created')` through every consumer, RPC hop, and dead-letter branch, across multiple services if needed. That's what tracing is for.
 
 The library emits OpenTelemetry spans on the same paths the metrics surface counts. If you already run an APM (Sentry, Datadog, Honeycomb, Jaeger, Tempo, …), no transport-side configuration is required, traces appear the moment your application registers an OTel SDK.
 
@@ -43,7 +43,7 @@ That's it. Spans appear in your backend immediately.
 
 ### Vendor cheat sheets
 
-Every modern Node.js APM SDK ships with OpenTelemetry under the hood. Pick whichever you already use:
+Every modern Node.js APM SDK has OpenTelemetry under the hood. Pick whichever you already use:
 
 ```ts
 // Sentry, automatic OTel setup with tracesSampleRate
@@ -165,7 +165,7 @@ otel: {
 
 ## Security and privacy
 
-Configuration knobs deal with potentially sensitive data. Both default to safe values; opting in is a deliberate choice.
+Configuration knobs deal with potentially sensitive data. Both default to safe values, so opting in is a deliberate choice.
 
 ### `captureHeaders`
 
@@ -187,7 +187,7 @@ Captures the message payload as a `messaging.nats.message.body` span attribute. 
 Message payloads commonly contain PII, credentials, financial data, or content regulated by GDPR, HIPAA, or PCI-DSS. Enabling body capture in production is almost always a policy violation. Keep the default unless you are in a controlled environment, or pair the capture with a custom `SpanProcessor` that scrubs or drops the attribute before export.
 :::
 
-When enabled, payloads are UTF-8 decoded if possible (base64 otherwise), truncated at the configured `maxBytes` (default 4096), and flagged with a `messaging.nats.message.body.truncated` attribute when truncation occurs.
+When enabled, payloads are UTF-8 decoded where possible and base64 otherwise, then truncated at the configured `maxBytes` (default 4096). A truncated payload carries a `messaging.nats.message.body.truncated` attribute.
 
 ```ts
 otel: {
@@ -213,7 +213,7 @@ otel: {
 }
 ```
 
-Hooks are synchronous: they run inline with span creation and termination. Errors thrown from a hook are caught and logged at `debug` level; they cannot disrupt the message flow.
+Hooks are synchronous: they run inline with span creation and termination. Errors thrown from a hook are caught and logged at `debug` level, and they cannot disrupt the message flow.
 
 ## Skipping spans for noisy subjects
 
@@ -244,4 +244,4 @@ This requires an OpenTelemetry `ContextManager` (typically `AsyncLocalStorageCon
 Review your `captureHeaders` allowlist; set explicit headers, never `true`. Confirm `captureBody` is `false`. If you need backend-side scrubbing, register a custom `SpanProcessor` that drops or rewrites attributes in `onEnd`.
 
 **Span name format looks "reversed" in my APM.**
-The library uses the OpenTelemetry messaging convention: `{operation} {destination}` (`publish orders.created`, `process orders.created`). Some older APMs render it differently, rendering is a UI concern rather than span data.
+The library uses the OpenTelemetry messaging convention: `{operation} {destination}` (`publish orders.created`, `process orders.created`). Some older APMs render it differently, which is a UI concern and not a difference in the span data.
