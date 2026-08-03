@@ -13,6 +13,9 @@ schema:
 
 # How to register lifecycle hooks
 
+> **Use when:** you want the transport to feed your metrics, tracing or alerting.
+> **You get:** every event it emits, the signature of each, and where in the flow they fire.
+
 The transport emits lifecycle events at key moments, connection changes, errors, message routing, shutdown, dead letters, and observability checkpoints. Register hook callbacks to integrate with your monitoring, alerting, or logging infrastructure.
 
 ## Available events

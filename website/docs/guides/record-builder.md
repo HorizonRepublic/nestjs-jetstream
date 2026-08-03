@@ -13,6 +13,9 @@ schema:
 
 # Record Builder & Deduplication
 
+> **Use when:** a message needs custom headers, its own timeout, or a deduplication ID.
+> **You get:** `JetstreamRecordBuilder`, the server-side dedup window, and the headers the transport sets itself.
+
 `JetstreamRecordBuilder` is a fluent builder for attaching custom headers, per-request timeouts, and deduplication IDs to outbound messages. It follows the same record-builder pattern used by other NestJS transports (`RmqRecord`, `NatsRecord`).
 
 ## Basic usage

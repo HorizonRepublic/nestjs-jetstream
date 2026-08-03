@@ -13,6 +13,9 @@ schema:
 
 # Handler Metadata Registry
 
+> **Use when:** something outside the service needs to know which handlers exist.
+> **You get:** a NATS KV bucket published at startup, its key format, and the metadata shape.
+
 Publish handler metadata to a NATS KV bucket at startup. External services (API gateways, dashboards, CLI tools) can read or watch the bucket for automatic service discovery.
 
 **Requires:** NATS Server 2.10+ (KV support)

@@ -13,6 +13,9 @@ schema:
 
 # How to set per-message TTL
 
+> **Use when:** individual messages should expire on their own schedule instead of the stream's.
+> **You get:** the `Nats-TTL` header, the server version it needs, and how it interacts with `max_age`.
+
 Individual message expiration via the `Nats-TTL` header ([ADR-43](https://github.com/nats-io/nats-architecture-and-design/blob/main/adr/ADR-43.md)). Each message can have its own lifetime, independent of the stream's `max_age`.
 
 ## Requirements

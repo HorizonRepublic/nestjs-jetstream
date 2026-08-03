@@ -13,6 +13,9 @@ schema:
 
 # How to configure a Dead Letter Queue
 
+> **Use when:** a message has failed every delivery attempt and you need it kept instead of dropped.
+> **You get:** the built-in DLQ stream, the `onDeadLetter` callback, and the fallback chain between them.
+
 A message that fails every delivery attempt and reaches `max_deliver` (default **3**) becomes a dead letter. These two mechanisms capture it, and they compose:
 
 | Mechanism               | Added  | Role                                                                           |

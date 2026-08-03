@@ -8,10 +8,13 @@ schema:
   headline: "Distributed Tracing: NestJS JetStream Transport"
   description: "Built-in W3C Trace Context propagation and OpenTelemetry spans for every publish, consume, and RPC round-trip."
   datePublished: "2026-04-24"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
 
 # Distributed Tracing
+
+> **Use when:** a request crosses services and you need one trace across the hops.
+> **You get:** OpenTelemetry spans for publish, consume and RPC, and what lands in their attributes.
 
 The transport produces OpenTelemetry spans for every publish, every consume, and every RPC round-trip. Trace context propagates through NATS message headers using the W3C Trace Context standard, so a single trace flows end-to-end across services regardless of language or runtime.
 

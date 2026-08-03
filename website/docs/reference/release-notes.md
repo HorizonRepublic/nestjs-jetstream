@@ -13,6 +13,9 @@ schema:
 
 # Release Notes
 
+> **Use when:** you are upgrading and need to know what changed.
+> **You get:** the notable changes per version, with the breaking ones called out.
+
 Version-by-version changelog. New features, peer-dependency requirements, behavior changes, and the small list of breaking changes are tracked here. For instructions on how to switch from the built-in `@nestjs/microservices` NATS transport to this library, see the [Migration Guide](/docs/guides/migration).
 
 ## v2.13 → v3.0

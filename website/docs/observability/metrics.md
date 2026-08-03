@@ -8,10 +8,13 @@ schema:
   headline: "Prometheus Metrics: NestJS JetStream Transport"
   description: "Built-in Prometheus metrics for NATS JetStream transport: throughput, handler latency, consumer lag, dead letters, and publish errors."
   datePublished: "2026-05-27"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
 
 # Prometheus Metrics
+
+> **Use when:** you are putting this service on a Prometheus dashboard.
+> **You get:** the metric catalog, PromQL to start from, and what collection costs at runtime.
 
 The transport ships built-in Prometheus metrics covering throughput, handler latency, consumer lag, publish errors, dead letters, and connection health. Metrics are written to a `prom-client` registry, the de-facto standard in the NestJS ecosystem, which any `/metrics` exporter picks up without extra wiring.
 

@@ -8,10 +8,13 @@ schema:
   headline: "Default Stream & Consumer Configs for NATS JetStream"
   description: "Default stream, consumer, and connection settings for every NestJS JetStream StreamKind (event, broadcast, ordered, command, DLQ)."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-28"
+  dateModified: "2026-08-03"
 ---
 
 # Default Configs
+
+> **Use when:** you need the exact value the transport starts from before overriding it.
+> **You get:** every stream, consumer and connection default, and the exported constant that holds it.
 
 Every stream and consumer the transport creates starts from the values below, taken from the source. Override any of them through [module configuration](/docs/reference/module-configuration).
 

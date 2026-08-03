@@ -6,10 +6,13 @@ schema:
   headline: "Performance Tuning"
   description: "Tune ackWait, maxAckPending, batch sizes, and ack extension for high-throughput workloads."
   datePublished: "2026-03-26"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
 
 # Performance Tuning
+
+> **Use when:** throughput or latency is not where you want it.
+> **You get:** the backpressure and concurrency knobs in the order they matter, with the numbers to expect.
 
 Backpressure controls and concurrency limits move throughput the most.
 

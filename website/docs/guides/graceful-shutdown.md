@@ -11,6 +11,9 @@ schema:
 
 # Graceful Shutdown
 
+> **Use when:** you are working out what a rolling deploy does to messages in flight.
+> **You get:** the shutdown sequence, the drain timeout, and why redelivery is the guarantee instead of waiting.
+
 The transport handles shutdown automatically through the NestJS application lifecycle. Consumption stops, then the connection drains. Whatever was still in flight comes back through redelivery, so you write no shutdown code yourself.
 
 ## How it works

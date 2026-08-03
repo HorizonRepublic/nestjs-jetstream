@@ -13,6 +13,9 @@ schema:
 
 # Troubleshooting
 
+> **Use when:** something is already broken and you want the cause.
+> **You get:** symptoms grouped by area, each with its usual causes and the command that confirms them.
+
 If something isn't working, start here. The sections below are grouped by symptom, scan them before opening an issue.
 
 ## Connection errors

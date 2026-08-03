@@ -13,6 +13,9 @@ schema:
 
 # How to expose health checks
 
+> **Use when:** you are wiring Kubernetes readiness and liveness probes.
+> **You get:** `JetstreamHealthIndicator`, the shape it returns, and which probe should watch what.
+
 The library provides a `JetstreamHealthIndicator` that reports the NATS connection status and round-trip latency. It is auto-registered by [`forRoot()`](/docs/reference/module-configuration#forroot) and exported from the module: no extra setup required.
 
 ## What it checks

@@ -13,6 +13,9 @@ schema:
 
 # Installation
 
+> **Use when:** you are setting the package up for the first time, or lining up peer dependencies.
+> **You get:** the install command, a local NATS through Docker, and the version ranges that matter.
+
 Get the package installed, NATS running locally, and the peer dependencies lined up. If you already have NATS, skip straight to [Quick Start](./quick-start).
 
 ## Install the package

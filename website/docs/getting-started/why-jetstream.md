@@ -13,6 +13,9 @@ schema:
 
 # Why JetStream?
 
+> **Use when:** you are deciding whether the built-in NestJS NATS transport is already enough.
+> **You get:** the line where Core NATS stops being enough, and what this library adds over raw JetStream.
+
 The [built-in NestJS NATS transport](https://docs.nestjs.com/microservices/nats) runs on Core NATS: fire-and-forget pub/sub with no persistence. This page marks the line where that stops being enough.
 
 ## Stay on the built-in transport when

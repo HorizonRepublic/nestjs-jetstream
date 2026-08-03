@@ -8,10 +8,13 @@ schema:
   headline: "Edge Cases & FAQ: NestJS JetStream Transport"
   description: "NestJS JetStream transport FAQ: publisher-only mode, consumer self-healing, NATS header limits, fire-and-forget messaging, and DeliverPolicy edge cases."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
 
 # Edge Cases & FAQ
+
+> **Use when:** the transport did something you did not expect.
+> **You get:** the non-obvious behaviors, each with the reason it works that way.
 
 Answers to common questions and non-obvious behaviors of the transport.
 

@@ -13,6 +13,9 @@ schema:
 
 # Multiple NATS connections in one service
 
+> **Use when:** one service has to reach more than one NATS cluster.
+> **You get:** named connections, per-connection handlers and clients, and how criticality, health and shutdown behave.
+
 One service, several NATS clusters. Each connection has its own streams, consumers, routers and backpressure budget. Handlers and clients declare which one they belong to.
 
 Typical reasons to reach for this:

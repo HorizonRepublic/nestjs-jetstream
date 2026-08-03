@@ -11,6 +11,9 @@ schema:
 
 # Naming Conventions
 
+> **Use when:** you need to predict a stream, consumer or subject name from the outside.
+> **You get:** the derivation rules from the single `name` value, and the helpers that compute them.
+
 Every NATS subject, stream and consumer name is derived from the single `name` value you pass to `forRoot()`, through helper functions the package exports.
 
 ## The `__microservice` Suffix

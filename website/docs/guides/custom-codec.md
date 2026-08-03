@@ -13,6 +13,9 @@ schema:
 
 # How to use a custom codec
 
+> **Use when:** JSON serialization shows up in profiles, or another language needs a shared wire format.
+> **You get:** the `Codec` interface, the built-in MessagePack codec with measured numbers, and where to set it.
+
 The transport uses a `Codec` to serialize and deserialize message payloads. By default, `JsonCodec` handles everything using the native `TextEncoder`/`TextDecoder` with `JSON.stringify`/`JSON.parse`. You can replace it globally or per-client with any binary format.
 
 ## The Codec interface

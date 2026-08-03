@@ -8,10 +8,13 @@ schema:
   headline: "Header Contract: NATS Message Headers Used by the Transport"
   description: "Stable contract for NATS message headers the transport reads and writes."
   datePublished: "2026-04-24"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
 
 # Header Contract
+
+> **Use when:** another language or service reads or writes these messages.
+> **You get:** every header the transport touches, who sets it, and the stability guarantee.
 
 The transport reads and writes the headers below and nothing else. Names are **stable across minor versions** and change only on major bumps, so a publisher in Go, Python or Rust interoperates with a NestJS service by honouring them.
 

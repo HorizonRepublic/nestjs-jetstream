@@ -13,6 +13,9 @@ schema:
 
 # Handler Context
 
+> **Use when:** a handler needs the message metadata, the delivery count, or manual control over settlement.
+> **You get:** `RpcContext`, its getters, and the settlement methods to call instead of `msg.ack()`.
+
 Every `@EventPattern` and `@MessagePattern` handler can inject `RpcContext`. It exposes the message metadata and JetStream delivery info, and it controls settlement.
 
 ## Injecting the context

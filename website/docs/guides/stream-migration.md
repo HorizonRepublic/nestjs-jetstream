@@ -13,6 +13,9 @@ schema:
 
 # How to migrate immutable stream properties
 
+> **Use when:** a stream property that JetStream will not let you change has to change anyway.
+> **You get:** blue-green stream recreation, what it costs, and when it refuses to run.
+
 Safely change immutable stream properties (like `storage`) without losing messages. The transport handles recreation automatically via NATS stream sourcing.
 
 ## When is migration needed?

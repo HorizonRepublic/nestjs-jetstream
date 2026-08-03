@@ -13,6 +13,9 @@ schema:
 
 # Module Configuration
 
+> **Use when:** you are looking up a specific option or its default.
+> **You get:** every key `forRoot()`, `forRootAsync()` and `forFeature()` accept, with type and default.
+
 Reference for the three registration methods exposed by `JetstreamModule`: `forRoot()` for global setup, `forRootAsync()` for async/runtime configuration, and `forFeature()` for per-module client registration. Every option is listed below with its type and default. For a guided introduction see the [Quick Start](/docs/getting-started/quick-start).
 
 ## forRoot()

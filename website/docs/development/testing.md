@@ -6,10 +6,13 @@ schema:
   headline: Testing
   description: "Running unit and integration tests with Vitest and Testcontainers."
   datePublished: "2026-03-21"
-  dateModified: "2026-07-27"
+  dateModified: "2026-08-03"
 ---
 
 # Testing
+
+> **Use when:** you are contributing and need the suite running locally.
+> **You get:** the commands, the unit and integration split, and the conventions tests follow here.
 
 The project uses [Vitest](https://vitest.dev/) v4 with a dual-project configuration: **unit tests** run without external dependencies, **integration tests** spin up isolated NATS containers via [Testcontainers](https://testcontainers.com/).
 

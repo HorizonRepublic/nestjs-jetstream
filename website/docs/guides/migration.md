@@ -13,6 +13,9 @@ schema:
 
 # How to migrate from `@nestjs/microservices` NATS to JetStream
 
+> **Use when:** you are replacing `Transport.NATS` from `/microservices`.
+> **You get:** five steps that keep your handlers, plus the acknowledgment semantics that change underneath.
+
 Replacing the built-in NestJS NATS transport (`Transport.NATS` from `@nestjs/microservices`) with `@horizon-republic/nestjs-jetstream` is configuration work: your `ClientProxy` already speaks NATS.
 
 You will end up with durable delivery, automatic retries, dead letter handling, and W3C trace context for the same `@EventPattern` / `@MessagePattern` handlers you already have.

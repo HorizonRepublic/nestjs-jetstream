@@ -13,6 +13,9 @@ schema:
 
 # How to schedule delayed messages
 
+> **Use when:** a message should arrive later instead of now.
+> **You get:** one-shot delayed delivery through NATS 2.12 scheduling, and the limits around it.
+
 One-shot delayed message delivery powered by [NATS 2.12 message scheduling](https://github.com/nats-io/nats-architecture-and-design/blob/main/adr/ADR-51.md) (ADR-51).
 
 Publish an event now, have it delivered to the consumer at a future time. Replaces the need for external schedulers like Bull or Agenda for simple delayed jobs.

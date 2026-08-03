@@ -13,6 +13,9 @@ schema:
 
 # Bring Your Own Infrastructure (bind-only mode)
 
+> **Use when:** Terraform, Pulumi or a platform team owns your streams and consumers.
+> **You get:** bind-only mode, the checks it runs at startup, and what each failure means.
+
 By default, the transport provisions and updates every JetStream stream and consumer it needs. If your organization owns the infrastructure layer (Terraform, ArgoCD, Helm, or a dedicated platform team) you can opt out of that auto-management and instead tell the library to bind to resources that already exist.
 
 In **Manual** mode the library never creates, updates, or migrates an entity. At startup it reads the live state from the NATS server and checks it against the application's handlers, failing fast with a detailed error when the two do not match.

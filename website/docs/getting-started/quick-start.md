@@ -13,6 +13,9 @@ schema:
 
 # Quick Start
 
+> **Use when:** you want a working service before reading anything else.
+> **You get:** a module registration, a bootstrap, one event handler and one RPC handler, running in five minutes.
+
 Five minutes from now you'll have a NestJS service running on NATS JetStream. It emits `order.created` and answers `order.get` RPCs, and a restart no longer loses whatever was in flight. Register the module, connect the transport, define handlers, send messages.
 
 :::note Prerequisites
