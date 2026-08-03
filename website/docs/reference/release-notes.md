@@ -2,7 +2,7 @@
 sidebar_position: 6
 sidebar_label: "Release Notes"
 title: "Release Notes: NestJS JetStream Transport"
-description: "Version-by-version changelog: new features, behavior changes, peer dependencies, and breaking changes between releases of @horizon-republic/nestjs-jetstream."
+description: "What changed in each release of @horizon-republic/nestjs-jetstream, with the breaking changes called out and upgrade steps linked."
 schema:
   type: Article
   headline: "Release Notes: NestJS JetStream Transport"
@@ -14,33 +14,17 @@ schema:
 # Release Notes
 
 > **Use when:** you are upgrading and need to know what changed.
-> **You get:** the notable changes per version, with the breaking ones called out.
+> **You get:** what changed in each release, with the breaking parts called out.
 
-Version-by-version changelog. New features, peer-dependency requirements, behavior changes, and the small list of breaking changes are tracked here. For instructions on how to switch from the built-in `@nestjs/microservices` NATS transport to this library, see the [Migration Guide](/docs/guides/migration).
+Notable changes per version. Upgrade instructions live in the [Migration Guide](/docs/guides/migration#upgrading-between-versions), and the full commit-level record is in [CHANGELOG.md](https://github.com/HorizonRepublic/nestjs-jetstream/blob/main/CHANGELOG.md).
 
-## v2.13 → v3.0
+## v3.0
 
-**New features**
+The headline is [multiple connections](/docs/guides/multi-connection): one service can talk to more than one NATS cluster through a `connections` map, each with its own streams, consumers, routers and backpressure budget. Health gains a per-connection breakdown, shutdown drains every connection in parallel, and two connections that would resolve the same stream fail at startup.
 
-- [**Multiple connections**](/docs/guides/multi-connection): one service can talk to several NATS clusters through a `connections` map, each with its own streams, consumers, routers and backpressure budget. Bind a controller with `@JetstreamConnection('name')` or a single handler with `{ connection }` in the pattern extras, publish through `forFeature({ connection })`, and attach every connection at bootstrap with `connectJetstreamMicroservices(app)`. Mark a connection `critical: false` and a dead secondary cluster degrades health instead of blocking startup.
-- **Health reports per connection.** `check()` gains `degraded` and a `connections` breakdown once more than one connection is configured. `connected` now means "every critical connection is alive", so `isHealthy()` keeps passing while a non-critical cluster is down.
-- **Shutdown drains connections in parallel.** Every connection stops accepting before any of them drains, and each is bounded by its own `shutdownTimeout`, so the ceiling for SIGTERM is `max(timeouts)` rather than their sum.
-- **Colliding connections fail fast.** Two connections that resolve the same stream are caught at startup, either by their server sets matching or by the `nestjs-jetstream-owner` stamp the transport writes into stream metadata.
+The defaults changed alongside it. Streams reserve far less storage, retries are paced instead of firing immediately, and the dead-letter stream is on unless you opt out. Node 22 is the new minimum.
 
-**Behavior changes**
-
-- **Streams reserve far less storage.** `max_bytes` drops to 512 MB on events, 1 GB on ordered, 256 MB on broadcast and 64 MB on commands, and `max_msg_size` drops to 1 MB. `max_bytes` is mutable, so existing streams pick the new value up on the next boot.
-- **Retries are paced.** A failing handler naks with a delay from `[2000, 10000]` ms instead of immediately. Pass `events: { retry: false }` for the previous behavior.
-- **The dead-letter stream is on by default**, so exhausted messages land in `{service}__microservice_dlq-stream` instead of being dropped. Pass `dlq: false` to opt out.
-- **Streams gain an ownership stamp.** Every service-scoped stream, the DLQ included, carries `nestjs-jetstream-owner` metadata. Existing streams pick it up through one mutable update on the first boot after upgrading; the shared broadcast stream is never stamped.
-- **Hooks receive a trailing connection name**, populated only when more than one connection is configured. Hooks that ignore the extra argument are unaffected.
-
-**Breaking changes**
-
-- **Node 20 is no longer supported.** The minimum is Node 22.
-- **`servers` is optional in the options type**, paired with the mutually exclusive `connections`. Supplying both, or neither, fails at startup. Flat configurations keep working untouched.
-
-A single-connection application upgrades with no source changes: stream, consumer and subject names are identical, `check()` returns the same shape, and hook payloads are unchanged. See [Upgrading between versions](/docs/guides/migration#upgrading-between-versions) for the step-by-step notes.
+Every one of these, with what you have to change and what you can leave alone, is in [Upgrading between versions](/docs/guides/migration#upgrading-between-versions). That page is the one to read before you bump the dependency, and the one kept current for each release.
 
 ## Earlier releases
 
@@ -60,7 +44,7 @@ Every 2.x release, newest first.
 
 **Bug fixes**
 
-- Consumer filters that would swallow scheduled messages are rejected at boot rather than silently dropping them.
+- Consumer filters that would swallow scheduled messages are rejected at boot instead of silently dropping them.
 - Unfiltered consumers are treated as covering every handler subject, so binding to them no longer fails validation.
 - Self-RPC, broadcast publishing and metric labels all resolve names through the same resolver, so custom names apply consistently.
 
@@ -71,7 +55,7 @@ Every 2.x release, newest first.
 
 **New features**
 
-- **Provisioning boot summary and actionable errors.** Startup logs what each stream reserves, and provisioning failures name the entity, the limits involved, and what to do about it. Opt into a storage preflight to catch an over-committed file store before it bites.
+- **Provisioning boot summary and errors you can act on.** Startup logs what each stream reserves, and provisioning failures name the entity, the limits involved, and what to do about it. Opt into a storage preflight to catch an over-committed file store before it bites.
 
 **Bug fixes**
 
@@ -79,10 +63,10 @@ This release closed a set of silent data-loss and reliability gaps. The ones wor
 
 - **Destructive stream migration no longer has data-loss windows**, and services can no longer clobber the shared broadcast stream.
 - **Routers subscribe before consumers start delivering**, so a consumer flushing its backlog at startup no longer drops messages onto a subject nobody is watching yet.
-- **Dead-letter handling engages when `dlq` is configured without `onDeadLetter`**, unroutable messages are captured in the DLQ instead of being terminated, and `ctx.retry()` on the final delivery escalates to dead-letter handling rather than vanishing.
+- **Dead-letter handling engages when `dlq` is configured without `onDeadLetter`**, unroutable messages are captured in the DLQ instead of being terminated, and `ctx.retry()` on the final delivery escalates to dead-letter handling instead of vanishing.
 - **The DLQ publish is retried in-process**, and the transport no longer promises redelivery it cannot make.
 - **Ack extension keeps running for backlogged messages**, and settlement failures on a degraded connection are contained instead of taking the pipeline down.
-- **Scheduling fixes:** per-message TTL applies to the delivered message rather than the schedule holder, each scheduled message goes to a unique subject, and `scheduleAt` is rejected for ordered patterns.
+- **Scheduling fixes:** per-message TTL applies to the delivered message instead of the schedule holder, each scheduled message goes to a unique subject, and `scheduleAt` is rejected for ordered patterns.
 - **NATS control headers set by user code are blocked** and stripped from DLQ republishes.
 - The DLQ stream retention changed to `Limits`, and empty payloads decode as `undefined`.
 
@@ -124,7 +108,7 @@ No breaking API changes. Existing applications upgrade by bumping the dependency
 - **Reduced internal logging.** The `logger.error` sites that duplicated existing `TransportHooks` events have been removed. The hook is now the single observability channel for those events. If you relied on those log lines for monitoring, register the relevant hook (`error`, `rpcTimeout`, `deadLetter`).
 - **Error classification on OTel spans.** When OpenTelemetry is enabled, handler throws of `RpcException` and `HttpException` produce `OK` spans with `jetstream.rpc.reply.has_error` and `jetstream.rpc.reply.error.code` attributes; they are treated as expected business outcomes per the RPC contract. Bare `Error` throws produce `ERROR` spans with `recordException`. This keeps APM error rates clean for known business denials while loud-failing on real bugs.
 - **TransportEvent.Error now fires on every handler throw**, both event and RPC paths. Previously only some paths emitted it. If you have an `error` hook registered, it will now receive these (which is what most users want).
-- **`RpcConfig.timeout` in JetStream mode now bounds `connect + RPC`.** Previously the JetStream-mode per-request deadline only started after `await connect()` resolved, which meant a permanent NATS outage could accumulate pending RPCs indefinitely. The deadline is now armed immediately so callers always see a timeout. Core-mode RPC still relies on `nats.js`'s own `nc.request({ timeout })`, which starts after `connect()` resolves; operators running permanent-outage scenarios against Core mode should configure `maxReconnectAttempts` to stop the retry loop at the protocol layer.
+- **`RpcConfig.timeout` in JetStream mode now bounds `connect + RPC`.** Previously the JetStream-mode per-request deadline only started after `await connect()` resolved, which meant a permanent NATS outage could accumulate pending RPCs indefinitely. The deadline is now armed immediately so callers always see a timeout. Core-mode RPC still relies on `nats.js`'s own `nc.request({ timeout })`, which starts after `connect()` resolves. Against Core mode, a permanent outage wants `maxReconnectAttempts` set, so the retry loop stops at the protocol layer.
 
 No breaking API changes. Existing applications upgrade by bumping the dependency.
 
@@ -135,8 +119,8 @@ No breaking API changes. Existing applications upgrade by bumping the dependency
 
 **Notable change**
 
-:::warning Broadcast `max_age` reduced: 1 day → 1 hour
-Broadcast messages (config propagation, cache invalidation, feature flags) are relevant for minutes, not days. The new default provides a enough catch-up window while reducing storage. This is a mutable property, **existing streams update automatically on next application startup**. If you need a longer retention window, override it explicitly:
+:::warning Broadcast `max_age` drops from 1 day to 1 hour
+Broadcast messages stay relevant for minutes, not days, so an hour of catch-up covers a pod that just started at a fraction of the storage. This is a mutable property, **existing streams update automatically on next application startup**. If you need a longer retention window, override it explicitly:
 
 ```typescript
 broadcast: { stream: { max_age: toNanos(1, 'days') } }
@@ -148,10 +132,10 @@ broadcast: { stream: { max_age: toNanos(1, 'days') } }
 
 - [**Built-in Dead Letter Queue stream**](/docs/guides/dead-letter-queue#built-in-dlq-stream): add the `dlq: { stream }` option to `forRoot()` and the library provisions a dedicated DLQ stream on startup. Exhausted messages are automatically republished with tracking headers (`x-dead-letter-reason`, `x-original-subject`, `x-original-stream`, `x-failed-at`, `x-delivery-count`). The `onDeadLetter` callback remains available as a standalone option or as a notification/safety-net hook when combined with the DLQ stream.
 - [**Per-message TTL**](/docs/guides/per-message-ttl): `JetstreamRecordBuilder.ttl(duration)` sets the `Nats-TTL` header (NATS 2.11+), allowing individual messages to expire independently of the stream's `max_age`. Requires `allow_msg_ttl: true` on the target stream.
-- [**Handler metadata registry (NATS KV)**](/docs/patterns/handler-metadata): when enabled via the `metadata` option, the library publishes all registered `@EventPattern` / `@MessagePattern` handlers to a NATS KV bucket at startup, enabling cross-service discovery without a separate service registry.
+- [**Handler metadata registry (NATS KV)**](/docs/patterns/handler-metadata): with the `metadata` option on, every registered `@EventPattern` and `@MessagePattern` handler is published to a NATS KV bucket at startup. Other services discover them there, with no separate service registry.
 - [**Stream migration**](/docs/guides/stream-migration): automatic blue-green stream recreation for immutable property changes (`storage`, `retention`, etc.). Enable with `allowDestructiveMigration: true` on a per-stream basis.
 - **Consumer self-healing auto-recreation**: consumers deleted externally (via NATS CLI, cluster issues) are automatically recreated on the next poll. Migration-aware: waits during active stream migrations.
-- **`StreamConfigOverrides` type**; prevents users from overriding `retention` (transport-controlled).
+- **`StreamConfigOverrides` type**, which stops anyone overriding `retention` (transport-controlled).
 - **`NatsErrorCode` enum** for NATS JetStream API error codes, so error handling code can switch on typed constants instead of magic strings.
 
 No breaking changes.
@@ -181,7 +165,7 @@ This is an internal change: the library re-exports everything users need. If you
 <details>
 <summary>v2.6 → v2.7</summary>
 
-v2.7 shipped handler-controlled settlement, a way to ack, nak, or terminate a message without throwing.
+v2.7 added handler-controlled settlement, a way to ack, nak, or terminate a message without throwing.
 
 **New features**
 
