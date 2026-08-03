@@ -56,6 +56,7 @@ export {
   JetstreamHeader,
   JetstreamDlqHeader,
   dlqStreamName,
+  STREAM_OWNER_METADATA_KEY,
   JETSTREAM_CODEC,
   JETSTREAM_CONNECTION,
   JETSTREAM_CONNECTIONS,
