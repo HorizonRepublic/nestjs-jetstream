@@ -1,5 +1,7 @@
 export { JetstreamStrategy } from './strategy';
 
+export { JetstreamConnection } from './connection.decorator';
+
 export { CoreRpcServer } from './core-rpc.server';
 
 export {

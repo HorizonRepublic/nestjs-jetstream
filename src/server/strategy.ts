@@ -72,11 +72,14 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
   }
 
   /**
-   * Override NestJS `Server.addHandler` to fail fast on duplicate pattern registration.
+   * Override NestJS `Server.addHandler` to route by connection and fail fast on
+   * duplicate pattern registration.
    *
-   * The base class silently overwrites duplicate RPC handlers and chains duplicate event
-   * handlers, which would double-ack the same JetStream message. Any collision is treated
-   * as a fatal misconfiguration so it surfaces at bootstrap, not in production traffic.
+   * Every strategy in a hybrid application sees all handlers; each keeps only
+   * the ones bound to its own connection. The base class silently overwrites
+   * duplicate RPC handlers and chains duplicate event handlers, which would
+   * double-ack the same JetStream message, so a collision within one connection
+   * is treated as a fatal misconfiguration and surfaces at bootstrap.
    */
   public override addHandler(
     pattern: unknown,
@@ -84,6 +87,8 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     isEventHandler = false,
     extras: Record<string, unknown> = {},
   ): void {
+    if (!this.acceptsConnection(extras)) return;
+
     const normalizedPattern = this.normalizePattern(pattern as MsPattern);
 
     if (this.messageHandlers.has(normalizedPattern)) {
@@ -129,6 +134,31 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
   /** The connection this strategy serves; `default` when only one is configured. */
   public get connectionName(): string {
     return this.binding?.name ?? 'default';
+  }
+
+  /** Whether this strategy's connection owns the handler described by `extras`. */
+  private acceptsConnection(extras: Record<string, unknown>): boolean {
+    if (!this.binding) return true;
+
+    const requested = typeof extras.connection === 'string' ? extras.connection : null;
+
+    if (requested === null) return this.binding.name === this.binding.defaultName;
+
+    if (!this.binding.known.has(requested)) {
+      throw new Error(
+        `Unknown connection "${requested}" in handler extras. ` +
+          `Configured connections: ${[...this.binding.known].join(', ')}.`,
+      );
+    }
+
+    if (this.binding.publisherOnly.has(requested)) {
+      throw new Error(
+        `Connection "${requested}" is publisher-only (consumer: false) and cannot host handlers. ` +
+          `Remove consumer: false from that connection or bind the handler elsewhere.`,
+      );
+    }
+
+    return requested === this.binding.name;
   }
 
   private async doListen(callback: (...args: unknown[]) => void): Promise<void> {

@@ -85,7 +85,7 @@ export { NatsErrorCode } from './server/infrastructure/nats-error-codes';
 export { JetstreamProvisioningError } from './server/infrastructure/provisioning-error';
 
 // Server (for advanced use cases)
-export { JetstreamStrategy } from './server';
+export { JetstreamConnection, JetstreamStrategy } from './server';
 
 // Prometheus metrics
 export type { HistogramBuckets, MetricsConfig, MetricsOption } from './metrics/metrics.config';
