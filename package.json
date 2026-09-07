@@ -108,7 +108,7 @@
     "@nestjs/common": "^11.1.29",
     "@nestjs/core": "^11.1.29",
     "@nestjs/microservices": "^11.1.29",
-    "@nestjs/platform-express": "^11.1.29",
+    "@nestjs/platform-express": "^12.0.1",
     "@nestjs/testing": "^11.1.29",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/context-async-hooks": "^2.10.0",
