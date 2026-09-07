@@ -107,7 +107,7 @@
     "@golevelup/ts-vitest": "^4.0.0",
     "@nestjs/common": "^11.1.29",
     "@nestjs/core": "^11.1.29",
-    "@nestjs/microservices": "^11.1.29",
+    "@nestjs/microservices": "^12.0.1",
     "@nestjs/platform-express": "^11.1.29",
     "@nestjs/testing": "^11.1.29",
     "@opentelemetry/api": "^1.9.1",
