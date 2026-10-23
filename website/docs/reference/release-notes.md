@@ -26,6 +26,10 @@ The headline is [multiple connections](/docs/guides/multi-connection): one servi
 
 Features an old NATS server would accept and silently ignore, such as per-message TTL on 2.10 or `scheduleAt()` on 2.11, now fail with a `JetstreamCapabilityError` instead.
 
+Dead letters now also cover deliveries no handler settled: a message whose final attempt ended in a crash, a stopped pod or a handler outliving `ack_wait` reaches the [DLQ](/docs/guides/dead-letter-queue#deliveries-no-handler-settled) instead of sitting in the stream unnoticed. [Ack extension](/docs/guides/performance#ack-extension) takes a per-message limit, and logs when a handler reaches it.
+
+The package loads in native ESM apps on NestJS 10 and 11, and `@opentelemetry/api` is a required peer dependency, since the transport always loaded it.
+
 Several defaults changed. Streams reserve far less storage, retries are paced instead of firing immediately, and the dead-letter stream is on unless you opt out. Node 22 is the new minimum. What to change, and how to keep the old behaviour, is in [Upgrading](/docs/reference/upgrading#v213--v30).
 
 ## Earlier releases
