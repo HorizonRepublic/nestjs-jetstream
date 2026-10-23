@@ -257,6 +257,13 @@ export class InfrastructureBinder {
   }
 
   private warnOnScheduleExpiry(info: StreamInfo): void {
+    if (info.config.allow_msg_ttl !== true) {
+      this.logger.warn(
+        `Stream "${this.names.streamName(StreamKind.Schedule)}" does not report allow_msg_ttl=true. ` +
+          'Every schedule carries a tick TTL, so the server will refuse to store them.',
+      );
+    }
+
     const maxAge = info.config.max_age;
 
     if (maxAge === 0) return;

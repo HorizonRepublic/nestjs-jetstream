@@ -184,6 +184,14 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
       });
     }
 
+    if (registry.hasScheduleHandlers()) {
+      targets.push({
+        kind: StreamKind.Schedule,
+        stream: this.resolveStreamName(StreamKind.Schedule),
+        consumer: this.resolveConsumerName(StreamKind.Schedule),
+      });
+    }
+
     // Ordered consumers are ephemeral; no stable durable name to poll.
 
     return targets;

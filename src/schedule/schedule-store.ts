@@ -18,7 +18,11 @@ const REJECTION_CODES: ReadonlySet<number> = new Set([
   NatsErrorCode.MessageSchedulesDisabled,
   NatsErrorCode.MessageSchedulesPatternInvalid,
   NatsErrorCode.MessageSchedulesTargetInvalid,
+  NatsErrorCode.MessageSchedulesTtlInvalid,
 ]);
+
+/** Holders read in parallel by `list()`. */
+const LIST_BATCH_SIZE = 32;
 
 const errorCodeOf = (err: unknown): number | undefined =>
   err instanceof JetStreamApiError ? err.apiError().err_code : undefined;
@@ -60,9 +64,17 @@ export class ScheduleStore {
     const filter = `${this.holderPrefix}${origin === undefined ? '' : `${origin}.`}>`;
     const info = await jsm.streams.info(this.streamName, { subjects_filter: filter });
     const subjects = Object.keys(info.state.subjects ?? {}).toSorted();
-    const holders = await Promise.all(subjects.map(async (subject) => this.read(subject)));
+    const holders: StoredHolder[] = [];
 
-    return holders.filter((holder): holder is StoredHolder => holder !== null);
+    // Batched, so thousands of dynamic schedules do not become thousands of parallel requests.
+    for (let i = 0; i < subjects.length; i += LIST_BATCH_SIZE) {
+      const batch = subjects.slice(i, i + LIST_BATCH_SIZE);
+      const read = await Promise.all(batch.map(async (subject) => this.read(subject)));
+
+      holders.push(...read.filter((holder): holder is StoredHolder => holder !== null));
+    }
+
+    return holders;
   }
 
   /** The holder stored on `subject`, or `null` when there is none or another tool wrote it. */

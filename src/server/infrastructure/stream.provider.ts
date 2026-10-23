@@ -10,6 +10,7 @@ import {
 
 import { ConnectionProvider } from '../../connection';
 import { NatsCapability } from '../../connection/server-capabilities.types';
+import type { CapabilityUsage } from '../../connection/server-capabilities.types';
 import { ManagementMode, StreamKind } from '../../interfaces';
 import type { JetstreamModuleOptions } from '../../interfaces';
 import {
@@ -153,18 +154,24 @@ export class StreamProvider {
    * `allow_msg_schedules`, so the stream would look fine and never expire or fire.
    */
   private async assertServerSupports(kinds: StreamKind[]): Promise<void> {
-    const gated: [NatsCapability, string][] = [];
+    const gated: CapabilityUsage[] = [];
 
     for (const kind of kinds) {
       const config = { ...this.getDefaults(kind), ...this.getOverrides(kind) };
       const stream = this.getStreamName(kind);
 
       if (config.allow_msg_ttl === true) {
-        gated.push([NatsCapability.MessageTtl, `Stream ${stream} (allow_msg_ttl)`]);
+        gated.push({
+          capability: NatsCapability.MessageTtl,
+          usage: `Stream ${stream} (allow_msg_ttl)`,
+        });
       }
 
       if (config.allow_msg_schedules === true) {
-        gated.push([NatsCapability.MessageSchedules, `Stream ${stream} (allow_msg_schedules)`]);
+        gated.push({
+          capability: NatsCapability.MessageSchedules,
+          usage: `Stream ${stream} (allow_msg_schedules)`,
+        });
       }
     }
 
@@ -172,7 +179,7 @@ export class StreamProvider {
 
     const capabilities = await this.connection.getCapabilities();
 
-    for (const [capability, usage] of gated) capabilities.assert(capability, usage);
+    for (const { capability, usage } of gated) capabilities.assert(capability, usage);
   }
 
   /** Get the stream name for a given kind. */

@@ -7,7 +7,6 @@ import type {
   JetstreamModuleOptions,
   PatternsByKind,
   RegisteredHandler,
-  ScheduleHandlerOption,
   RecurringScheduleSpec,
   ScheduleSpec,
 } from '../../interfaces';
@@ -85,7 +84,6 @@ export class PatternRegistry {
       const rawSchedule: unknown = extras?.schedule;
       // `schedule: false` from JavaScript reads as no schedule rather than a malformed one.
       const isScheduled = rawSchedule !== undefined && rawSchedule !== false;
-      const schedule = rawSchedule as ScheduleSpec | true;
       const meta = extras?.meta as Record<string, unknown> | undefined;
 
       if (isBroadcast && isOrdered) {
@@ -95,7 +93,7 @@ export class PatternRegistry {
       }
 
       const declared = isScheduled
-        ? this.declaredSchedule(pattern, schedule, isEvent, isBroadcast || isOrdered)
+        ? this.declaredSchedule(pattern, rawSchedule, isEvent, isBroadcast || isOrdered)
         : undefined;
 
       const kind = resolveHandlerKind(isScheduled, isBroadcast, isOrdered, isEvent);
@@ -268,25 +266,13 @@ export class PatternRegistry {
     return StreamKind.Command;
   }
 
-  /** Validate a handler's schedule and return the one it declares, if any. */
+  /** Validate a handler's schedule extra and return the schedule it declares, if any. */
   private declaredSchedule(
     pattern: string,
-    schedule: ScheduleSpec | true,
+    schedule: unknown,
     isEvent: boolean,
     hasOtherDelivery: boolean,
   ): RecurringScheduleSpec | undefined {
-    this.assertSchedulable(pattern, schedule, isEvent, hasOtherDelivery);
-
-    return schedule === true ? undefined : schedule;
-  }
-
-  /** A schedule needs an event handler on its own stream, a literal pattern and a valid spec. */
-  private assertSchedulable(
-    pattern: string,
-    schedule: ScheduleSpec | true,
-    isEvent: boolean,
-    hasOtherDelivery: boolean,
-  ): asserts schedule is ScheduleHandlerOption {
     if (!isEvent) {
       throw new Error(
         `Handler "${pattern}" has a schedule; schedules belong on @EventPattern only.`,
@@ -300,17 +286,28 @@ export class PatternRegistry {
     }
 
     assertLiteralSubject(pattern, ScheduleErrorReason.InvalidPattern);
-    if (schedule === true) return;
+    if (schedule === true) return undefined;
+
+    if (typeof schedule !== 'object' || schedule === null) {
+      throw new JetstreamScheduleError(
+        ScheduleErrorReason.InvalidSpec,
+        `Handler "${pattern}" has schedule ${JSON.stringify(schedule)}; expected a schedule spec or true.`,
+      );
+    }
+
+    const spec = schedule as ScheduleSpec;
 
     // Declared schedules are re-created on every boot, so a one-shot would fire again each time.
-    if (isAtSchedule(schedule)) {
+    if (isAtSchedule(spec)) {
       throw new JetstreamScheduleError(
         ScheduleErrorReason.InvalidAt,
         `Handler "${pattern}" declares a one-shot schedule; create one-shot schedules with JetstreamClient.schedule().`,
       );
     }
 
-    validateScheduleSpec(schedule);
+    validateScheduleSpec(spec);
+
+    return spec;
   }
 
   private logSummary(): void {

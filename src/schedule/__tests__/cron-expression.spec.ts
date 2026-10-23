@@ -89,6 +89,13 @@ describe(parseCron, () => {
   });
 
   describe('rejections', () => {
+    it.each(['0 0 0 * constructor *', '0 0 0 * * toString'])(
+      'should read %j as an unknown name, not an inherited object key',
+      (expression) => {
+        expect(() => parseCron(expression)).toThrow(/is not a number/);
+      },
+    );
+
     it('should reject a field that matches nothing without searching five years', () => {
       // Given
       const started = performance.now();

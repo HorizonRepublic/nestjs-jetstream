@@ -8,6 +8,12 @@ export enum NatsCapability {
   RecurringSchedules = 'recurring-schedules',
 }
 
+/** A capability something is about to use, and who uses it, for the error message. */
+export interface CapabilityUsage {
+  readonly capability: NatsCapability;
+  readonly usage: string;
+}
+
 /** What a capability needs and how to name it in an error. */
 export interface CapabilityRequirement {
   readonly apiLevel: number;

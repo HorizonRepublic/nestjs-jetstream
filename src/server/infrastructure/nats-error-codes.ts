@@ -44,6 +44,9 @@ export enum NatsErrorCode {
   /** The schedule target is not a literal subject inside the same stream. */
   MessageSchedulesTargetInvalid = 10190,
 
+  /** The schedule TTL is invalid, or the stream does not allow message TTLs. */
+  MessageSchedulesTtlInvalid = 10191,
+
   /** The schedule time zone is unknown to the server, usually an image without tzdata. */
   MessageSchedulesTimeZoneInvalid = 10223,
 }

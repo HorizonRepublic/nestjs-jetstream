@@ -68,8 +68,14 @@ const parseInteger = (text: string, expression: string): number => {
   return value;
 };
 
-const parseValue = (text: string, bounds: CronBounds, expression: string): number =>
-  bounds.names?.[text.toLowerCase()] ?? parseInteger(text, expression);
+const parseValue = (text: string, bounds: CronBounds, expression: string): number => {
+  const key = text.toLowerCase();
+
+  // Own keys only: `constructor` must not resolve to an Object.prototype member.
+  if (bounds.names && Object.hasOwn(bounds.names, key)) return bounds.names[key] ?? 0;
+
+  return parseInteger(text, expression);
+};
 
 interface RangeSpan {
   start: number;

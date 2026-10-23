@@ -99,6 +99,19 @@ describe('PatternRegistry with scheduled handlers', () => {
     }).toThrow(expect.objectContaining({ reason: ScheduleErrorReason.InvalidAt }));
   });
 
+  it.each(['daily', 42, null])(
+    'should refuse a schedule extra of %j that is not a spec',
+    (schedule) => {
+      // Given a JavaScript caller passing a malformed extra
+      const handler = eventHandler({ schedule });
+
+      // When / Then
+      expect(() => {
+        sut.registerHandlers(new Map([['x', handler]]));
+      }).toThrow(expect.objectContaining({ reason: ScheduleErrorReason.InvalidSpec }));
+    },
+  );
+
   it('should refuse an invalid schedule at registration', () => {
     // Given
     const handler = eventHandler({ schedule: { cron: '* * * * *' } });

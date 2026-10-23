@@ -351,6 +351,23 @@ describe(InfrastructureBinder.name, () => {
       warn.mockRestore();
     });
 
+    it('should warn when the schedule stream cannot hold tick TTLs', async () => {
+      // Given
+      const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      const sut = makeSut();
+      const info = makeStreamInfo(scheduleConfig({ allow_msg_ttl: false }));
+
+      // When
+      await sut.bindStream(
+        makeJsm({ streamInfo: vi.fn().mockResolvedValue(info) }),
+        StreamKind.Schedule,
+      );
+
+      // Then
+      expect(warn).toHaveBeenCalledWith(expect.stringMatching(/allow_msg_ttl/));
+      warn.mockRestore();
+    });
+
     it('should refuse a schedule consumer whose filter would consume holders', async () => {
       // Given
       const sut = makeSut();

@@ -212,6 +212,7 @@ export const createConnectionScope = (
 
   const scheduleReconciler = new ScheduleReconciler(
     new ScheduleWriter(scheduleStore, codec),
+    scheduleStore,
     names.subjects,
     async () => connection.getCapabilities(),
     eventBus,
