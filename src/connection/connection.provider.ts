@@ -29,6 +29,7 @@ import {
   type ResolvedOtelOptions,
   type ServerEndpoint,
 } from '../otel';
+import { ServerCapabilities } from './server-capabilities';
 
 const DEFAULT_OPTIONS: Partial<ConnectionOptions> = {
   maxReconnectAttempts: -1,
@@ -59,6 +60,7 @@ export class ConnectionProvider {
   private jsClient: JetStreamClient | null = null;
   private jsmInstance: JetStreamManager | null = null;
   private jsmPromise: Promise<JetStreamManager> | null = null;
+  private capabilitiesPromise: Promise<ServerCapabilities> | null = null;
 
   private readonly otel: ResolvedOtelOptions;
   private readonly otelServiceName: string;
@@ -119,6 +121,16 @@ export class ConnectionProvider {
     this.jsmPromise = this.initJetStreamManager();
 
     return this.jsmPromise;
+  }
+
+  /**
+   * What the connected JetStream supports, probed once per connection and
+   * again after a reconnect, which may land on a server of another version.
+   */
+  public async getCapabilities(): Promise<ServerCapabilities> {
+    this.capabilitiesPromise ??= this.probeCapabilities();
+
+    return this.capabilitiesPromise;
   }
 
   /**
@@ -186,6 +198,19 @@ export class ConnectionProvider {
       this.jsClient = null;
       this.jsmInstance = null;
       this.jsmPromise = null;
+      this.capabilitiesPromise = null;
+    }
+  }
+
+  private async probeCapabilities(): Promise<ServerCapabilities> {
+    try {
+      return await ServerCapabilities.probe(
+        await this.getConnection(),
+        await this.getJetStreamManager(),
+      );
+    } catch (err) {
+      this.capabilitiesPromise = null;
+      throw err;
     }
   }
 
@@ -253,6 +278,7 @@ export class ConnectionProvider {
         this.jsClient = null;
         this.jsmInstance = null;
         this.jsmPromise = null;
+        this.capabilitiesPromise = null;
         this.eventBus.emit(TransportEvent.Reconnect, nc.getServer());
         this.lifecycleSpan?.recordEvent(EVENT_CONNECTION_RECONNECTED, {
           [ATTR_NATS_CONNECTION_SERVER]: nc.getServer(),
