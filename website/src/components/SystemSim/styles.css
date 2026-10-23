@@ -1,62 +1,65 @@
-.sim {
-  margin: clamp(28px, 4vw, 44px) 0 0;
-  padding: 16px 18px 12px;
-  border: 1px solid var(--jt-line-1);
-  border-radius: 12px;
-  background:
-    radial-gradient(70% 120% at 50% 40%, var(--jt-deliver-soft), transparent 75%),
-    var(--jt-bg-1);
+/* The scene fills the hero behind its content. On wide screens it fades out
+   towards the text column so the copy keeps a clean ground. */
+.scene {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
 }
 
-.sim-stage {
-  position: relative;
-  height: 170px;
+.scene-stage {
+  position: absolute;
+  inset: 0;
+  mask-image: linear-gradient(90deg, transparent 30%, #000 52%);
 }
 
-.sim-stage canvas {
+.scene-stage canvas {
   display: block;
 }
 
-.sim-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 22px;
-  margin-top: 8px;
-  padding-top: 10px;
-  border-top: 1px solid var(--jt-line-1);
+.scene-stats {
+  position: absolute;
+  inset-block-end: 22px;
+  inset-inline-end: max(var(--lp-gutter, 24px), calc((100% - var(--lp-max, 1140px)) / 2 + var(--lp-gutter, 24px)));
+  margin: 0;
   font-family: var(--jt-font-mono);
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   color: var(--jt-fg-3);
 }
 
-.sim-stats b {
+.scene-stats b {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: var(--jt-fg-0);
+  color: var(--jt-fg-1);
 }
 
-.sim-stats b[data-tone='deliver'] {
+.scene-stats b[data-tone='deliver'] {
   color: var(--jt-state-deliver);
 }
 
-.sim-stats b[data-tone='redeliver'] {
+.scene-stats b[data-tone='redeliver'] {
   color: var(--jt-state-redeliver);
 }
 
-.sim-stats b[data-tone='ack'] {
+.scene-stats b[data-tone='ack'] {
   color: var(--jt-state-ack);
 }
 
-.sim-note {
-  margin-inline-start: auto;
-}
-
-@media (max-width: 640px) {
-  .sim-stage {
-    height: 150px;
+/* Narrow: the scene moves under the copy, in the flow, full width. */
+@media (max-width: 996px) {
+  .scene {
+    position: relative;
+    height: 340px;
+    order: 2;
   }
 
-  .sim-note {
-    margin-inline-start: 0;
+  .scene-stage {
+    mask-image: none;
+  }
+
+  .scene-stats {
+    inset-inline: 0;
+    text-align: center;
+    inset-block-end: 4px;
   }
 }

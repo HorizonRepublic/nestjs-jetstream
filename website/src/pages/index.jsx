@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import SystemSim from '../components/SystemSim';
+import useBaseUrl from '@docusaurus/useBaseUrl';
+import HeroScene from '../components/SystemSim';
 import Layout from '@theme/Layout';
 import Link from '@docusaurus/Link';
 import rootPkg from '../../../package.json';
@@ -59,6 +60,33 @@ const CopyInstall = () => {
         {copied ? 'copied' : 'copy'}
       </span>
     </button>
+  );
+};
+
+const GITHUB_PATH =
+  'M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.34c-2.23.48-2.7-1.07-2.7-1.07-.37-.93-.9-1.18-.9-1.18-.73-.5.06-.49.06-.49.81.06 1.24.83 1.24.83.72 1.23 1.88.88 2.34.67.07-.52.28-.88.5-1.08-1.78-.2-3.65-.89-3.65-3.96 0-.88.31-1.6.83-2.16-.08-.2-.36-1.02.08-2.13 0 0 .67-.21 2.2.83a7.7 7.7 0 0 1 4 0c1.53-1.04 2.2-.83 2.2-.83.44 1.11.16 1.93.08 2.13.52.56.83 1.28.83 2.16 0 3.08-1.88 3.76-3.66 3.96.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0z';
+
+const GitHubMark = () => (
+  <svg className="lp-btn-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+    <path d={GITHUB_PATH} />
+  </svg>
+);
+
+const BuiltFor = () => {
+  const nest = useBaseUrl('/img/brands/nestjs.svg');
+  const nats = useBaseUrl('/img/brands/nats.svg');
+
+  return (
+    <p className="lp-built">
+      <span>
+        <img src={nest} alt="" width="18" height="18" />
+        Built for NestJS
+      </span>
+      <span>
+        <img src={nats} alt="" width="18" height="18" />
+        Runs on NATS JetStream
+      </span>
+    </p>
   );
 };
 
@@ -247,6 +275,7 @@ export default function Home() {
     >
       <main className="landingRoot">
         <section className="lp-hero">
+          <HeroScene />
           <div className="lp-container lp-hero-grid">
             <div className="lp-hero-lead">
               <h1 className="lp-hero-title">Durable messaging for NestJS microservices</h1>
@@ -268,6 +297,8 @@ export default function Home() {
 
               <CopyInstall />
 
+              <BuiltFor />
+
               <ul className="lp-badges" aria-label="Compatibility">
                 <li>v{version}</li>
                 <li>NestJS 10, 11, 12</li>
@@ -277,7 +308,7 @@ export default function Home() {
               </ul>
             </div>
 
-            <SystemSim />
+            <div className="lp-hero-room" aria-hidden="true" />
           </div>
         </section>
 
@@ -404,6 +435,7 @@ export default function Home() {
                 Get started
               </Link>
               <a className="lp-btn lp-btn--secondary" href="https://github.com/HorizonRepublic/nestjs-jetstream">
+                <GitHubMark />
                 GitHub
               </a>
             </div>

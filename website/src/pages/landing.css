@@ -73,6 +73,7 @@
 /* ---- hero --------------------------------------------------------------- */
 .lp-hero {
   position: relative;
+  isolation: isolate;
   padding-block: clamp(48px, 7vw, 88px) clamp(48px, 6vw, 72px);
 }
 
@@ -83,15 +84,34 @@
   align-items: center;
 }
 
-.lp-hero-grid .sim {
-  justify-self: center;
-  width: 100%;
-  max-width: 420px;
-  margin: 0;
+/* The scene sits under the whole hero; the right column only keeps it room. */
+.lp-hero-lead {
+  position: relative;
+  z-index: 1;
 }
 
-.lp-hero-grid .sim-stage {
-  height: 460px;
+.lp-hero-room {
+  min-height: 480px;
+}
+
+.lp-built {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 22px 0 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--jt-fg-2);
+}
+
+.lp-built span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lp-btn-icon {
+  margin-inline-end: 8px;
 }
 
 .lp-hero-title {
@@ -533,6 +553,16 @@
   .lp-hero-grid,
   .lp-split {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lp-hero-room {
+    min-height: 0;
+  }
+
+  .lp-hero {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
   }
 
   .lp-reasons,
