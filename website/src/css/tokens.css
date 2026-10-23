@@ -44,7 +44,7 @@
   --jt-fg-0: #21262f; /* ink */
   --jt-fg-1: #3c434f; /* body */
   --jt-fg-2: #5a6272; /* secondary */
-  --jt-fg-3: #697181; /* muted, captions - AA at small sizes */
+  --jt-fg-3: #666e7d; /* muted, captions - AA at small sizes */
 
   /* deliver, and every interactive affordance */
   --jt-accent: #2c5fb3;
@@ -90,7 +90,7 @@
   --jt-fg-0: #e8ebf2;
   --jt-fg-1: #c3c9d6;
   --jt-fg-2: #8f97a8;
-  --jt-fg-3: #7a8294;
+  --jt-fg-3: #878f9f;
 
   --jt-accent: #7fa4e0;
   --jt-accent-hover: #9bb8e9;
@@ -107,7 +107,7 @@
 
   --jt-code-string: #9cb98a;
   --jt-code-keyword: #b3a3e0;
-  --jt-code-comment: #7a8294;
+  --jt-code-comment: #7e8697;
 
   --jt-accent-line: rgb(127 164 224 / 0.32);
   --jt-line-3: #4a5364;
