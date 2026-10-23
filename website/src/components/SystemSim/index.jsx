@@ -81,8 +81,16 @@ const createSim = () => ({
   nextRestart: 16000,
   nextDeploy: 6000,
   deploy: null,
+  effects: [],
   stats: { published: 0, retried: 0, acked: 0 },
 });
+
+const EFFECT_MS = { ack: 900, nak: 700, down: 1100 };
+
+/* Visual only: a ring on the floor and a few sparks where something happened. */
+const burst = (sim, kind, at) => {
+  sim.effects.push({ kind, x: at.x, y: at.y, born: sim.time, seed: Math.random() * Math.PI * 2 });
+};
 
 const flight = (message, from, to, duration, state, delay = 0) => {
   message.state = state;
@@ -107,6 +115,7 @@ const takeDown = (sim, geo, index, ms, manual) => {
 
   replica.downUntil = sim.time + ms;
   replica.manual = manual;
+  burst(sim, 'down', geo.replicas[index]);
 
   if (replica.busy) {
     const message = replica.busy;
@@ -252,9 +261,11 @@ const step = (sim, geo, dt) => {
         sim.stats.retried += 1;
         replica.flash = 'redeliver';
         replica.flashAt = now;
+        burst(sim, 'nak', geo.replicas[message.replica]);
         toLane(geo, message);
       } else {
         sim.stats.acked += 1;
+        burst(sim, 'ack', geo.replicas[message.replica]);
         replica.flash = 'ack';
         replica.flashAt = now;
         flight(message, { ...message.pos }, { ...message.pos }, 1100, 'toExit');
@@ -273,6 +284,7 @@ const step = (sim, geo, dt) => {
   }
 
   sim.messages = sim.messages.filter((message) => message.state !== 'done');
+  sim.effects = sim.effects.filter((effect) => now - effect.born < EFFECT_MS[effect.kind]);
 };
 
 /* ---- rendering ---------------------------------------------------------- */
@@ -603,6 +615,162 @@ const drawChannel = (ctx, project, geo, palette, sim, drawContents) => {
   ctx.globalAlpha = 1;
 };
 
+const effectColor = (effect, palette) => ({ ack: palette.ack, nak: palette.redeliver, down: palette.dlq })[effect.kind];
+
+/* Rings spread over the floor from the pod; sparks rise and fall back. */
+const drawEffects = (ctx, project, palette, sim, bright) => {
+  const k = project.k;
+
+  for (const effect of sim.effects) {
+    const life = EFFECT_MS[effect.kind];
+    const t = (sim.time - effect.born) / life;
+    const color = effectColor(effect, palette);
+    const base = project(effect.x, effect.y);
+    const reach = effect.kind === 'down' ? 70 : effect.kind === 'ack' ? 52 : 36;
+
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = (bright ? 3 : 1.5) * (1 - t) + 0.5;
+    ctx.globalAlpha = (bright ? 0.9 : 0.7) * (1 - t);
+    ctx.beginPath();
+    ctx.ellipse(base.x, base.y, (16 + reach * easeInOut(t)) * k * 1.4, (9 + reach * 0.55 * easeInOut(t)) * k * 1.4, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    const sparks = effect.kind === 'ack' ? 7 : effect.kind === 'nak' ? 4 : 0;
+    const seconds = (sim.time - effect.born) / 1000;
+
+    ctx.fillStyle = color;
+    for (let i = 0; i < sparks; i += 1) {
+      const angle = effect.seed + i * 2.399;
+      const speed = 22 + ((i * 37) % 17);
+      const lift = 70 + ((i * 53) % 40);
+      const z = POD.height + lift * seconds - 160 * seconds * seconds;
+
+      if (z < 0) continue;
+
+      const p = project(effect.x + Math.cos(angle) * speed * seconds, effect.y + Math.sin(angle) * speed * seconds, z);
+
+      ctx.globalAlpha = (1 - t) * (bright ? 1 : 0.85);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, (bright ? 2.4 : 1.4) * Math.max(1, k * 1.2), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+};
+
+/* Glossy floor: a faded mirror of each block below its foot, and the colour of its light. */
+const reflectBlock = (ctx, project, cx, cy, size, height, color, light) => {
+  const s = size / 2;
+  const at = (dx, dy, dz) => project(cx + dx, cy + dy, -dz);
+  const depth = height * 0.7;
+  const right = [at(s, -s, 0), at(s, s, 0), at(s, s, depth), at(s, -s, depth)];
+  const front = [at(-s, s, 0), at(s, s, 0), at(s, s, depth), at(-s, s, depth)];
+  const top = project(cx, cy, 0);
+  const bottom = project(cx, cy, -depth);
+  const fade = ctx.createLinearGradient(0, top.y, 0, bottom.y + size * project.k);
+
+  fade.addColorStop(0, color);
+  fade.addColorStop(1, 'transparent');
+
+  ctx.save();
+  ctx.globalAlpha = 0.16;
+  ctx.fillStyle = fade;
+  path(ctx, right);
+  ctx.fill();
+  path(ctx, front);
+  ctx.fill();
+
+  if (light) {
+    const pool = project(cx + s + 10, cy + s * 0.4);
+    const g = ctx.createRadialGradient(pool.x, pool.y, 0, pool.x, pool.y, 46 * project.k);
+
+    g.addColorStop(0, light);
+    g.addColorStop(1, 'transparent');
+    ctx.globalAlpha = 0.2;
+    ctx.fillStyle = g;
+    ctx.translate(pool.x, pool.y);
+    ctx.scale(1, 0.55);
+    ctx.beginPath();
+    ctx.arc(0, 0, 46 * project.k, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+};
+
+const podLight = (sim, replica, palette) => {
+  if (isDown(sim, replica)) return palette.dlq;
+  if (sim.time - replica.flashAt < 600) return palette[replica.flash];
+  if (replica.busy) return palette.deliver;
+
+  return palette.ack;
+};
+
+/* Everything that gives off light, drawn sharp into the glow layer that gets blurred. */
+const drawEmissive = (ctx, project, palette, sim, geo) => {
+  const k = project.k;
+
+  for (const message of sim.messages) {
+    if (!message.screen) continue;
+
+    const color = colorOf(message, palette);
+    const alpha = message.state === 'toExit' ? Math.max(0, 1 - message.t) : 1;
+
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(message.screen.x, message.screen.y, Math.max(3.4, 5.2 * k), 0, Math.PI * 2);
+    ctx.fill();
+
+    if (message.state !== 'queued' && message.trail.length > 1) {
+      ctx.strokeStyle = color;
+      ctx.lineCap = 'round';
+      ctx.lineWidth = 3.5;
+      ctx.globalAlpha = alpha * 0.6;
+      ctx.beginPath();
+      message.trail.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+      ctx.stroke();
+    }
+  }
+
+  sim.replicas.forEach((replica, index) => {
+    const r = geo.replicas[index];
+    const down = isDown(sim, replica);
+    const color = podLight(sim, replica, palette);
+    const c = project(r.x, r.y, down ? POD.downHeight : POD.height);
+
+    // the light of the pod's front panel, plus a wash on the top face while it flashes
+    const front = project(r.x - POD.size * 0.28, r.y + POD.size / 2, (down ? POD.downHeight : POD.height) / 2);
+
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(front.x, front.y, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (!down && sim.time - replica.flashAt < 600) {
+      ctx.globalAlpha = 0.6 * (1 - (sim.time - replica.flashAt) / 600);
+      ctx.beginPath();
+      ctx.ellipse(c.x, c.y, 26 * k, 14 * k, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+
+  ctx.globalAlpha = 0.25 + 0.5 * Math.min(1, sim.queue.length / 10);
+  ctx.strokeStyle = palette.deliver;
+  ctx.lineWidth = 3;
+  const a = project(geo.tube.x0 - 10, geo.tube.y + 13, 12);
+  const b = project(geo.tube.x1 + 10, geo.tube.y + 13, 12);
+
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.lineTo(b.x, b.y);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  drawEffects(ctx, project, palette, sim, true);
+};
+
 const drawMessage = (ctx, project, palette, message, ui) => {
   const color = colorOf(message, palette);
   const alpha = message.state === 'toExit' ? Math.max(0, 1 - message.t) : 1;
@@ -657,6 +825,14 @@ const drawShadow = (ctx, project, palette, message) => {
   ctx.fillStyle = colorOf(message, palette);
   ctx.beginPath();
   ctx.ellipse(floor.x, floor.y, (5 + height * 0.06) * k * 1.6, (2.5 + height * 0.03) * k * 1.6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // its mirror image in the glossy floor
+  const mirror = project(message.pos.x, message.pos.y, -height);
+
+  ctx.globalAlpha = 0.14 * alpha;
+  ctx.beginPath();
+  ctx.arc(mirror.x, mirror.y, Math.max(2, 3.4 * k), 0, Math.PI * 2);
   ctx.fill();
   ctx.globalAlpha = 1;
 };
@@ -783,6 +959,14 @@ const draw = (ctx, sim, geo, view, palette, logo, ui) => {
   ctx.stroke();
   ctx.globalAlpha = 1;
 
+  for (const p of geo.producers) reflectBlock(ctx, project, p.x, p.y, 26, 20, palette.block, null);
+  sim.replicas.forEach((replica, index) => {
+    const r = geo.replicas[index];
+    const down = isDown(sim, replica);
+
+    reflectBlock(ctx, project, r.x, r.y, POD.size, down ? POD.downHeight : POD.height, palette.block, podLight(sim, replica, palette));
+  });
+
   for (const message of sim.messages) drawShadow(ctx, project, palette, message);
 
   for (const p of geo.producers) {
@@ -825,6 +1009,7 @@ const draw = (ctx, sim, geo, view, palette, logo, ui) => {
   // pods back to front, then everything in flight on top
   geo.replicas.forEach((_, index) => drawPod(ctx, project, palette, sim, geo, index, logo, view, ui));
   drawHint(ctx, project, palette, sim, geo, ui);
+  drawEffects(ctx, project, palette, sim, false);
 
   for (const message of sim.messages) if (!inChannel(message)) drawMessage(ctx, project, palette, message, ui);
 
@@ -916,6 +1101,12 @@ const HeroScene = () => {
     let statsAt = 0;
     let pointer = null;
 
+    // The glow layer: half resolution, blurred, laid over the scene with additive light.
+    const glow = document.createElement('canvas');
+    const gctx = glow.getContext('2d');
+    const canBlur = typeof gctx.filter === 'string';
+    const GLOW_SCALE = 0.5;
+
     const resize = () => {
       const ratio = window.devicePixelRatio || 1;
       const cw = wrap.clientWidth;
@@ -926,11 +1117,30 @@ const HeroScene = () => {
       canvas.style.width = `${cw}px`;
       canvas.style.height = `${ch}px`;
       view = { cw, ch, ratio, project: makeProjector(cw, ch, cw < 760 ? REGION.narrow : REGION.wide) };
+      glow.width = Math.max(1, Math.round(cw * GLOW_SCALE));
+      glow.height = Math.max(1, Math.round(ch * GLOW_SCALE));
     };
 
     const render = () => {
       ctx.setTransform(view.ratio, 0, 0, view.ratio, 0, 0);
       draw(ctx, sim, geo, view, palette, logo, ui);
+
+      if (!canBlur) return;
+
+      gctx.setTransform(GLOW_SCALE, 0, 0, GLOW_SCALE, 0, 0);
+      gctx.clearRect(0, 0, view.cw, view.ch);
+      drawEmissive(gctx, view.project, palette, sim, geo);
+
+      ctx.save();
+      ctx.setTransform(view.ratio, 0, 0, view.ratio, 0, 0);
+      ctx.globalCompositeOperation = palette.dark ? 'lighter' : 'source-over';
+      ctx.globalAlpha = palette.dark ? 0.9 : 0.45;
+      ctx.filter = 'blur(10px)';
+      ctx.drawImage(glow, 0, 0, view.cw, view.ch);
+      ctx.globalAlpha = palette.dark ? 0.7 : 0.35;
+      ctx.filter = 'blur(3px)';
+      ctx.drawImage(glow, 0, 0, view.cw, view.ch);
+      ctx.restore();
     };
 
     // What the pointer is over: a pod (clickable) or a message (inspectable).
