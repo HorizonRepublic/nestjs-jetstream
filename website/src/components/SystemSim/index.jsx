@@ -36,12 +36,15 @@ const readPalette = () => {
   };
 };
 
-const layout = (w, h) => {
-  const mid = h * 0.46;
+/* Coordinates run along the flow (x) and across it (y). A vertical stage keeps
+   the same model; the canvas transposes it and labels are placed per orientation. */
+const layout = (w, h, vertical) => {
+  const mid = h * (vertical ? 0.36 : 0.46);
 
   return {
     w,
     h,
+    vertical,
     producers: [0.2, 0.46, 0.72].map((f) => ({ x: w * 0.06, y: h * f })),
     tube: { x0: w * 0.34, x1: w * 0.6, y: mid },
     lane: { x0: w * 0.34, x1: w * 0.6, y: mid + 30 },
@@ -199,10 +202,28 @@ const step = (sim, geo, dt) => {
   sim.messages = sim.messages.filter((message) => message.state !== 'done');
 };
 
-const draw = (ctx, sim, geo, palette) => {
-  const { w, h } = geo;
+/* Text is drawn untransposed, at the screen position of a model point plus an
+   offset chosen for the orientation. */
+const label = (ctx, geo, text, { at, h, v, color, font, size = 11 }) => {
+  const [mx, my] = at;
+  const [sx, sy] = geo.vertical ? [my, mx] : [mx, my];
+  const [dx, dy, align] = geo.vertical ? v : h;
 
-  ctx.clearRect(0, 0, w, h);
+  ctx.save();
+  ctx.setTransform(geo.ratio, 0, 0, geo.ratio, 0, 0);
+  ctx.font = `${size}px ${font}`;
+  ctx.fillStyle = color;
+  ctx.globalAlpha = 0.9;
+  ctx.textAlign = align;
+  ctx.fillText(text, sx + dx, sy + dy);
+  ctx.restore();
+};
+
+const draw = (ctx, sim, geo, palette) => {
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  ctx.restore();
   ctx.lineWidth = 1;
 
   // connectors
@@ -240,16 +261,34 @@ const draw = (ctx, sim, geo, palette) => {
   ctx.restore();
 
   // labels
-  ctx.font = `11px ${palette.mono}`;
-  ctx.fillStyle = palette.label;
-  ctx.textAlign = 'center';
-  ctx.fillText('services', geo.producers[0].x, h - 6);
-  ctx.fillText('stream', (geo.tube.x0 + geo.tube.x1) / 2, geo.tube.y - 16);
-  ctx.fillText('replicas', geo.replicas[0].x, h - 6);
-  ctx.fillStyle = palette.redeliver;
-  ctx.globalAlpha = 0.85;
-  ctx.fillText('retry after 2 s, 10 s', (geo.lane.x0 + geo.lane.x1) / 2, geo.lane.y + 16);
-  ctx.globalAlpha = 1;
+  label(ctx, geo, 'stream', {
+    at: [(geo.tube.x0 + geo.tube.x1) / 2, geo.tube.y],
+    h: [0, -16, 'center'],
+    v: [-16, 4, 'right'],
+    color: palette.label,
+    font: palette.mono,
+  });
+  label(ctx, geo, 'retry after 2 s, 10 s', {
+    at: [(geo.lane.x0 + geo.lane.x1) / 2, geo.lane.y],
+    h: [0, 16, 'center'],
+    v: [12, 4, 'left'],
+    color: palette.redeliver,
+    font: palette.mono,
+  });
+  label(ctx, geo, 'services', {
+    at: [geo.producers[0].x, geo.producers.at(-1).y],
+    h: [0, 22, 'center'],
+    v: [16, 4, 'left'],
+    color: palette.label,
+    font: palette.mono,
+  });
+  label(ctx, geo, 'replicas', {
+    at: [geo.replicas[0].x, geo.replicas.at(-1).y],
+    h: [0, 26, 'center'],
+    v: [20, 4, 'left'],
+    color: palette.label,
+    font: palette.mono,
+  });
 
   // producers
   for (const p of geo.producers) {
@@ -284,10 +323,14 @@ const draw = (ctx, sim, geo, palette) => {
     ctx.restore();
 
     if (down) {
-      ctx.font = `10px ${palette.mono}`;
-      ctx.fillStyle = palette.label;
-      ctx.textAlign = 'left';
-      ctx.fillText('restarting', r.x + 15, r.y + 4);
+      label(ctx, geo, 'restarting', {
+        at: [r.x, r.y],
+        h: [15, 4, 'left'],
+        v: [0, 26, 'center'],
+        color: palette.label,
+        font: palette.mono,
+        size: 10,
+      });
     }
 
     const busy = replica.busy;
@@ -356,8 +399,14 @@ const SystemSim = () => {
       canvas.height = Math.round(h * ratio);
       canvas.style.width = `${w}px`;
       canvas.style.height = `${h}px`;
-      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-      geo = layout(w, h);
+      const vertical = h > w * 0.9;
+
+      // Vertical: model x (the flow) runs down the screen, model y across it.
+      if (vertical) ctx.setTransform(0, ratio, ratio, 0, 0, 0);
+      else ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+
+      geo = vertical ? layout(h, w, true) : layout(w, h, false);
+      geo.ratio = ratio;
       // Positions are in pixels, so a new size starts a fresh run.
       Object.assign(sim, createSim());
     };

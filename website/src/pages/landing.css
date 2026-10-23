@@ -84,7 +84,14 @@
 }
 
 .lp-hero-grid .sim {
+  justify-self: center;
+  width: 100%;
+  max-width: 420px;
   margin: 0;
+}
+
+.lp-hero-grid .sim-stage {
+  height: 460px;
 }
 
 .lp-hero-title {
