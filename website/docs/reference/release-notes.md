@@ -8,7 +8,7 @@ schema:
   headline: "Release Notes: NestJS JetStream Transport"
   description: "Version-by-version changelog covering new features, behavior changes, and breaking changes."
   datePublished: "2026-03-26"
-  dateModified: "2026-08-03"
+  dateModified: "2026-10-23"
 ---
 
 # Release Notes
@@ -16,15 +16,17 @@ schema:
 > **Use when:** you are upgrading and need to know what changed.
 > **You get:** what changed in each release, with the breaking parts called out.
 
-Notable changes per version. Upgrade instructions live in the [Migration Guide](/docs/guides/migration#upgrading-between-versions), and the full commit-level record is in [CHANGELOG.md](https://github.com/HorizonRepublic/nestjs-jetstream/blob/main/CHANGELOG.md).
+Notable changes per version. What you have to change when upgrading is in [Upgrading](/docs/reference/upgrading), and the full commit-level record is in [CHANGELOG.md](https://github.com/HorizonRepublic/nestjs-jetstream/blob/main/CHANGELOG.md).
 
 ## v3.0
 
 The headline is [multiple connections](/docs/guides/multi-connection): one service can talk to more than one NATS cluster through a `connections` map, each with its own streams, consumers, routers and backpressure budget. Health gains a per-connection breakdown, shutdown drains every connection in parallel, and two connections that would resolve the same stream fail at startup.
 
-The defaults changed alongside it. Streams reserve far less storage, retries are paced instead of firing immediately, and the dead-letter stream is on unless you opt out. Node 22 is the new minimum.
+[Recurring schedules](/docs/guides/recurring-schedules) bring cron and interval jobs, declared on a handler or created from a client, fired by NATS 2.14 itself and kept alive across deploys and replicas. A client can also schedule a one-shot delivery far past the events stream's `max_age`.
 
-Every one of these, with what you have to change and what you can leave alone, is in [Upgrading between versions](/docs/guides/migration#upgrading-between-versions). That page is the one to read before you bump the dependency, and the one kept current for each release.
+Features an old NATS server would accept and silently ignore, such as per-message TTL on 2.10 or `scheduleAt()` on 2.11, now fail with a `JetstreamCapabilityError` instead.
+
+Several defaults changed. Streams reserve far less storage, retries are paced instead of firing immediately, and the dead-letter stream is on unless you opt out. Node 22 is the new minimum. What to change, and how to keep the old behaviour, is in [Upgrading](/docs/reference/upgrading#v213--v30).
 
 ## Earlier releases
 
