@@ -1,0 +1,297 @@
+import { Logger } from '@nestjs/common';
+
+import type { JetStreamManager, StoredMsg } from '@nats-io/jetstream';
+import { headers as natsHeaders } from '@nats-io/transport-node';
+import type { Msg, MsgCallback, NatsConnection, Subscription } from '@nats-io/transport-node';
+
+import { faker } from '@faker-js/faker';
+import { createMock } from '@golevelup/ts-vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Mock } from 'vitest';
+
+import { JsonCodec } from '../../../codec';
+import type { ConnectionProvider } from '../../../connection';
+import { DeadLetterAdvisoryListener } from '../dead-letter-advisory';
+import type { DeadLetterCapture } from '../dead-letter-capture';
+import type { DeadLetterSource, DeadLetterWatchTarget } from '../routing.types';
+
+const codec = new JsonCodec();
+
+describe(DeadLetterAdvisoryListener, () => {
+  let sut: DeadLetterAdvisoryListener;
+  let callbacks: Map<string, MsgCallback<Msg>>;
+  let subscribe: Mock;
+  let getMessage: Mock;
+  let deleteMessage: Mock;
+  let captureSource: Mock;
+  let target: DeadLetterWatchTarget;
+
+  const advisory = (body: unknown): Msg =>
+    createMock<Msg>({
+      json: <T>(): T => {
+        if (typeof body === 'string') throw new SyntaxError('Unexpected token');
+
+        return body as T;
+      },
+    });
+
+  const stored = (seq: number, payload: unknown): StoredMsg =>
+    createMock<StoredMsg>({
+      subject: faker.lorem.word(),
+      seq,
+      data: codec.encode(payload),
+      header: natsHeaders(),
+      time: faker.date.recent(),
+    });
+
+  /** Deliver an advisory to the subscription for `target` and let the handler settle. */
+  const receive = async (body: unknown): Promise<void> => {
+    const callback = callbacks.get(
+      `$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.${target.stream}.${target.consumer}`,
+    );
+
+    void callback?.(null, advisory(body));
+    await vi.waitFor(() => {
+      expect(getMessage.mock.calls.length + warn.mock.calls.length).toBeGreaterThan(0);
+    });
+    await new Promise(process.nextTick);
+  };
+
+  let warn: Mock;
+  let error: Mock;
+
+  beforeEach(() => {
+    callbacks = new Map();
+    subscribe = vi.fn((subject: string, opts: { callback: MsgCallback<Msg> }) => {
+      callbacks.set(subject, opts.callback);
+
+      return createMock<Subscription>();
+    });
+    getMessage = vi.fn();
+    deleteMessage = vi.fn().mockResolvedValue(true);
+    captureSource = vi.fn().mockImplementation(async (source: DeadLetterSource) => {
+      await source.release('Moved to DLQ stream');
+    });
+    warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined) as Mock;
+    error = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined) as Mock;
+
+    const connection = createMock<ConnectionProvider>({
+      getConnection: vi.fn().mockResolvedValue(createMock<NatsConnection>({ subscribe })),
+      getJetStreamManager: vi
+        .fn()
+        .mockResolvedValue(
+          createMock<JetStreamManager>({ streams: { getMessage, deleteMessage } }),
+        ),
+    });
+
+    target = {
+      stream: faker.string.alpha(12),
+      consumer: faker.string.alpha(12),
+      removeOnCapture: true,
+    };
+    sut = new DeadLetterAdvisoryListener(
+      connection,
+      createMock<DeadLetterCapture>({ captureSource }),
+      codec,
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.resetAllMocks();
+  });
+
+  describe('happy path', () => {
+    it('should subscribe to the consumer advisory in a queue group shared by every replica', async () => {
+      // When
+      await sut.watch([target]);
+
+      // Then
+      expect(subscribe).toHaveBeenCalledWith(
+        `$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.${target.stream}.${target.consumer}`,
+        expect.objectContaining({ queue: target.consumer }),
+      );
+    });
+
+    it('should capture the stored message with the delivery count from the advisory', async () => {
+      // Given
+      const seq = faker.number.int({ min: 1, max: 10_000 });
+      const payload = { id: faker.string.uuid() };
+      const message = stored(seq, payload);
+
+      getMessage.mockResolvedValue(message);
+      await sut.watch([target]);
+
+      // When
+      await receive({
+        stream: target.stream,
+        consumer: target.consumer,
+        stream_seq: seq,
+        deliveries: 3,
+      });
+
+      // Then
+      expect(getMessage).toHaveBeenCalledWith(target.stream, { seq });
+      expect(captureSource).toHaveBeenCalledTimes(1);
+
+      const [source, data, reason] = captureSource.mock.calls[0]!;
+
+      expect(source).toMatchObject({
+        subject: message.subject,
+        stream: target.stream,
+        streamSequence: seq,
+        deliveryCount: 3,
+        timestamp: message.time,
+      });
+      expect(data).toEqual(payload);
+      expect(reason).toBeInstanceOf(Error);
+    });
+
+    it('should delete the message from a work-queue stream once captured', async () => {
+      // Given
+      const seq = faker.number.int({ min: 1, max: 10_000 });
+
+      getMessage.mockResolvedValue(stored(seq, {}));
+      await sut.watch([target]);
+
+      // When
+      await receive({ stream: target.stream, stream_seq: seq, deliveries: 2 });
+
+      // Then
+      expect(deleteMessage).toHaveBeenCalledWith(target.stream, seq, false);
+    });
+  });
+
+  describe('edge cases', () => {
+    it('should keep the message in a stream other services still read', async () => {
+      // Given: a broadcast-style target
+      target = { ...target, removeOnCapture: false };
+      getMessage.mockResolvedValue(stored(5, {}));
+      await sut.watch([target]);
+
+      // When
+      await receive({ stream: target.stream, stream_seq: 5, deliveries: 2 });
+
+      // Then
+      expect(captureSource).toHaveBeenCalledTimes(1);
+      expect(deleteMessage).not.toHaveBeenCalled();
+    });
+
+    it('should do nothing when the message is already gone', async () => {
+      // Given
+      getMessage.mockResolvedValue(null);
+      await sut.watch([target]);
+
+      // When
+      await receive({ stream: target.stream, stream_seq: 9, deliveries: 2 });
+
+      // Then
+      expect(captureSource).not.toHaveBeenCalled();
+    });
+
+    it('should hand over the raw bytes when the payload cannot be decoded', async () => {
+      // Given
+      const message = createMock<StoredMsg>({
+        subject: faker.lorem.word(),
+        seq: 4,
+        data: new TextEncoder().encode('{not json'),
+        header: natsHeaders(),
+        time: new Date(),
+      });
+
+      getMessage.mockResolvedValue(message);
+      await sut.watch([target]);
+
+      // When
+      await receive({ stream: target.stream, stream_seq: 4, deliveries: 2 });
+
+      // Then
+      expect(captureSource.mock.calls[0]![1]).toBe(message.data);
+    });
+
+    it('should leave the message in place when the capture does not release it', async () => {
+      // Given: a capture that keeps the message (DLQ and callback both failed)
+      captureSource.mockImplementation(async (source: DeadLetterSource) => {
+        source.retain();
+      });
+      getMessage.mockResolvedValue(stored(6, {}));
+      await sut.watch([target]);
+
+      // When
+      await receive({ stream: target.stream, stream_seq: 6, deliveries: 2 });
+
+      // Then
+      expect(deleteMessage).not.toHaveBeenCalled();
+    });
+
+    it('should stop listening on stop()', async () => {
+      // Given
+      const unsubscribe = vi.fn();
+
+      subscribe.mockReturnValue(createMock<Subscription>({ unsubscribe }));
+      await sut.watch([target, { ...target, consumer: faker.string.alpha(10) }]);
+
+      // When
+      sut.stop();
+
+      // Then
+      expect(unsubscribe).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('error paths', () => {
+    it('should warn and skip an advisory it cannot parse', async () => {
+      // Given
+      await sut.watch([target]);
+
+      // When
+      await receive('garbage');
+
+      // Then
+      expect(getMessage).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalled();
+    });
+
+    it('should warn and skip an advisory without a stream sequence', async () => {
+      // Given
+      await sut.watch([target]);
+
+      // When
+      await receive({ stream: target.stream, deliveries: 2 });
+
+      // Then
+      expect(getMessage).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalled();
+    });
+
+    it('should log and survive when the message cannot be fetched', async () => {
+      // Given
+      getMessage.mockRejectedValue(new Error('timeout'));
+      await sut.watch([target]);
+
+      // When
+      await receive({ stream: target.stream, stream_seq: 3, deliveries: 2 });
+      await vi.waitFor(() => {
+        expect(error).toHaveBeenCalled();
+      });
+
+      // Then
+      expect(captureSource).not.toHaveBeenCalled();
+    });
+
+    it('should log when the captured message cannot be deleted', async () => {
+      // Given
+      deleteMessage.mockRejectedValue(new Error('no responders'));
+      getMessage.mockResolvedValue(stored(8, {}));
+      await sut.watch([target]);
+
+      // When
+      await receive({ stream: target.stream, stream_seq: 8, deliveries: 2 });
+
+      // Then
+      await vi.waitFor(() => {
+        expect(error).toHaveBeenCalledWith(expect.stringContaining('8'), expect.any(Error));
+      });
+    });
+  });
+});

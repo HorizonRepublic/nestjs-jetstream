@@ -1,6 +1,7 @@
 import type { Logger } from '@nestjs/common';
 
 import type { JsMsg } from '@nats-io/jetstream';
+import type { MsgHdrs } from '@nats-io/transport-node';
 
 import type { RpcContext } from '../../context';
 import type { EventBus } from '../../hooks';
@@ -49,7 +50,7 @@ export interface RoutePipelineContext {
   readonly otel: ResolvedOtelOptions;
   readonly serviceName: string;
   readonly serverEndpoint: ServerEndpoint | null;
-  /** Resolved ack-extension interval in ms, or null when disabled. */
+  /** Resolved ack extension, or null when disabled. */
   readonly ackExtension: AckExtension | null;
   /** Delay before each redelivery, in ms; empty means nak immediately. */
   readonly retryDelays: readonly number[];
@@ -78,4 +79,38 @@ export enum OrphanOutcome {
   Newer = 'newer',
   /** Already cancelled, by another replica or an earlier tick. */
   Gone = 'gone',
+}
+
+/**
+ * A message that ran out of deliveries: either the live delivery a handler
+ * just failed, or one found in the stream after the server gave up on it.
+ */
+export interface DeadLetterSource {
+  readonly subject: string;
+  readonly data: Uint8Array;
+  readonly headers: MsgHdrs | undefined;
+  readonly stream: string;
+  readonly streamSequence: number;
+  readonly deliveryCount: number;
+  readonly timestamp: Date;
+  /** Take the message out of circulation once it has been captured. */
+  release(reason: string): Promise<void>;
+  /** Leave the message where it is after a capture failed. */
+  retain(): void;
+}
+
+/** A durable consumer whose exhausted deliveries are captured from server advisories. */
+export interface DeadLetterWatchTarget {
+  readonly stream: string;
+  readonly consumer: string;
+  /** Delete the message after capture: true for work-queue streams, false where other services still read it. */
+  readonly removeOnCapture: boolean;
+}
+
+/** The fields this transport reads from a `MAX_DELIVERIES` consumer advisory. */
+export interface MaxDeliveriesAdvisory {
+  readonly stream?: string;
+  readonly consumer?: string;
+  readonly stream_seq?: number;
+  readonly deliveries?: number;
 }

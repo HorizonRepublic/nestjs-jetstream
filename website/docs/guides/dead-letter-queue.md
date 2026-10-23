@@ -110,7 +110,19 @@ No message terminates without passing a recovery path:
 | 4. Fall back to `onDeadLetter`      | Every publish attempt failed           | Last chance to persist. Success terminates, failure naks                          |
 | 5. `nak()`                          | No callback, or the fallback threw     | The message stays in the stream for manual recovery                               |
 
-Step 5 leaves the message visible to operators until recovered by hand or expired by `max_age`, and every occurrence is logged. It is never redelivered: the delivery count already reached `max_deliver`.
+After step 5 the server reports the exhausted message (see below), so capture runs once more. If that fails too, the message stays visible to operators until recovered by hand or expired by `max_age`, and every occurrence is logged. It is never redelivered: the delivery count already reached `max_deliver`.
+
+## Deliveries no handler settled
+
+A final attempt can also end without the handler failing: the process crashes, a pod is stopped mid-handler, or the handler outlives `ack_wait` (with [ack extension](/docs/guides/performance#ack-extension) off or past its limit). The server then gives up on the message, keeps it in the stream, and publishes a `MAX_DELIVERIES` advisory.
+
+The transport listens for that advisory on every event, broadcast and schedule consumer with a delivery limit, whenever dead letters are enabled. It reads the message back from the stream and runs it through the same fallback chain, with `deliveryCount` from the advisory and an error explaining that no attempt settled it. A captured event or schedule tick is then deleted from its work-queue stream; a broadcast stays, because other services read the same stream.
+
+Replicas of a service share one queue group, so each advisory is handled by one replica. The DLQ publish carries the stream and sequence as its message ID, so a message captured twice within the DLQ stream's duplicate window lands once.
+
+Advisories are plain NATS messages. One sent while no replica is running, for instance during a crash loop on every pod, is not seen, and that message stays in the stream until recovered by hand or expired by `max_age`.
+
+With restricted NATS permissions, the service user needs to subscribe to `$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.>`, and to call `$JS.API.STREAM.MSG.GET.*` and `$JS.API.STREAM.MSG.DELETE.*` on its streams.
 
 ## The callback
 
