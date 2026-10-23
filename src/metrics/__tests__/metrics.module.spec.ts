@@ -10,25 +10,35 @@ import type { JetstreamModuleOptions } from '../../interfaces';
 import { JETSTREAM_EVENT_BUS, JETSTREAM_OPTIONS } from '../../jetstream.constants';
 import { NameResolver } from '../../server/infrastructure/name-resolver';
 import {
+  JETSTREAM_METRICS_CLIENT,
   JETSTREAM_METRICS_CONFIG,
-  JETSTREAM_METRICS_PROM_CLIENT,
   JETSTREAM_METRICS_REGISTRY,
   DEFAULT_METRICS_PREFIX,
   DEFAULT_POLL_INTERVAL_MS,
 } from '../metrics.constants';
 import { JetstreamMetricsModule } from '../metrics.module';
 import { JetstreamMetricsService } from '../metrics.service';
-import type { PromClientRuntime } from '../metrics.types';
+import type { LoadedPrometheusClient } from '../metrics.types';
+import { loadPrometheusPackage } from '../prometheus-client';
 
 const baseOptions: JetstreamModuleOptions = {
   name: 'orders',
   servers: ['nats://localhost:4222'],
 };
 
+const loadPromClient = async (): Promise<LoadedPrometheusClient> => {
+  const runtime = await loadPrometheusPackage('prom-client');
+
+  if (!runtime) throw new Error('prom-client is a dev dependency and must load');
+
+  return { name: 'prom-client', runtime };
+};
+
 const compile = async (
   options: JetstreamModuleOptions,
   eventBus: EventBus,
   names?: NameResolver,
+  client?: LoadedPrometheusClient,
 ): Promise<import('@nestjs/testing').TestingModule> => {
   const extraProviders = names ? [{ provide: NameResolver, useValue: names }] : [];
   const extraExports = names ? [NameResolver] : [];
@@ -44,9 +54,13 @@ const compile = async (
   })
   class TestRootModule {}
 
-  return Test.createTestingModule({
+  const builder = Test.createTestingModule({
     imports: [TestRootModule, JetstreamMetricsModule.forFeature()],
-  }).compile();
+  });
+
+  if (client) builder.overrideProvider(JETSTREAM_METRICS_CLIENT).useValue(client);
+
+  return builder.compile();
 };
 
 describe(JetstreamMetricsModule, () => {
@@ -64,8 +78,16 @@ describe(JetstreamMetricsModule, () => {
 
   describe('happy path', () => {
     it('should provide a resolved MetricsConfig with defaults applied when metrics=true', async () => {
-      // Given/When
-      const moduleRef = await compile({ ...baseOptions, metrics: true }, eventBus);
+      // Given only prom-client is installed
+      const client = await loadPromClient();
+
+      // When
+      const moduleRef = await compile(
+        { ...baseOptions, metrics: true },
+        eventBus,
+        undefined,
+        client,
+      );
       const config = moduleRef.get(JETSTREAM_METRICS_CONFIG);
 
       // Then
@@ -96,15 +118,19 @@ describe(JetstreamMetricsModule, () => {
       expect(registry).toBe(customRegister);
     });
 
-    it('should resolve prom-client runtime via dynamic import and expose it via DI', async () => {
+    it('should load the package the given registry belongs to and expose it via DI', async () => {
       // Given/When
-      const moduleRef = await compile({ ...baseOptions, metrics: true }, eventBus);
-      const promClient = moduleRef.get<PromClientRuntime>(JETSTREAM_METRICS_PROM_CLIENT);
+      const moduleRef = await compile(
+        { ...baseOptions, metrics: { register: new Registry() } },
+        eventBus,
+      );
+      const client = moduleRef.get<LoadedPrometheusClient>(JETSTREAM_METRICS_CLIENT);
 
       // Then
-      expect(typeof promClient.Counter).toBe('function');
-      expect(typeof promClient.Histogram).toBe('function');
-      expect(typeof promClient.Gauge).toBe('function');
+      expect(client.name).toBe('prom-client');
+      expect(typeof client.runtime.Counter).toBe('function');
+      expect(typeof client.runtime.Histogram).toBe('function');
+      expect(typeof client.runtime.Gauge).toBe('function');
     });
 
     it('should instantiate JetstreamMetricsService and register metrics on bootstrap', async () => {
@@ -139,7 +165,7 @@ describe(JetstreamMetricsModule, () => {
         events: { stream: { name: 'custom-ev-stream' } },
       };
       const names = new NameResolver(customOptions);
-      const moduleRef = await compile(customOptions, eventBus, names);
+      const moduleRef = await compile(customOptions, eventBus, names, await loadPromClient());
 
       // When
       const service = moduleRef.get(JetstreamMetricsService);
@@ -152,11 +178,18 @@ describe(JetstreamMetricsModule, () => {
   });
 
   describe('edge cases', () => {
+    it('should refuse to guess a registry when both packages are installed', async () => {
+      // When / Then
+      await expect(compile({ ...baseOptions, metrics: true }, eventBus)).rejects.toThrow(
+        /Both @prometheus-io\/client and prom-client are installed/,
+      );
+    });
+
     it('should resolve config to null when metrics option is disabled', async () => {
       // Given/When
       const moduleRef = await compile({ ...baseOptions, metrics: false }, eventBus);
 
-      // Then: providers resolve to null, prom-client is never loaded, service self-disables
+      // Then: providers resolve to null, no Prometheus client is loaded, service self-disables
       expect(moduleRef.get(JETSTREAM_METRICS_CONFIG)).toBeNull();
       expect(moduleRef.get(JetstreamMetricsService)).toBeInstanceOf(JetstreamMetricsService);
     });

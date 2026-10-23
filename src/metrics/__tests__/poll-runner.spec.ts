@@ -1,13 +1,14 @@
 import type { ConsumerInfo, JetStreamManager, StreamInfo } from '@nats-io/jetstream';
 
 import { createMock } from '@golevelup/ts-vitest';
-import { Counter, Gauge, Histogram, Registry } from 'prom-client';
+import { Registry } from 'prom-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { StreamKind } from '../../interfaces';
 import { createMetrics } from '../metrics.factory';
-import type { ConsumerPollTarget, JetstreamMetrics } from '../metrics.types';
+import type { ConsumerPollTarget, JetstreamMetrics, PrometheusRuntime } from '../metrics.types';
 import { PollRunner } from '../poll-runner';
+import { loadPrometheusPackage } from '../prometheus-client';
 
 const consumerInfo = (overrides: Partial<ConsumerInfo> = {}): ConsumerInfo =>
   ({
@@ -41,12 +42,13 @@ describe(PollRunner, () => {
   let jsm: JetStreamManager;
   let targets: ConsumerPollTarget[];
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    const runtime: PrometheusRuntime | null = await loadPrometheusPackage('prom-client');
+
+    if (!runtime) throw new Error('prom-client is a dev dependency and must load');
+
     register = new Registry();
-    metrics = createMetrics({
-      register,
-      promClient: { Counter, Histogram, Gauge },
-    });
+    metrics = createMetrics({ register, runtime });
     jsm = createMock<JetStreamManager>();
     targets = [
       { kind: StreamKind.Event, stream: 'svc_ev-stream', consumer: 'svc_ev-consumer' },

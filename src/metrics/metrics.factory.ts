@@ -1,11 +1,15 @@
-import type { Counter, Gauge, Histogram } from 'prom-client';
-
 import { DEFAULT_HISTOGRAM_BUCKETS, DEFAULT_METRICS_PREFIX } from './metrics.constants';
-import type { CreateMetricsOptions, JetstreamMetrics } from './metrics.types';
+import type {
+  CreateMetricsOptions,
+  JetstreamMetrics,
+  MetricCounter,
+  MetricGauge,
+  MetricHistogram,
+} from './metrics.types';
 
 /** Instantiate every Jetstream metric on the given registry. */
 export const createMetrics = (opts: CreateMetricsOptions): JetstreamMetrics => {
-  const { register, promClient } = opts;
+  const { register, runtime } = opts;
   const prefix = opts.prefix ?? DEFAULT_METRICS_PREFIX;
   const buckets = {
     handlerDuration: opts.buckets?.handlerDuration ?? DEFAULT_HISTOGRAM_BUCKETS.handlerDuration,
@@ -17,16 +21,16 @@ export const createMetrics = (opts: CreateMetricsOptions): JetstreamMetrics => {
     register.setDefaultLabels(opts.defaultLabels);
   }
 
-  const counter = (name: string, help: string, labelNames: string[]): Counter<string> =>
-    new promClient.Counter({ name: `${prefix}${name}`, help, labelNames, registers: [register] });
+  const counter = (name: string, help: string, labelNames: string[]): MetricCounter =>
+    new runtime.Counter({ name: `${prefix}${name}`, help, labelNames, registers: [register] });
 
   const histogram = (
     name: string,
     help: string,
     labelNames: string[],
     bucketArr: number[],
-  ): Histogram<string> =>
-    new promClient.Histogram({
+  ): MetricHistogram =>
+    new runtime.Histogram({
       name: `${prefix}${name}`,
       help,
       labelNames,
@@ -34,8 +38,8 @@ export const createMetrics = (opts: CreateMetricsOptions): JetstreamMetrics => {
       registers: [register],
     });
 
-  const gauge = (name: string, help: string, labelNames: string[]): Gauge<string> =>
-    new promClient.Gauge({ name: `${prefix}${name}`, help, labelNames, registers: [register] });
+  const gauge = (name: string, help: string, labelNames: string[]): MetricGauge =>
+    new runtime.Gauge({ name: `${prefix}${name}`, help, labelNames, registers: [register] });
 
   return {
     messagesReceivedTotal: counter(

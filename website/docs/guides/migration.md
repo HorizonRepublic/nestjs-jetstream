@@ -167,6 +167,8 @@ A service used to reserve up to 17 GB before processing a single message, which 
 
 **Node 20 is no longer supported.** The minimum is Node 22.
 
+**Metrics accept `@prometheus-io/client`.** `prom-client` was renamed to `@prometheus-io/client`, and either package now works. If both end up installed, startup fails until `metrics.register` names the registry your `/metrics` endpoint serves, because the two global registries are different objects. A service with only `prom-client` installed changes nothing.
+
 **`servers` is now optional, paired with `connections`.** Configuration accepts either the flat `servers` form or the new `connections` map, and rejects supplying both. Existing flat configurations are unchanged. Internally they become a single connection called `default`, and stream, consumer and subject names stay exactly as they were. See [Multiple connections](/docs/guides/multi-connection).
 
 **`getClientToken` takes an optional second argument.** `getClientToken(name)` returns the same bare token it always did. `getClientToken(name, connection)` returns a namespaced one, for a client bound to one connection. Existing injections resolve unchanged.

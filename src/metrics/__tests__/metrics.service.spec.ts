@@ -2,7 +2,7 @@ import type { NatsConnection } from '@nats-io/transport-node';
 
 import { faker } from '@faker-js/faker';
 import { createMock } from '@golevelup/ts-vitest';
-import { Counter, Gauge, Histogram, Registry } from 'prom-client';
+import { Registry } from 'prom-client';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 
 import { ConnectionProvider } from '../../connection';
@@ -19,7 +19,8 @@ import { NameResolver } from '../../server/infrastructure/name-resolver';
 import { PatternRegistry } from '../../server/routing/pattern-registry';
 import { DEFAULT_POLL_INTERVAL_MS, UNMATCHED_SUBJECT_LABEL } from '../metrics.constants';
 import { JetstreamMetricsService } from '../metrics.service';
-import type { ConsumerPollTarget, PromClientRuntime } from '../metrics.types';
+import type { ConsumerPollTarget, LoadedPrometheusClient } from '../metrics.types';
+import { loadPrometheusPackage } from '../prometheus-client';
 
 type Subscribers = Map<string, ((...args: unknown[]) => void)[]>;
 
@@ -84,7 +85,7 @@ const setup = async (params: {
   options: JetstreamModuleOptions;
   patternRegistry?: PatternRegistry | null;
   register: Registry;
-  promClient: PromClientRuntime;
+  client: LoadedPrometheusClient;
   eventBus: Mocked<EventBus>;
 }): Promise<{ sut: JetstreamMetricsService; subs: Subscribers }> => {
   const subs = captureSubscribers(params.eventBus);
@@ -92,7 +93,7 @@ const setup = async (params: {
   const sut = new JetstreamMetricsService(
     params.eventBus,
     { register: params.register, pollInterval: 0 },
-    params.promClient,
+    params.client,
     params.options,
     params.patternRegistry ?? null,
   );
@@ -105,13 +106,17 @@ const setup = async (params: {
 describe(JetstreamMetricsService, () => {
   let eventBus: Mocked<EventBus>;
   let register: Registry;
-  let promClient: PromClientRuntime;
+  let client: LoadedPrometheusClient;
   let options: JetstreamModuleOptions;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    const runtime = await loadPrometheusPackage('prom-client');
+
+    if (!runtime) throw new Error('prom-client is a dev dependency and must load');
+
     eventBus = createMock<EventBus>();
     register = new Registry();
-    promClient = { Counter, Histogram, Gauge };
+    client = { name: 'prom-client', runtime };
     options = { name: 'orders', servers: ['nats://localhost:4222'], metrics: true };
   });
 
@@ -123,7 +128,7 @@ describe(JetstreamMetricsService, () => {
   describe('bootstrap', () => {
     it('should subscribe to every transport event consumed by the metrics service', async () => {
       // Given/When
-      const { subs } = await setup({ options, register, promClient, eventBus });
+      const { subs } = await setup({ options, register, client, eventBus });
 
       // Then
       expect([...subs.keys()]).toEqual(
@@ -145,7 +150,7 @@ describe(JetstreamMetricsService, () => {
 
     it('should register every Jetstream metric family on the configured registry', async () => {
       // Given/When
-      await setup({ options, register, promClient, eventBus });
+      await setup({ options, register, client, eventBus });
 
       // Then
       const text = await register.metrics();
@@ -162,7 +167,7 @@ describe(JetstreamMetricsService, () => {
       const sut = new JetstreamMetricsService(
         eventBus,
         { register, pollInterval: 0, prefix: 'svc_' },
-        promClient,
+        client,
         options,
         null,
       );
@@ -183,7 +188,7 @@ describe(JetstreamMetricsService, () => {
       const sut = new JetstreamMetricsService(
         eventBus,
         { register, pollInterval: 0 },
-        promClient,
+        client,
         options,
         null,
       );
@@ -198,7 +203,7 @@ describe(JetstreamMetricsService, () => {
   describe('Connect/Disconnect/Reconnect -> connection_up gauge', () => {
     it('should flip connection_up to 1 on Connect for the given server', async () => {
       // Given
-      const { subs } = await setup({ options, register, promClient, eventBus });
+      const { subs } = await setup({ options, register, client, eventBus });
       const server = faker.internet.url();
 
       // When
@@ -210,7 +215,7 @@ describe(JetstreamMetricsService, () => {
 
     it('should flip connection_up to 0 on Disconnect for every observed server', async () => {
       // Given
-      const { subs } = await setup({ options, register, promClient, eventBus });
+      const { subs } = await setup({ options, register, client, eventBus });
       const serverA = faker.internet.url();
       const serverB = faker.internet.url();
 
@@ -227,7 +232,7 @@ describe(JetstreamMetricsService, () => {
 
     it('should flip connection_up back to 1 on Reconnect', async () => {
       // Given
-      const { subs } = await setup({ options, register, promClient, eventBus });
+      const { subs } = await setup({ options, register, client, eventBus });
       const server = faker.internet.url();
 
       dispatch(subs, TransportEvent.Connect, server);
@@ -244,7 +249,7 @@ describe(JetstreamMetricsService, () => {
   describe('Error -> errors_total counter', () => {
     it('should map a known context to its bounded enum value', async () => {
       // Given
-      const { subs } = await setup({ options, register, promClient, eventBus });
+      const { subs } = await setup({ options, register, client, eventBus });
 
       // When
       dispatch(subs, TransportEvent.Error, new Error('boom'), 'event-handler:orders.created');
@@ -255,7 +260,7 @@ describe(JetstreamMetricsService, () => {
 
     it('should fall back to "other" when the context is unrecognised', async () => {
       // Given
-      const { subs } = await setup({ options, register, promClient, eventBus });
+      const { subs } = await setup({ options, register, client, eventBus });
 
       // When
       dispatch(subs, TransportEvent.Error, new Error('boom'), 'totally-unknown');
@@ -279,7 +284,7 @@ describe(JetstreamMetricsService, () => {
         options,
         patternRegistry,
         register,
-        promClient,
+        client,
         eventBus,
       });
 
@@ -299,7 +304,7 @@ describe(JetstreamMetricsService, () => {
 
     it('should bucket into the UNMATCHED sentinel when the pattern registry has no entry', async () => {
       // Given
-      const { subs } = await setup({ options, register, promClient, eventBus });
+      const { subs } = await setup({ options, register, client, eventBus });
 
       // When
       dispatch(subs, TransportEvent.RpcTimeout, 'unknown.subject', faker.string.uuid());
@@ -323,7 +328,7 @@ describe(JetstreamMetricsService, () => {
         kind: StreamKind.Event,
       });
 
-      const { subs } = await setup({ options, patternRegistry, register, promClient, eventBus });
+      const { subs } = await setup({ options, patternRegistry, register, client, eventBus });
 
       // When
       dispatch(
@@ -345,7 +350,7 @@ describe(JetstreamMetricsService, () => {
 
     it('should bucket unmatched subjects into messages_unhandled_total with the sentinel label', async () => {
       // Given: no pattern registry (publisher-only or unknown subject path)
-      const { subs } = await setup({ options, register, promClient, eventBus });
+      const { subs } = await setup({ options, register, client, eventBus });
 
       // When
       dispatch(subs, TransportEvent.MessageRouted, faker.lorem.word(), MessageKind.Event);
@@ -369,7 +374,7 @@ describe(JetstreamMetricsService, () => {
         kind: StreamKind.Event,
       });
 
-      const { subs } = await setup({ options, patternRegistry, register, promClient, eventBus });
+      const { subs } = await setup({ options, patternRegistry, register, client, eventBus });
       const info: DeadLetterInfo = {
         subject: 'orders__microservice.ev.orders.created',
         data: {},
@@ -397,7 +402,7 @@ describe(JetstreamMetricsService, () => {
   describe('ConsumerRecovered -> consumer_recovered_total counter', () => {
     it('should increment with the recovery label as kind', async () => {
       // Given
-      const { subs } = await setup({ options, register, promClient, eventBus });
+      const { subs } = await setup({ options, register, client, eventBus });
 
       // When
       dispatch(subs, TransportEvent.ConsumerRecovered, StreamKind.Event, 3);
@@ -412,7 +417,7 @@ describe(JetstreamMetricsService, () => {
   describe('HandlerCompleted -> processed_total + handler_duration_seconds', () => {
     it('should increment processed counter and observe duration when handler succeeds', async () => {
       // Given
-      const { subs } = await setup({ options, register, promClient, eventBus });
+      const { subs } = await setup({ options, register, client, eventBus });
 
       // When
       dispatch(
@@ -438,7 +443,7 @@ describe(JetstreamMetricsService, () => {
 
     it('should record the status label verbatim for error/retried/terminated outcomes', async () => {
       // Given
-      const { subs } = await setup({ options, register, promClient, eventBus });
+      const { subs } = await setup({ options, register, client, eventBus });
 
       // When
       dispatch(subs, TransportEvent.HandlerCompleted, 'orders.x', StreamKind.Event, 10, 'error');
@@ -483,7 +488,7 @@ describe(JetstreamMetricsService, () => {
   describe('Published -> publish_total + publish_duration_seconds', () => {
     it('should increment publish_total and observe duration for a successful event publish', async () => {
       // Given
-      const { subs } = await setup({ options, register, promClient, eventBus });
+      const { subs } = await setup({ options, register, client, eventBus });
 
       // When
       dispatch(
@@ -504,7 +509,7 @@ describe(JetstreamMetricsService, () => {
 
     it('should record kind=broadcast/ordered/command for the matching StreamKind', async () => {
       // Given
-      const { subs } = await setup({ options, register, promClient, eventBus });
+      const { subs } = await setup({ options, register, client, eventBus });
 
       // When
       dispatch(subs, TransportEvent.Published, 'a', StreamKind.Broadcast, 1, 'success');
@@ -537,7 +542,7 @@ describe(JetstreamMetricsService, () => {
 
     it('should record status=error when the publish fails', async () => {
       // Given
-      const { subs } = await setup({ options, register, promClient, eventBus });
+      const { subs } = await setup({ options, register, client, eventBus });
 
       // When
       dispatch(subs, TransportEvent.Published, 'orders.created', StreamKind.Event, 10, 'error');
@@ -556,7 +561,7 @@ describe(JetstreamMetricsService, () => {
   describe('RpcCompleted -> rpc_duration_seconds', () => {
     it('should observe duration with status=success on a successful RPC round-trip', async () => {
       // Given
-      const { subs } = await setup({ options, register, promClient, eventBus });
+      const { subs } = await setup({ options, register, client, eventBus });
 
       // When
       dispatch(
@@ -578,7 +583,7 @@ describe(JetstreamMetricsService, () => {
 
     it('should distinguish error vs timeout outcomes via the status label', async () => {
       // Given
-      const { subs } = await setup({ options, register, promClient, eventBus });
+      const { subs } = await setup({ options, register, client, eventBus });
 
       // When
       dispatch(subs, TransportEvent.RpcCompleted, 'orders.get', 5, 'error');
@@ -615,7 +620,7 @@ describe(JetstreamMetricsService, () => {
       const sut = new JetstreamMetricsService(
         eventBus,
         { register, pollInterval: 0 },
-        promClient,
+        client,
         customOptions,
         null,
         null,
@@ -649,7 +654,7 @@ describe(JetstreamMetricsService, () => {
   describe('edge cases', () => {
     it('should default pollInterval to 15s when not provided', () => {
       // Given/When
-      const sut = new JetstreamMetricsService(eventBus, { register }, promClient, options, null);
+      const sut = new JetstreamMetricsService(eventBus, { register }, client, options, null);
 
       // Then
       expect(sut.getEffectivePollInterval()).toBe(DEFAULT_POLL_INTERVAL_MS);
@@ -657,7 +662,7 @@ describe(JetstreamMetricsService, () => {
 
     it('should throw on bootstrap when registry is missing', async () => {
       // Given: config without register (module factory normally guards this)
-      const sut = new JetstreamMetricsService(eventBus, {}, promClient, options, null);
+      const sut = new JetstreamMetricsService(eventBus, {}, client, options, null);
 
       // Then
       await expect(sut.onApplicationBootstrap()).rejects.toThrow(/Registry/);
@@ -687,7 +692,7 @@ describe(JetstreamMetricsService, () => {
       const sut = new JetstreamMetricsService(
         eventBus,
         { register, pollInterval: 0 },
-        promClient,
+        client,
         { ...options, rpc: { mode: 'jetstream' } },
         makeRegistry({ events: true, rpc: true, broadcasts: true }),
       );
@@ -710,7 +715,7 @@ describe(JetstreamMetricsService, () => {
       const sut = new JetstreamMetricsService(
         eventBus,
         { register, pollInterval: 0 },
-        promClient,
+        client,
         { ...options, rpc: { mode: 'core' } },
         makeRegistry({ rpc: true }),
       );
@@ -735,7 +740,7 @@ describe(JetstreamMetricsService, () => {
       const sut = new JetstreamMetricsService(
         eventBus,
         { register, pollInterval: 0 },
-        promClient,
+        client,
         customOptions,
         makeRegistry({ events: true }),
         null,
@@ -765,7 +770,7 @@ describe(JetstreamMetricsService, () => {
       const sut = new JetstreamMetricsService(
         eventBus,
         { register, pollInterval: 0 },
-        promClient,
+        client,
         options,
         null,
         connection,

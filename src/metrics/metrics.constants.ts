@@ -4,11 +4,11 @@ import type { ErrorContext, HistogramBuckets } from './metrics.config';
 /** DI token for the resolved {@link MetricsConfig} (defaults applied). */
 export const JETSTREAM_METRICS_CONFIG: unique symbol = Symbol('JETSTREAM_METRICS_CONFIG');
 
-/** DI token for the resolved `prom-client` Registry. */
+/** DI token for the resolved Prometheus registry. */
 export const JETSTREAM_METRICS_REGISTRY: unique symbol = Symbol('JETSTREAM_METRICS_REGISTRY');
 
-/** DI token for the `prom-client` runtime classes, loaded on demand. */
-export const JETSTREAM_METRICS_PROM_CLIENT: unique symbol = Symbol('JETSTREAM_METRICS_PROM_CLIENT');
+/** DI token for the Prometheus client package that builds the metrics, loaded on demand. */
+export const JETSTREAM_METRICS_CLIENT: unique symbol = Symbol('JETSTREAM_METRICS_CLIENT');
 
 export const DEFAULT_METRICS_PREFIX = 'jetstream_';
 

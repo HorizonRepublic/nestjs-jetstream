@@ -423,13 +423,13 @@ export interface JetstreamModuleOptions {
    *
    * Pass `true` to enable with defaults, or a {@link MetricsConfig} object for
    * full control (custom registry, prefix, labels, polling, buckets).
-   * When omitted or `false`, the metrics module is not registered and
-   * `prom-client` is not imported, so there is zero overhead.
+   * When omitted or `false`, the metrics module is not registered and no
+   * Prometheus client is imported, so there is zero overhead.
    *
-   * Requires `prom-client` peer dependency to be installed when enabled.
-   * The service writes to `prom-client`'s global `register` by default,
-   * making integration with `@willsoto/nestjs-prometheus` (or any
-   * `prom-client`-based `/metrics` exporter) work without coordination.
+   * Requires `@prometheus-io/client` or `prom-client` to be installed when
+   * enabled. The service writes to that package's global `register` by
+   * default, so `@willsoto/nestjs-prometheus` and other `/metrics` exporters
+   * work without coordination. With both installed, `register` is required.
    *
    * @see MetricsConfig
    * @example

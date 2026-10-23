@@ -8,7 +8,7 @@ schema:
   headline: "How to register lifecycle hooks for NestJS JetStream"
   description: "Subscribe to transport events for monitoring, alerting, and logging integration."
   datePublished: "2026-03-21"
-  dateModified: "2026-08-03"
+  dateModified: "2026-10-23"
 ---
 
 # How to register lifecycle hooks
@@ -110,7 +110,7 @@ JetstreamModule.forRoot({
 Track message throughput, RPC timeouts, and connection state:
 
 ```typescript
-import { Counter, Gauge } from 'prom-client';
+import { Counter, Gauge } from '@prometheus-io/client';
 import { JetstreamModule, MessageKind, TransportEvent } from '@horizon-republic/nestjs-jetstream';
 
 const messagesRouted = new Counter({

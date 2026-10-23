@@ -6,9 +6,9 @@ description: "Built-in distributed tracing and Prometheus metrics for NATS JetSt
 schema:
   type: Article
   headline: "Observability: NestJS JetStream Transport"
-  description: "Distributed tracing and Prometheus metrics built into the transport. Zero-config integration with OpenTelemetry SDKs and prom-client-based exporters."
+  description: "Distributed tracing and Prometheus metrics built into the transport. Zero-config integration with OpenTelemetry SDKs and Prometheus client exporters."
   datePublished: "2026-05-27"
-  dateModified: "2026-08-03"
+  dateModified: "2026-10-23"
 ---
 
 # Observability
@@ -17,7 +17,7 @@ The transport carries two complementary observability surfaces. Both work out of
 
 [**Distributed tracing →**](/docs/observability/tracing), answers "where did this one request go, and where did it slow down?" Backed by OpenTelemetry spans with W3C Trace Context propagation across services.
 
-[**Prometheus metrics →**](/docs/observability/metrics), answers "is the system healthy in aggregate? What should I alert on?" Backed by `prom-client` counters, histograms, and gauges written to a registry your exporter already serves.
+[**Prometheus metrics →**](/docs/observability/metrics), answers "is the system healthy in aggregate? What should I alert on?" Backed by `@prometheus-io/client` or `prom-client` counters, histograms, and gauges written to a registry your exporter already serves.
 
 ## Picking what you need
 
@@ -32,7 +32,7 @@ Both surfaces complement each other. Most production deployments enable both: tr
 Neither surface costs anything when off:
 
 - **Tracing**: with no OpenTelemetry SDK registered in the host application, every tracer call inside the transport short-circuits to a no-op. `@opentelemetry/api` is an optional peer, and nothing in the library forces it into your bundle.
-- **Metrics**: with `metrics` omitted from `forRoot`, the metrics module is never registered. `prom-client` is never imported; not even at runtime. Per-message overhead drops to a single `Map.get` (~30 nanoseconds) that checks whether anyone is listening.
+- **Metrics**: with `metrics` omitted from `forRoot`, the metrics module is never registered. No Prometheus client is imported, not even at runtime. Per-message overhead drops to a single `Map.get` (~30 nanoseconds) that checks whether anyone is listening.
 
 You can enable either independently, or both. They share the same `EventBus` for transport events but are otherwise isolated.
 

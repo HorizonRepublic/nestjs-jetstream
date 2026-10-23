@@ -4,7 +4,8 @@ import { TestingModule } from '@nestjs/testing';
 
 import type { NatsConnection } from '@nats-io/transport-node';
 
-import { Registry } from 'prom-client';
+import { Registry as IoRegistry } from '@prometheus-io/client';
+import { Registry as PromRegistry } from 'prom-client';
 import { firstValueFrom } from 'rxjs';
 import type { StartedTestContainer } from 'testcontainers';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -43,6 +44,18 @@ class MetricsController {
     throw new Error('rpc handler failure');
   }
 }
+
+const registryFactories = {
+  '@prometheus-io/client': (): IoRegistry => new IoRegistry(),
+  'prom-client': (): PromRegistry => new PromRegistry(),
+};
+
+type RegistryPackage = keyof typeof registryFactories;
+
+/** A registry of either supported Prometheus client package. */
+type Registry = ReturnType<(typeof registryFactories)[RegistryPackage]>;
+
+const REGISTRY_PACKAGES: readonly RegistryPackage[] = ['@prometheus-io/client', 'prom-client'];
 
 interface PromSample {
   value: number;
@@ -96,7 +109,7 @@ describe('Metrics; integration', () => {
     }
   });
 
-  describe('when metrics are enabled with a custom registry', () => {
+  describe.each(REGISTRY_PACKAGES)('when metrics are enabled with a %s registry', (pkg) => {
     let app: INestApplication;
     let module: TestingModule;
     let client: ClientProxy;
@@ -105,7 +118,7 @@ describe('Metrics; integration', () => {
 
     beforeEach(async () => {
       serviceName = uniqueServiceName();
-      register = new Registry();
+      register = registryFactories[pkg]();
 
       ({ app, module } = await createTestApp(
         {
@@ -286,7 +299,7 @@ describe('Metrics; integration', () => {
 
     beforeEach(async () => {
       serviceName = uniqueServiceName();
-      register = new Registry();
+      register = registryFactories['prom-client']();
       ({ app, module } = await createTestApp(
         {
           name: serviceName,

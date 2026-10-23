@@ -8,7 +8,7 @@ schema:
   headline: "Prometheus Metrics: NestJS JetStream Transport"
   description: "Built-in Prometheus metrics for NATS JetStream transport: throughput, handler latency, consumer lag, dead letters, and publish errors."
   datePublished: "2026-05-27"
-  dateModified: "2026-08-03"
+  dateModified: "2026-10-23"
 ---
 
 # Prometheus Metrics
@@ -16,7 +16,7 @@ schema:
 > **Use when:** you are putting this service on a Prometheus dashboard.
 > **You get:** the metric catalog, PromQL to start from, and what collection costs at runtime.
 
-The transport carries built-in Prometheus metrics for throughput, handler latency, consumer lag, publish errors, dead letters and connection health. Metrics are written to a `prom-client` registry, the de-facto standard in the NestJS ecosystem, which any `/metrics` exporter picks up without extra wiring.
+The transport carries built-in Prometheus metrics for throughput, handler latency, consumer lag, publish errors, dead letters and connection health. Metrics are written to a Prometheus registry from `@prometheus-io/client` or `prom-client`, its previous name, so any `/metrics` exporter picks them up without extra wiring.
 
 ## What it covers
 
@@ -33,13 +33,19 @@ Default labels stay bounded, covering declared patterns, enum-typed statuses and
 
 ## Setup
 
-Install the optional peer dependency once:
+Install one Prometheus client:
 
 ```bash
-pnpm add prom-client
+pnpm add @prometheus-io/client
 ```
 
-The transport declares `prom-client` as an **optional peer**. If you do not enable metrics, the package is never imported. Tested against `prom-client@^15`.
+`prom-client` was renamed to `@prometheus-io/client` when it became a Prometheus subproject, and the transport accepts either. Both are **optional peers**: if you do not enable metrics, neither is imported. Tested against `@prometheus-io/client@^0.16` and `prom-client@^15`.
+
+If your `/metrics` exporter still runs on `prom-client`, as `@willsoto/nestjs-prometheus` does, keep `prom-client` so both write to the same global registry.
+
+:::warning Both packages installed
+With `@prometheus-io/client` and `prom-client` both installed, their global registries are two different objects and only one of them is scraped. The transport will not guess: startup fails until you pass `metrics.register` with the registry your exporter serves. Metrics are then built with classes from that registry's package.
+:::
 
 Enable metrics in `forRoot`:
 
@@ -72,7 +78,7 @@ JetstreamModule.forRootAsync({
 })
 ```
 
-That's the whole integration. Metrics write to `prom-client`'s global `register`. To expose them at `/metrics`, pair the transport with `@willsoto/nestjs-prometheus`:
+That's the whole integration. Metrics write to the installed package's global `register`. To expose them at `/metrics`, pair the transport with `@willsoto/nestjs-prometheus`:
 
 ```ts
 import { PrometheusModule } from '@willsoto/nestjs-prometheus';
@@ -95,12 +101,12 @@ export class AppModule {}
 ### Full configuration
 
 ```ts
-import { Registry } from 'prom-client';
+import { Registry } from '@prometheus-io/client';
 
 JetstreamModule.forRoot({
   // ...
   metrics: {
-    register: customRegister,            // default: prom-client's global register
+    register: customRegister,            // default: the installed package's global register
     prefix: 'jetstream_',                // default: 'jetstream_'
     defaultLabels: { service: 'orders', env: 'prod' },
     pollInterval: 15_000,                // default: 15s; set 0 to disable gauge polling
@@ -117,7 +123,7 @@ JetstreamModule.forRoot({
 
 When the `metrics` option is omitted or set to `false`:
 
-- `prom-client` is never imported (the lazy `import()` only runs when `metrics` is truthy).
+- No Prometheus client is imported (the lazy `import()` only runs when `metrics` is truthy).
 - The transport's hot paths add ~30 nanoseconds per message (a single `Map.get` to check if a listener exists): effectively free.
 
 Production deployments that don't need metrics pay nothing for the feature.
@@ -255,7 +261,7 @@ Per-message overhead with metrics enabled:
 - 1× `performance.now()` at handler entry.
 - 1× `EventBus.emit(HandlerCompleted, ...)` after settlement, which is a `Map.get` and a callback.
 - 1× `PatternRegistry.resolveDeclared()` (a `Map.get`) inside the metrics service.
-- 1× `Counter.inc()` + 1× `Histogram.observe()` in `prom-client`.
+- 1× `Counter.inc()` + 1× `Histogram.observe()` in the Prometheus client.
 
 Aggregate cost: **~5 to 10 microseconds per message** on modern hardware. For a service handling 10,000 messages per second, that is ~50ms of CPU time per second of wall clock, well under 5% overhead and dominated by the NATS round-trip itself.
 
@@ -287,7 +293,7 @@ The `HandlerCompleted`, `Published`, and `RpcCompleted` events used internally b
 If your application exposes multiple `/metrics` endpoints (e.g. one per tenant), pass a dedicated `Registry` instance per metrics endpoint. The transport writes to whatever registry you supply:
 
 ```ts
-import { Registry } from 'prom-client';
+import { Registry } from '@prometheus-io/client';
 
 const tenantRegister = new Registry();
 
@@ -297,4 +303,4 @@ JetstreamModule.forRoot({
 });
 ```
 
-Multiple `JetstreamModule` instances are not currently supported (the library expects a single connection per service), so multi-registry use cases are limited to running the transport once with metrics scoped to a non-default registry.
+One `forRoot()` writes the metrics of all its connections to that one registry.

@@ -1,4 +1,15 @@
-import type { Registry } from 'prom-client';
+/**
+ * The part of a Prometheus registry the transport relies on. Both
+ * `prom-client` and `@prometheus-io/client` registries satisfy it, so neither
+ * package has to be installed for these types to resolve.
+ */
+export interface MetricsRegistry {
+  /** Labels merged into every metric of the registry. */
+  setDefaultLabels(labels: Record<string, string>): void;
+
+  /** Called by each metric constructor that lists this registry. */
+  registerMetric(metric: unknown): void;
+}
 
 /**
  * Labels (in seconds) for histogram bucket configuration.
@@ -19,11 +30,15 @@ export interface HistogramBuckets {
  */
 export interface MetricsConfig {
   /**
-   * `prom-client` registry to write metrics into. Defaults to the global
-   * `register` from `prom-client`, which is also what
-   * `@willsoto/nestjs-prometheus` exposes via `/metrics`.
+   * Registry to write metrics into, from `@prometheus-io/client` or
+   * `prom-client`. The metrics are built with classes from the same package.
+   *
+   * Defaults to the global `register` of whichever of the two is installed,
+   * which is also what `@willsoto/nestjs-prometheus` exposes via `/metrics`.
+   * Required when both are installed, because the two global registries are
+   * different objects and only one of them is scraped.
    */
-  register?: Registry;
+  register?: MetricsRegistry;
 
   /** Metric name prefix. Defaults to `'jetstream_'`. */
   prefix?: string;

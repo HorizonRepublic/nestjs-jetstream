@@ -32,6 +32,16 @@ describe('assertNoRemovedOptions', () => {
     }).not.toThrow();
   });
 
+  it('should skip connection entries that are not objects', () => {
+    // Given a malformed connections map, left for normalizeOptions to report
+    const options = { name: 'orders', connections: { broken: null } };
+
+    // When / Then
+    expect(() => {
+      assertNoRemovedOptions(options);
+    }).not.toThrow();
+  });
+
   it('should reject the root consumer switch and name its replacement', () => {
     // Given a v2 publisher-only configuration
     const options = { name: 'gateway', consumer: false };
