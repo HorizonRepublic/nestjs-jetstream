@@ -32,7 +32,7 @@ export class ServerCapabilities {
     jsm: JetStreamManager,
   ): Promise<ServerCapabilities> {
     const account = await jsm.getAccountInfo();
-    const levels = [levelOrNull(nc.info?.api_lvl), levelOrNull(account.api?.level)].filter(
+    const levels = [levelOrNull(nc.info?.api_lvl), levelOrNull(account.api.level)].filter(
       (level): level is number => level !== null,
     );
     const label = `${nc.info?.server_name ?? 'the NATS server'} (NATS ${nc.info?.version ?? 'unknown'})`;
