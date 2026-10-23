@@ -61,7 +61,7 @@ class MultiPatternScheduledController {
 class HeaderCapturingController {
   public readonly received: { data: unknown; tenantHeader: string | undefined }[] = [];
 
-  @EventPattern('order.reminder')
+  @EventPattern<string>('order.reminder')
   handleReminder(@Payload() data: unknown, @Ctx() ctx: RpcContext): void {
     this.received.push({
       data,

@@ -28,7 +28,7 @@ class MetricsController {
     this.events.push(data);
   }
 
-  @EventPattern('orders.cancelled')
+  @EventPattern<string>('orders.cancelled')
   public handleOrderCancelled(): never {
     throw new Error('cancel failed');
   }

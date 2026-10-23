@@ -13,10 +13,10 @@ import { startNatsContainer } from './nats-container';
 
 @Controller()
 class InfraEventController {
-  @EventPattern('order.created')
+  @EventPattern<string>('order.created')
   handleOrder(): void {}
 
-  @EventPattern('config.updated', { broadcast: true })
+  @EventPattern<string>('config.updated', { broadcast: true })
   handleBroadcast(): void {}
 }
 

@@ -49,7 +49,7 @@ class MixedController {
 class FailingOrderedController {
   public callCount = 0;
 
-  @EventPattern('order.fail', { ordered: true })
+  @EventPattern<string>('order.fail', { ordered: true })
   handleOrder(): void {
     this.callCount++;
     throw new Error('Ordered handler failure');
@@ -83,7 +83,7 @@ class OrderedWithDlqController {
     throw new Error('Ordered handler fails');
   }
 
-  @EventPattern('order.process')
+  @EventPattern<string>('order.process')
   handleWorkqueue(): void {
     this.workqueueAttempts++;
     throw new Error('Workqueue handler fails');

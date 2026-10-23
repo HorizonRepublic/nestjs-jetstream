@@ -30,7 +30,7 @@ import { startNatsContainer } from './nats-container';
 class AlwaysFailingController {
   public attempts = 0;
 
-  @EventPattern('order.doomed')
+  @EventPattern<string>('order.doomed')
   handleOrder(@Payload() _data: unknown): never {
     this.attempts++;
     throw new Error('Permanent failure');
@@ -41,7 +41,7 @@ class AlwaysFailingController {
 class AlwaysRetryingController {
   public attempts = 0;
 
-  @EventPattern('order.postponed')
+  @EventPattern<string>('order.postponed')
   handleOrder(@Payload() _data: unknown, @Ctx() ctx: RpcContext): void {
     this.attempts++;
     ctx.retry();
