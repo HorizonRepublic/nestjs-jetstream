@@ -1,22 +1,21 @@
 # Security Policy
 
-## Supported Versions
+## Supported versions
 
-| Version | Supported          |
-|---------|--------------------|
-| 2.x     | :white_check_mark: |
-| < 2.0   | :x:                |
+| Version | Supported |
+| ------- | --------- |
+| 3.x     | Yes       |
+| < 3.0   | No        |
 
-## Reporting a Vulnerability
+Fixes ship in the latest 3.x release.
 
-If you discover a security vulnerability, please report it responsibly:
+## Reporting a vulnerability
 
-1. **Do not** open a public GitHub issue.
-2. Email us at **themaiby0@gmail.com** with:
-   - A description of the vulnerability
-   - Steps to reproduce
-   - Potential impact
-3. You will receive an acknowledgment within **48 hours**.
-4. We aim to release a fix within **7 days** of confirmation.
+Do not open a public GitHub issue. Email [themaiby0@gmail.com](mailto:themaiby0@gmail.com) with:
 
-Thank you for helping keep this project and its users safe.
+- a description of the vulnerability
+- steps to reproduce it
+- its potential impact
+
+You will get an acknowledgment within 48 hours, and a fix is targeted within
+7 days of confirmation.

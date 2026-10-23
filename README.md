@@ -11,10 +11,10 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@horizon-republic/nestjs-jetstream"><img src="https://img.shields.io/npm/v/@horizon-republic/nestjs-jetstream?style=flat&label=npm&labelColor=3d4450&color=2c5fb3" alt="npm version"/></a>
-  <a href="https://github.com/HorizonRepublic/nestjs-jetstream/actions/workflows/coverage.yml"><img src="https://img.shields.io/github/actions/workflow/status/HorizonRepublic/nestjs-jetstream/coverage.yml?branch=main&style=flat&label=ci&labelColor=3d4450&color=2c5fb3" alt="CI status"/></a>
-  <a href="https://codecov.io/github/HorizonRepublic/nestjs-jetstream"><img src="https://img.shields.io/codecov/c/github/HorizonRepublic/nestjs-jetstream?style=flat&label=coverage&labelColor=3d4450&color=2c5fb3&token=40IPSWFMT4" alt="test coverage"/></a>
-  <a href="LICENSE.md"><img src="https://img.shields.io/badge/license-MIT-2c5fb3?style=flat&labelColor=3d4450" alt="MIT license"/></a>
+  <a href="https://www.npmjs.com/package/@horizon-republic/nestjs-jetstream"><img src="https://img.shields.io/npm/v/@horizon-republic/nestjs-jetstream" alt="npm version"/></a>
+  <a href="https://github.com/HorizonRepublic/nestjs-jetstream/actions/workflows/coverage.yml"><img src="https://github.com/HorizonRepublic/nestjs-jetstream/actions/workflows/coverage.yml/badge.svg?branch=main" alt="CI status"/></a>
+  <a href="https://codecov.io/gh/HorizonRepublic/nestjs-jetstream"><img src="https://codecov.io/gh/HorizonRepublic/nestjs-jetstream/graph/badge.svg?token=40IPSWFMT4" alt="test coverage"/></a>
+  <a href="LICENSE.md"><img src="https://img.shields.io/github/license/HorizonRepublic/nestjs-jetstream" alt="MIT license"/></a>
 </p>
 
 <p align="center">
@@ -37,14 +37,22 @@ something goes wrong in production there is nothing to look at.
 
 ## The swap
 
-Same decorators, same `client.emit()`. One module import changes underneath.
+Same decorators, same `client.emit()`. The module and the strategy change
+underneath.
 
 ```ts
 // app.module.ts
 @Module({
-  imports: [JetstreamModule.forRoot({ servers: ['nats://localhost:4222'] })],
+  imports: [
+    JetstreamModule.forRoot({ name: 'orders', servers: ['nats://localhost:4222'] }),
+    JetstreamModule.forFeature({ name: 'orders' }), // client for emit() and send()
+  ],
+  controllers: [OrdersController],
 })
 export class AppModule {}
+
+// main.ts
+app.connectMicroservice({ strategy: app.get(JetstreamStrategy) });
 ```
 
 ```ts
@@ -53,27 +61,29 @@ export class AppModule {}
 export class OrdersController {
   @EventPattern('orders.created')
   async onCreated(@Payload() order: Order) {
-    await this.billing.charge(order); // throws → nak → redelivered with backoff
+    await this.billing.charge(order); // throws: nak, redelivered after a delay
   }
 }
 ```
 
 The transport acknowledges an event only after its handler resolves. A throw is
-a `nak` with exponential backoff. Exhausted retries go to a typed dead-letter
-queue with the original headers intact. A `traceparent` header rides through
-every hop.
+a `nak` with a delay, 2 s and then 10 s by default. A message that runs out of
+attempts, or whose handler never settles it, goes to a dead-letter stream with
+its original headers. A `traceparent` header rides through every hop.
 
 ## What you get
 
-| Capability             | How                                                                      |
-| ---------------------- | ------------------------------------------------------------------------ |
-| At-least-once delivery | Ack after the handler resolves, with bounded retries and backoff         |
-| Broadcast              | One message to every running pod via per-service durable consumers       |
-| Ordered delivery       | Sequential per partition key, without giving up horizontal scale         |
-| RPC                    | Core NATS for speed or JetStream for durability, same `@MessagePattern`  |
-| Dead-letter queue      | Typed sink, original headers preserved, `onDeadLetter` callback          |
-| Tracing                | W3C `traceparent` propagated end to end, OpenTelemetry spans built in    |
-| Operations             | Health checks, graceful shutdown, cron and delayed jobs, per-message TTL |
+| Capability             | How                                                                          |
+| ---------------------- | ---------------------------------------------------------------------------- |
+| At-least-once delivery | Ack after the handler resolves, with paced, bounded retries                  |
+| Broadcast              | One copy to every service, through a durable consumer per service            |
+| Ordered delivery       | Strict sequence, with every instance reading the whole stream                |
+| RPC                    | Core NATS for speed or JetStream for durability, same `@MessagePattern`      |
+| Dead-letter queue      | DLQ stream on by default, original headers kept, `onDeadLetter` callback     |
+| Scheduling             | Delayed messages, per-message TTL, cron and interval jobs run by NATS itself |
+| Multiple clusters      | One service talks to several NATS clusters through named connections         |
+| Tracing and metrics    | W3C `traceparent` end to end, OpenTelemetry spans, Prometheus metrics        |
+| Operations             | Health checks, graceful shutdown, bring-your-own streams and consumers       |
 
 ## Install
 
@@ -82,7 +92,10 @@ npm i @horizon-republic/nestjs-jetstream
 ```
 
 Requires Node >= 22, NestJS 10 to 12, and NATS Server >= 2.10 with JetStream
-enabled.
+enabled. Scheduling features need a newer server; see
+[NATS server versions](https://nestjs-jetstream.horizon-republic.dev/docs/getting-started/installation#nats-server-versions).
+Upgrading from 2.x? Read
+[Upgrading](https://nestjs-jetstream.horizon-republic.dev/docs/reference/upgrading).
 
 ## Where to go next
 
@@ -97,8 +110,7 @@ enabled.
   documents the failure paths, from consumer lag to redelivery loops to DLQ
   traffic.
 
-One runnable example per pattern, ten in all, lives under
-[`examples/`](./examples).
+Twelve runnable examples, one per pattern, live under [`examples/`](./examples).
 
 Versioning follows semver: breaking changes come only in majors, and the
 [header contract](https://nestjs-jetstream.horizon-republic.dev/docs/reference/header-contract)
