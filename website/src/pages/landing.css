@@ -69,16 +69,21 @@
   position: relative;
   padding-block: clamp(48px, 7vw, 88px) clamp(48px, 6vw, 72px);
   background:
-    radial-gradient(60% 80% at 85% 20%, var(--jt-deliver-soft), transparent 70%),
+    radial-gradient(55% 70% at 88% 18%, var(--jt-deliver-soft), transparent 70%),
+    radial-gradient(40% 60% at 70% 95%, var(--jt-ack-soft), transparent 70%),
     var(--jt-bg-1);
   overflow: hidden;
 }
 
 .lp-hero-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
-  gap: clamp(32px, 5vw, 64px);
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  gap: clamp(32px, 5vw, 56px);
   align-items: center;
+}
+
+.lp-hero-grid .sim {
+  margin: 0;
 }
 
 .lp-hero-title {
@@ -163,208 +168,6 @@
   background: var(--jt-bg-1);
   font-size: 0.8125rem;
   color: var(--jt-fg-2);
-}
-
-/* ---- the record --------------------------------------------------------- */
-.lp-record {
-  margin: 0;
-}
-
-.lp-record-card {
-  position: relative;
-  padding: 14px 18px 24px;
-  font-family: var(--jt-font-mono);
-  background: var(--jt-bg-1);
-  border: 1px solid var(--jt-line-1);
-  border-radius: var(--jt-radius-lg);
-  box-shadow: var(--jt-shadow-raised);
-  font-variation-settings: var(--jt-vf-struct);
-  font-size: var(--jt-step--1);
-}
-
-.lp-record-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--jt-line-2);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--jt-fg-3);
-}
-
-.lp-record-kind {
-  color: var(--jt-fg-2);
-}
-
-/* The message's path as a strip: one segment per log entry, in its state colour. */
-.lp-record-life {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
-  gap: 3px;
-  margin: 14px 0 0;
-}
-
-.lp-record-life span {
-  height: 4px;
-  border-radius: 2px;
-  background: var(--lp-tone, var(--jt-line-2));
-}
-
-.lp-record-fields {
-  display: grid;
-  gap: 6px;
-  margin: 14px 0 0;
-}
-
-.lp-record-fields > div {
-  display: grid;
-  grid-template-columns: 7.5rem minmax(0, 1fr);
-  gap: 12px;
-}
-
-.lp-record-fields dt {
-  color: var(--jt-fg-3);
-}
-
-.lp-record-fields dd {
-  margin: 0;
-  color: var(--jt-fg-0);
-  overflow-wrap: anywhere;
-}
-
-.lp-record-log {
-  display: grid;
-  gap: 9px;
-  list-style: none;
-  margin: 16px 0 0;
-  padding: 14px 0 0;
-  border-top: 1px dashed var(--jt-line-2);
-}
-
-.lp-record-log li {
-  display: grid;
-  grid-template-columns: 6.4rem minmax(0, 6.8rem) minmax(0, 1fr);
-  gap: 10px;
-  align-items: baseline;
-  animation: lp-row-in 300ms cubic-bezier(0.2, 0, 0, 1) both;
-  animation-delay: calc(120ms + var(--lp-row) * 130ms);
-}
-
-.lp-log-time {
-  color: var(--jt-fg-3);
-  font-variant-numeric: tabular-nums;
-}
-
-.lp-log-event {
-  font-weight: 600;
-  color: var(--jt-fg-0);
-}
-
-.lp-log-note {
-  color: var(--jt-fg-2);
-}
-
-.landingRoot [data-state='deliver'] {
-  --lp-tone: var(--jt-state-deliver);
-  --lp-tone-soft: var(--jt-deliver-soft);
-}
-
-.landingRoot [data-state='nak'],
-.landingRoot [data-state='redeliver'] {
-  --lp-tone: var(--jt-state-redeliver);
-  --lp-tone-soft: var(--jt-redeliver-soft);
-}
-
-.landingRoot [data-state='ack'] {
-  --lp-tone: var(--jt-state-ack);
-  --lp-tone-soft: var(--jt-ack-soft);
-}
-
-.lp-log-pill {
-  display: inline-block;
-  padding: 1px 8px;
-  border-radius: var(--jt-radius-sm);
-  background: var(--lp-tone-soft, transparent);
-  color: var(--lp-tone, inherit);
-}
-
-
-.lp-record-log li[data-state='seam'] {
-  padding-block: 8px;
-  border-block: 1px dashed var(--jt-line-2);
-}
-
-.lp-record-log li[data-state='seam'] .lp-log-event {
-  font-weight: 500;
-  color: var(--jt-fg-2);
-}
-
-.lp-record-log li[data-state='seam'] .lp-log-note {
-  color: var(--jt-fg-3);
-}
-
-.lp-record-stamp {
-  position: absolute;
-  inset-block-end: -18px;
-  inset-inline-end: 20px;
-  animation: lp-stamp-in 420ms cubic-bezier(0.2, 0, 0, 1) both;
-  animation-delay: 900ms;
-}
-
-.lp-record-stamp span {
-  display: block;
-  padding: 7px 16px;
-  background: var(--jt-bg-1);
-  border: 2px solid var(--jt-state-ack);
-  border-radius: var(--jt-radius-md);
-  box-shadow: 0 0 0 3px var(--jt-bg-1), 0 0 0 4px var(--jt-ack-soft);
-  font-variation-settings: var(--jt-vf-struct);
-  font-size: var(--jt-step-1);
-  font-weight: 700;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--jt-state-ack);
-}
-
-.lp-record-caption {
-  margin: 30px 0 0;
-  max-width: 58ch;
-  font-size: var(--jt-step--1);
-  line-height: 1.6;
-  color: var(--jt-fg-2);
-}
-
-@keyframes lp-row-in {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes lp-stamp-in {
-  from {
-    opacity: 0;
-    transform: rotate(-16deg) scale(1.45);
-  }
-
-  60% {
-    opacity: 1;
-    transform: rotate(-4deg) scale(0.97);
-  }
-
-  to {
-    opacity: 1;
-    transform: rotate(-6deg) scale(1);
-  }
 }
 
 /* ---- install ------------------------------------------------------------ */
@@ -640,9 +443,34 @@
 }
 
 .lp-feature:hover {
-  border-color: var(--jt-accent-line);
+  border-color: color-mix(in oklch, var(--lp-tone, var(--jt-accent)) 45%, transparent);
   box-shadow: var(--jt-shadow-raised);
   text-decoration: none;
+}
+
+.lp-feature[data-tone='deliver'] {
+  --lp-tone: var(--jt-state-deliver);
+  --lp-tone-soft: var(--jt-deliver-soft);
+}
+
+.lp-feature[data-tone='redeliver'] {
+  --lp-tone: var(--jt-state-redeliver);
+  --lp-tone-soft: var(--jt-redeliver-soft);
+}
+
+.lp-feature[data-tone='dlq'] {
+  --lp-tone: var(--jt-state-dlq);
+  --lp-tone-soft: var(--jt-dlq-soft);
+}
+
+.lp-feature[data-tone='ack'] {
+  --lp-tone: var(--jt-state-ack);
+  --lp-tone-soft: var(--jt-ack-soft);
+}
+
+.lp-feature[data-tone='trace'] {
+  --lp-tone: var(--jt-state-trace);
+  --lp-tone-soft: color-mix(in oklch, var(--jt-state-trace) 12%, transparent);
 }
 
 .lp-feature-icon {
@@ -652,8 +480,8 @@
   width: 38px;
   height: 38px;
   border-radius: 8px;
-  background: var(--jt-accent-soft);
-  color: var(--jt-accent);
+  background: var(--lp-tone-soft, var(--jt-accent-soft));
+  color: var(--lp-tone, var(--jt-accent));
 }
 
 .lp-feature-name {
@@ -668,6 +496,13 @@
 }
 
 /* ---- closing call ------------------------------------------------------- */
+.lp-cta-band {
+  background:
+    linear-gradient(100deg, var(--jt-deliver-soft), transparent 45%, var(--jt-ack-soft)),
+    var(--jt-bg-1);
+  border-top: 1px solid var(--jt-line-1);
+}
+
 .lp-cta-inner {
   display: flex;
   flex-wrap: wrap;
@@ -713,23 +548,6 @@
   }
 }
 
-/* Stack rather than shrink: a timestamp wrapping mid-value stops reading as one. */
-@media (max-width: 540px) {
-  .lp-record-fields > div,
-  .lp-record-log li {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 2px;
-  }
-
-  .lp-record-stamp {
-    inset-inline-end: 12px;
-  }
-
-  .lp-record-stamp span {
-    font-size: var(--jt-step-0);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .lp-install,
   .lp-btn,
@@ -737,193 +555,6 @@
     transition: none;
   }
 
-  /* Rotation is part of the drawing, so restate it when the animation goes. */
-  .lp-record-log li,
-  .lp-record-stamp {
-    animation: none;
-  }
-
-  .lp-record-stamp {
-    transform: rotate(-6deg);
-  }
 }
 
 
-/* ---- message track: the hero's quiet loop ------------------------------ */
-.lp-track {
-  position: relative;
-  height: 72px;
-  margin-top: clamp(32px, 5vw, 52px);
-}
-
-.lp-track-svg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 64px;
-  overflow: visible;
-}
-
-.lp-track-svg line {
-  stroke: var(--jt-line-2);
-  stroke-width: 1;
-  vector-effect: non-scaling-stroke;
-}
-
-.lp-track-arc {
-  fill: none;
-  stroke: var(--jt-state-redeliver);
-  stroke-width: 1;
-  stroke-dasharray: 3 4;
-  vector-effect: non-scaling-stroke;
-  opacity: 0;
-  transition: opacity 500ms ease;
-}
-
-.lp-track[data-phase='nak'] .lp-track-arc,
-.lp-track[data-phase='waiting'] .lp-track-arc {
-  opacity: 0.55;
-}
-
-.lp-track-node {
-  position: absolute;
-  inset-block-start: 13px;
-  display: grid;
-  justify-items: center;
-  width: 150px;
-  transform: translateX(-50%);
-}
-
-.lp-track-node[data-node='emit'] {
-  left: 10%;
-}
-
-.lp-track-node[data-node='stream'] {
-  left: 50%;
-}
-
-.lp-track-node[data-node='handler'] {
-  left: 90%;
-}
-
-.lp-track-point {
-  width: 14px;
-  height: 14px;
-  border: 1.5px solid var(--jt-line-2);
-  border-radius: 50%;
-  background: var(--jt-bg-1);
-  transition: border-color 400ms ease, background-color 400ms ease, box-shadow 400ms ease;
-}
-
-.lp-track-node[data-node='stream'] .lp-track-point {
-  border-radius: 4px;
-}
-
-.lp-track-label {
-  margin-top: 8px;
-  font-family: var(--jt-font-mono);
-  font-size: 0.72rem;
-  color: var(--jt-fg-3);
-}
-
-.lp-track[data-phase='stored'] [data-node='stream'] .lp-track-point {
-  border-color: var(--jt-state-deliver);
-  box-shadow: 0 0 0 5px var(--jt-deliver-soft);
-}
-
-.lp-track[data-phase='waiting'] [data-node='stream'] .lp-track-point {
-  border-color: var(--jt-state-redeliver);
-}
-
-.lp-track[data-phase='nak'] [data-node='handler'] .lp-track-point {
-  border-color: var(--jt-state-redeliver);
-  background: var(--jt-redeliver-soft);
-}
-
-.lp-track[data-phase='ack'] [data-node='handler'] .lp-track-point {
-  border-color: var(--jt-state-ack);
-  background: var(--jt-ack-soft);
-  box-shadow: 0 0 0 6px var(--jt-ack-soft);
-}
-
-.lp-track-ring {
-  position: absolute;
-  inset-block-start: -8px;
-  width: 30px;
-  height: 30px;
-  transform: rotate(-90deg);
-  opacity: 0;
-  transition: opacity 300ms ease;
-}
-
-.lp-track-ring circle {
-  fill: none;
-  stroke: var(--jt-state-redeliver);
-  stroke-width: 1.5;
-}
-
-.lp-track[data-phase='waiting'] .lp-track-ring {
-  opacity: 1;
-}
-
-.lp-track-status {
-  position: absolute;
-  inset-block-start: -24px;
-  inset-inline: -40px;
-  font-family: var(--jt-font-mono);
-  font-size: 0.72rem;
-  text-align: center;
-  white-space: nowrap;
-  opacity: 0;
-  transform: translateY(3px);
-  transition: opacity 350ms ease, transform 350ms ease;
-}
-
-.lp-track-status[data-status='nak'] {
-  color: var(--jt-state-redeliver);
-}
-
-.lp-track-status[data-status='ack'] {
-  color: var(--jt-state-ack);
-}
-
-.lp-track[data-phase='nak'] [data-status='nak'],
-.lp-track[data-phase='ack'] [data-status='ack'] {
-  opacity: 1;
-  transform: none;
-}
-
-.lp-track-msg {
-  position: absolute;
-  inset-block-start: 14.5px;
-  left: -5.5px;
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  background: var(--jt-state-deliver);
-  box-shadow: 0 0 0 4px var(--jt-deliver-soft);
-  transition: background-color 350ms ease, box-shadow 350ms ease;
-  will-change: transform;
-}
-
-.lp-track[data-phase='nak'] .lp-track-msg,
-.lp-track[data-phase='waiting'] .lp-track-msg {
-  background: var(--jt-state-redeliver);
-  box-shadow: 0 0 0 4px var(--jt-redeliver-soft);
-}
-
-.lp-track[data-phase='ack'] .lp-track-msg {
-  background: var(--jt-state-ack);
-  box-shadow: 0 0 0 4px var(--jt-ack-soft);
-}
-
-@media (max-width: 640px) {
-  .lp-track-node {
-    width: 96px;
-  }
-
-  [data-node='handler'] .lp-track-status {
-    inset-inline: auto 0;
-    text-align: end;
-  }
-}

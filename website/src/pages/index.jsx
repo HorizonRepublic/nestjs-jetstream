@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { animate, motion, useMotionValue, useReducedMotion } from 'motion/react';
+import React, { useEffect, useState } from 'react';
+import SystemSim from '../components/SystemSim';
 import Layout from '@theme/Layout';
 import Link from '@docusaurus/Link';
 import rootPkg from '../../../package.json';
@@ -59,171 +59,6 @@ const CopyInstall = () => {
         {copied ? 'copied' : 'copy'}
       </span>
     </button>
-  );
-};
-
-const RECORD_FIELDS = [
-  { key: 'subject', value: 'orders.created' },
-  { key: 'msg-id', value: 'ord_9f21' },
-  { key: 'traceparent', value: '00-4bf92f35a8…-01' },
-];
-
-const RECORD_LOG = [
-  { state: 'deliver', time: '19:04:02.118', event: 'deliver', note: 'attempt 1/3' },
-  { state: 'nak', time: '19:04:02.204', event: 'nak', note: 'handler threw · retry in 2 s' },
-  { state: 'seam', time: '', event: 'pod restart', note: 'in flight, not lost' },
-  { state: 'redeliver', time: '19:04:04.336', event: 'redeliver', note: 'attempt 2/3 · new pod' },
-  { state: 'ack', time: '19:04:04.402', event: 'ack', note: 'handled in 66 ms' },
-];
-
-const DeliveryRecord = () => (
-  <figure className="lp-record">
-    <div className="lp-record-card">
-      <div className="lp-record-head">
-        <span className="lp-record-kind">delivery record</span>
-        <span className="lp-record-seq">seq 4,832,107</span>
-      </div>
-
-      <dl className="lp-record-fields">
-        {RECORD_FIELDS.map((field) => (
-          <div key={field.key}>
-            <dt>{field.key}</dt>
-            <dd>{field.value}</dd>
-          </div>
-        ))}
-      </dl>
-
-      <div className="lp-record-life" aria-hidden="true">
-        {RECORD_LOG.map((entry) => (
-          <span key={entry.event} data-state={entry.state} />
-        ))}
-      </div>
-
-      <ol className="lp-record-log">
-        {RECORD_LOG.map((entry, index) => (
-          <li
-            key={entry.event}
-            data-state={entry.state}
-            style={{ '--lp-row': String(index) }}
-          >
-            <span className="lp-log-time">{entry.time}</span>
-            <span className="lp-log-event">
-              <span className="lp-log-pill">{entry.event}</span>
-            </span>
-            <span className="lp-log-note">{entry.note}</span>
-          </li>
-        ))}
-      </ol>
-
-      <div className="lp-record-stamp" aria-hidden="true">
-        <span>acked</span>
-      </div>
-    </div>
-
-    <figcaption className="lp-record-caption">
-      One message across a deploy that restarts the pod holding it.
-    </figcaption>
-  </figure>
-);
-
-/* One message's life on a loop: emitted, stored, failed once, retried after the
-   delay, acked. The phase drives colours in CSS; motion drives the movement. */
-const TRACK_STOPS = { emit: 0.1, stream: 0.5, handler: 0.9 };
-const GLIDE = { duration: 1.1, ease: [0.45, 0, 0.2, 1] };
-
-const MessageTrack = () => {
-  const ref = useRef(null);
-  const reduceMotion = useReducedMotion();
-  const [phase, setPhase] = useState('idle');
-  const x = useMotionValue(0);
-  const y = useMotionValue(0);
-  const opacity = useMotionValue(0);
-  const scale = useMotionValue(1);
-  const ring = useMotionValue(0);
-
-  useEffect(() => {
-    if (reduceMotion) return undefined;
-
-    let alive = true;
-    const at = (stop) => (ref.current?.clientWidth ?? 0) * TRACK_STOPS[stop];
-    const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-    const loop = async () => {
-      await pause(900);
-
-      while (alive) {
-        setPhase('idle');
-        x.set(at('emit'));
-        y.set(0);
-        scale.set(1);
-        ring.set(0);
-        await animate(opacity, 1, { duration: 0.4 });
-        await animate(x, at('stream'), GLIDE);
-        if (!alive) return;
-        setPhase('stored');
-        await pause(700);
-        setPhase('flight');
-        await animate(x, at('handler'), GLIDE);
-        if (!alive) return;
-        setPhase('nak');
-        await pause(900);
-        await Promise.all([
-          animate(x, at('stream'), { duration: 1.2, ease: [0.45, 0, 0.2, 1] }),
-          animate(y, [0, 22, 0], { duration: 1.2, ease: 'easeInOut' }),
-        ]);
-        if (!alive) return;
-        setPhase('waiting');
-        await animate(ring, 1, { duration: 2, ease: 'linear' });
-        setPhase('flight');
-        await animate(x, at('handler'), GLIDE);
-        if (!alive) return;
-        setPhase('ack');
-        await Promise.all([
-          animate(scale, 1.9, { duration: 1.1, ease: 'easeOut' }),
-          animate(opacity, 0, { duration: 0.8, delay: 0.5 }),
-        ]);
-        await pause(2600);
-      }
-    };
-
-    void loop();
-
-    return () => {
-      alive = false;
-    };
-  }, [reduceMotion, x, y, opacity, scale, ring]);
-
-  return (
-    <div className="lp-track" ref={ref} data-phase={phase} aria-hidden="true">
-      <svg className="lp-track-svg" viewBox="0 0 100 64" preserveAspectRatio="none">
-        <line x1="4" y1="20" x2="96" y2="20" />
-        <path className="lp-track-arc" d="M90 20 Q70 64 50 20" />
-      </svg>
-
-      <div className="lp-track-node" data-node="emit">
-        <span className="lp-track-point" />
-        <span className="lp-track-label">client.emit()</span>
-      </div>
-      <div className="lp-track-node" data-node="stream">
-        <svg className="lp-track-ring" viewBox="0 0 30 30">
-          <motion.circle cx="15" cy="15" r="13" style={{ pathLength: ring }} />
-        </svg>
-        <span className="lp-track-point" />
-        <span className="lp-track-label">stream</span>
-      </div>
-      <div className="lp-track-node" data-node="handler">
-        <span className="lp-track-status" data-status="nak">
-          nak · retry in 2 s
-        </span>
-        <span className="lp-track-status" data-status="ack">
-          ack
-        </span>
-        <span className="lp-track-point" />
-        <span className="lp-track-label">handler</span>
-      </div>
-
-      {!reduceMotion && <motion.span className="lp-track-msg" style={{ x, y, opacity, scale }} />}
-    </div>
   );
 };
 
@@ -383,15 +218,15 @@ const STEPS = [
 ];
 
 const FEATURES = [
-  { icon: 'events', name: 'Workqueue events', body: 'Each message reaches one replica, at least once.', to: '/docs/patterns/events' },
-  { icon: 'rpc', name: 'RPC', body: 'Core NATS for latency or JetStream for durability, per module.', to: '/docs/patterns/rpc' },
-  { icon: 'broadcast', name: 'Broadcast', body: 'Every service gets every message, late replicas included.', to: '/docs/patterns/broadcast' },
-  { icon: 'ordered', name: 'Ordered events', body: 'A strict, replayable sequence for projections and caches.', to: '/docs/patterns/ordered-events' },
-  { icon: 'dlq', name: 'Dead-letter queue', body: 'Exhausted messages kept with headers and delivery count.', to: '/docs/guides/dead-letter-queue' },
-  { icon: 'schedule', name: 'Cron and delayed jobs', body: 'Fired by NATS itself, with no scheduler process to run.', to: '/docs/guides/scheduling-overview' },
-  { icon: 'observe', name: 'Tracing and metrics', body: 'W3C trace context across hops, Prometheus metrics built in.', to: '/docs/observability' },
-  { icon: 'health', name: 'Health and shutdown', body: 'Kubernetes probes, and in-flight work drained on SIGTERM.', to: '/docs/guides/health-checks' },
-  { icon: 'clusters', name: 'Multiple clusters', body: 'One service talking to several NATS clusters at once.', to: '/docs/guides/multi-connection' },
+  { icon: 'events', tone: 'deliver', name: 'Workqueue events', body: 'Each message reaches one replica, at least once.', to: '/docs/patterns/events' },
+  { icon: 'rpc', tone: 'deliver', name: 'RPC', body: 'Core NATS for latency or JetStream for durability, per module.', to: '/docs/patterns/rpc' },
+  { icon: 'broadcast', tone: 'deliver', name: 'Broadcast', body: 'Every service gets every message, late replicas included.', to: '/docs/patterns/broadcast' },
+  { icon: 'ordered', tone: 'deliver', name: 'Ordered events', body: 'A strict, replayable sequence for projections and caches.', to: '/docs/patterns/ordered-events' },
+  { icon: 'dlq', tone: 'dlq', name: 'Dead-letter queue', body: 'Exhausted messages kept with headers and delivery count.', to: '/docs/guides/dead-letter-queue' },
+  { icon: 'schedule', tone: 'redeliver', name: 'Cron and delayed jobs', body: 'Fired by NATS itself, with no scheduler process to run.', to: '/docs/guides/scheduling-overview' },
+  { icon: 'observe', tone: 'trace', name: 'Tracing and metrics', body: 'W3C trace context across hops, Prometheus metrics built in.', to: '/docs/observability' },
+  { icon: 'health', tone: 'ack', name: 'Health and shutdown', body: 'Kubernetes probes, and in-flight work drained on SIGTERM.', to: '/docs/guides/health-checks' },
+  { icon: 'clusters', tone: 'trace', name: 'Multiple clusters', body: 'One service talking to several NATS clusters at once.', to: '/docs/guides/multi-connection' },
 ];
 
 export default function Home() {
@@ -442,10 +277,7 @@ export default function Home() {
               </ul>
             </div>
 
-            <DeliveryRecord />
-          </div>
-          <div className="lp-container">
-            <MessageTrack />
+            <SystemSim />
           </div>
         </section>
 
@@ -550,7 +382,7 @@ export default function Home() {
             <ul className="lp-features">
               {FEATURES.map((feature) => (
                 <li key={feature.name}>
-                  <Link to={feature.to} className="lp-feature">
+                  <Link to={feature.to} className="lp-feature" data-tone={feature.tone}>
                     <span className="lp-feature-icon">{ICONS[feature.icon]}</span>
                     <span className="lp-feature-name">{feature.name}</span>
                     <span className="lp-feature-body">{feature.body}</span>

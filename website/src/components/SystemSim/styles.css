@@ -1,0 +1,62 @@
+.sim {
+  margin: clamp(28px, 4vw, 44px) 0 0;
+  padding: 16px 18px 12px;
+  border: 1px solid var(--jt-line-1);
+  border-radius: 12px;
+  background:
+    radial-gradient(70% 120% at 50% 40%, var(--jt-deliver-soft), transparent 75%),
+    var(--jt-bg-1);
+}
+
+.sim-stage {
+  position: relative;
+  height: 170px;
+}
+
+.sim-stage canvas {
+  display: block;
+}
+
+.sim-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--jt-line-1);
+  font-family: var(--jt-font-mono);
+  font-size: 0.78rem;
+  color: var(--jt-fg-3);
+}
+
+.sim-stats b {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--jt-fg-0);
+}
+
+.sim-stats b[data-tone='deliver'] {
+  color: var(--jt-state-deliver);
+}
+
+.sim-stats b[data-tone='redeliver'] {
+  color: var(--jt-state-redeliver);
+}
+
+.sim-stats b[data-tone='ack'] {
+  color: var(--jt-state-ack);
+}
+
+.sim-note {
+  margin-inline-start: auto;
+}
+
+@media (max-width: 640px) {
+  .sim-stage {
+    height: 150px;
+  }
+
+  .sim-note {
+    margin-inline-start: 0;
+  }
+}
