@@ -32,7 +32,7 @@ export interface EntityManagement {
 /**
  * Stream config overrides exposed to users.
  *
- * Four fields are owned by the transport and excluded here, because setting
+ * Three fields are owned by the transport and excluded here, because setting
  * them would be accepted and then overwritten:
  *
  * - `retention` follows the kind (Workqueue for events and commands, Limits
