@@ -1306,7 +1306,7 @@ body.jt-mermaid-zoom-open {
 /* ---- page lede: the "Use when / You get" opener ------------------------- */
 .jt-lede {
   display: grid;
-  margin: 4px 0 28px;
+  margin: 2px 0 22px;
   max-width: 70ch;
   border: 1px solid var(--jt-line-1);
   border-radius: var(--jt-radius-lg);
@@ -1316,14 +1316,15 @@ body.jt-mermaid-zoom-open {
 
 .markdown .jt-lede-row {
   display: grid;
-  grid-template-columns: 6.5rem minmax(0, 1fr);
-  gap: 14px;
+  grid-template-columns: 5.5rem minmax(0, 1fr);
+  gap: 12px;
   margin: 0;
-  padding: 12px 16px;
+  padding: 8px 14px;
   max-width: none;
   border-inline-start: 3px solid var(--jt-lede-tone);
   background: var(--jt-lede-soft);
-  line-height: 1.55;
+  font-size: 15px;
+  line-height: 1.5;
   color: var(--jt-fg-1);
 }
 

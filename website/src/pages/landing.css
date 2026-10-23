@@ -25,7 +25,7 @@
   grid-template-columns: minmax(0, 1.04fr) minmax(0, 0.96fr);
   gap: clamp(32px, 5vw, 72px);
   align-items: center;
-  padding: clamp(44px, 6vw, 84px) var(--lp-gutter) clamp(48px, 6vw, 76px);
+  padding: clamp(32px, 4.5vw, 60px) var(--lp-gutter) clamp(36px, 4.5vw, 56px);
   overflow: hidden;
 }
 
@@ -55,7 +55,7 @@
   /* ch must stay on max-width: as a grid track it resolves against the
      container font and collapses. */
   max-width: 16ch;
-  font-size: clamp(1.9rem, 4.4vw, var(--jt-step-5));
+  font-size: clamp(1.75rem, 3.4vw, 2.6rem);
   line-height: 1.08;
   font-weight: 620;
   letter-spacing: -0.018em;
@@ -64,9 +64,9 @@
 }
 
 .lp-hero-sub {
-  margin: 18px 0 0;
+  margin: 14px 0 0;
   max-width: 52ch;
-  font-size: clamp(0.98rem, 1.25vw, var(--jt-step-1));
+  font-size: clamp(0.95rem, 1.1vw, 1.0625rem);
   line-height: 1.55;
   color: var(--jt-fg-1);
 }
@@ -277,8 +277,8 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 14px 24px;
-  margin-top: 28px;
+  gap: 12px 20px;
+  margin-top: 22px;
 }
 
 .lp-install {
@@ -362,7 +362,7 @@
 
 .lp-facts {
   display: block;
-  margin-top: 24px;
+  margin-top: 18px;
   font-variation-settings: var(--jt-vf-struct);
   font-size: var(--jt-step--1);
   color: var(--jt-fg-3);
@@ -371,7 +371,7 @@
 /* ---- bands --------------------------------------------------------------
    Sections are told apart by ground and space, not by rules. */
 .lp-band {
-  padding: clamp(48px, 7vw, 96px) var(--lp-gutter);
+  padding: clamp(32px, 4vw, 56px) var(--lp-gutter);
 }
 
 .lp-band--raised {
@@ -379,14 +379,14 @@
 }
 
 .lp-wrap {
-  max-width: 1120px;
+  max-width: 1080px;
   margin-inline: auto;
 }
 
 .lp-band h2,
 .lp-section-title {
   margin: 0;
-  font-size: var(--jt-step-3);
+  font-size: var(--jt-step-2);
   font-weight: 620;
   line-height: 1.15;
   letter-spacing: -0.012em;
@@ -396,21 +396,21 @@
 
 .lp-section-title {
   max-width: 24ch;
-  margin-bottom: clamp(28px, 4vw, 44px);
+  margin-bottom: clamp(18px, 2.5vw, 26px);
 }
 
 /* ---- the swap: one diff ------------------------------------------------- */
 .lp-swap-grid {
   display: grid;
   grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
-  gap: clamp(28px, 5vw, 64px);
+  gap: clamp(24px, 4vw, 48px);
   align-items: center;
 }
 
 .lp-swap-copy p {
-  margin: 16px 0 0;
+  margin: 12px 0 0;
   max-width: 44ch;
-  font-size: var(--jt-step-1);
+  font-size: var(--jt-step-0);
   line-height: 1.55;
   color: var(--jt-fg-1);
 }
@@ -445,12 +445,12 @@
 
 .lp-diff-body {
   margin: 0;
-  padding: 12px 0;
+  padding: 10px 0;
   overflow-x: auto;
   background: none;
   font-variation-settings: var(--jt-vf-struct);
-  font-size: 0.82rem;
-  line-height: 1.7;
+  font-size: 0.78rem;
+  line-height: 1.6;
   color: var(--jt-fg-1);
 }
 
@@ -517,13 +517,13 @@
 /* Each step is a node on one line: a dot in its state colour, the rail running on. */
 .lp-flow-steps li {
   position: relative;
-  padding: 30px 24px 0 0;
+  padding: 24px 20px 0 0;
 }
 
 .lp-flow-steps li::before {
   content: '';
   position: absolute;
-  inset-block-start: 6px;
+  inset-block-start: 5px;
   inset-inline: 0;
   height: 2px;
   background: linear-gradient(90deg, var(--lp-tone), color-mix(in oklch, var(--lp-tone) 30%, var(--jt-line-1)));
@@ -539,8 +539,8 @@
   position: absolute;
   inset-block-start: 0;
   inset-inline-start: 0;
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   background: var(--lp-tone);
   box-shadow: 0 0 0 4px var(--jt-bg-1);
@@ -549,24 +549,24 @@
 .lp-flow-name {
   display: block;
   font-variation-settings: var(--jt-vf-struct);
-  font-size: var(--jt-step-1);
+  font-size: var(--jt-step-0);
   font-weight: 650;
   color: var(--lp-tone);
 }
 
 .lp-flow-body {
   display: block;
-  margin-top: 6px;
+  margin-top: 4px;
   max-width: 30ch;
-  font-size: var(--jt-step-0);
+  font-size: var(--jt-step--1);
   line-height: 1.5;
   color: var(--jt-fg-1);
 }
 
 /* The other way out: below the nak and ack steps, where the retries run out. */
 .lp-flow-branch {
-  margin: 36px 0 0 25%;
-  padding: 18px 22px;
+  margin: 24px 0 0 25%;
+  padding: 12px 18px;
   border-inline-start: 3px solid var(--lp-tone);
   border-radius: 0 var(--jt-radius-md) var(--jt-radius-md) 0;
   background: var(--lp-tone-soft);
@@ -580,7 +580,7 @@
 .lp-groups {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: clamp(28px, 4vw, 48px);
+  gap: clamp(20px, 3vw, 36px);
 }
 
 .lp-group[data-tone='deliver'] {
@@ -599,10 +599,10 @@
 }
 
 .lp-group-name {
-  margin: 0 0 8px;
-  padding-bottom: 10px;
+  margin: 0 0 4px;
+  padding-bottom: 8px;
   border-bottom: 2px solid var(--lp-tone);
-  font-size: var(--jt-step-1);
+  font-size: var(--jt-step-0);
   font-weight: 650;
   color: var(--lp-tone);
 }
@@ -615,8 +615,8 @@
 
 .lp-group-item {
   display: block;
-  margin-inline: -10px;
-  padding: 10px;
+  margin-inline: -8px;
+  padding: 7px 8px;
   border-radius: var(--jt-radius-md);
   text-decoration: none;
   color: inherit;
@@ -654,7 +654,7 @@
 }
 
 .lp-close-note {
-  margin: 28px 0 0;
+  margin: 18px 0 0;
   max-width: 64ch;
   font-size: var(--jt-step--1);
   line-height: 1.6;
@@ -715,15 +715,15 @@
   /* The rail turns vertical: each step under the last. */
   .lp-flow-steps {
     grid-template-columns: minmax(0, 1fr);
-    gap: 26px;
+    gap: 18px;
   }
 
   .lp-flow-steps li {
-    padding: 0 0 0 32px;
+    padding: 0 0 0 28px;
   }
 
   .lp-flow-steps li::before {
-    inset-block: 14px -26px;
+    inset-block: 12px -18px;
     inset-inline: 6px auto;
     width: 2px;
     height: auto;
@@ -735,7 +735,7 @@
   }
 
   .lp-flow-branch {
-    margin-inline-start: 32px;
+    margin-inline-start: 28px;
   }
 }
 
