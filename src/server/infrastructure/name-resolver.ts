@@ -51,14 +51,6 @@ export class NameResolver {
     return this.subjects.hasCustomPrefix(kind);
   }
 
-  /**
-   * Map a resolved event subject back to its schedule-holder base subject
-   * (the `_sch` namespace twin, without the per-message unique suffix).
-   */
-  public scheduleSubjectBase(eventSubject: string): string {
-    return this.subjects.scheduleSubjectBase(eventSubject);
-  }
-
   private get(kind: StreamKind): KindNames {
     const entry = this.kinds.get(kind);
 
