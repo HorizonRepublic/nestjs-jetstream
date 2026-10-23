@@ -1,32 +1,25 @@
 import { StreamKind } from '../../interfaces';
 import type { JetstreamModuleOptions } from '../../interfaces';
-import {
-  BROADCAST_SUBJECT_PREFIX,
-  consumerName,
-  dlqStreamName,
-  internalName,
-  SCHEDULE_SEGMENT,
-  streamName,
-  subjectPrefix,
-} from '../../jetstream.constants';
+import { consumerName, dlqStreamName, streamName } from '../../jetstream.constants';
 import { dlqStreamOverrides } from './dlq-options';
 import { kindOptionsBlock } from './management';
+import { SubjectResolver } from './subject-resolver';
+import type { KindSubjectPrefixes } from './subject-resolver.types';
 
 interface KindNames {
   stream: string;
   consumer: string;
-  prefix: string;
-  schedulePrefix: string;
-  custom: boolean;
 }
 
 /** Single source of truth for all stream, consumer, and subject names. */
 export class NameResolver {
+  public readonly subjects: SubjectResolver;
   private readonly kinds: Map<StreamKind, KindNames>;
   private readonly dlq: string;
 
   public constructor(private readonly options: JetstreamModuleOptions) {
     this.dlq = dlqStreamOverrides(options).name ?? dlqStreamName(options.name);
+    this.subjects = SubjectResolver.forService(options.name, this.customPrefixes());
     this.kinds = this.buildKindMap();
   }
 
@@ -43,35 +36,19 @@ export class NameResolver {
   }
 
   public subject(kind: StreamKind, pattern: string): string {
-    return `${this.get(kind).prefix}${pattern}`;
+    return this.subjects.subject(kind, pattern);
   }
 
   public filterSubject(kind: StreamKind): string {
-    return `${this.get(kind).prefix}>`;
+    return this.subjects.filterSubject(kind);
   }
 
   public schedulePrefix(kind: StreamKind): string {
-    return this.get(kind).schedulePrefix;
+    return this.subjects.schedulePrefix(kind);
   }
 
   public hasCustomPrefix(kind: StreamKind): boolean {
-    return this.get(kind).custom;
-  }
-
-  /**
-   * Map a resolved event subject back to its schedule-holder base subject
-   * (the `_sch` namespace twin, without the per-message unique suffix).
-   */
-  public scheduleSubjectBase(eventSubject: string): string {
-    for (const kind of [StreamKind.Broadcast, StreamKind.Event, StreamKind.Ordered]) {
-      const { prefix, schedulePrefix } = this.get(kind);
-
-      if (eventSubject.startsWith(prefix)) {
-        return `${schedulePrefix}${eventSubject.slice(prefix.length)}`;
-      }
-    }
-
-    throw new Error(`Unexpected event subject format: ${eventSubject}`);
+    return this.subjects.hasCustomPrefix(kind);
   }
 
   private get(kind: StreamKind): KindNames {
@@ -82,58 +59,31 @@ export class NameResolver {
     return entry;
   }
 
+  private customPrefixes(): KindSubjectPrefixes {
+    const prefixes: KindSubjectPrefixes = {};
+
+    for (const kind of Object.values(StreamKind)) {
+      const custom = kindOptionsBlock(this.options, kind)?.subjectPrefix;
+
+      if (custom !== undefined) prefixes[kind] = custom;
+    }
+
+    return prefixes;
+  }
+
   private buildKindMap(): Map<StreamKind, KindNames> {
     const map = new Map<StreamKind, KindNames>();
     const { name } = this.options;
 
     for (const kind of Object.values(StreamKind)) {
       const block = kindOptionsBlock(this.options, kind);
-      const customPrefix = block?.subjectPrefix;
-      const custom = customPrefix !== undefined;
-      const prefix = custom
-        ? this.normalizePrefix(customPrefix)
-        : this.conventionPrefix(name, kind);
 
       map.set(kind, {
         stream: block?.stream?.name ?? streamName(name, kind),
         consumer: block?.consumer?.durable_name ?? consumerName(name, kind),
-        prefix,
-        schedulePrefix: custom
-          ? `${prefix}${SCHEDULE_SEGMENT}`
-          : this.conventionSchedulePrefix(name, kind),
-        custom,
       });
     }
 
     return map;
-  }
-
-  private normalizePrefix(raw: string): string {
-    let end = raw.length;
-
-    while (end > 0 && raw[end - 1] === '.') end -= 1;
-
-    const trimmed = raw.slice(0, end);
-    const tokens = trimmed.split('.');
-
-    if (trimmed.length === 0 || tokens.some((t) => t.length === 0 || t === '>')) {
-      throw new Error(
-        `Invalid subjectPrefix "${raw}": expected non-empty dot-separated tokens without ">".`,
-      );
-    }
-
-    return `${trimmed}.`;
-  }
-
-  private conventionPrefix(name: string, kind: StreamKind): string {
-    if (kind === StreamKind.Broadcast) return BROADCAST_SUBJECT_PREFIX;
-
-    return subjectPrefix(name, kind);
-  }
-
-  private conventionSchedulePrefix(name: string, kind: StreamKind): string {
-    if (kind === StreamKind.Broadcast) return `${BROADCAST_SUBJECT_PREFIX}${SCHEDULE_SEGMENT}`;
-
-    return `${internalName(name)}.${SCHEDULE_SEGMENT}`;
   }
 }

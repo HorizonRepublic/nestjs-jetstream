@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vi
 
 import { ConnectionProvider } from '../../connection';
 import { EventBus } from '../../hooks';
-import type { Codec, JetstreamModuleOptions } from '../../interfaces';
+import type { Codec, JetstreamModuleOptions, TargetSubjectPrefixes } from '../../interfaces';
 import { TransportEvent } from '../../interfaces';
 import {
   DEFAULT_JETSTREAM_RPC_TIMEOUT,
@@ -467,6 +467,177 @@ describe(JetstreamClient, () => {
 
         expect(publishOpts.schedule).toBeUndefined();
       });
+    });
+  });
+
+  describe('when the target declares custom subject prefixes', () => {
+    let prefixes: TargetSubjectPrefixes;
+    let prefixedSut: JetstreamClient;
+
+    beforeEach(() => {
+      prefixes = {
+        events: `${faker.lorem.word()}.ev`,
+        ordered: `${faker.lorem.word()}.ord`,
+        rpc: `${faker.lorem.word()}.rpc`,
+      };
+      prefixedSut = new JetstreamClient(
+        options,
+        targetName,
+        connection,
+        codec,
+        eventBus,
+        undefined,
+        prefixes,
+      );
+    });
+
+    afterEach(async () => {
+      await prefixedSut.close();
+    });
+
+    it('should publish events under the target events prefix', async () => {
+      // Given
+      const data = { id: faker.number.int() };
+
+      // When
+      await firstValueFrom(prefixedSut.emit('order.created', data));
+
+      // Then
+      expect(mockJs.publish).toHaveBeenCalledWith(
+        `${prefixes.events}.order.created`,
+        codec.encode(data),
+        expect.anything(),
+      );
+    });
+
+    it('should publish ordered events under the target ordered prefix', async () => {
+      // Given
+      const data = { id: faker.number.int() };
+
+      // When
+      await firstValueFrom(prefixedSut.emit('ordered:order.status', data));
+
+      // Then
+      expect(mockJs.publish).toHaveBeenCalledWith(
+        `${prefixes.ordered}.order.status`,
+        codec.encode(data),
+        expect.anything(),
+      );
+    });
+
+    it('should send commands under the target rpc prefix', async () => {
+      // Given a responding server
+      mockNc.request.mockResolvedValue(
+        createMock<Msg>({ data: codec.encode({ ok: true }), headers: natsHeaders() }),
+      );
+
+      // When
+      await firstValueFrom(prefixedSut.send('get.asset', {}));
+
+      // Then
+      expect(mockNc.request).toHaveBeenCalledWith(
+        `${prefixes.rpc}.get.asset`,
+        expect.any(Uint8Array),
+        expect.anything(),
+      );
+    });
+
+    it('should place a scheduled event holder in the target custom schedule namespace', async () => {
+      // Given
+      const data = { id: faker.number.int() };
+      const at = new Date(Date.now() + 60_000);
+      const record = new JetstreamRecordBuilder(data).scheduleAt(at).build();
+
+      // When
+      await firstValueFrom(prefixedSut.emit('order.reminder', record));
+
+      // Then
+      expect(mockJs.publish).toHaveBeenCalledWith(
+        expect.stringMatching(new RegExp(`^${prefixes.events}\\._sch\\.order\\.reminder\\.\\w+$`)),
+        codec.encode(data),
+        expect.objectContaining({
+          schedule: { specification: at, target: `${prefixes.events}.order.reminder` },
+        }),
+      );
+    });
+
+    it('should keep the convention for kinds the target leaves out', async () => {
+      // Given a target with only an events prefix
+      const partialSut = new JetstreamClient(
+        options,
+        targetName,
+        connection,
+        codec,
+        eventBus,
+        undefined,
+        { events: prefixes.events },
+      );
+
+      // When
+      await firstValueFrom(partialSut.emit('ordered:order.status', {}));
+
+      // Then
+      expect(mockJs.publish).toHaveBeenCalledWith(
+        `${targetName}__microservice.ordered.order.status`,
+        expect.anything(),
+        expect.anything(),
+      );
+
+      await partialSut.close();
+    });
+
+    it("should schedule a broadcast under the caller's own broadcast prefix", async () => {
+      // Given a caller with a custom broadcast prefix publishing through a foreign-target client
+      const broadcastPrefix = `${faker.lorem.word()}.bc`;
+      const callerOptions: JetstreamModuleOptions = {
+        ...options,
+        broadcast: { subjectPrefix: broadcastPrefix },
+      };
+      const callerSut = new JetstreamClient(
+        callerOptions,
+        targetName,
+        connection,
+        codec,
+        eventBus,
+        new NameResolver(callerOptions),
+        prefixes,
+      );
+      const at = new Date(Date.now() + 60_000);
+      const record = new JetstreamRecordBuilder({}).scheduleAt(at).build();
+
+      // When
+      await firstValueFrom(callerSut.emit('broadcast:config.updated', record));
+
+      // Then the holder and the target both follow the caller's broadcast prefix
+      expect(mockJs.publish).toHaveBeenCalledWith(
+        expect.stringMatching(new RegExp(`^${broadcastPrefix}\\._sch\\.config\\.updated\\.\\w+$`)),
+        expect.anything(),
+        expect.objectContaining({
+          schedule: { specification: at, target: `${broadcastPrefix}.config.updated` },
+        }),
+      );
+
+      await callerSut.close();
+    });
+
+    it('should reject prefixes for a client that targets the service itself', () => {
+      // When / Then
+      expect(
+        () =>
+          new JetstreamClient(options, options.name, connection, codec, eventBus, undefined, {
+            events: prefixes.events,
+          }),
+      ).toThrow(/targets this service itself/);
+    });
+
+    it('should reject an invalid prefix when the client is created', () => {
+      // When / Then
+      expect(
+        () =>
+          new JetstreamClient(options, targetName, connection, codec, eventBus, undefined, {
+            rpc: 'acme.>',
+          }),
+      ).toThrow(/Invalid subjectPrefix "acme\.>"/);
     });
   });
 

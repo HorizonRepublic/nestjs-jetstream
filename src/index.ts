@@ -27,6 +27,7 @@ export type {
   ScheduleRecordOptions,
   StreamConfigOverrides,
   StreamConsumerOverrides,
+  TargetSubjectPrefixes,
   TransportHooks,
 } from './interfaces';
 

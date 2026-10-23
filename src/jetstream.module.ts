@@ -263,6 +263,7 @@ export class JetstreamModule implements OnApplicationBootstrap, OnApplicationShu
           options.codec ?? scope.codec,
           eventBus,
           scope.names,
+          options.subjectPrefix,
         );
       },
     };

@@ -37,6 +37,7 @@ export type {
   RpcConfig,
   StreamConfigOverrides,
   StreamConsumerOverrides,
+  TargetSubjectPrefixes,
 } from './options.interface';
 
 export { StreamKind } from './stream.interface';
