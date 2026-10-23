@@ -25,4 +25,25 @@ export enum NatsErrorCode {
    * or no peer has storage headroom). Confirmed at runtime by the cluster integration test.
    */
   NoSuitablePeers = 10005,
+
+  /** `expect.lastSubjectSequence` did not match: the subject changed since it was read. */
+  StreamWrongLastSequence = 10071,
+
+  /** The same mismatch, reported without the sequence. */
+  StreamWrongLastSequenceConstant = 10164,
+
+  /** The per-subject last sequence is momentarily unknown, for example after a leader change. */
+  StreamExpectedLastSeqPerSubjectNotReady = 10163,
+
+  /** The stream does not allow message schedules. */
+  MessageSchedulesDisabled = 10188,
+
+  /** The `Nats-Schedule` value is not a pattern this server accepts. */
+  MessageSchedulesPatternInvalid = 10189,
+
+  /** The schedule target is not a literal subject inside the same stream. */
+  MessageSchedulesTargetInvalid = 10190,
+
+  /** The schedule time zone is unknown to the server, usually an image without tzdata. */
+  MessageSchedulesTimeZoneInvalid = 10223,
 }

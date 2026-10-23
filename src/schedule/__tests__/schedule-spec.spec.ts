@@ -33,12 +33,30 @@ describe('schedule spec', () => {
       expect(toNatsSpecification({ everySeconds: 600 })).toBe('@every 600s');
     });
 
+    it('should write a one-shot time in RFC 3339', () => {
+      expect(toNatsSpecification({ at: new Date('2027-01-01T09:00:00Z') })).toBe(
+        '@at 2027-01-01T09:00:00.000Z',
+      );
+    });
+
     it('should pass a cron expression through', () => {
       expect(toNatsSpecification({ cron: '0 */10 * * * *' })).toBe('0 */10 * * * *');
     });
   });
 
   describe(resolveTickTtlSeconds, () => {
+    it('should leave a one-shot without a ttl unless one is given', () => {
+      expect(resolveTickTtlSeconds({ at: new Date('2027-01-01T00:00:00Z') }, FRIDAY_NOON)).toBe(
+        undefined,
+      );
+      expect(
+        resolveTickTtlSeconds(
+          { at: new Date('2027-01-01T00:00:00Z'), ttlSeconds: 60 },
+          FRIDAY_NOON,
+        ),
+      ).toBe(60);
+    });
+
     it('should default an interval to the interval', () => {
       expect(resolveTickTtlSeconds({ everySeconds: 600 }, FRIDAY_NOON)).toBe(600);
     });
@@ -70,6 +88,23 @@ describe('schedule spec', () => {
         validateScheduleSpec(spec);
       }).not.toThrow();
     });
+
+    it('should accept a one-shot in the future', () => {
+      expect(() => {
+        validateScheduleSpec({ at: new Date(Date.now() + 60_000) });
+      }).not.toThrow();
+    });
+
+    it.each([new Date(Date.now() - 1_000), new Date(Number.NaN)])(
+      'should reject the one-shot time %s',
+      (at) => {
+        expect(
+          reasonOf(() => {
+            validateScheduleSpec({ at });
+          }),
+        ).toBe(ScheduleErrorReason.InvalidAt);
+      },
+    );
 
     it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
       'should reject everySeconds %s',

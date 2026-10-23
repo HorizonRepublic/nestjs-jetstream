@@ -1,6 +1,11 @@
+import type { JetStreamPublishOptions } from '@nats-io/jetstream';
+
+import type { ScheduleInfo } from '../interfaces';
+
 /** Why a schedule was refused. */
 export enum ScheduleErrorReason {
   InvalidCron = 'invalid-cron',
+  InvalidAt = 'invalid-at',
   InvalidInterval = 'invalid-interval',
   InvalidTtl = 'invalid-ttl',
   InvalidTimezone = 'invalid-timezone',
@@ -34,4 +39,27 @@ export interface CronBounds {
   readonly min: number;
   readonly max: number;
   readonly names?: Readonly<Record<string, number>>;
+}
+
+/** A holder ready to publish, with the hash of the definition it carries. */
+export interface HolderMessage {
+  readonly subject: string;
+  readonly payload: Uint8Array;
+  readonly options: Partial<JetStreamPublishOptions>;
+  readonly hash: string;
+}
+
+/** A holder as the stream stores it. */
+export interface StoredHolder {
+  readonly subject: string;
+  readonly seq: number;
+  readonly hash: string;
+  readonly info: ScheduleInfo;
+}
+
+/** What a compare-and-set write did. */
+export enum PutOutcome {
+  Written = 'written',
+  /** The holder changed since it was read; read again before retrying. */
+  Conflict = 'conflict',
 }

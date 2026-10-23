@@ -5,6 +5,7 @@ export { JetstreamScheduleError } from './schedule-error';
 export {
   assertLiteralSubject,
   assertSubjectToken,
+  isAtSchedule,
   isCronSchedule,
   resolveTickTtlSeconds,
   toNatsSpecification,

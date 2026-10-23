@@ -37,8 +37,10 @@ export { ScheduleChange, ScheduleOrigin } from './interfaces';
 export type {
   CronAlias,
   CronExpression,
+  AtSchedule,
   CronSchedule,
   IntervalSchedule,
+  RecurringScheduleSpec,
   ScheduleHandlerOption,
   ScheduleInfo,
   ScheduleSpec,

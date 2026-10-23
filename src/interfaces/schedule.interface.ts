@@ -47,14 +47,31 @@ export interface IntervalSchedule {
   data?: unknown;
 }
 
-/** When a recurring schedule fires. */
-export type ScheduleSpec = CronSchedule | IntervalSchedule;
+/**
+ * A schedule that fires once, at `at`. For delays longer than the events
+ * stream keeps messages, which `scheduleAt()` cannot outlive. Client API only.
+ */
+export interface AtSchedule {
+  at: Date;
+
+  /** How long the tick stays in the stream unconsumed, in whole seconds. Default: no limit. */
+  ttlSeconds?: number;
+
+  /** Payload the tick carries, encoded with the connection codec. */
+  data?: unknown;
+}
+
+/** When a schedule fires. */
+export type ScheduleSpec = CronSchedule | IntervalSchedule | AtSchedule;
+
+/** The schedules a handler may declare: recurring ones only. */
+export type RecurringScheduleSpec = CronSchedule | IntervalSchedule;
 
 /**
  * The `schedule` extra of `@EventPattern`: a spec the handler owns, or `true`
  * for a handler that only receives schedules created through a client.
  */
-export type ScheduleHandlerOption = ScheduleSpec | true;
+export type ScheduleHandlerOption = RecurringScheduleSpec | true;
 
 /** Who owns a schedule. */
 export enum ScheduleOrigin {
@@ -82,5 +99,5 @@ export interface ScheduleInfo {
   /** The schedule as NATS stores it, such as `@every 600s` or `0 0 9 * * mon-fri`. */
   specification: string;
   timezone?: string;
-  ttlSeconds: number;
+  ttlSeconds?: number;
 }

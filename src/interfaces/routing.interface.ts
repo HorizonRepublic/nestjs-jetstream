@@ -2,7 +2,7 @@ import type { MessageHandler } from '@nestjs/microservices';
 
 import type { DeadLetterInfo } from './hooks.interface';
 import type { AckExtensionConfig, RetryConfig } from './options.interface';
-import type { ScheduleSpec } from './schedule.interface';
+import type { RecurringScheduleSpec } from './schedule.interface';
 
 /** @internal Entry stored in the pattern registry after handler registration. */
 export interface RegisteredHandler {
@@ -19,7 +19,7 @@ export interface RegisteredHandler {
   /** `true` if this handler receives ticks from the schedule stream. */
   isScheduled: boolean;
   /** The schedule the handler declares; absent for a dynamic-only handler. */
-  schedule?: ScheduleSpec;
+  schedule?: RecurringScheduleSpec;
   /** User-defined metadata from `@EventPattern`/`@MessagePattern` extras. */
   meta?: Record<string, unknown>;
 }
@@ -41,7 +41,7 @@ export interface PatternsByKind {
 /** A schedule a handler owns, reconciled at boot. */
 export interface DeclaredSchedule {
   pattern: string;
-  spec: ScheduleSpec;
+  spec: RecurringScheduleSpec;
 }
 
 /** Options for configuring event/broadcast processing behavior. */

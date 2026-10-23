@@ -297,6 +297,10 @@ export enum JetstreamHeader {
   CallerName = 'x-caller-name',
   /** Set to `'true'` on error responses so the client can distinguish success from failure. */
   Error = 'x-error',
+  /** Hash of a schedule definition, stored on its holder to skip unchanged rewrites. */
+  ScheduleHash = 'x-schedule-hash',
+  /** Handler pattern a schedule's ticks are delivered to, stored on its holder. */
+  SchedulePattern = 'x-schedule-pattern',
 }
 
 /** Headers the transport attaches to a message when it is routed to the DLQ. */
@@ -318,6 +322,8 @@ export const RESERVED_HEADERS: ReadonlySet<string> = new Set<string>([
   JetstreamHeader.CorrelationId,
   JetstreamHeader.ReplyTo,
   JetstreamHeader.Error,
+  JetstreamHeader.ScheduleHash,
+  JetstreamHeader.SchedulePattern,
 ]);
 
 /**

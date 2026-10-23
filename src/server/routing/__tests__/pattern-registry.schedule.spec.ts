@@ -89,6 +89,16 @@ describe('PatternRegistry with scheduled handlers', () => {
     }).toThrow(/@EventPattern/);
   });
 
+  it('should refuse a one-shot schedule on a handler, which every boot would fire again', () => {
+    // Given
+    const handler = eventHandler({ schedule: { at: new Date(Date.now() + 60_000) } });
+
+    // When / Then
+    expect(() => {
+      sut.registerHandlers(new Map([['x', handler]]));
+    }).toThrow(expect.objectContaining({ reason: ScheduleErrorReason.InvalidAt }));
+  });
+
   it('should refuse an invalid schedule at registration', () => {
     // Given
     const handler = eventHandler({ schedule: { cron: '* * * * *' } });

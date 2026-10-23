@@ -1,4 +1,4 @@
-import type { CronSchedule, ScheduleSpec } from '../interfaces';
+import type { AtSchedule, CronSchedule, ScheduleSpec } from '../interfaces';
 import { nextFireTimes, parseCron } from './cron-expression';
 import { JetstreamScheduleError } from './schedule-error';
 import { ScheduleErrorReason } from './schedule.types';
@@ -12,6 +12,9 @@ const isPositiveWholeNumber = (value: unknown): value is number =>
 
 /** Narrow a spec to its cron form. */
 export const isCronSchedule = (spec: ScheduleSpec): spec is CronSchedule => 'cron' in spec;
+
+/** Narrow a spec to its one-shot form. */
+export const isAtSchedule = (spec: ScheduleSpec): spec is AtSchedule => 'at' in spec;
 
 const assertTimezone = (timezone: string): void => {
   try {
@@ -35,6 +38,21 @@ export const validateScheduleSpec = (spec: ScheduleSpec): void => {
       ScheduleErrorReason.InvalidTtl,
       `ttlSeconds must be a positive whole number of seconds; got ${String(spec.ttlSeconds)}.`,
     );
+  }
+
+  if (isAtSchedule(spec)) {
+    if (
+      !(spec.at instanceof Date) ||
+      Number.isNaN(spec.at.getTime()) ||
+      spec.at.getTime() <= Date.now()
+    ) {
+      throw new JetstreamScheduleError(
+        ScheduleErrorReason.InvalidAt,
+        `at must be a valid date in the future; got ${String(spec.at)}.`,
+      );
+    }
+
+    return;
   }
 
   if (isCronSchedule(spec)) {
@@ -61,16 +79,21 @@ export const validateScheduleSpec = (spec: ScheduleSpec): void => {
 };
 
 /** The schedule as the `Nats-Schedule` header carries it. */
-export const toNatsSpecification = (spec: ScheduleSpec): string =>
-  isCronSchedule(spec) ? spec.cron : `@every ${spec.everySeconds}s`;
+export const toNatsSpecification = (spec: ScheduleSpec): string => {
+  if (isAtSchedule(spec)) return `@at ${spec.at.toISOString()}`;
+
+  return isCronSchedule(spec) ? spec.cron : `@every ${spec.everySeconds}s`;
+};
 
 /**
  * How long a tick may wait unconsumed: the explicit `ttlSeconds`, else the
- * interval, else the shortest gap between a cron's next fires (capped at a
+ * interval, nothing for a one-shot, else the shortest gap between a cron's next fires (capped at a
  * year), so a service that was down finds one tick, not a backlog.
  */
-export const resolveTickTtlSeconds = (spec: ScheduleSpec, now: Date): number => {
+export const resolveTickTtlSeconds = (spec: ScheduleSpec, now: Date): number | undefined => {
   if (spec.ttlSeconds !== undefined) return spec.ttlSeconds;
+  // A one-shot fires once, so there is no backlog to bound.
+  if (isAtSchedule(spec)) return undefined;
   if (!isCronSchedule(spec)) return spec.everySeconds;
 
   const fires = nextFireTimes(parseCron(spec.cron), now, TTL_SAMPLE_FIRES);
