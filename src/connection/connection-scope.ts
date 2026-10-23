@@ -176,6 +176,12 @@ export const createConnectionScope = (
       ? { maxDeliverByStream: new Map(), onDeadLetter: options.onDeadLetter }
       : undefined;
 
+  const scheduleStore = new ScheduleStore(
+    connection,
+    names.streamName(StreamKind.Schedule),
+    names.schedulePrefix(StreamKind.Schedule),
+  );
+
   const eventRouter = new EventRouter(
     messages,
     patterns,
@@ -187,6 +193,7 @@ export const createConnectionScope = (
     connection,
     options,
     names,
+    scheduleStore,
   );
 
   const rpcRouter = new RpcRouter(
@@ -204,14 +211,7 @@ export const createConnectionScope = (
   const metadata = new MetadataProvider(options, connection);
 
   const scheduleReconciler = new ScheduleReconciler(
-    new ScheduleWriter(
-      new ScheduleStore(
-        connection,
-        names.streamName(StreamKind.Schedule),
-        names.schedulePrefix(StreamKind.Schedule),
-      ),
-      codec,
-    ),
+    new ScheduleWriter(scheduleStore, codec),
     names.subjects,
     async () => connection.getCapabilities(),
     eventBus,

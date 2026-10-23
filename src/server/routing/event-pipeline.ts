@@ -7,6 +7,7 @@ import { MessageKind, TransportEvent } from '../../interfaces';
 import { withConsumeSpan } from '../../otel';
 import { isPromiseLike, startAckExtensionTimer, unwrapResult } from '../../utils';
 import type { DeadLetterCapture } from './dead-letter-capture';
+import { settleOrphanTick } from './orphan-ticks';
 import type { HandlerReporter, RoutePipelineContext } from './routing.types';
 import { createSettlement, statusForContext } from './settlement';
 
@@ -45,7 +46,7 @@ const createHandlerReporter = (rctx: RoutePipelineContext): HandlerReporter => {
 const createEventResolver = (
   rctx: RoutePipelineContext,
 ): ((msg: JsMsg) => ResolvedEvent | Promise<void> | null) => {
-  const { patternRegistry, codec, eventBus, logger, capture, kind } = rctx;
+  const { patternRegistry, codec, eventBus, logger, capture, kind, orphans } = rctx;
 
   // Unroutable messages can't be fixed by redelivery, so capture them
   // immediately; term() on a workqueue stream would delete the payload.
@@ -74,6 +75,9 @@ const createEventResolver = (
       const handler = patternRegistry.getHandler(subject);
 
       if (!handler) {
+        // A schedule tick may belong to a newer replica mid-rollout; the policy decides.
+        if (orphans !== null) return settleOrphanTick(orphans, msg, logger);
+
         logger.error(`No handler for subject: ${subject}`);
 
         if (capture !== null) {

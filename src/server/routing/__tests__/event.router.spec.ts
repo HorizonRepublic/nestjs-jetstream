@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 
 import type { DeliveryInfo, JsMsg } from '@nats-io/jetstream';
+import { headers as natsHeaders } from '@nats-io/transport-node';
 
 import { faker } from '@faker-js/faker';
 import { createMock } from '@golevelup/ts-vitest';
@@ -19,6 +20,7 @@ import type {
   JetstreamModuleOptions,
 } from '../../../interfaces';
 import { dlqStreamName, JetstreamDlqHeader } from '../../../jetstream.constants';
+import type { ScheduleStore } from '../../../schedule/schedule-store';
 import { MessageProvider } from '../../infrastructure';
 import { NameResolver } from '../../infrastructure/name-resolver';
 import { EventRouter } from '../event.router';
@@ -95,6 +97,87 @@ describe(EventRouter, () => {
         // Then
         expect(schedules$.observed).toBe(true);
         expect(msg.nak).toHaveBeenCalledWith(7_000);
+      });
+    });
+
+    describe('when a schedule tick finds no handler', () => {
+      let store: Mocked<ScheduleStore>;
+
+      const tick = (deliveryCount: number, scheduler?: string): Mocked<JsMsg> => {
+        const hdrs = natsHeaders();
+
+        if (scheduler !== undefined) hdrs.set('Nats-Scheduler', scheduler);
+
+        return createMock<JsMsg>({
+          ack: vi.fn(),
+          subject: 'svc__microservice.sched.gone',
+          data: new Uint8Array(),
+          headers: hdrs,
+          info: { deliveryCount, stream: 'svc__microservice_sched-stream' },
+        });
+      };
+
+      beforeEach(() => {
+        store = createMock<ScheduleStore>({ cancel: vi.fn().mockResolvedValue(undefined) });
+        sut = new EventRouter(
+          messageProvider,
+          patternRegistry,
+          codec,
+          eventBus,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          { name: 'svc', servers: ['nats://localhost:4222'] },
+          new NameResolver({ name: 'svc', servers: ['nats://localhost:4222'] }),
+          store,
+        );
+        sut.updateMaxDeliverMap(new Map([['svc__microservice_sched-stream', 3]]));
+        patternRegistry.hasScheduleHandlers.mockReturnValue(true);
+        patternRegistry.getHandler.mockReturnValue(null);
+        sut.start();
+      });
+
+      it('should hand it back for another replica before giving up', async () => {
+        // Given
+        const msg = tick(1, 'svc__microservice._cron.decl.gone');
+
+        // When
+        schedules$.next(msg);
+        await new Promise(process.nextTick);
+
+        // Then
+        expect(msg.nak).toHaveBeenCalledWith(5_000);
+        expect(msg.term).not.toHaveBeenCalled();
+        expect(store.cancel).not.toHaveBeenCalled();
+      });
+
+      it('should cancel the schedule on the last delivery', async () => {
+        // Given
+        const msg = tick(3, 'svc__microservice._cron.decl.gone');
+
+        // When
+        schedules$.next(msg);
+        await new Promise(process.nextTick);
+        await new Promise(process.nextTick);
+
+        // Then
+        expect(store.cancel).toHaveBeenCalledWith('svc__microservice._cron.decl.gone');
+        expect(msg.term).toHaveBeenCalled();
+        expect(msg.nak).not.toHaveBeenCalled();
+      });
+
+      it('should terminate a tick that names no schedule without cancelling anything', async () => {
+        // Given
+        const msg = tick(3);
+
+        // When
+        schedules$.next(msg);
+        await new Promise(process.nextTick);
+
+        // Then
+        expect(store.cancel).not.toHaveBeenCalled();
+        expect(msg.term).toHaveBeenCalled();
       });
     });
 

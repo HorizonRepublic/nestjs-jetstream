@@ -23,6 +23,7 @@ import {
   type ResolvedOtelOptions,
   type ServerEndpoint,
 } from '../../otel';
+import type { ScheduleStore } from '../../schedule/schedule-store';
 import {
   resolveAckExtensionInterval,
   resolveRetryDelays,
@@ -34,7 +35,18 @@ import { ConcurrencyGate } from './concurrency-gate';
 import { DeadLetterCapture } from './dead-letter-capture';
 import { createOrderedPipeline, createWorkqueuePipeline } from './event-pipeline';
 import { PatternRegistry } from './pattern-registry';
-import type { EventConsumeKind, ParkTimerFn, RoutePipelineContext } from './routing.types';
+import type {
+  EventConsumeKind,
+  OrphanTickPolicy,
+  ParkTimerFn,
+  RoutePipelineContext,
+} from './routing.types';
+
+/** Delay before an unhandled tick is offered to another replica. */
+const ORPHAN_REDELIVER_DELAY_MS = 5_000;
+
+/** Deliveries before an orphan is cancelled when the consumer sets no limit. */
+const ORPHAN_FALLBACK_DELIVERIES = 3;
 
 const eventConsumeKindFor = (kind: StreamKind): EventConsumeKind => {
   if (kind === StreamKind.Broadcast) return ConsumeKind.Broadcast;
@@ -58,6 +70,7 @@ export class EventRouter {
   private readonly serviceName: string;
   private readonly serverEndpoint: ServerEndpoint | null;
   private readonly capture: DeadLetterCapture | null;
+  private maxDeliverByStream = new Map<string, number>();
 
   public constructor(
     private readonly messageProvider: MessageProvider,
@@ -69,7 +82,8 @@ export class EventRouter {
     private readonly ackWaitMap?: Map<StreamKind, number> | undefined,
     connection?: ConnectionProvider,
     options?: JetstreamModuleOptions,
-    names?: NameResolver,
+    private readonly names?: NameResolver | undefined,
+    private readonly scheduleStore?: ScheduleStore | undefined,
   ) {
     if (options) {
       const derived = deriveOtelAttrs(options);
@@ -105,6 +119,7 @@ export class EventRouter {
    * Called after consumers are ensured so the DLQ map reflects reality.
    */
   public updateMaxDeliverMap(consumerMaxDelivers: Map<string, number>): void {
+    this.maxDeliverByStream = consumerMaxDelivers;
     if (!this.deadLetterConfig) return;
     this.deadLetterConfig.maxDeliverByStream = consumerMaxDelivers;
   }
@@ -152,6 +167,7 @@ export class EventRouter {
       ackExtensionInterval,
       retryDelays: resolveRetryDelays(this.getRetryConfig(kind)),
       capture: this.capture,
+      orphans: kind === StreamKind.Schedule ? this.orphanPolicy() : null,
     };
 
     const route = isOrdered ? createOrderedPipeline(rctx) : createWorkqueuePipeline(rctx);
@@ -177,6 +193,25 @@ export class EventRouter {
     });
 
     this.subscriptions.push(subscription);
+  }
+
+  private orphanPolicy(): OrphanTickPolicy | null {
+    const { scheduleStore, names } = this;
+
+    if (!scheduleStore || !names) return null;
+
+    const stream = names.streamName(StreamKind.Schedule);
+
+    return {
+      // An unlimited consumer would hand an orphan around forever; bound it like the default.
+      maxDeliver: () => {
+        const configured = this.maxDeliverByStream.get(stream) ?? 0;
+
+        return configured > 0 ? configured : ORPHAN_FALLBACK_DELIVERIES;
+      },
+      redeliverDelayMs: ORPHAN_REDELIVER_DELAY_MS,
+      cancel: async (holderSubject) => scheduleStore.cancel(holderSubject),
+    };
   }
 
   private getRetryConfig(kind: StreamKind): RetryConfig | undefined {
