@@ -58,7 +58,7 @@ Required, and already present in any standard NestJS project:
 Optional, install only for the feature that needs it:
 
 - `msgpackr` `^1.11.0 || ^2.0.0` for the [MessagePack codec](/docs/guides/custom-codec#built-in-msgpackcodec)
-- `prom-client` ^15.0.0 for [Prometheus metrics](/docs/observability/metrics)
+- `@prometheus-io/client` ^0.16.0, or `prom-client` ^15.0.0, its previous name, for [Prometheus metrics](/docs/observability/metrics)
 - `@opentelemetry/api` ^1.9.0 for [distributed tracing](/docs/observability/tracing)
 
 ## Runtime requirements

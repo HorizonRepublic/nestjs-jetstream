@@ -137,7 +137,7 @@ export default function Root({ children }) {
   "headline": "How to register lifecycle hooks for NestJS JetStream",
   "description": "Subscribe to transport events for monitoring, alerting, and logging integration.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-08-03"
+  "dateModified": "2026-10-23"
 },
       
     '/docs/guides/migration/': {
@@ -223,9 +223,9 @@ export default function Root({ children }) {
     '/docs/observability/index/': {
   "@type": "Article",
   "headline": "Observability: NestJS JetStream Transport",
-  "description": "Distributed tracing and Prometheus metrics built into the transport. Zero-config integration with OpenTelemetry SDKs and prom-client-based exporters.",
+  "description": "Distributed tracing and Prometheus metrics built into the transport. Zero-config integration with OpenTelemetry SDKs and Prometheus client exporters.",
   "datePublished": "2026-05-27",
-  "dateModified": "2026-08-03"
+  "dateModified": "2026-10-23"
 },
       
     '/docs/observability/metrics/': {
@@ -233,7 +233,7 @@ export default function Root({ children }) {
   "headline": "Prometheus Metrics: NestJS JetStream Transport",
   "description": "Built-in Prometheus metrics for NATS JetStream transport: throughput, handler latency, consumer lag, dead letters, and publish errors.",
   "datePublished": "2026-05-27",
-  "dateModified": "2026-08-03"
+  "dateModified": "2026-10-23"
 },
       
     '/docs/observability/tracing/': {

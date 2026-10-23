@@ -35,7 +35,7 @@ import {
   DEFAULT_METRICS_PREFIX,
   DEFAULT_POLL_INTERVAL_MS,
   JETSTREAM_METRICS_CONFIG,
-  JETSTREAM_METRICS_PROM_CLIENT,
+  JETSTREAM_METRICS_CLIENT,
   STREAM_KIND_LABEL,
   UNMATCHED_SUBJECT_LABEL,
 } from './metrics.constants';
@@ -43,7 +43,7 @@ import { createMetrics } from './metrics.factory';
 import type {
   ConsumerPollTarget,
   JetstreamMetrics,
-  PromClientRuntime,
+  LoadedPrometheusClient,
   RecoveredKindLabel,
   ResolvedSubjectLabels,
 } from './metrics.types';
@@ -66,7 +66,7 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
   public constructor(
     private readonly eventBus: EventBus,
     @Inject(JETSTREAM_METRICS_CONFIG) private readonly config: MetricsConfig | null,
-    @Inject(JETSTREAM_METRICS_PROM_CLIENT) private readonly promClient: PromClientRuntime | null,
+    @Inject(JETSTREAM_METRICS_CLIENT) private readonly client: LoadedPrometheusClient | null,
     @Inject(JETSTREAM_OPTIONS) private readonly options: JetstreamModuleOptions,
     @Optional() private readonly patternRegistry: PatternRegistry | null,
     @Optional()
@@ -78,20 +78,20 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
   public async onApplicationBootstrap(): Promise<void> {
     if (this.metrics !== null) return;
 
-    // Disabled: `metrics` was omitted/false. prom-client is never resolved
+    // Disabled: `metrics` was omitted/false. No Prometheus client is loaded
     // in this branch, so the service is a no-op for publisher-only or
     // metrics-off deployments.
-    if (!this.options.metrics || !this.config || !this.promClient) return;
+    if (!this.options.metrics || !this.config || !this.client) return;
 
     if (!this.config.register) {
       throw new Error(
-        'JetstreamMetricsService requires a prom-client Registry; none was resolved by JetstreamMetricsModule.',
+        'JetstreamMetricsService requires a Prometheus Registry; none was resolved by JetstreamMetricsModule.',
       );
     }
 
     this.metrics = createMetrics({
       register: this.config.register,
-      promClient: this.promClient,
+      runtime: this.client.runtime,
       prefix: this.config.prefix,
       defaultLabels: this.config.defaultLabels,
       buckets: this.config.buckets,
@@ -101,7 +101,7 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
     this.syncInitialConnectionState();
     this.startPolling();
     this.logger.log(
-      `Metrics enabled (prefix=${this.config.prefix ?? DEFAULT_METRICS_PREFIX}, poll=${this.getEffectivePollInterval()}ms)`,
+      `Metrics enabled (client=${this.client.name}, prefix=${this.config.prefix ?? DEFAULT_METRICS_PREFIX}, poll=${this.getEffectivePollInterval()}ms)`,
     );
   }
 
