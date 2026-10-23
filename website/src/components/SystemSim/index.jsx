@@ -437,13 +437,26 @@ const sphere = (ctx, x, y, r, color, alpha) => {
   ctx.restore();
 };
 
+/* Text on a soft backing, so it stays readable over geometry and particles. */
 const label = (ctx, palette, value, x, y, align, color = palette.label, weight = 400) => {
   ctx.font = `${weight} 11px ${palette.mono}`;
-  ctx.fillStyle = color;
-  ctx.globalAlpha = 0.9;
-  ctx.textAlign = align;
-  ctx.fillText(value, x, y);
+  const width = ctx.measureText(value).width;
+  let left = x;
+
+  if (align === 'center') left = x - width / 2;
+  else if (align === 'right') left = x - width;
+
+  ctx.save();
+  ctx.globalAlpha = 0.78;
+  ctx.fillStyle = palette.surface;
+  ctx.beginPath();
+  ctx.roundRect(left - 6, y - 12, width + 12, 17, 4);
+  ctx.fill();
   ctx.globalAlpha = 1;
+  ctx.fillStyle = color;
+  ctx.textAlign = 'left';
+  ctx.fillText(value, left, y);
+  ctx.restore();
 };
 
 const tooltip = (ctx, palette, lines, x, y) => {
@@ -816,15 +829,16 @@ const draw = (ctx, sim, geo, view, palette, logo, ui) => {
   for (const message of sim.messages) if (!inChannel(message)) drawMessage(ctx, project, palette, message, ui);
 
   // labels
+  // labels sit beside the geometry, never across it
   const pl = project(geo.producers[0].x, geo.producers[0].y, 20);
-  const sl = project((geo.tube.x0 + geo.tube.x1) / 2, geo.tube.y + 16);
-  const ll = project((geo.lane.x0 + geo.lane.x1) / 2, geo.lane.y, LANE_HEIGHT);
+  const sl = project(geo.tube.x0 + 30, geo.tube.y + 40);
+  const ll = project(geo.lane.x0, geo.lane.y - 18, LANE_HEIGHT);
   const rl = project(geo.replicas.at(-1).x, geo.replicas.at(-1).y + 24);
 
-  label(ctx, palette, 'services', pl.x, pl.y - 14, 'center');
-  label(ctx, palette, sim.queue.length ? `stream · ${sim.queue.length} stored` : 'stream', sl.x + 10, sl.y + 18, 'left');
-  label(ctx, palette, 'retry · 2 s, 10 s', ll.x, ll.y - 10, 'center', palette.redeliver);
-  label(ctx, palette, 'NestJS replicas', rl.x + 4, rl.y + 20, 'center');
+  label(ctx, palette, 'services', pl.x, pl.y - 16, 'center');
+  label(ctx, palette, sim.queue.length ? `stream · ${sim.queue.length} stored` : 'stream', sl.x, sl.y, 'right', palette.deliver);
+  label(ctx, palette, 'retry · 2 s, 10 s', ll.x - 10, ll.y - 8, 'right', palette.redeliver);
+  label(ctx, palette, 'NestJS replicas', rl.x + 4, rl.y + 22, 'center');
 
   if (sim.deploy) {
     const done = Math.min(sim.replicas.length, Math.floor((sim.time - sim.deploy.start) / RESTART_MS) + 1);
