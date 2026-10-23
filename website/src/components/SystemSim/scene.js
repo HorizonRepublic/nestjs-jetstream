@@ -9,15 +9,15 @@ import { ACK_MS, CAPACITY, createSim, isDown, step, togglePod } from './model';
    pods. An ack lifts the message away; a nak sends it up the retry arc, the
    backoff, and back into the stream. Every message moves along a drawn path. */
 
-const Z = [-2.1, 0, 2.1];
-const SERVICE_X = -5.3;
-const POD_X = 4.3;
+const Z = [-2.7, 0, 2.7];
+const SERVICE_X = -4.3;
+const POD_X = 3.4;
 const BELT_Y = 0.36;
-const TUBE = { x0: -2.6, x1: 1.5, radius: 0.27 };
+const TUBE = { x0: -2.0, x1: 1.0, radius: 0.27 };
 const SPACING = (TUBE.x1 - TUBE.x0 - 0.5) / (CAPACITY - 1);
-const POD = { w: 1.15, h: 0.12, d: 1.15 };
+const POD = { w: 1.35, h: 0.12, d: 1.35 };
 const POD_TOP = POD.h + 0.12;
-const SERVICE = { w: 1.0, h: 0.1, d: 0.72 };
+const SERVICE = { w: 1.2, h: 0.1, d: 0.86 };
 const REGION = {
   wide: { x0: 0.47, x1: 0.95, y0: 0.02, y1: 0.98 },
   narrow: { x0: 0.02, x1: 0.98, y0: 0.04, y1: 0.96 },
@@ -33,9 +33,9 @@ const clamp01 = (t) => Math.max(0, Math.min(1, t));
 
 const entrance = v3(TUBE.x0 + 0.05, BELT_Y, 0);
 const exit = v3(TUBE.x1 + 0.1, BELT_Y, 0);
-const JOIN_X = -3.9;
-const SPLIT_X = 2.6;
-const RAIL = { y: 0.95, z: -3.0, dropX: -3.3 };
+const JOIN_X = -3.0;
+const SPLIT_X = 1.85;
+const RAIL = { y: 0.95, z: -3.7, dropX: -2.55 };
 
 /* A schematic route: straight runs along the axes, corners rounded off. */
 const route = (points, radius = 0.3) => {
@@ -61,13 +61,13 @@ const route = (points, radius = 0.3) => {
 const intoStream = v3(TUBE.x0 - 0.2, BELT_Y, 0);
 const fanIn = Z.map((z) =>
   z === 0
-    ? route([v3(SERVICE_X + 0.5, BELT_Y, 0), intoStream])
-    : route([v3(SERVICE_X + 0.5, BELT_Y, z), v3(JOIN_X, BELT_Y, z), v3(JOIN_X, BELT_Y, 0), intoStream]),
+    ? route([v3(SERVICE_X + 0.6, BELT_Y, 0), intoStream])
+    : route([v3(SERVICE_X + 0.6, BELT_Y, z), v3(JOIN_X, BELT_Y, z), v3(JOIN_X, BELT_Y, 0), intoStream]),
 );
 const fanOut = Z.map((z) =>
   z === 0
-    ? route([exit.clone(), v3(POD_X - 0.6, BELT_Y, 0), v3(POD_X, POD_TOP, 0)], 0.15)
-    : route([exit.clone(), v3(SPLIT_X, BELT_Y, 0), v3(SPLIT_X, BELT_Y, z), v3(POD_X - 0.6, BELT_Y, z), v3(POD_X, POD_TOP, z)], 0.3),
+    ? route([exit.clone(), v3(POD_X - 0.7, BELT_Y, 0), v3(POD_X, POD_TOP, 0)], 0.15)
+    : route([exit.clone(), v3(SPLIT_X, BELT_Y, 0), v3(SPLIT_X, BELT_Y, z), v3(POD_X - 0.7, BELT_Y, z), v3(POD_X, POD_TOP, z)], 0.3),
 );
 // nak: straight up out of the pod onto a raised rail along the back, and down into the stream
 const retryLifts = Z.map((z) => route([v3(POD_X, POD_TOP, z), v3(POD_X, RAIL.y, z), v3(POD_X, RAIL.y, RAIL.z)], 0.25));
@@ -251,32 +251,6 @@ export const createScene = ({ container, overlay, logoUrl, natsUrl, reduce }) =>
   for (const curve of retryLifts) scene.add(curveLine(curve, retryMaterial, 64));
   scene.add(curveLine(retryArc, retryMaterial, 240));
 
-  // the board the system sits on: a thin plate with a rounded outline
-  const PLATE = { x0: SERVICE_X - 0.95, x1: POD_X + 0.95, z0: RAIL.z - 0.55, z1: Z[2] + 0.95, r: 0.5 };
-  const plateShape = new THREE.Shape();
-
-  plateShape.moveTo(PLATE.x0 + PLATE.r, PLATE.z0);
-  plateShape.lineTo(PLATE.x1 - PLATE.r, PLATE.z0);
-  plateShape.quadraticCurveTo(PLATE.x1, PLATE.z0, PLATE.x1, PLATE.z0 + PLATE.r);
-  plateShape.lineTo(PLATE.x1, PLATE.z1 - PLATE.r);
-  plateShape.quadraticCurveTo(PLATE.x1, PLATE.z1, PLATE.x1 - PLATE.r, PLATE.z1);
-  plateShape.lineTo(PLATE.x0 + PLATE.r, PLATE.z1);
-  plateShape.quadraticCurveTo(PLATE.x0, PLATE.z1, PLATE.x0, PLATE.z1 - PLATE.r);
-  plateShape.lineTo(PLATE.x0, PLATE.z0 + PLATE.r);
-  plateShape.quadraticCurveTo(PLATE.x0, PLATE.z0, PLATE.x0 + PLATE.r, PLATE.z0);
-
-  const plateMaterial = new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide });
-  const plate = new THREE.Mesh(new THREE.ShapeGeometry(plateShape, 12), plateMaterial);
-  const plateEdgeMaterial = new THREE.LineBasicMaterial({ transparent: true });
-  const plateEdge = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(plateShape.getSpacedPoints(160)), plateEdgeMaterial);
-
-  // the shape is drawn in x/y; lay it on the floor so its y becomes the floor's z
-  for (const mesh of [plate, plateEdge]) {
-    mesh.rotation.x = Math.PI / 2;
-    mesh.position.y = 0.004;
-    scene.add(mesh);
-  }
-
   // junction dots where lines merge and split
   const junctionMaterial = new THREE.MeshBasicMaterial();
 
@@ -385,14 +359,14 @@ export const createScene = ({ container, overlay, logoUrl, natsUrl, reduce }) =>
     const material = new THREE.MeshStandardMaterial({ roughness: 0.5, transparent: true });
     const body = new THREE.Mesh(podGeometry, material);
     const logo = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.56, 0.56),
+      new THREE.PlaneGeometry(0.64, 0.64),
       new THREE.MeshBasicMaterial({ map: logoTexture, transparent: true, depthWrite: false }),
     );
     const ledMaterial = new THREE.MeshBasicMaterial();
     const led = new THREE.Mesh(ledGeometry, ledMaterial);
     const progress = new THREE.Line(new THREE.BufferGeometry().setFromPoints(ringPoints), new THREE.LineBasicMaterial({ transparent: true }));
     const burst = new THREE.Mesh(
-      new THREE.RingGeometry(0.74, 0.77, 64),
+      new THREE.RingGeometry(0.86, 0.89, 64),
       new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }),
     );
     const group = new THREE.Group();
@@ -470,10 +444,6 @@ export const createScene = ({ container, overlay, logoUrl, natsUrl, reduce }) =>
     tubeGlow.material.color.copy(palette.deliver);
     for (const pod of pods) pod.progress.material.color.copy(palette.deliver);
 
-    plateMaterial.color.copy(palette.dark ? palette.bg2 : palette.bg0);
-    plateMaterial.opacity = palette.dark ? 0.55 : 0.8;
-    plateEdgeMaterial.color.copy(palette.line);
-    plateEdgeMaterial.opacity = 0.9;
     junctionMaterial.color.copy(palette.strong);
 
     scene.remove(grid);
@@ -521,7 +491,7 @@ export const createScene = ({ container, overlay, logoUrl, natsUrl, reduce }) =>
     const content = Math.min(cw, 1140);
     const left = (cw - content) / 2;
     const region =
-      cw < 760 ? REGION.narrow : { ...REGION.wide, x0: (left + content * 0.48) / cw, x1: Math.min(1, (left + content + 40) / cw) };
+      cw < 760 ? REGION.narrow : { ...REGION.wide, x0: (left + content * 0.47) / cw, x1: Math.min(1, (left + content + Math.min(left, 160)) / cw) };
     const aspect = cw / ch;
 
     view.cw = cw;
@@ -537,10 +507,10 @@ export const createScene = ({ container, overlay, logoUrl, natsUrl, reduce }) =>
     camera.updateMatrixWorld();
 
     const bounds = [
-      v3(SERVICE_X - 0.95, 0, RAIL.z - 0.55),
-      v3(SERVICE_X - 0.95, 0, Z[2] + 0.95),
-      v3(POD_X + 0.95, 0, RAIL.z - 0.55),
-      v3(POD_X + 0.95, 0, Z[2] + 0.95),
+      v3(SERVICE_X - 0.7, 0, RAIL.z - 0.2),
+      v3(SERVICE_X - 0.7, 0, Z[2] + 0.6),
+      v3(POD_X + 0.8, 0, RAIL.z - 0.2),
+      v3(POD_X + 0.8, 0, Z[2] + 0.8),
       v3(POD_X, RAIL.y + 0.2, RAIL.z),
       v3(POD_X, POD_TOP + 1.3, Z[0]),
     ].map((p) => p.applyMatrix4(camera.matrixWorldInverse));
