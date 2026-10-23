@@ -69,6 +69,7 @@ export type {
   CronSchedule,
   IntervalSchedule,
   RecurringScheduleSpec,
+  ScheduleReconcileReport,
   ScheduleHandlerOption,
   ScheduleInfo,
   ScheduleSpec,

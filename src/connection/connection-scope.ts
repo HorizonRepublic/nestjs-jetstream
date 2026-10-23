@@ -11,6 +11,9 @@ import type {
   RpcRouterOptions,
 } from '../interfaces';
 import { deriveOtelAttrs, withSelfHealingSpan } from '../otel';
+import { ScheduleReconciler } from '../schedule/schedule-reconciler';
+import { ScheduleStore } from '../schedule/schedule-store';
+import { ScheduleWriter } from '../schedule/schedule-writer';
 import {
   ConsumerProvider,
   CoreRpcServer,
@@ -200,6 +203,20 @@ export const createConnectionScope = (
   const coreRpc = new CoreRpcServer(options, connection, patterns, codec, eventBus, names);
   const metadata = new MetadataProvider(options, connection);
 
+  const scheduleReconciler = new ScheduleReconciler(
+    new ScheduleWriter(
+      new ScheduleStore(
+        connection,
+        names.streamName(StreamKind.Schedule),
+        names.schedulePrefix(StreamKind.Schedule),
+      ),
+      codec,
+    ),
+    names.subjects,
+    async () => connection.getCapabilities(),
+    eventBus,
+  );
+
   const strategy = new JetstreamStrategy(
     options,
     connection,
@@ -213,6 +230,7 @@ export const createConnectionScope = (
     ackWaitMap,
     metadata,
     binding,
+    scheduleReconciler,
   );
 
   return {

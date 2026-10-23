@@ -89,6 +89,13 @@ export enum ScheduleChange {
   Unchanged = 'unchanged',
 }
 
+/** What reconciling the declared schedules at boot did, by handler pattern. */
+export interface ScheduleReconcileReport {
+  created: string[];
+  updated: string[];
+  unchanged: string[];
+}
+
 /** A stored schedule as `listSchedules()` reports it. */
 export interface ScheduleInfo {
   /** The handler pattern for a declared schedule, the caller's id for a dynamic one. */

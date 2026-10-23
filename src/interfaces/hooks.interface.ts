@@ -1,5 +1,6 @@
 import type { MsgHdrs } from '@nats-io/transport-node';
 
+import type { ScheduleReconcileReport } from './schedule.interface';
 import { StreamKind } from './stream.interface';
 
 /** Discriminates the kind of message routed through the transport. */
@@ -40,6 +41,7 @@ export enum TransportEvent {
   HandlerCompleted = 'handlerCompleted',
   Published = 'published',
   RpcCompleted = 'rpcCompleted',
+  ScheduleReconciled = 'scheduleReconciled',
 }
 
 /**
@@ -157,6 +159,14 @@ export interface TransportHooks {
     status: RpcOutcomeStatus,
     connection?: string,
   ): void;
+
+  /**
+   * Fired once per connection at boot, after the declared schedules were
+   * written to the schedule stream.
+   *
+   * @param report Handler patterns whose schedule was created, updated or left as it was.
+   */
+  [TransportEvent.ScheduleReconciled](report: ScheduleReconcileReport, connection?: string): void;
 }
 
 /**
