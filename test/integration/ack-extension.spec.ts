@@ -141,6 +141,36 @@ describe('Ack extension and concurrency', () => {
 
       expect(sut.attempts).toBeGreaterThanOrEqual(2);
     });
+
+    it('stops extending at maxDuration and lets the server redeliver', async () => {
+      // Given extension capped well under the handler's run time
+      serviceName = uniqueServiceName();
+
+      const created = await createTestApp(
+        {
+          name: serviceName,
+          port,
+          events: {
+            consumer: { ack_wait: toNanos(ACK_WAIT_MS / 1_000, 'seconds'), max_deliver: 3 },
+            ackExtension: { maxDuration: ACK_WAIT_MS },
+          },
+        },
+        [SlowHandlerController],
+        [serviceName],
+      );
+
+      app = created.app;
+      const sut = created.module.get(SlowHandlerController);
+      const client = created.module.get<ClientProxy>(getClientToken(serviceName));
+
+      // When one message is published
+      await firstValueFrom(client.emit('order.slow', { id: 1 }));
+
+      // Then the extension lapses mid-handler and the message arrives again
+      await waitForCondition(() => sut.attempts >= 2, SLOW_HANDLER_MS + 10_000);
+
+      expect(sut.attempts).toBeGreaterThanOrEqual(2);
+    });
   });
 
   describe('concurrency', () => {

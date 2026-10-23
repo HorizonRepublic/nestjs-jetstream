@@ -1,4 +1,5 @@
-export { resolveAckExtensionInterval, startAckExtensionTimer } from './ack-extension';
+export { resolveAckExtension, startAckExtensionTimer } from './ack-extension';
+export type { AckExtension } from './ack-extension.types';
 
 export { resolveRetryDelays, retryDelayFor } from './retry-delay';
 

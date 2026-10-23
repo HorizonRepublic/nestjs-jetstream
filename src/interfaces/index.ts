@@ -24,6 +24,7 @@ export { ManagementMode } from './options.interface';
 
 export type {
   AckExtensionConfig,
+  AckExtensionOptions,
   DlqOptions,
   EntityManagement,
   RetryConfig,

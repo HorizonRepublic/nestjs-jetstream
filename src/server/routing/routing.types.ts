@@ -5,6 +5,7 @@ import type { JsMsg } from '@nats-io/jetstream';
 import type { RpcContext } from '../../context';
 import type { EventBus } from '../../hooks';
 import type { Codec, HandlerStatus, StreamKind } from '../../interfaces';
+import type { AckExtension } from '../../utils';
 import type { ConsumeKind, ResolvedOtelOptions, ServerEndpoint } from '../../otel';
 import type { DeadLetterCapture } from './dead-letter-capture';
 import type { PatternRegistry } from './pattern-registry';
@@ -49,7 +50,7 @@ export interface RoutePipelineContext {
   readonly serviceName: string;
   readonly serverEndpoint: ServerEndpoint | null;
   /** Resolved ack-extension interval in ms, or null when disabled. */
-  readonly ackExtensionInterval: number | null;
+  readonly ackExtension: AckExtension | null;
   /** Delay before each redelivery, in ms; empty means nak immediately. */
   readonly retryDelays: readonly number[];
   readonly capture: DeadLetterCapture | null;

@@ -25,7 +25,7 @@ import {
 } from '../../otel';
 import type { ScheduleStore } from '../../schedule/schedule-store';
 import {
-  resolveAckExtensionInterval,
+  resolveAckExtension,
   resolveRetryDelays,
   startAckExtensionTimer,
 } from '../../utils';
@@ -155,9 +155,9 @@ export class EventRouter {
   /** Assemble the pipeline and concurrency gate for one stream and subscribe. */
   private subscribeToStream(stream$: Observable<JsMsg>, kind: StreamKind): void {
     const isOrdered = kind === StreamKind.Ordered;
-    const ackExtensionInterval = isOrdered
+    const ackExtension = isOrdered
       ? null
-      : resolveAckExtensionInterval(this.getAckExtensionConfig(kind), this.ackWaitMap?.get(kind));
+      : resolveAckExtension(this.getAckExtensionConfig(kind), this.ackWaitMap?.get(kind));
 
     const rctx: RoutePipelineContext = {
       kind,
@@ -169,7 +169,7 @@ export class EventRouter {
       otel: this.otel,
       serviceName: this.serviceName,
       serverEndpoint: this.serverEndpoint,
-      ackExtensionInterval,
+      ackExtension,
       retryDelays: resolveRetryDelays(this.getRetryConfig(kind)),
       capture: this.capture,
       orphans: kind === StreamKind.Schedule ? this.orphanPolicy() : null,
@@ -177,10 +177,10 @@ export class EventRouter {
 
     const route = isOrdered ? createOrderedPipeline(rctx) : createWorkqueuePipeline(rctx);
     const maxActive = isOrdered ? 1 : (this.getConcurrency(kind) ?? Number.POSITIVE_INFINITY);
-    const hasAckExtension = ackExtensionInterval !== null && ackExtensionInterval > 0;
-    const parkTimer: ParkTimerFn | null = hasAckExtension
-      ? (msg): (() => void) | null => startAckExtensionTimer(msg, ackExtensionInterval)
-      : null;
+    const parkTimer: ParkTimerFn | null =
+      ackExtension === null
+        ? null
+        : (msg): (() => void) | null => startAckExtensionTimer(msg, ackExtension);
 
     const gate = new ConcurrencyGate(maxActive, route, parkTimer, this.logger, kind);
 
