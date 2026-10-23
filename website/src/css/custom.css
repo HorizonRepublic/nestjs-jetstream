@@ -17,7 +17,7 @@
   --ifm-line-height-base: 1.65;
 
   --ifm-heading-font-family: var(--jt-font-sans);
-  --ifm-heading-font-weight: 500;
+  --ifm-heading-font-weight: 600;
   --ifm-heading-line-height: 1.25;
 
   --ifm-global-radius: var(--jt-radius-md);
@@ -1479,4 +1479,72 @@ body.jt-mermaid-zoom-open {
 .docusaurus-mermaid-container svg .noteText > tspan,
 .docusaurus-mermaid-container svg .noteText {
   fill: var(--jt-fg-0) !important;
+}
+
+/* ---- conventional type: labels in the text face, sentence case ---------- */
+.menu__list-item-collapsible > .menu__link--sublist,
+.menu__list-item--collapsed > .menu__list-item-collapsible > .menu__link,
+.pagination-nav__sublabel,
+.table-of-contents::before,
+.footer__title {
+  font-family: var(--jt-font-sans);
+  font-size: 13px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 600;
+  color: var(--jt-fg-0);
+}
+
+.pagination-nav__sublabel,
+.table-of-contents::before {
+  color: var(--jt-fg-2);
+  font-weight: 500;
+}
+
+.theme-admonition .alert__heading,
+.theme-admonition [class*="admonitionHeading"] {
+  font-family: var(--jt-font-sans) !important;
+  font-size: 14px !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  font-weight: 600 !important;
+}
+
+.breadcrumbs,
+.breadcrumbs__item,
+.breadcrumbs__link,
+.footer__copyright,
+.theme-edit-this-page,
+.theme-last-updated {
+  font-family: var(--jt-font-sans);
+}
+
+.markdown table th {
+  font-family: var(--jt-font-sans);
+  font-size: 13px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 600;
+}
+
+.markdown h1 {
+  font-size: 38px;
+  font-weight: 700;
+  letter-spacing: -0.022em;
+}
+
+.markdown h2 {
+  font-size: 26px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+
+.markdown h3 {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.markdown :not(pre) > code {
+  font-size: 0.88em;
 }

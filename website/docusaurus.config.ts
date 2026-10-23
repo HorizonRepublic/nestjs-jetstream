@@ -92,7 +92,7 @@ const config: Config = {
       tagName: 'link',
       attributes: {
         rel: 'stylesheet',
-        href: 'https://fonts.googleapis.com/css2?family=Recursive:slnt,wght,CASL,MONO@-15..0,300..800,0..1,0..1&display=swap',
+        href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap',
       },
     },
     { tagName: 'link', attributes: { rel: 'icon', type: 'image/png', sizes: '48x48', href: '/img/favicon-48.png' } },
@@ -145,7 +145,7 @@ const config: Config = {
       theme: { light: 'neutral', dark: 'dark' },
       options: {
         securityLevel: 'loose',
-        fontFamily: '"Recursive", ui-monospace, monospace',
+        fontFamily: '"Inter", ui-sans-serif, system-ui, sans-serif',
         flowchart: {
           curve: 'basis',
           padding: 18,
