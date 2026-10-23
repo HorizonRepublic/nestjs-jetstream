@@ -15,7 +15,6 @@ export enum ScheduleErrorReason {
   /** The server has no time zone data for a zone the client accepted. */
   ServerTimezoneData = 'server-timezone-data',
   ServerRejected = 'server-rejected',
-  UnsupportedServer = 'unsupported-server',
 }
 
 /** One cron field: which values match, and whether it was written as a star. */

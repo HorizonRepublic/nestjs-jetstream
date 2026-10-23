@@ -48,13 +48,10 @@ export class ScheduleClient {
 
     validateScheduleSpec(spec);
 
-    // One-shot schedules need an older server than recurring ones; see the capability audit.
-    if (!isAtSchedule(spec)) {
-      (await this.connection.getCapabilities()).assert(
-        NatsCapability.RecurringSchedules,
-        `Schedule "${id}"`,
-      );
-    }
+    (await this.connection.getCapabilities()).assert(
+      isAtSchedule(spec) ? NatsCapability.MessageSchedules : NatsCapability.RecurringSchedules,
+      `Schedule "${id}"`,
+    );
 
     const writer = new ScheduleWriter(await this.store(), this.codec);
 

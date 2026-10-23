@@ -63,6 +63,16 @@ describe(ScheduleClient, () => {
     expect(jsm.streams.find).not.toHaveBeenCalled();
   });
 
+  it('should hold a one-shot to the older one-shot requirement', async () => {
+    // Given NATS 2.11, which ignores schedules altogether
+    level = 1;
+
+    // When / Then
+    await expect(
+      sut.schedule('once', 'reminder.due', {}, { at: new Date(Date.now() + 60_000) }),
+    ).rejects.toThrow(/Schedule "once" needs NATS JetStream API level 2/);
+  });
+
   it('should refuse to cancel an invalid id', async () => {
     await expect(sut.cancelSchedule('a.b')).rejects.toThrow(
       expect.objectContaining({ reason: ScheduleErrorReason.InvalidId }),

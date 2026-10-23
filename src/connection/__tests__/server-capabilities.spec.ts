@@ -4,8 +4,7 @@ import type { NatsConnection } from '@nats-io/transport-node';
 import { createMock } from '@golevelup/ts-vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { JetstreamScheduleError } from '../../schedule';
-import { ServerCapabilities } from '../server-capabilities';
+import { JetstreamCapabilityError, ServerCapabilities } from '../server-capabilities';
 import { NatsCapability } from '../server-capabilities.types';
 
 const probe = async (
@@ -44,6 +43,32 @@ describe(ServerCapabilities, () => {
     expect((await probe(3, 3)).supports(NatsCapability.RecurringSchedules)).toBe(false);
   });
 
+  // Levels measured on real servers: 2.10 none, 2.11.0 account 1, 2.12.0 2, 2.14.0 4.
+  it.each([
+    [NatsCapability.MessageTtl, 1, 0],
+    [NatsCapability.MessageSchedules, 2, 1],
+    [NatsCapability.RecurringSchedules, 4, 3],
+  ])('should require level %#: %s from %i', async (capability, required, below) => {
+    expect((await probe(required, required)).supports(capability)).toBe(true);
+    expect((await probe(below, below)).supports(capability)).toBe(false);
+  });
+
+  it('should carry the capability and both levels on the error', async () => {
+    // Given
+    const sut = await probe(undefined, 1);
+
+    // When / Then
+    expect(() => {
+      sut.assert(NatsCapability.MessageSchedules, 'scheduleAt()');
+    }).toThrow(
+      expect.objectContaining({
+        capability: NatsCapability.MessageSchedules,
+        requiredLevel: 2,
+        actualLevel: 1,
+      }),
+    );
+  });
+
   it('should pass the assertion on a server that supports the capability', async () => {
     const sut = await probe(4, 4);
 
@@ -62,7 +87,7 @@ describe(ServerCapabilities, () => {
     };
 
     // Then
-    expect(act).toThrow(JetstreamScheduleError);
+    expect(act).toThrow(JetstreamCapabilityError);
     expect(act).toThrow(
       'Handler "sync.tick" needs NATS JetStream API level 4 (NATS 2.14 or newer); ' +
         'n1 (NATS 2.12.6) reports level 3.',

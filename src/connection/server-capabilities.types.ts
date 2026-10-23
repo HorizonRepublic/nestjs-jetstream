@@ -1,6 +1,10 @@
 /** A server-side feature the transport gates on the JetStream API level. */
 export enum NatsCapability {
-  /** Cron and interval message schedules (`Nats-Schedule` beyond `@at`). */
+  /** Per-message TTL: `allow_msg_ttl` and the `Nats-TTL` header. */
+  MessageTtl = 'message-ttl',
+  /** One-shot message schedules: `allow_msg_schedules` and `Nats-Schedule: @at`. */
+  MessageSchedules = 'message-schedules',
+  /** Cron and interval message schedules. */
   RecurringSchedules = 'recurring-schedules',
 }
 

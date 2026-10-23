@@ -1,14 +1,31 @@
 import type { JetStreamManager } from '@nats-io/jetstream';
 import type { NatsConnection } from '@nats-io/transport-node';
 
-import { JetstreamScheduleError, ScheduleErrorReason } from '../schedule';
 import { NatsCapability } from './server-capabilities.types';
 import type { CapabilityRequirement } from './server-capabilities.types';
 
-/** Measured against real servers: 2.11 = 1, 2.12.6 = 3, 2.14.3 = 4, 2.15.1 = 5. */
+/**
+ * Measured against real servers. 2.10 reports no level and silently ignores
+ * both TTL and schedule flags; 2.11.0 reports 1, 2.12.0 reports 2, 2.14.0 reports 4.
+ */
 const REQUIREMENTS: Readonly<Record<NatsCapability, CapabilityRequirement>> = {
+  [NatsCapability.MessageTtl]: { apiLevel: 1, natsVersion: '2.11' },
+  [NatsCapability.MessageSchedules]: { apiLevel: 2, natsVersion: '2.12' },
   [NatsCapability.RecurringSchedules]: { apiLevel: 4, natsVersion: '2.14' },
 };
+
+/** A feature was used against a NATS server too old to run it. */
+export class JetstreamCapabilityError extends Error {
+  public constructor(
+    public readonly capability: NatsCapability,
+    public readonly requiredLevel: number,
+    public readonly actualLevel: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'JetstreamCapabilityError';
+  }
+}
 
 const levelOrNull = (value: unknown): number | null =>
   typeof value === 'number' && Number.isFinite(value) ? value : null;
@@ -47,15 +64,17 @@ export class ServerCapabilities {
   /**
    * @param capability What is about to be used.
    * @param usage Who uses it, for the message, such as `Handler "sync.tick"`.
-   * @throws JetstreamScheduleError when the server is too old.
+   * @throws JetstreamCapabilityError when the server is too old.
    */
   public assert(capability: NatsCapability, usage: string): void {
     if (this.supports(capability)) return;
 
     const { apiLevel, natsVersion } = REQUIREMENTS[capability];
 
-    throw new JetstreamScheduleError(
-      ScheduleErrorReason.UnsupportedServer,
+    throw new JetstreamCapabilityError(
+      capability,
+      apiLevel,
+      this.apiLevel,
       `${usage} needs NATS JetStream API level ${apiLevel} (NATS ${natsVersion} or newer); ` +
         `${this.serverLabel} reports level ${this.apiLevel}.`,
     );

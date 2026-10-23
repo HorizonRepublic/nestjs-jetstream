@@ -49,6 +49,11 @@ export type {
 
 export { JetstreamScheduleError, ScheduleErrorReason } from './schedule';
 
+// Server capabilities
+export { JetstreamCapabilityError } from './connection/server-capabilities';
+
+export { NatsCapability } from './connection/server-capabilities.types';
+
 // Client
 export { JetstreamClient } from './client';
 

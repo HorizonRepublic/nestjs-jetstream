@@ -13,6 +13,7 @@ import { context } from '@opentelemetry/api';
 import { Subscription as RxSubscription } from 'rxjs';
 
 import { ConnectionProvider } from '../connection';
+import { NatsCapability } from '../connection/server-capabilities.types';
 import { EventBus } from '../hooks';
 import { TransportEvent } from '../interfaces';
 import type {
@@ -294,6 +295,13 @@ export class JetstreamClient extends ClientProxy {
         `scheduleAt() is not supported for ordered events (pattern: ${packet.pattern}). ` +
           'Scheduled delivery is available for workqueue events and broadcasts.',
       );
+    }
+
+    // Older servers accept both headers and silently drop them.
+    if (schedule) {
+      await this.assertSupported(NatsCapability.MessageSchedules, 'scheduleAt()');
+    } else if (ttl !== undefined) {
+      await this.assertSupported(NatsCapability.MessageTtl, 'ttl()');
     }
 
     const eventSubject = this.buildEventSubject(packet.pattern);
@@ -665,6 +673,10 @@ export class JetstreamClient extends ClientProxy {
     this.rpcInbox.rejectAll(new Error('Connection lost'));
     // Force the next publish to re-run the full connect setup.
     this.readyForPublish = false;
+  }
+
+  private async assertSupported(capability: NatsCapability, usage: string): Promise<void> {
+    (await this.connection.getCapabilities()).assert(capability, usage);
   }
 
   private schedules(): ScheduleClient {

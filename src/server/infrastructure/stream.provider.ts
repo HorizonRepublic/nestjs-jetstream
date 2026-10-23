@@ -9,6 +9,7 @@ import {
 } from '@nats-io/jetstream';
 
 import { ConnectionProvider } from '../../connection';
+import { NatsCapability } from '../../connection/server-capabilities.types';
 import { ManagementMode, StreamKind } from '../../interfaces';
 import type { JetstreamModuleOptions } from '../../interfaces';
 import {
@@ -126,6 +127,8 @@ export class StreamProvider {
 
     this.logger.log(`\n${formatProvisioningSummary(this.options.name, reservations, external)}`);
 
+    await this.assertServerSupports(kinds);
+
     if (this.options.provisioning?.preflightStorageCheck && reservations.length > 0) {
       await assertStorageBudget(jsm, this.options.name, reservations, this.logger);
     }
@@ -142,6 +145,34 @@ export class StreamProvider {
         await this.ensureDlqStream(jsm);
       }
     }
+  }
+
+  /**
+   * Refuse stream features the server would silently drop: NATS before 2.11
+   * accepts `allow_msg_ttl` and ignores it, and before 2.12 does the same with
+   * `allow_msg_schedules`, so the stream would look fine and never expire or fire.
+   */
+  private async assertServerSupports(kinds: StreamKind[]): Promise<void> {
+    const gated: [NatsCapability, string][] = [];
+
+    for (const kind of kinds) {
+      const config = { ...this.getDefaults(kind), ...this.getOverrides(kind) };
+      const stream = this.getStreamName(kind);
+
+      if (config.allow_msg_ttl === true) {
+        gated.push([NatsCapability.MessageTtl, `Stream ${stream} (allow_msg_ttl)`]);
+      }
+
+      if (config.allow_msg_schedules === true) {
+        gated.push([NatsCapability.MessageSchedules, `Stream ${stream} (allow_msg_schedules)`]);
+      }
+    }
+
+    if (gated.length === 0) return;
+
+    const capabilities = await this.connection.getCapabilities();
+
+    for (const [capability, usage] of gated) capabilities.assert(capability, usage);
   }
 
   /** Get the stream name for a given kind. */
