@@ -215,7 +215,7 @@ export class JetstreamClient extends ClientProxy {
    *
    * @throws Error if not connected.
    */
-  public override unwrap<T = NatsConnection>(): T {
+  public unwrap<T = NatsConnection>(): T {
     const nc = this.connection.unwrap;
 
     if (!nc) {
