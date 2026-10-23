@@ -65,15 +65,15 @@ every hop.
 
 ## What you get
 
-| Capability             | How                                                                     |
-| ---------------------- | ----------------------------------------------------------------------- |
-| At-least-once delivery | Ack after the handler resolves, with bounded retries and backoff        |
-| Broadcast              | One message to every running pod via per-service durable consumers      |
-| Ordered delivery       | Sequential per partition key, without giving up horizontal scale        |
-| RPC                    | Core NATS for speed or JetStream for durability, same `@MessagePattern` |
-| Dead-letter queue      | Typed sink, original headers preserved, `onDeadLetter` callback         |
-| Tracing                | W3C `traceparent` propagated end to end, OpenTelemetry spans built in   |
-| Operations             | Health checks, graceful shutdown, scheduled messages, per-message TTL   |
+| Capability             | How                                                                      |
+| ---------------------- | ------------------------------------------------------------------------ |
+| At-least-once delivery | Ack after the handler resolves, with bounded retries and backoff         |
+| Broadcast              | One message to every running pod via per-service durable consumers       |
+| Ordered delivery       | Sequential per partition key, without giving up horizontal scale         |
+| RPC                    | Core NATS for speed or JetStream for durability, same `@MessagePattern`  |
+| Dead-letter queue      | Typed sink, original headers preserved, `onDeadLetter` callback          |
+| Tracing                | W3C `traceparent` propagated end to end, OpenTelemetry spans built in    |
+| Operations             | Health checks, graceful shutdown, cron and delayed jobs, per-message TTL |
 
 ## Install
 

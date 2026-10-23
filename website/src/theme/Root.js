@@ -180,12 +180,20 @@ export default function Root({ children }) {
   "dateModified": "2026-08-03"
 },
       
+    '/docs/guides/recurring-schedules/': {
+  "@type": "Article",
+  "headline": "How to run cron and interval jobs with NestJS JetStream",
+  "description": "Cron and interval schedules on NATS JetStream message scheduling (NATS 2.14, ADR-51).",
+  "datePublished": "2026-10-23",
+  "dateModified": "2026-10-23"
+},
+      
     '/docs/guides/scheduling/': {
   "@type": "Article",
   "headline": "How to schedule delayed messages with NestJS JetStream",
   "description": "One-shot delayed message delivery via the Nats-Schedule header (NATS 2.12, ADR-51).",
   "datePublished": "2026-04-01",
-  "dateModified": "2026-08-03"
+  "dateModified": "2026-10-23"
 },
       
     '/docs/guides/storage-budgeting/': {

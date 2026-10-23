@@ -13,27 +13,43 @@ schema:
 
 # How to migrate from `@nestjs/microservices` NATS to JetStream
 
-> **Use when:** you are replacing `Transport.NATS` from `/microservices`.
-> **You get:** five steps that keep your handlers, plus the acknowledgment semantics that change underneath.
+> **Use when:** you are replacing `Transport.NATS` from `/microservices`. **You
+> get:** five steps that keep your handlers, plus the acknowledgment semantics
+> that change underneath.
 
-Replacing the built-in NestJS NATS transport (`Transport.NATS` from `@nestjs/microservices`) with `@horizon-republic/nestjs-jetstream` is configuration work: your `ClientProxy` already speaks NATS.
+Replacing the built-in NestJS NATS transport (`Transport.NATS` from
+`@nestjs/microservices`) with `@horizon-republic/nestjs-jetstream` is
+configuration work: your `ClientProxy` already speaks NATS.
 
-You will end up with durable delivery and automatic retries, plus dead letter handling and W3C trace context, all behind the same `@EventPattern` and `@MessagePattern` handlers you already have.
+You will end up with durable delivery and automatic retries, plus dead letter
+handling and W3C trace context, all behind the same `@EventPattern` and
+`@MessagePattern` handlers you already have.
 
-:::tip Already using this library and upgrading to a newer version?
-Jump to [Upgrading between versions](#upgrading-between-versions) below, which lists what changes release by release. The [Release Notes](/docs/reference/release-notes) carry the full changelog. Everything before that section covers the one-time switch from `@nestjs/microservices`.
-:::
+:::tip Already using this library and upgrading to a newer version? Jump to
+[Upgrading between versions](#upgrading-between-versions) below, which lists
+what changes release by release. The
+[Release Notes](/docs/reference/release-notes) carry the full changelog.
+Everything before that section covers the one-time switch from
+`@nestjs/microservices`. :::
 
 ## What changes
 
 The semantic shift is from at-most-once to at-least-once delivery:
 
-- **Delivery.** Built-in NATS is fire-and-forget, so a message with no subscriber listening is gone. JetStream persists every event in a stream, and messages survive restarts.
-- **Retention.** Built-in has no retention. JetStream keeps messages in a stream until acked (workqueue) or until the retention window expires.
-- **Replay.** Built-in does not support replay. JetStream consumers can be created to catch up on history.
-- **Retries.** Built-in does not retry. JetStream redelivers a message until the handler acks or `max_deliver` is exhausted.
-- **Dead letters.** Built-in silently drops failed messages. JetStream provides a configurable dead-letter flow ([Dead Letter Queue](/docs/guides/dead-letter-queue)).
-- **Decorators.** Unchanged. `@EventPattern` and `@MessagePattern` work identically.
+- **Delivery.** Built-in NATS is fire-and-forget, so a message with no
+  subscriber listening is gone. JetStream persists every event in a stream, and
+  messages survive restarts.
+- **Retention.** Built-in has no retention. JetStream keeps messages in a stream
+  until acked (workqueue) or until the retention window expires.
+- **Replay.** Built-in does not support replay. JetStream consumers can be
+  created to catch up on history.
+- **Retries.** Built-in does not retry. JetStream redelivers a message until the
+  handler acks or `max_deliver` is exhausted.
+- **Dead letters.** Built-in silently drops failed messages. JetStream provides
+  a configurable dead-letter flow
+  ([Dead Letter Queue](/docs/guides/dead-letter-queue)).
+- **Decorators.** Unchanged. `@EventPattern` and `@MessagePattern` work
+  identically.
 
 ## Step 1: Install the library
 
@@ -41,7 +57,8 @@ The semantic shift is from at-most-once to at-least-once delivery:
 npm install @horizon-republic/nestjs-jetstream @nats-io/transport-node @nats-io/jetstream
 ```
 
-You can remove `@nestjs/microservices` if no other transport (Redis, RabbitMQ, Kafka) is in use.
+You can remove `@nestjs/microservices` if no other transport (Redis, RabbitMQ,
+Kafka) is in use.
 
 ## Step 2: Replace module registration
 
@@ -84,11 +101,14 @@ import { JetstreamModule } from '@horizon-republic/nestjs-jetstream';
 export class AppModule {}
 ```
 
-The `name` field is the service identity used to derive stream, consumer, and subject names. See [Naming Conventions](/docs/reference/naming-conventions) for the rules.
+The `name` field is the service identity used to derive stream, consumer, and
+subject names. See [Naming Conventions](/docs/reference/naming-conventions) for
+the rules.
 
 ## Step 3: Keep your handlers
 
-No changes to handler signatures. `@EventPattern` and `@MessagePattern` work identically.
+No changes to handler signatures. `@EventPattern` and `@MessagePattern` work
+identically.
 
 ```typescript
 import { Controller } from '@nestjs/common';
@@ -131,11 +151,14 @@ constructor(@Inject(getClientToken('payments')) private readonly client: ClientP
 
 ## Step 5: Adjust for acknowledgment semantics
 
-JetStream is **at-least-once**. A message may be redelivered after a handler throws or a pod restarts mid-execution. Make handlers idempotent:
+JetStream is **at-least-once**. A message may be redelivered after a handler
+throws or a pod restarts mid-execution. Make handlers idempotent:
 
 - Use a unique identifier from the payload (e.g., `orderId`) to deduplicate.
-- For commands that produce side effects (charge a card, send an email), check whether the side effect already happened before doing it again.
-- See [Idempotency](/docs/patterns/events#idempotency) in the events pattern for concrete techniques.
+- For commands that produce side effects (charge a card, send an email), check
+  whether the side effect already happened before doing it again.
+- See [Idempotency](/docs/patterns/events#idempotency) in the events pattern for
+  concrete techniques.
 
 ## What you gain
 
@@ -143,43 +166,101 @@ After migration, you get these capabilities for free:
 
 - Messages survive NATS server restarts.
 - Failed messages are automatically retried up to `max_deliver`.
-- Dead letter handling for exhausted retries: see [Dead Letter Queue](/docs/guides/dead-letter-queue).
-- Health checks with RTT monitoring: see [Health Checks](/docs/guides/health-checks).
-- Graceful shutdown with message drain: see [Graceful Shutdown](/docs/guides/graceful-shutdown).
-- Broadcast fan-out to all service instances: see [Broadcast Events](/docs/patterns/broadcast).
-- Ordered sequential delivery mode: see [Ordered Events](/docs/patterns/ordered-events).
-- W3C trace context end-to-end: see [Distributed Tracing](/docs/observability/tracing).
-- Prometheus metrics out of the box: see [Prometheus Metrics](/docs/observability/metrics).
+- Dead letter handling for exhausted retries: see
+  [Dead Letter Queue](/docs/guides/dead-letter-queue).
+- Health checks with RTT monitoring: see
+  [Health Checks](/docs/guides/health-checks).
+- Graceful shutdown with message drain: see
+  [Graceful Shutdown](/docs/guides/graceful-shutdown).
+- Broadcast fan-out to all service instances: see
+  [Broadcast Events](/docs/patterns/broadcast).
+- Ordered sequential delivery mode: see
+  [Ordered Events](/docs/patterns/ordered-events).
+- W3C trace context end-to-end: see
+  [Distributed Tracing](/docs/observability/tracing).
+- Prometheus metrics out of the box: see
+  [Prometheus Metrics](/docs/observability/metrics).
 
 ## Upgrading between versions
 
-Newest first. Each entry lists only what changes for you and how to restore the previous behaviour.
+Newest first. Each entry lists only what changes for you and how to restore the
+previous behaviour.
 
 ### v2.13 → v3.0
 
-**Streams reserve far less storage.** `max_bytes` drops from 5 GB to 512 MB on events, from 5 GB to 1 GB on ordered, from 2 GB to 256 MB on broadcast and from 100 MB to 64 MB on commands. `max_msg_size` drops to 1 MB everywhere, matching the NATS server's own `max_payload` default.
+**Streams reserve far less storage.** `max_bytes` drops from 5 GB to 512 MB on
+events, from 5 GB to 1 GB on ordered, from 2 GB to 256 MB on broadcast and from
+100 MB to 64 MB on commands. `max_msg_size` drops to 1 MB everywhere, matching
+the NATS server's own `max_payload` default.
 
-A service used to reserve up to 17 GB before processing a single message, which exhausted a modest file store after one or two deployments. `max_bytes` is mutable, so existing streams pick the new value up on the next boot. Set it back under `events.stream` if you need the old headroom.
+A service used to reserve up to 17 GB before processing a single message, which
+exhausted a modest file store after one or two deployments. `max_bytes` is
+mutable, so existing streams pick the new value up on the next boot. Set it back
+under `events.stream` if you need the old headroom.
 
-**Retries are paced.** A failing handler now naks with a delay from `[2000, 10000]` ms instead of immediately, so three attempts span roughly twelve seconds instead of milliseconds. Pass `events: { retry: false }` for the previous behaviour.
+**Retries are paced.** A failing handler now naks with a delay from
+`[2000, 10000]` ms instead of immediately, so three attempts span roughly twelve
+seconds instead of milliseconds. Pass `events: { retry: false }` for the
+previous behaviour.
 
-**The dead-letter stream is on by default.** Exhausted messages are republished to `{service}__microservice_dlq-stream` instead of being dropped. Pass `dlq: false` to opt out. Under `provisioning: { management: Manual }` nothing changes unless you configure `dlq` explicitly.
+**The dead-letter stream is on by default.** Exhausted messages are republished
+to `{service}__microservice_dlq-stream` instead of being dropped. Pass
+`dlq: false` to opt out. Under `provisioning: { management: Manual }` nothing
+changes unless you configure `dlq` explicitly.
 
 **Node 20 is no longer supported.** The minimum is Node 22.
 
-**Metrics accept `@prometheus-io/client`.** `prom-client` was renamed to `@prometheus-io/client`, and either package now works. If both end up installed, startup fails until `metrics.register` names the registry your `/metrics` endpoint serves, because the two global registries are different objects. A service with only `prom-client` installed changes nothing.
+**Recurring schedules.** Cron and interval schedules, declared on a handler or
+created from a client, run on NATS 2.14 or newer. See
+[recurring schedules](/docs/guides/recurring-schedules). Nothing changes for a
+service that does not use them.
 
-**`servers` is now optional, paired with `connections`.** Configuration accepts either the flat `servers` form or the new `connections` map, and rejects supplying both. Existing flat configurations are unchanged. Internally they become a single connection called `default`, and stream, consumer and subject names stay exactly as they were. See [Multiple connections](/docs/guides/multi-connection).
+**Features the server would ignore now raise an error.** On NATS 2.10,
+`allow_msg_ttl` and TTL headers have no effect, and on NATS 2.11 neither do
+`allow_msg_schedules` and `scheduleAt()`. The boot or the call now stops with a
+`JetstreamCapabilityError` where messages used to never expire or never fire. A
+service that used them on a server too old for them was already broken without
+knowing it.
 
-**`getClientToken` takes an optional second argument.** `getClientToken(name)` returns the same bare token it always did. `getClientToken(name, connection)` returns a namespaced one, for a client bound to one connection. Existing injections resolve unchanged.
+**Metrics accept `@prometheus-io/client`.** `prom-client` was renamed to
+`@prometheus-io/client`, and either package now works. If both end up installed,
+startup fails until `metrics.register` names the registry your `/metrics`
+endpoint serves, because the two global registries are different objects. A
+service with only `prom-client` installed changes nothing.
 
-**Lifecycle hooks receive a trailing connection name.** Every callback in `hooks` gains an optional final `connection?: string` parameter, populated only when more than one connection is configured. Hooks that ignore it are unaffected, and single-connection applications see the exact payloads they saw before.
+**`servers` is now optional, paired with `connections`.** Configuration accepts
+either the flat `servers` form or the new `connections` map, and rejects
+supplying both. Existing flat configurations are unchanged. Internally they
+become a single connection called `default`, and stream, consumer and subject
+names stay exactly as they were. See
+[Multiple connections](/docs/guides/multi-connection).
 
-**Streams gain an ownership stamp.** Each provisioned stream carries a `nestjs-jetstream-owner` metadata entry of `{service}:{connection}`, the dead-letter stream included. It catches two connections that reach the same cluster.
+**`getClientToken` takes an optional second argument.** `getClientToken(name)`
+returns the same bare token it always did. `getClientToken(name, connection)`
+returns a namespaced one, for a client bound to one connection. Existing
+injections resolve unchanged.
 
-Existing streams pick the stamp up through one mutable update on the first boot after upgrading. Messages already in the stream are untouched, and metadata written by anyone else is kept. Nothing is stamped under `provisioning: { management: Manual }`, and the shared broadcast stream is never stamped.
+**Lifecycle hooks receive a trailing connection name.** Every callback in
+`hooks` gains an optional final `connection?: string` parameter, populated only
+when more than one connection is configured. Hooks that ignore it are
+unaffected, and single-connection applications see the exact payloads they saw
+before.
 
-**Some options were renamed or moved.** TypeScript flags each one at compile time. A JavaScript configuration, or a `useFactory` that returns an untyped object, fails at boot with an error that lists every removed option and its replacement, so none of them is silently ignored.
+**Streams gain an ownership stamp.** Each provisioned stream carries a
+`nestjs-jetstream-owner` metadata entry of `{service}:{connection}`, the
+dead-letter stream included. It catches two connections that reach the same
+cluster.
+
+Existing streams pick the stamp up through one mutable update on the first boot
+after upgrading. Messages already in the stream are untouched, and metadata
+written by anyone else is kept. Nothing is stamped under
+`provisioning: { management: Manual }`, and the shared broadcast stream is never
+stamped.
+
+**Some options were renamed or moved.** TypeScript flags each one at compile
+time. A JavaScript configuration, or a `useFactory` that returns an untyped
+object, fails at boot with an error that lists every removed option and its
+replacement, so none of them is silently ignored.
 
 | v2.13                                                                 | v3.0                                                                                      |
 | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
@@ -210,37 +291,61 @@ JetstreamModule.forRoot({
 });
 ```
 
-`publisherOnly` inverts the old value: `consumer: false` becomes `publisherOnly: true`. On a named connection it now accepts both values, so one connection can publish only while another consumes.
+`publisherOnly` inverts the old value: `consumer: false` becomes
+`publisherOnly: true`. On a named connection it now accepts both values, so one
+connection can publish only while another consumes.
 
-The `management` object form on `dlq` and `ordered` is still accepted at runtime. Only its `stream` slot was ever read: the dead-letter stream has no consumer, and ordered consumers are ephemeral.
+The `management` object form on `dlq` and `ordered` is still accepted at
+runtime. Only its `stream` slot was ever read: the dead-letter stream has no
+consumer, and ordered consumers are ephemeral.
 
-`subjects` and `description` were accepted before and then overwritten, so removing them from your config changes nothing at runtime.
+`subjects` and `description` were accepted before and then overwritten, so
+removing them from your config changes nothing at runtime.
 
-The `ordered.consumer` block also exposes the remaining nats.js ordered-consumer options, `inactive_threshold` and `headers_only` among them. `filter_subjects` stays derived from your handlers.
+The `ordered.consumer` block also exposes the remaining nats.js ordered-consumer
+options, `inactive_threshold` and `headers_only` among them. `filter_subjects`
+stays derived from your handlers.
 
 `dlq: true` is now accepted and means the same as leaving `dlq` unset.
 
-A single-connection application that uses none of the options in the table upgrades with no source changes.
+A single-connection application that uses none of the options in the table
+upgrades with no source changes.
 
 <details>
 <summary>v2.12 → v2.13</summary>
 
-**Behavior change: `stream.name` and `consumer.durable_name` overrides are now honored.**
+**Behavior change: `stream.name` and `consumer.durable_name` overrides are now
+honored.**
 
-In previous releases, setting `stream.name` or `consumer.durable_name` inside a stream's `overrides` block was silently accepted but had no effect: the transport continued to derive names from its [naming conventions](/docs/reference/naming-conventions). Starting with v2.13, these fields are read and applied, so the library will use or create entities under the names you supply.
+In previous releases, setting `stream.name` or `consumer.durable_name` inside a
+stream's `overrides` block was silently accepted but had no effect: the
+transport continued to derive names from its
+[naming conventions](/docs/reference/naming-conventions). Starting with v2.13,
+these fields are read and applied, so the library will use or create entities
+under the names you supply.
 
 **What this means for you:**
 
-- If you intentionally set custom names to bind the library to externally provisioned infrastructure, this is the release that makes it work. Combined with the new `ManagementMode.Manual` / `provisioning.management` options, you can now run in full bind-only mode: see [Bring Your Own Infrastructure](/docs/guides/external-infrastructure).
-- If you had `stream.name` or `consumer.durable_name` set by accident (copy-pasted config, leftover experiments), the library will now attempt to use or create streams and consumers under those names instead of the convention-derived ones. **Review your `overrides` blocks before upgrading**: remove any unintentional name fields to keep the previous behavior.
+- If you intentionally set custom names to bind the library to externally
+  provisioned infrastructure, this is the release that makes it work. Combined
+  with the new `ManagementMode.Manual` / `provisioning.management` options, you
+  can now run in full bind-only mode: see
+  [Bring Your Own Infrastructure](/docs/guides/external-infrastructure).
+- If you had `stream.name` or `consumer.durable_name` set by accident
+  (copy-pasted config, leftover experiments), the library will now attempt to
+  use or create streams and consumers under those names instead of the
+  convention-derived ones. **Review your `overrides` blocks before upgrading**:
+  remove any unintentional name fields to keep the previous behavior.
 
-No other breaking changes. Applications that do not set `stream.name` or `consumer.durable_name` are unaffected.
+No other breaking changes. Applications that do not set `stream.name` or
+`consumer.durable_name` are unaffected.
 
 </details>
 
 ## See also
 
 - [Installation](/docs/getting-started/installation): setup requirements
-- [Module Configuration](/docs/reference/module-configuration): full options reference
+- [Module Configuration](/docs/reference/module-configuration): full options
+  reference
 - [Quick Start](/docs/getting-started/quick-start): first handler in 5 minutes
 - [Release Notes](/docs/reference/release-notes): version-by-version changelog

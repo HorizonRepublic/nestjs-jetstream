@@ -45,6 +45,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'guides/scheduling',
+        'guides/recurring-schedules',
         'guides/per-message-ttl',
         'guides/storage-budgeting',
         'guides/stream-migration',
