@@ -13,34 +13,28 @@ schema:
 
 # Observability
 
-The transport carries two complementary observability surfaces. Both work out of the box, and both stay invisible until you turn them on.
+> **Use when:** you are deciding between tracing and metrics, or want both running.
+> **You get:** what each surface answers, what it costs when off, and a setup that enables both.
 
-[**Distributed tracing →**](/docs/observability/tracing), answers "where did this one request go, and where did it slow down?" Backed by OpenTelemetry spans with W3C Trace Context propagation across services.
+| Surface                                            | Answers                                                    | Built on                                                                 | Default                                |
+| -------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------- |
+| [Distributed tracing](/docs/observability/tracing) | Where did this one request go, and where did it slow down? | OpenTelemetry spans, W3C Trace Context across services                   | on, a no-op until an SDK is registered |
+| [Prometheus metrics](/docs/observability/metrics)  | Is the system healthy in aggregate, and what to alert on?  | `@prometheus-io/client` or `prom-client` counters, histograms and gauges | off until `metrics` is set             |
 
-[**Prometheus metrics →**](/docs/observability/metrics), answers "is the system healthy in aggregate? What should I alert on?" Backed by `@prometheus-io/client` or `prom-client` counters, histograms, and gauges written to a registry your exporter already serves.
-
-## Picking what you need
-
-**Reach for tracing when** debugging one specific request, whether that is a slow order or an RPC that failed in a way you cannot explain. A single trace shows the full path through `client.emit() -> consumer -> handler -> reply` across every service that touched the message.
-
-**Reach for metrics when** running the system day to day. Alert on consumer lag past a threshold, dashboard p99 handler latency over time, get paged when the error rate spikes, chart throughput per kind. Aggregated numbers are what you want here, not individual requests.
-
-Both surfaces complement each other. Most production deployments enable both: traces feed an APM (Sentry, Datadog, Jaeger, Tempo, Honeycomb), metrics feed a Prometheus + Grafana stack, and alerts route through both depending on whether the symptom is "this one request" or "the whole system."
+Use tracing to debug one request: a single trace shows `client.emit() -> consumer -> handler -> reply` across every service that touched the message. Use metrics to run the system day to day: consumer lag, p99 handler latency, error rate, throughput per kind. Most production deployments run both, traces into an APM (Sentry, Datadog, Jaeger, Tempo, Honeycomb) and metrics into Prometheus and Grafana.
 
 ## Zero overhead when disabled
 
-Neither surface costs anything when off:
+- **Tracing**: with no OpenTelemetry SDK registered in the host application, every tracer call short-circuits to a no-op.
+- **Metrics**: with `metrics` omitted, the metrics module is never registered and no Prometheus client is imported. Per-message overhead is one `Map.get` that finds no listener.
 
-- **Tracing**: with no OpenTelemetry SDK registered in the host application, every tracer call inside the transport short-circuits to a no-op. `@opentelemetry/api` is an optional peer, and nothing in the library forces it into your bundle.
-- **Metrics**: with `metrics` omitted from `forRoot`, the metrics module is never registered. No Prometheus client is imported, not even at runtime. Per-message overhead drops to a single `Map.get` (~30 nanoseconds) that checks whether anyone is listening.
-
-You can enable either independently, or both. They share the same `EventBus` for transport events but are otherwise isolated.
+The two are independent; they share only the `EventBus` that carries transport events.
 
 ## Quick start
 
 ```ts
-// 1. Tracing, register any OpenTelemetry SDK before your AppModule loads.
-// Sentry, Datadog, NewRelic, or @opentelemetry/sdk-node, pick one.
+// 1. Tracing: register any OpenTelemetry SDK (Sentry, Datadog, New Relic,
+// @opentelemetry/sdk-node) before AppModule loads.
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 new NodeSDK({
@@ -48,7 +42,7 @@ new NodeSDK({
   traceExporter: new OTLPTraceExporter({ url: 'http://collector:4318/v1/traces' }),
 }).start();
 
-// 2. Metrics, enable in forRoot.
+// 2. Metrics: enable in forRoot.
 import { PrometheusModule } from '@willsoto/nestjs-prometheus';
 import { JetstreamModule } from '@horizon-republic/nestjs-jetstream';
 
@@ -65,4 +59,4 @@ import { JetstreamModule } from '@horizon-republic/nestjs-jetstream';
 export class AppModule {}
 ```
 
-Continue with [Tracing](/docs/observability/tracing) for OpenTelemetry details and [Metrics](/docs/observability/metrics) for the full Prometheus catalog.
+[Tracing](/docs/observability/tracing) covers the OpenTelemetry options and span catalog, [Metrics](/docs/observability/metrics) the Prometheus catalog.

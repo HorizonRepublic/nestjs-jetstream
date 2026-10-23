@@ -17,7 +17,7 @@
   --ifm-line-height-base: 1.65;
 
   --ifm-heading-font-family: var(--jt-font-sans);
-  --ifm-heading-font-weight: 500;
+  --ifm-heading-font-weight: 600;
   --ifm-heading-line-height: 1.25;
 
   --ifm-global-radius: var(--jt-radius-md);
@@ -360,10 +360,10 @@ body {
   font-family: var(--jt-font-mono);
   font-size: 0.86em;
   color: var(--jt-fg-0);
-  background: var(--jt-bg-1);
-  border: 1px solid var(--jt-line-1);
-  border-radius: var(--jt-radius-sm);
-  padding: 1px 6px;
+  background: var(--jt-bg-2);
+  border: none;
+  border-radius: 4px;
+  padding: 2px 6px;
 }
 
 
@@ -506,14 +506,14 @@ button[class*="copyButton"]:hover {
 
 .theme-admonition-note::before,
 .theme-admonition-info::before {
-  background: var(--jt-line-2);
+  background: var(--jt-state-deliver);
 }
 
 .theme-admonition-note [class*="admonitionHeading"],
 .theme-admonition-info [class*="admonitionHeading"],
 .theme-admonition-note [class*="admonitionIcon"] svg,
 .theme-admonition-info [class*="admonitionIcon"] svg {
-  color: var(--jt-fg-2);
+  color: var(--jt-state-deliver);
 }
 
 .theme-admonition-tip {
@@ -521,12 +521,12 @@ button[class*="copyButton"]:hover {
 }
 
 .theme-admonition-tip::before {
-  background: var(--jt-state-deliver);
+  background: var(--jt-state-ack);
 }
 
 .theme-admonition-tip [class*="admonitionHeading"],
 .theme-admonition-tip [class*="admonitionIcon"] svg {
-  color: var(--jt-state-deliver);
+  color: var(--jt-state-ack);
 }
 
 .theme-admonition-warning,
@@ -1009,7 +1009,7 @@ details.alert > summary:hover::before,
   padding: 32px 24px 24px;
   margin: 24px 0;
   position: relative;
-  overflow: hidden;
+  overflow-x: auto;
   cursor: zoom-in;
   transition: border-color 120ms ease, transform 120ms ease;
 }
@@ -1028,28 +1028,14 @@ details.alert > summary:hover::before,
   pointer-events: none;
 }
 
-.docusaurus-mermaid-container::after {
-  content: "mermaid";
-  position: absolute;
-  top: 14px;
-  right: 16px;
-  font-family: var(--jt-font-mono);
-  font-size: 10px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: var(--jt-fg-3);
-  padding-left: 14px;
-  background-image: radial-gradient(circle at 4px 50%, var(--jt-accent) 3px, transparent 4px);
-  pointer-events: none;
-}
+
 
 .docusaurus-mermaid-container svg {
   position: relative;
   z-index: 1;
   display: block;
   margin: 0 auto;
-  max-width: 100%;
+  max-width: none;
   height: auto;
 }
 
@@ -1095,10 +1081,6 @@ details.alert > summary:hover::before,
 .docusaurus-mermaid-container svg .label foreignObject div {
   color: var(--jt-fg-0) !important;
   fill: var(--jt-fg-0) !important;
-  font-family: var(--jt-font-mono) !important;
-  font-size: 12.5px !important;
-  font-weight: 500 !important;
-  line-height: 1.4 !important;
 }
 
 .docusaurus-mermaid-container svg .node.lib .nodeLabel,
@@ -1128,10 +1110,6 @@ details.alert > summary:hover::before,
   background: var(--jt-bg-1) !important;
   color: var(--jt-fg-2) !important;
   fill: var(--jt-fg-2) !important;
-  font-family: var(--jt-font-mono) !important;
-  font-size: 10.5px !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.06em !important;
 }
 
 .docusaurus-mermaid-container svg .edgeLabel rect {
@@ -1147,11 +1125,6 @@ details.alert > summary:hover::before,
 
 .docusaurus-mermaid-container svg text.actor {
   fill: var(--jt-fg-0) !important;
-  font-family: var(--jt-font-mono) !important;
-  font-weight: 500 !important;
-  font-size: 12px !important;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
 .docusaurus-mermaid-container svg .actor-line {
@@ -1168,10 +1141,6 @@ details.alert > summary:hover::before,
 
 .docusaurus-mermaid-container svg .messageText {
   fill: var(--jt-fg-1) !important;
-  font-size: 11.5px !important;
-  text-transform: none !important;
-  letter-spacing: 0;
-  font-weight: 500 !important;
 }
 
 .docusaurus-mermaid-container svg .labelBox {
@@ -1185,10 +1154,6 @@ details.alert > summary:hover::before,
 .docusaurus-mermaid-container svg .loopText,
 .docusaurus-mermaid-container svg .loopText * {
   fill: var(--jt-accent) !important;
-  font-family: var(--jt-font-mono) !important;
-  font-size: 10.5px !important;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
 }
 
 .docusaurus-mermaid-container svg .loopLine {
@@ -1205,8 +1170,6 @@ details.alert > summary:hover::before,
 .docusaurus-mermaid-container svg .noteText,
 .docusaurus-mermaid-container svg .noteText * {
   fill: var(--jt-fg-0) !important;
-  font-family: var(--jt-font-mono) !important;
-  font-size: 11px !important;
 }
 
 .docusaurus-mermaid-container svg .sequenceNumber {
@@ -1226,11 +1189,6 @@ details.alert > summary:hover::before,
 .docusaurus-mermaid-container svg .cluster text {
   fill: var(--jt-fg-3) !important;
   color: var(--jt-fg-3) !important;
-  font-family: var(--jt-font-mono) !important;
-  font-size: 10px !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.14em !important;
-  font-weight: 500 !important;
 }
 
 
@@ -1301,4 +1259,333 @@ body.jt-mermaid-zoom-open {
 .jt-mermaid-zoom-close svg {
   width: 16px;
   height: 16px;
+}
+
+/* ---- section tones ----------------------------------------------------
+   The doc layout marks each page with its sidebar section; the tone colours the
+   active sidebar link, the lede and the marks above headings. */
+:root {
+  --jt-tone: var(--jt-accent);
+}
+
+html:has(.jt-doc[data-tone='deliver']) { --jt-tone: var(--jt-state-deliver); }
+html:has(.jt-doc[data-tone='violet']) { --jt-tone: var(--jt-state-trace); }
+html:has(.jt-doc[data-tone='amber']) { --jt-tone: var(--jt-state-redeliver); }
+html:has(.jt-doc[data-tone='green']) { --jt-tone: var(--jt-state-ack); }
+html:has(.jt-doc[data-tone='teal']) { --jt-tone: var(--jt-tone-teal); }
+html:has(.jt-doc[data-tone='rose']) { --jt-tone: var(--jt-tone-rose); }
+html:has(.jt-doc[data-tone='red']) { --jt-tone: var(--jt-state-dlq); }
+html:has(.jt-doc[data-tone='neutral']) { --jt-tone: var(--jt-fg-2); }
+
+.menu__link--active:not(.menu__link--sublist)::before {
+  background: var(--jt-tone);
+}
+
+.menu__link--active:not(.menu__link--sublist) {
+  color: var(--jt-tone);
+}
+
+.breadcrumbs__item:nth-child(2) .breadcrumbs__link {
+  color: var(--jt-tone);
+}
+
+/* a short mark in the section's tone above each section heading */
+.markdown h2::before {
+  content: '';
+  display: block;
+  width: 22px;
+  height: 3px;
+  margin-bottom: 12px;
+  border-radius: 2px;
+  background: var(--jt-tone);
+  opacity: 0.85;
+}
+
+/* ---- page lede: the "Use when / You get" opener ------------------------- */
+.jt-lede {
+  display: grid;
+  gap: 8px;
+  margin: 6px 0 28px;
+  padding: 14px 18px;
+  max-width: 70ch;
+  border: 1px solid color-mix(in oklch, var(--jt-tone) 22%, var(--jt-line-1));
+  border-radius: 10px;
+  background: color-mix(in oklch, var(--jt-tone) 6%, var(--jt-bg-1));
+}
+
+.markdown .jt-lede-row {
+  display: grid;
+  grid-template-columns: 5.6rem minmax(0, 1fr);
+  gap: 12px;
+  margin: 0;
+  max-width: none;
+  font-size: 15.5px;
+  line-height: 1.55;
+  color: var(--jt-fg-1);
+}
+
+.jt-lede-label {
+  font-family: var(--jt-font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.85;
+  color: var(--jt-tone);
+}
+
+.jt-lede-row[data-role='get'] .jt-lede-label {
+  color: var(--jt-fg-2);
+}
+
+@media (max-width: 540px) {
+  .markdown .jt-lede-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+}
+
+/* ---- settlement names in inline code take their state colour ------------ */
+.markdown code[data-state] {
+  font-weight: 600;
+}
+
+.markdown code[data-state='ack'] {
+  color: var(--jt-state-ack);
+  background: var(--jt-ack-soft);
+}
+
+.markdown code[data-state='redeliver'] {
+  color: var(--jt-state-redeliver);
+  background: var(--jt-redeliver-soft);
+}
+
+.markdown code[data-state='dlq'] {
+  color: var(--jt-state-dlq);
+  background: var(--jt-dlq-soft);
+}
+
+/* ---- tables ------------------------------------------------------------- */
+.markdown table th {
+  color: var(--jt-fg-1);
+  background: color-mix(in oklch, var(--jt-accent) 7%, var(--jt-bg-1));
+  border-bottom: 1px solid var(--jt-accent-line);
+}
+
+.markdown table tbody tr {
+  transition: background var(--jt-m-fast);
+}
+
+.markdown table tbody tr:hover {
+  background: var(--jt-bg-2);
+}
+
+.markdown table td:first-child {
+  color: var(--jt-fg-0);
+}
+
+/* ---- code block titles: a dot in the accent, like a file tab ------------ */
+[class*="codeBlockTitle"]::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-inline-end: 9px;
+  border-radius: 50%;
+  vertical-align: 1px;
+  background: var(--jt-accent);
+}
+
+/* ---- mermaid: drawn in the site palette instead of the stock greys ------- */
+.docusaurus-mermaid-container svg .node rect,
+.docusaurus-mermaid-container svg .node polygon,
+.docusaurus-mermaid-container svg .node circle,
+.docusaurus-mermaid-container svg .node path {
+  fill: var(--jt-bg-1) !important;
+  stroke: var(--jt-accent) !important;
+  stroke-width: 1.5px !important;
+}
+
+.docusaurus-mermaid-container svg .cluster rect {
+  fill: var(--jt-accent-soft) !important;
+  stroke: var(--jt-accent-line) !important;
+}
+
+.docusaurus-mermaid-container svg .flowchart-link,
+.docusaurus-mermaid-container svg .edgePath .path {
+  stroke: var(--jt-fg-3) !important;
+}
+
+.docusaurus-mermaid-container svg .arrowheadPath,
+.docusaurus-mermaid-container svg marker path {
+  fill: var(--jt-fg-3) !important;
+  stroke: var(--jt-fg-3) !important;
+}
+
+.docusaurus-mermaid-container svg .edgeLabel,
+.docusaurus-mermaid-container svg .edgeLabel rect,
+.docusaurus-mermaid-container svg .labelBkg {
+  background: var(--jt-bg-0) !important;
+  fill: var(--jt-bg-0) !important;
+  color: var(--jt-fg-1) !important;
+}
+
+.docusaurus-mermaid-container svg .nodeLabel,
+.docusaurus-mermaid-container svg .label,
+.docusaurus-mermaid-container svg .cluster-label {
+  color: var(--jt-fg-0) !important;
+}
+
+.docusaurus-mermaid-container svg rect.actor {
+  fill: var(--jt-bg-1) !important;
+  stroke: var(--jt-accent) !important;
+}
+
+.docusaurus-mermaid-container svg text.actor > tspan,
+.docusaurus-mermaid-container svg .messageText {
+  fill: var(--jt-fg-0) !important;
+}
+
+.docusaurus-mermaid-container svg .actor-line {
+  stroke: var(--jt-line-2) !important;
+}
+
+.docusaurus-mermaid-container svg .messageLine0,
+.docusaurus-mermaid-container svg .messageLine1 {
+  stroke: var(--jt-fg-2) !important;
+}
+
+.docusaurus-mermaid-container svg #arrowhead path {
+  fill: var(--jt-fg-2) !important;
+}
+
+.docusaurus-mermaid-container svg rect.note {
+  fill: var(--jt-redeliver-soft) !important;
+  stroke: var(--jt-state-redeliver) !important;
+}
+
+.docusaurus-mermaid-container svg .noteText > tspan,
+.docusaurus-mermaid-container svg .noteText {
+  fill: var(--jt-fg-0) !important;
+}
+
+/* ---- conventional type: labels in the text face, sentence case ---------- */
+.menu__list-item-collapsible > .menu__link--sublist,
+.menu__list-item--collapsed > .menu__list-item-collapsible > .menu__link,
+.pagination-nav__sublabel,
+.table-of-contents::before,
+.footer__title {
+  font-family: var(--jt-font-sans);
+  font-size: 13px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 600;
+  color: var(--jt-fg-0);
+}
+
+.pagination-nav__sublabel,
+.table-of-contents::before {
+  color: var(--jt-fg-2);
+  font-weight: 500;
+}
+
+.theme-admonition .alert__heading,
+.theme-admonition [class*="admonitionHeading"] {
+  font-family: var(--jt-font-sans) !important;
+  font-size: 14px !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  font-weight: 600 !important;
+}
+
+.breadcrumbs,
+.breadcrumbs__item,
+.breadcrumbs__link,
+.footer__copyright,
+.theme-edit-this-page,
+.theme-last-updated {
+  font-family: var(--jt-font-sans);
+}
+
+.markdown table th {
+  font-family: var(--jt-font-sans);
+  font-size: 13px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 600;
+}
+
+.markdown h1 {
+  font-size: 38px;
+  font-weight: 700;
+  letter-spacing: -0.022em;
+}
+
+.markdown h2 {
+  font-size: 26px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+
+.markdown h3 {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.markdown :not(pre) > code {
+  font-size: 0.88em;
+}
+
+/* ---- section index cards ------------------------------------------------ */
+.jt-doc [class*='cardContainer'] {
+  height: 100%;
+  border: 1px solid var(--jt-line-1);
+  border-radius: 10px;
+  background: var(--jt-bg-1);
+  box-shadow: none;
+  transition: border-color var(--jt-m-fast), background var(--jt-m-fast);
+}
+
+.jt-doc [class*='cardContainer']:hover {
+  border-color: color-mix(in oklch, var(--jt-tone) 45%, var(--jt-line-1));
+  background: color-mix(in oklch, var(--jt-tone) 5%, var(--jt-bg-1));
+}
+
+.jt-doc [class*='cardContainer'] h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--jt-fg-0);
+}
+
+.jt-doc [class*='cardContainer'] p {
+  display: -webkit-box;
+  overflow: hidden;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--jt-fg-2);
+}
+
+.jt-card-mark {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--jt-tone);
+}
+
+.jt-card-mark {
+  display: inline-block;
+}
+
+/* section index pages: the title matches a doc page's */
+.jt-doc header h1 {
+  font-size: 38px;
+  font-weight: 700;
+  letter-spacing: -0.022em;
 }

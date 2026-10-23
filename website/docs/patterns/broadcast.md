@@ -8,7 +8,7 @@ schema:
   headline: "Broadcast Events: NestJS JetStream Fan-Out Delivery"
   description: "Fan-out NATS JetStream events to every NestJS service instance via per-service durable consumers on a shared broadcast stream."
   datePublished: "2026-03-21"
-  dateModified: "2026-08-03"
+  dateModified: "2026-10-23"
 ---
 
 # Broadcast Events
@@ -16,24 +16,17 @@ schema:
 > **Use when:** every running service must react to the same message (cache invalidation, feature-flag flips, config reload).
 > **You get:** per-service durable consumers on a shared stream, late-joining replicas catch up automatically.
 
-Broadcast events **fan out**: every subscribing service receives a copy of each message. This is the opposite of [workqueue events](/docs/patterns/events) (one instance processes each message) and distinct from [ordered events](/docs/patterns/ordered-events) (every instance receives a full sequential replay).
+A broadcast event **fans out**: every service with a matching handler gets its own copy. A [workqueue event](/docs/patterns/events) reaches one instance, and an [ordered event](/docs/patterns/ordered-events) gives each instance a sequential replay.
 
-## When to use
-
-A feature flag changes, and every service (orders, payments, notifications, analytics) has to refresh its local cache. Calling each one individually does not scale, and a workqueue event would reach only a single instance.
-
-Broadcast events solve this. When you publish a broadcast event, every service that has registered a handler receives the message independently.
+A typical case: a feature flag changes, and orders, payments and notifications all have to refresh their local cache. Calling each service does not scale, and a workqueue event would reach only one of them.
 
 ## How it works
 
-The broadcast flow, step by step:
-
-1. **Publish**: a service calls `client.emit('broadcast:config.updated', data)`. The `broadcast:` prefix tells the transport this is a fan-out event.
-2. **Route**: the transport publishes to the subject `broadcast.config.updated` (a global subject, not scoped to any service).
-3. **Shared stream**: the message is persisted in a single **shared** `broadcast-stream` with **Limits** retention: messages stay in the stream until they exceed `max_age`, `max_msgs`, or `max_bytes`, even after every consumer acknowledges them. This is what lets new instances replay recent broadcasts on startup, unlike the Workqueue retention used for regular events.
-4. **Per-service consumers**: each service that registered a `{ broadcast: true }` handler has its own durable consumer on the shared stream. Every consumer independently receives the message.
-5. **Dispatch**: each service's `EventRouter` decodes the payload and invokes the matching handler.
-6. **Acknowledge**: each consumer acks or naks independently.
+1. **Publish**: a service calls `client.emit('broadcast:config.updated', data)`. The `broadcast:` prefix marks a fan-out event.
+2. **Route**: the transport publishes to `broadcast.config.updated`, a global subject with no service scope.
+3. **Store**: the message is stored in the single `broadcast-stream` that all services share. It uses `Limits` retention, so acks do not delete messages; they age out by `max_age`, `max_msgs` or `max_bytes`. That is what lets a new instance catch up on recent broadcasts.
+4. **Consume**: each service with a `{ broadcast: true }` handler has its own durable consumer on the stream, and each consumer receives the message.
+5. **Settle**: each service decodes, handles, and acks or naks on its own.
 
 ```mermaid
 flowchart TD
@@ -46,11 +39,9 @@ flowchart TD
     AC --> AH["handler"]
 ```
 
-## Code examples
+## Sending and handling
 
-### Sending broadcast events
-
-Use `client.emit()` with the `broadcast:` prefix on the pattern. The prefix is only used on the sending side to route the message to the broadcast stream.
+Publish with the `broadcast:` prefix:
 
 ```typescript title="src/admin/admin.service.ts"
 import { Inject, Injectable } from '@nestjs/common';
@@ -59,93 +50,46 @@ import { lastValueFrom } from 'rxjs';
 
 @Injectable()
 export class AdminService {
-  constructor(
-    @Inject('admin') private readonly client: ClientProxy,
-  ) {}
+  constructor(@Inject('admin') private readonly client: ClientProxy) {}
 
   async updateFeatureFlag(key: string, enabled: boolean): Promise<void> {
     await this.featureFlagRepository.update(key, enabled);
 
-    // Notify ALL services to refresh their cache
-    await lastValueFrom(
-      this.client.emit('broadcast:feature-flag.updated', { key, enabled }),
-    );
-  }
-
-  async updateConfig(key: string, value: string): Promise<void> {
-    await this.configRepository.update(key, value);
-
-    await lastValueFrom(
-      this.client.emit('broadcast:config.updated', { key, value }),
-    );
+    await lastValueFrom(this.client.emit('broadcast:feature-flag.updated', { key, enabled }));
   }
 }
 ```
 
-### Handling broadcast events
-
-Use `@EventPattern` with `{ broadcast: true }` in the extras object. The pattern itself does not include the `broadcast:` prefix: that's only for the sending side.
+Handle with the bare pattern and `{ broadcast: true }`. Every service that declares this handler receives the message through its own consumer:
 
 ```typescript title="src/orders/orders.controller.ts"
-import { Controller, Logger } from '@nestjs/common';
+import { Controller } from '@nestjs/common';
 import { EventPattern, Payload } from '@nestjs/microservices';
 
 @Controller()
 export class OrdersController {
-  private readonly logger = new Logger(OrdersController.name);
-  private configCache = new Map<string, string>();
-
-  @EventPattern('config.updated', { broadcast: true })
-  handleConfigUpdated(@Payload() data: { key: string; value: string }): void {
-    this.logger.log(`Config changed: ${data.key} = ${data.value}`);
-    this.configCache.set(data.key, data.value);
-  }
-
   @EventPattern('feature-flag.updated', { broadcast: true })
   handleFeatureFlag(@Payload() data: { key: string; enabled: boolean }): void {
-    this.logger.log(`Feature flag ${data.key}: ${data.enabled}`);
     this.featureFlagService.refresh(data.key, data.enabled);
   }
 }
 ```
 
-```typescript title="src/payments/payments.controller.ts"
-import { Controller, Logger } from '@nestjs/common';
-import { EventPattern, Payload } from '@nestjs/microservices';
-
-@Controller()
-export class PaymentsController {
-  private readonly logger = new Logger(PaymentsController.name);
-
-  @EventPattern('config.updated', { broadcast: true })
-  handleConfigUpdated(@Payload() data: { key: string; value: string }): void {
-    this.logger.log(`Payments refreshing config: ${data.key}`);
-    this.configService.reload(data.key, data.value);
-  }
-}
-```
-
-Both `OrdersController` and `PaymentsController` receive the same `config.updated` message independently: each through their own durable consumer.
-
 :::warning Asymmetric prefixing
-The `broadcast:` prefix is used **only on the sending side** (`client.emit('broadcast:config.updated', ...)`). On the handler side, the pattern is just `'config.updated'` with `{ broadcast: true }` in extras. This asymmetry is intentional: the prefix controls routing, while the extras flag controls consumer registration.
+The `broadcast:` prefix belongs **only on the sending side**. The handler pattern is `'feature-flag.updated'` with `{ broadcast: true }` in extras: the prefix controls routing, the extras flag controls consumer registration.
 :::
+
+Each consumer filters on the broadcast subjects its service has handlers for, so a service receives only the broadcasts it handles.
 
 ## Delivery semantics
 
-Every outcome in [workqueue delivery semantics](/docs/patterns/events#delivery-semantics) applies here unchanged, with one word added: each one happens **per consumer**. A nak redelivers to that service alone, and a decode error or an exhausted retry budget settles the message for that service alone.
+Every outcome in [workqueue delivery semantics](/docs/patterns/events#delivery-semantics) applies, **per consumer**: retries, the retry delay curve, dead-lettering and termination all happen for one service at a time. Delivery is at-least-once per subscribing service.
 
-That makes broadcast delivery **at-least-once per consumer**. Every subscribing service receives every message at least once.
+When the orders service fails a message:
 
-## Per-service isolation
-
-This is the most important concept to understand about broadcast events: **each service's consumer is independent**.
-
-If the orders service fails to process a broadcast message and the message is nak'd:
-
-- Only the orders service's consumer retries the message.
-- The payments service and analytics service are **unaffected**.
-- Each consumer tracks its own delivery count independently.
+- only the orders consumer redelivers it, and payments and analytics are unaffected;
+- each consumer counts its own delivery attempts, so orders can dead-letter a message that payments processed fine;
+- a bug or an outage in one service never blocks the others.
 
 ```mermaid
 sequenceDiagram
@@ -163,118 +107,46 @@ sequenceDiagram
     OC-->>OC: SUCCESS (ack)
 ```
 
-Consumers are isolated from each other:
+## Configuration: shared stream, per-service consumers
 
-- A bug in one service does not block message delivery to other services.
-- Dead letter tracking is per-consumer: the orders service can exhaust its retries while payments processes normally.
-- Each service can be deployed, restarted, or scaled independently.
-
-## Shared stream, per-service consumers
-
-The broadcast system has two configuration layers with different scopes:
-
-### Stream-level config (shared)
-
-The `broadcast-stream` is **shared across all services**. Stream-level settings affect everyone:
+Broadcast settings live under `broadcast` in `forRoot()`, at two scopes:
 
 ```typescript
-// In ANY service's forRoot() -- affects the shared broadcast-stream
 JetstreamModule.forRoot({
   name: 'orders',
   servers: ['nats://localhost:4222'],
   broadcast: {
-    stream: {
-      max_age: toNanos(48, 'hours'), // Keep broadcasts for 48 hours
-      max_bytes: 5 * 1024 * 1024 * 1024,   // 5 GB limit
-    },
+    // Shared: applies to broadcast-stream for every service
+    stream: { max_age: toNanos(48, 'hours') },
+    // Per service: only the orders broadcast consumer
+    consumer: { max_deliver: 5, ack_wait: toNanos(30, 'seconds') },
+    retry: [1_000, 5_000],
   },
-}),
+});
 ```
+
+- **`broadcast.stream`** changes the one stream everybody shares. `max_age` (1 hour by default) is the catch-up window for a new instance.
+- **`broadcast.consumer`**, **`broadcast.retry`** and **`broadcast.concurrency`** apply only to this service's consumer, `{service}__microservice_broadcast-consumer`. Payments can retry ten times while orders retries five.
 
 :::warning Stream config is global
-Since all services share the same `broadcast-stream`, any service can update the stream config on startup, and the last service to start wins for mutable properties. The way out is to let a single "infrastructure" service own the stream-level settings.
+Any service can change the shared stream on startup, and the last one to start wins for mutable properties. Let one service own the stream settings and leave `broadcast.stream` unset everywhere else.
 
-The transport logs every applied change on startup, so drift shows up in your logs. An immutable conflict such as `storage` becomes a warning unless `provisioning.allowDestructiveMigration` is on.
+The transport logs each change it applies, so drift shows up in the logs. A conflict on an immutable property such as `storage` only logs a warning unless `provisioning.allowDestructiveMigration` is on.
 :::
 
-### Consumer-level config (per-service)
+Delayed broadcasts with `scheduleAt()` need `broadcast.stream.allow_msg_schedules: true`, separate from the event stream flag. See [Scheduling](/docs/guides/scheduling).
 
-Each service creates its own durable consumer, `{service}__microservice_broadcast-consumer`. Consumer settings are scoped to that service:
+Defaults for both scopes are in [Default Configs](/docs/reference/default-configs#stream-defaults), and mutable versus immutable properties in [Immutable vs mutable](/docs/reference/default-configs#immutable-vs-mutable-stream-properties).
 
-```typescript
-// In the orders service -- only affects the orders broadcast consumer
-JetstreamModule.forRoot({
-  name: 'orders',
-  servers: ['nats://localhost:4222'],
-  broadcast: {
-    consumer: {
-      max_deliver: 5,              // Orders service retries 5 times
-      ack_wait: toNanos(30, 'seconds'),  // 30s timeout for orders handlers
-    },
-  },
-}),
-```
-
-```typescript
-// In the payments service -- only affects the payments broadcast consumer
-JetstreamModule.forRoot({
-  name: 'payments',
-  servers: ['nats://localhost:4222'],
-  broadcast: {
-    consumer: {
-      max_deliver: 10,             // Payments retries 10 times
-      ack_wait: toNanos(60, 'seconds'),  // 60s timeout for payment handlers
-    },
-  },
-}),
-```
-
-Each consumer only subscribes to the broadcast subjects it has handlers for (via `filter_subject` or `filter_subjects`), so services only receive the broadcast events they care about.
-
-:::tip Broadcast scheduling
-To schedule delayed broadcasts, enable `broadcast.stream.allow_msg_schedules: true`: this is a separate opt-in from the event stream flag. See [Scheduling (Delayed Jobs)](/docs/guides/scheduling).
-:::
-
-### Default values: the ones you'll actually tune
-
-- **`max_age`** (stream, shared), 1 hour. New instances catch up on broadcasts within this window.
-- **`max_deliver`** (per-service), `3`. Each service retries independently before dead letter.
-- **`ack_wait`** (per-service), 10 seconds. Scoped to each service's broadcast consumer.
-
-See [Default Configs](/docs/reference/default-configs#stream-defaults) for the broadcast stream and [consumer](/docs/reference/default-configs#consumer-defaults) values side by side with the other kinds.
-
-## Common use cases
-
-### Configuration propagation
-
-When a centralized config service updates a value, all services must pick up the change:
+## Cache invalidation example
 
 ```typescript
 // Publisher
 await lastValueFrom(
-  this.client.emit('broadcast:config.updated', {
-    key: 'rate-limit.max-requests',
-    value: '1000',
-    updatedAt: new Date().toISOString(),
-  }),
-);
-```
-
-### Cache invalidation
-
-When the source of truth changes, all services holding a cached copy must invalidate:
-
-```typescript
-// Publisher
-await lastValueFrom(
-  this.client.emit('broadcast:cache.invalidate', {
-    entity: 'product',
-    id: productId,
-    reason: 'price-updated',
-  }),
+  this.client.emit('broadcast:cache.invalidate', { entity: 'product', id: productId }),
 );
 
-// Handler (in any service that caches products)
+// Handler, in every service that caches products
 @EventPattern('cache.invalidate', { broadcast: true })
 handleCacheInvalidation(@Payload() data: CacheInvalidationEvent): void {
   if (data.entity === 'product') {
@@ -283,30 +155,10 @@ handleCacheInvalidation(@Payload() data: CacheInvalidationEvent): void {
 }
 ```
 
-### Feature flag toggles
-
-When a feature flag changes, every service instance must update its local state:
-
-```typescript
-// Publisher
-await lastValueFrom(
-  this.client.emit('broadcast:feature-flag.updated', {
-    key: 'new-checkout-flow',
-    enabled: true,
-    rolloutPercentage: 25,
-  }),
-);
-
-// Handler
-@EventPattern('feature-flag.updated', { broadcast: true })
-handleFeatureFlag(@Payload() data: FeatureFlagEvent): void {
-  this.featureFlags.set(data.key, {
-    enabled: data.enabled,
-    rollout: data.rolloutPercentage,
-  });
-}
-```
+Config propagation and feature-flag toggles follow the same shape: publish once with the prefix, handle in each service with `{ broadcast: true }`.
 
 ## See also
 
-Broadcast consumers compete with regular event consumers for the same concurrency budget, tune both via [Performance Tuning](/docs/guides/performance#concurrency-control). If a broadcast handler keeps failing, only _that_ service's consumer retries. See [Dead Letter Queue](/docs/guides/dead-letter-queue#scope) for per-consumer dead letter semantics.
+- [Performance Tuning](/docs/guides/performance#concurrency-control): broadcast and workqueue consumers share the concurrency budget
+- [Dead Letter Queue](/docs/guides/dead-letter-queue#scope): per-consumer dead letters
+- [Edge Cases](/docs/reference/edge-cases#broadcast-stream-is-shared): why the stream has no service prefix

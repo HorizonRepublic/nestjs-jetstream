@@ -8,7 +8,7 @@ schema:
   headline: "Multiple NATS connections in one NestJS service"
   description: "Named NATS connections in NestJS JetStream: configuration, handler binding, criticality, health, and shutdown."
   datePublished: "2026-08-03"
-  dateModified: "2026-08-03"
+  dateModified: "2026-10-23"
 ---
 
 # Multiple NATS connections in one service
@@ -16,9 +16,7 @@ schema:
 > **Use when:** one service has to reach more than one NATS cluster.
 > **You get:** named connections, per-connection handlers and clients, and how criticality, health and shutdown behave.
 
-One service, several NATS clusters. Each connection has its own streams, consumers, routers and backpressure budget. Handlers and clients declare which one they belong to.
-
-Typical reasons to reach for this:
+Each connection has its own streams, consumers, routers and backpressure budget, and handlers and clients declare which one they belong to. Typical reasons:
 
 - **Traffic isolation.** Business events on the primary cluster, audit or analytics firehose on a separate one, so a flood in the latter cannot starve the former.
 - **Cross-DC bridging.** A service that consumes locally and publishes to a remote region.
@@ -73,7 +71,7 @@ JetstreamModule.forRoot({
 })
 ```
 
-Every per-cluster knob is tunable this way: `events`, `broadcast`, `ordered`, `rpc`, `dlq`, `metadata`, `provisioning`, `shutdownTimeout`, `codec`, `connectionOptions`, and `publisherOnly` for a publish-only connection.
+Every per-cluster knob is tunable this way: `events`, `broadcast`, `schedule`, `ordered`, `rpc`, `dlq`, `metadata`, `provisioning`, `shutdownTimeout`, `codec`, `connectionOptions`, and `publisherOnly` for a publish-only connection.
 
 :::warning A block you redeclare replaces the root one entirely
 The merge is one level deep, so naming `events` on a connection replaces the whole root `events` block instead of merging into it. In the example above, `analytics` gets `concurrency: 32` and **loses** any `events.retry` or `events.stream` set at the root. Repeat the parts you still want:
@@ -82,7 +80,7 @@ The merge is one level deep, so naming `events` on a connection replaces the who
 events: { concurrency: 32, retry: rootRetry },   // on the connection
 ```
 
-The same applies to `broadcast`, `ordered`, `rpc`, `dlq`, `metadata`, `provisioning` and `connectionOptions`.
+The same applies to `broadcast`, `schedule`, `ordered`, `rpc`, `dlq`, `metadata`, `provisioning` and `connectionOptions`.
 :::
 
 **Root-only fields.** `name`, `hooks`, `metrics`, `otel` and `onDeadLetter` stay at the root. They describe or observe the service as a whole, so a connection never overrides them.
@@ -110,8 +108,6 @@ export class AnalyticsController {
   handleAudit(@Payload() data: AuditEntry) {}   // method wins over the class
 }
 ```
-
-Most controllers belong to one cluster, so the class decorator is the common case. The method-level `{ connection }` extra covers the exceptions.
 
 **Typos fail at startup.** Naming a connection that is not configured (or one declared `publisherOnly: true`) raises at bootstrap with the list of configured names, instead of silently routing to the default connection and surfacing in production.
 
@@ -175,9 +171,9 @@ Publisher-only connections have no strategy, so the check skips them.
 | Retry                | n/a                                   | Exponential backoff, capped at 30 s             |
 | Health               | `connected: false`                    | `degraded: true`, readiness unaffected          |
 
-A dead analytics cluster must not stop the pod that serves the primary one. That is the whole point of `critical: false`.
+A dead analytics cluster must not stop the pod that serves the primary one.
 
-Because a connection with no handlers never touches NATS on its own, bootstrap opens every critical connection explicitly. Otherwise the flag would have no effect on a publish-only connection, which is precisely the case it exists for.
+A connection with no handlers never touches NATS on its own, so bootstrap opens every critical connection explicitly. Otherwise the flag would do nothing for a publish-only connection, the case it exists for.
 
 ## Health
 
@@ -231,7 +227,7 @@ JetstreamModule.forRoot({
 
 Single-connection applications receive the exact payloads they always did.
 
-Prometheus metrics aggregate across connections and carry no `connection` label. That is the right default for "how much traffic did this service process", but it means a per-connection breakdown is not available from metrics today.
+[Prometheus metrics](/docs/observability/metrics) aggregate across connections and carry no `connection` label, so they give no per-connection breakdown.
 
 ## Naming and collisions
 

@@ -8,7 +8,7 @@ schema:
   headline: "Distributed Tracing: NestJS JetStream Transport"
   description: "Built-in W3C Trace Context propagation and OpenTelemetry spans for every publish, consume, and RPC round-trip."
   datePublished: "2026-04-24"
-  dateModified: "2026-08-03"
+  dateModified: "2026-10-23"
 ---
 
 # Distributed Tracing
@@ -16,17 +16,11 @@ schema:
 > **Use when:** a request crosses services and you need one trace across the hops.
 > **You get:** OpenTelemetry spans for publish, consume and RPC, and the attributes each one carries.
 
-The transport produces OpenTelemetry spans for every publish, every consume, and every RPC round-trip. Trace context propagates through NATS message headers using the W3C Trace Context standard, so a single trace flows end-to-end across services regardless of language or runtime.
-
-## What it covers
-
-Aggregate metrics tell you the system is slow. Traces tell you _which_ message was slow and _where_ it spent its time. When a customer reports a failed order, you want a single waterfall view that follows the request from `client.emit('orders.created')` through every consumer, RPC hop, and dead-letter branch, across multiple services if needed. That's what tracing is for.
-
-The library emits OpenTelemetry spans on the same paths the metrics surface counts. If you already run an APM (Sentry, Datadog, Honeycomb, Jaeger, Tempo, …), no transport-side configuration is required, traces appear the moment your application registers an OTel SDK.
+Trace context travels in NATS message headers as W3C Trace Context, so one trace follows a message from `client.emit('orders.created')` through every consumer, RPC hop and dead-letter branch, across services and languages.
 
 ## Setup
 
-Tracing activates automatically the moment your application registers an OpenTelemetry SDK. **No transport-side configuration is required.** If no SDK is registered, the library's tracer calls are no-ops and there is zero runtime cost.
+Tracing is on by default and activates when your application registers an OpenTelemetry SDK. **No transport-side configuration is required.**
 
 ```ts
 // tracing.ts, load this BEFORE your AppModule
@@ -39,11 +33,9 @@ new NodeSDK({
 }).start();
 ```
 
-That's it. Spans appear in your backend immediately.
+### Vendor SDKs
 
-### Vendor cheat sheets
-
-Every modern Node.js APM SDK has OpenTelemetry under the hood. Pick whichever you already use:
+Most Node.js APM SDKs register OpenTelemetry themselves, so their usual init is enough:
 
 ```ts
 // Sentry, automatic OTel setup with tracesSampleRate
@@ -57,35 +49,33 @@ import tracer from 'dd-trace';
 tracer.init({ service: 'orders-service' });
 ```
 
-```ts
-// Jaeger / Tempo / OTel Collector, NodeSDK + OTLP
-import { NodeSDK } from '@opentelemetry/sdk-node';
-import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
-new NodeSDK({
-  serviceName: 'orders-service',
-  traceExporter: new OTLPTraceExporter({ url: 'http://jaeger:4318/v1/traces' }),
-}).start();
-```
+Jaeger, Tempo and an OTel Collector take the `NodeSDK` setup above with their OTLP endpoint.
 
-### Disabled by default: zero overhead
+### No SDK, no overhead
 
-When no OpenTelemetry SDK is registered in the host application, every internal `trace.getTracer()` call resolves to a no-op tracer. The transport still walks through the span helpers, but each call exits on the first guard. The hot path carries no measurable overhead, and `@opentelemetry/api` is declared as an optional peer dependency, applications that do not want tracing do not pay for it in their bundle either.
+Without a registered SDK, every `trace.getTracer()` call resolves to a no-op tracer and each span helper exits on its first guard. `@opentelemetry/api` is an optional peer dependency.
 
 ## What gets traced
 
-The default trace set covers the message-flow operations that map onto a distributed trace waterfall:
+| `JetstreamTrace`      | Span kind  | Default | Fires                                                                                                 |
+| --------------------- | ---------- | ------- | ----------------------------------------------------------------------------------------------------- |
+| `Publish`             | `PRODUCER` | on      | Every `client.emit()`, and the publish leg of `client.send()`                                         |
+| `Consume`             | `CONSUMER` | on      | Every handler invocation. Retries get their own span with `messaging.nats.message.delivery_count > 1` |
+| `RpcClientSend`       | `CLIENT`   | on      | The full RPC round-trip on the caller, from publish to reply or timeout                               |
+| `DeadLetter`          | `INTERNAL` | on      | A message exhausts `max_deliver`; covers the `onDeadLetter` callback                                  |
+| `ConnectionLifecycle` | `INTERNAL` | off     | One span per NATS connection session, with connect, reconnect and disconnect events                   |
+| `SelfHealing`         | `INTERNAL` | off     | Each consumer recovery attempt                                                                        |
+| `Provisioning`        | `INTERNAL` | off     | Each stream or consumer created or updated at startup                                                 |
+| `Migration`           | `INTERNAL` | off     | A destructive stream migration                                                                        |
+| `Shutdown`            | `INTERNAL` | off     | The graceful shutdown sequence                                                                        |
 
-- **`publish`**, `PRODUCER` span. Fires for every `client.emit()` and for the publish portion of an RPC `client.send()`.
-- **`consume`**, `CONSUMER` span. Fires for every handler invocation. Retries produce extra spans with `messaging.nats.message.delivery_count > 1`.
-- **`rpc.client.send`**, `CLIENT` span. Covers the full RPC round-trip on the caller side, from publish through reply or timeout.
-- **`dead_letter`**, `INTERNAL` span. Fires when a message exhausts `maxDeliver` and the DLQ flow runs.
-
-Infrastructure trace kinds (connection lifecycle, self-healing, provisioning, migration, shutdown) exist in the `JetstreamTrace` enum but are off by default. Enable them explicitly when you need that level of detail.
+`DEFAULT_TRACES` holds the four default kinds. Pass your own list to change it:
 
 ```ts
 import { JetstreamTrace } from '@horizon-republic/nestjs-jetstream';
 
 JetstreamModule.forRoot({
+  name: 'orders',
   servers: ['nats://localhost:4222'],
   otel: {
     traces: [
@@ -99,9 +89,7 @@ JetstreamModule.forRoot({
 });
 ```
 
-Use `traces: 'all'` to enable every kind, `traces: 'none'` to suppress span emission entirely while keeping context propagation alive.
-
-For an env-driven toggle, the option also accepts a plain boolean, `otel: true` for defaults, `otel: false` for `{ enabled: false }`.
+`traces: 'all'` enables every kind; `traces: 'none'` emits no spans but keeps propagating context. `otel: true` means the defaults and `otel: false` means `{ enabled: false }`, which also stops propagation and hook calls.
 
 ## Configuration reference
 
@@ -117,15 +105,11 @@ otel?: boolean | {
    * Header allowlist. Glob-supported (e.g. `['x-*', '!x-internal-*']`).
    * @default ['x-request-id']
    *
-   * Transport-internal headers (`x-correlation-id`, `x-reply-to`, `x-error`,
-   * `x-subject`, `x-caller-name`) and propagator-owned headers
-   * (`traceparent`, `tracestate`, `baggage`, `sentry-trace`, `b3`, …)
-   * are suppressed regardless of the allowlist. The RPC correlation id
-   * surfaces on spans as `messaging.message.conversation_id` instead.
+   * Some headers are never captured, see Security and privacy below.
    */
   captureHeaders?: string[] | boolean;
 
-  /** Capture message payloads. @default false */
+  /** Capture message payloads. `true` means maxBytes 4096. @default false */
   captureBody?: boolean | { maxBytes?: number; subjectAllowlist?: string[] };
 
   /** Synchronous hooks for custom span enrichment. */
@@ -144,12 +128,12 @@ otel?: boolean | {
 
 ## Error classification
 
-Handler errors are classified by exception type. The classifier drives **only** OpenTelemetry span status: it does not affect logs, hooks, or the reply envelope returned to the caller.
+The classifier drives **only** the span status: logs, hooks and the reply envelope stay the same either way. By default:
 
 - **`RpcException` / `HttpException`**, span status `OK`, with `jetstream.rpc.reply.has_error` and `jetstream.rpc.reply.error.code` attributes attached.
 - **Bare `Error` / unknown thrown value**, span status `ERROR`, with `span.recordException(err)` attached.
 
-This keeps APM error rates clean for business outcomes that are part of the contract (auth denials, validation failures) while loud-failing on real bugs and infrastructure problems. Override the default with a custom classifier when your team uses other primitives:
+Business outcomes that belong to the contract (auth denials, validation failures) stay out of APM error rates, and real bugs still show. Override it for your own error types:
 
 ```ts
 otel: {
@@ -165,19 +149,19 @@ otel: {
 
 ## Security and privacy
 
-Configuration knobs deal with potentially sensitive data. Both default to safe values, so opting in is a deliberate choice.
-
 ### `captureHeaders`
 
-Captures matching message headers as `messaging.header.<name>` span attributes. Default allowlist is `['x-request-id']`. Glob wildcards (`x-*`, `*-id`) and exclusions (`!x-internal-*`) are supported.
+Captures matching headers as `messaging.header.<name>` span attributes, matched case-insensitively. Default allowlist is `['x-request-id']`. Glob wildcards (`x-*`, `*-id`) and exclusions (`!x-internal-*`) are supported.
 
-The library-internal `x-correlation-id` is never emitted as a `messaging.header.*` attribute even if added to the allowlist; it surfaces on RPC spans as the standard `messaging.message.conversation_id` attribute instead, which keeps the OpenTelemetry semantic-conventions contract intact and avoids duplicating the same value under two keys.
+These are never captured, whatever the allowlist says:
+
+- propagator-owned headers: `traceparent`, `tracestate`, `baggage`, `sentry-trace`, `b3`, `x-b3-*`, `uber-trace-id`, already represented by the span's own context;
+- transport headers: `x-correlation-id`, `x-reply-to`, `x-error`, `x-subject`, `x-caller-name`. The correlation id appears on RPC spans as `messaging.message.conversation_id` instead;
+- every server-managed `Nats-*` header.
 
 :::warning
 Headers frequently hold authentication tokens, session identifiers, and other sensitive data. Captured values are exported to your OTel backend (Sentry, Datadog, etc.). **Never set `captureHeaders: true` in production**: that captures every header. Use an explicit allowlist.
 :::
-
-The library always excludes propagator-owned headers (`traceparent`, `tracestate`, `baggage`, `sentry-trace`, `b3`, `x-b3-*`, Jaeger format) from capture even when the matcher would pass them: they are noise and already represented by the span's own context.
 
 ### `captureBody`
 
@@ -187,7 +171,7 @@ Captures the message payload as a `messaging.nats.message.body` span attribute. 
 Message payloads commonly contain PII, credentials, financial data, or content regulated by GDPR, HIPAA, or PCI-DSS. Enabling body capture in production is almost always a policy violation. Keep the default unless you are in a controlled environment, or pair the capture with a custom `SpanProcessor` that scrubs or drops the attribute before export.
 :::
 
-When enabled, payloads are UTF-8 decoded where possible and base64 otherwise, then truncated at the configured `maxBytes` (default 4096). A truncated payload carries a `messaging.nats.message.body.truncated` attribute.
+Payloads are UTF-8 decoded where possible and base64 otherwise, then truncated at `maxBytes` (default 4096). A truncated payload carries a `messaging.nats.message.body.truncated` attribute. `subjectAllowlist` takes `*` globs and limits capture to matching subjects.
 
 ```ts
 otel: {
@@ -197,7 +181,7 @@ otel: {
 
 ## Custom enrichment hooks
 
-Hooks let you attach business-specific attributes to library-emitted spans without subclassing or wrapping:
+Attach your own attributes to the library's spans:
 
 ```ts
 otel: {
@@ -213,11 +197,11 @@ otel: {
 }
 ```
 
-Hooks are synchronous: they run inline with span creation and termination. Errors thrown from a hook are caught and logged at `debug` level, and they cannot disrupt the message flow.
+`publishHook` runs before the publish, `consumeHook` before the handler, and `responseHook` once the outcome is known, just before the span ends (publish, consume and RPC client spans). Hooks are synchronous; an error thrown in one is caught and logged at `debug` level.
 
 ## Skipping spans for noisy subjects
 
-Health-check pings and other internal traffic often do not deserve span output. Use the `shouldTrace*` predicates to skip span creation while still letting trace context flow through:
+The `shouldTrace*` predicates skip span creation for traffic such as health checks, while trace context still flows and the handler still runs:
 
 ```ts
 otel: {
@@ -228,20 +212,18 @@ otel: {
 
 ## Cross-language interoperability
 
-The transport reads and writes the W3C Trace Context standard (`traceparent`, `tracestate`, `baggage`). Any publisher that injects a `traceparent` header is automatically linked into the trace, regardless of language or runtime; Go, Python, Java, Rust, or a bare `curl` invocation.
-
-For the precise header contract used at the wire level, see the [Header Contract reference](../reference/header-contract).
+Any publisher that injects a `traceparent` header joins the trace, whatever its language. The [Header Contract](/docs/reference/header-contract) has the wire-level details and Go and Python examples.
 
 ## Troubleshooting
 
 **No spans appear in my APM.**
-Confirm that an OpenTelemetry SDK has been registered _before_ the application bootstraps. The library's tracer calls are no-ops until `trace.setGlobalTracerProvider()` runs. With `@opentelemetry/sdk-node`, calling `sdk.start()` handles this. With Sentry / Datadog / New Relic SDKs, calling `Sentry.init()` / `tracer.init()` does it for you.
+Register the OpenTelemetry SDK _before_ the application bootstraps: tracer calls are no-ops until `trace.setGlobalTracerProvider()` runs. `sdk.start()`, `Sentry.init()` and `tracer.init()` all do that. Also check that `otel` is not `false` and `traces` is not `'none'`.
 
 **Trace breaks at my service boundary on internal `client.emit()` calls.**
-This requires an OpenTelemetry `ContextManager` (typically `AsyncLocalStorageContextManager`) so the active trace context survives across `await` points inside your handler. Every modern OTel-aware SDK (Sentry, Datadog, NodeSDK) registers one automatically. If you only installed `@opentelemetry/api` without an SDK, register the context manager explicitly.
+The active context has to survive `await` points inside your handler, which needs an OpenTelemetry `ContextManager` (typically `AsyncLocalStorageContextManager`). Sentry, Datadog and `NodeSDK` register one; with a bare `@opentelemetry/api` setup, register it yourself.
 
 **Span attributes contain sensitive data.**
-Review your `captureHeaders` allowlist; set explicit headers, never `true`. Confirm `captureBody` is `false`. If you need backend-side scrubbing, register a custom `SpanProcessor` that drops or rewrites attributes in `onEnd`.
+Use an explicit `captureHeaders` allowlist, never `true`, and keep `captureBody` at `false`. For scrubbing, register a `SpanProcessor` that drops or rewrites attributes in `onEnd`.
 
 **Span name format looks "reversed" in my APM.**
-The library uses the OpenTelemetry messaging convention: `{operation} {destination}` (`publish orders.created`, `process orders.created`). Some older APMs render it differently, which is a UI concern and not a difference in the span data.
+Span names follow the OpenTelemetry messaging convention, `{operation} {destination}` (`publish orders.created`, `process orders.created`). Some older APMs render it differently; the span data is the same.

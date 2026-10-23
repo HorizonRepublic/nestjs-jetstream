@@ -8,7 +8,7 @@ schema:
   headline: "Header Contract: NATS Message Headers Used by the Transport"
   description: "Stable contract for NATS message headers the transport reads and writes."
   datePublished: "2026-04-24"
-  dateModified: "2026-08-03"
+  dateModified: "2026-10-23"
 ---
 
 # Header Contract
@@ -20,34 +20,40 @@ The transport reads and writes the headers below and nothing else. Names are **s
 
 ## At a glance
 
-| Header                 |   Read    |   Write   | Source            | What it does                                                    |
-| ---------------------- | :-------: | :-------: | ----------------- | --------------------------------------------------------------- |
-| `traceparent`          |     ✓     |     ✓     | W3C Trace Context | Links the consume span to the upstream producer span.           |
-| `tracestate`           |     ✓     |     ✓     | W3C Trace Context | Vendor-specific trace state. Forwarded as-is.                   |
-| `baggage`              |     ✓     |     ✓     | W3C Baggage       | App-level context propagation. Forwarded.                       |
-| `Nats-Msg-Id`          |     ✓     |     ✓     | NATS standard     | Dedup key. Surfaces on consume spans as `messaging.message.id`. |
-| `x-correlation-id`     |    RPC    |    RPC    | Library           | Identifies the matching RPC reply.                              |
-| `x-reply-to`           |    RPC    |    RPC    | Library           | Inbox subject for the RPC reply.                                |
-| `x-error`              | RPC reply | RPC reply | Library           | Marks the reply payload as an error envelope.                   |
-| `x-subject`            |     -     |     ✓     | Library           | Original subject the message was published to.                  |
-| `x-caller-name`        |     -     |     ✓     | Library           | Internal name of the sending service.                           |
-| `x-dead-letter-reason` |     -     |    DLQ    | Library           | DLQ tracking: exhausted-retry reason.                           |
-| `x-original-subject`   |     -     |    DLQ    | Library           | DLQ tracking: original target subject.                          |
-| `x-original-stream`    |     -     |    DLQ    | Library           | DLQ tracking: original stream name.                             |
-| `x-failed-at`          |     -     |    DLQ    | Library           | DLQ tracking: ISO 8601 failure timestamp.                       |
-| `x-delivery-count`     |     -     |    DLQ    | Library           | DLQ tracking: delivery attempt counter.                         |
+| Header                 |   Read    |   Write   | Source            | What it does                                                                |
+| ---------------------- | :-------: | :-------: | ----------------- | --------------------------------------------------------------------------- |
+| `traceparent`          |     ✓     |     ✓     | W3C Trace Context | Links the consume span to the upstream producer span.                       |
+| `tracestate`           |     ✓     |     ✓     | W3C Trace Context | Vendor-specific trace state. Forwarded as-is.                               |
+| `baggage`              |     ✓     |     ✓     | W3C Baggage       | App-level context propagation. Forwarded.                                   |
+| `Nats-Msg-Id`          |     ✓     |     ✓     | NATS standard     | Dedup key. Surfaces on consume spans as `messaging.message.id`.             |
+| `x-correlation-id`     |    RPC    |    RPC    | Library           | Identifies the matching RPC reply.                                          |
+| `x-reply-to`           |    RPC    |    RPC    | Library           | Inbox subject for the RPC reply.                                            |
+| `x-error`              | RPC reply | RPC reply | Library           | Marks the reply payload as an error envelope.                               |
+| `x-subject`            |     -     |     ✓     | Library           | Original subject the message was published to.                              |
+| `x-caller-name`        |     -     |     ✓     | Library           | Internal name of the sending service.                                       |
+| `x-dead-letter-reason` |     -     |    DLQ    | Library           | DLQ tracking: exhausted-retry reason.                                       |
+| `x-original-subject`   |     -     |    DLQ    | Library           | DLQ tracking: original target subject.                                      |
+| `x-original-stream`    |     -     |    DLQ    | Library           | DLQ tracking: original stream name.                                         |
+| `x-failed-at`          |     -     |    DLQ    | Library           | DLQ tracking: ISO 8601 failure timestamp.                                   |
+| `x-delivery-count`     |     -     |    DLQ    | Library           | DLQ tracking: delivery attempt counter.                                     |
+| `x-schedule-hash`      |  Holder   |  Holder   | Library           | Fingerprint of a recurring schedule's definition. Skips unchanged rewrites. |
+| `x-schedule-pattern`   |  Holder   |  Holder   | Library           | Handler pattern a recurring schedule's ticks go to.                         |
+| `Nats-Scheduler`       |   Tick    |     -     | NATS server       | Subject of the holder that fired the tick.                                  |
+| `Nats-Schedule-Next`   |     -     |     -     | NATS server       | Next fire time of the schedule, set on each tick.                           |
 
 Header names are matched **case-insensitively** per the W3C Trace Context specification.
 
+A schedule holder is the message on the `_cron.` subject that defines a [recurring schedule](/docs/guides/recurring-schedules). The server copies the holder's headers, `x-schedule-*` included, into every tick it fires, so a tick handler sees them through `ctx.getHeader()` alongside `Nats-Scheduler` and `Nats-Schedule-Next`.
+
 ## Reserved (you can't set these)
 
-Calling `JetstreamRecordBuilder.setHeader()` with any of these throws a reserved-header error: they are populated by the library at publish time:
+`JetstreamRecordBuilder.setHeader()` throws on these, because the library populates them:
 
-- `x-correlation-id` · `x-reply-to` · `x-error`
+- `x-correlation-id` · `x-reply-to` · `x-error` · `x-schedule-hash` · `x-schedule-pattern`
 
 The builder accepts `x-subject` and `x-caller-name`. The transport writes both before your custom headers are applied, so a value you set for either one **wins**. Set them only when you are deliberately relabelling a message, because the consume span and `ctx.getCallerName()` read what arrives on the wire.
 
-User-defined headers should use a distinct prefix or name (`x-tenant-id`, `x-request-id`, `application-foo`) and avoid the reserved names above.
+Give your own headers distinct names (`x-tenant-id`, `x-request-id`).
 
 ## NATS server-interpreted (`Nats-*` prefix)
 
@@ -86,7 +92,7 @@ js.PublishMsg(&nats.Msg{
 })
 ```
 
-The NestJS consumer picks up `traceparent` from the headers and creates a CONSUMER span as a child of the Go producer span. The trace appears as a single end-to-end flow in your APM.
+The NestJS consumer reads `traceparent` and starts its CONSUMER span as a child of the Go producer span, so the trace shows as one flow in your APM.
 
 </details>
 
@@ -120,14 +126,11 @@ The header has the form:
 
 Example: `00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01`.
 
-Per the [W3C Trace Context specification](https://www.w3.org/TR/trace-context/), the version field is fixed at `00` (current) and the flags field's lowest bit indicates whether the trace is sampled. See the spec for the full grammar.
+The version is `00`, and the lowest bit of the flags marks the trace as sampled. The [W3C Trace Context specification](https://www.w3.org/TR/trace-context/) has the full grammar.
 
 </details>
 
 ## Compatibility
 
-- **NATS server:** `>= 2.11` (preserves W3C Trace Context headers across publish and consume per ADR-41).
-- **`@nats-io/nats-core`:** inherited transitively via `@nats-io/jetstream` and `@nats-io/transport-node` (both pinned to `^3.3.1`). You do not install `nats-core` directly: the resolved version is whatever those two pull in.
-- **External publishers:** any NATS client capable of attaching headers.
-
-The library does not require a NestJS or TypeScript service on the other side of the wire. The header contract is the only coupling point.
+- **NATS server:** headers work on every supported version. `Nats-TTL` and `Nats-Schedule` need newer servers, see [NATS server versions](/docs/getting-started/installation#nats-server-versions).
+- **External publishers:** any NATS client that can attach headers. The other side of the wire does not need to be NestJS or TypeScript: these headers are the only coupling.

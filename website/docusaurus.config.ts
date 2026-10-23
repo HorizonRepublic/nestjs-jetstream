@@ -1,6 +1,8 @@
 import { themes as prismThemes } from 'prism-react-renderer';
 import type { Config } from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
+import npm2yarn from '@docusaurus/remark-plugin-npm2yarn';
+import rehypeJetstream from './src/plugins/rehype-jetstream.mjs';
 
 const config: Config = {
   title: '@horizon-republic/nestjs-jetstream',
@@ -27,6 +29,8 @@ const config: Config = {
           editUrl: 'https://github.com/HorizonRepublic/nestjs-jetstream/tree/main/website/',
           showLastUpdateTime: true,
           showLastUpdateAuthor: true,
+          remarkPlugins: [[npm2yarn, { sync: true, converters: ['pnpm', 'yarn'] }]],
+          rehypePlugins: [rehypeJetstream],
         },
         blog: false,
         theme: { customCss: './src/css/custom.css' },
@@ -90,7 +94,7 @@ const config: Config = {
       tagName: 'link',
       attributes: {
         rel: 'stylesheet',
-        href: 'https://fonts.googleapis.com/css2?family=Recursive:slnt,wght,CASL,MONO@-15..0,300..800,0..1,0..1&display=swap',
+        href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap',
       },
     },
     { tagName: 'link', attributes: { rel: 'icon', type: 'image/png', sizes: '48x48', href: '/img/favicon-48.png' } },
@@ -143,22 +147,27 @@ const config: Config = {
       theme: { light: 'neutral', dark: 'dark' },
       options: {
         securityLevel: 'loose',
-        fontFamily: '"Recursive", ui-monospace, monospace',
+        // Layout is measured with these fonts, so set them here, not in CSS.
+        fontFamily: '"Inter", ui-sans-serif, system-ui, sans-serif',
+        themeVariables: { fontFamily: '"Inter", ui-sans-serif, system-ui, sans-serif', fontSize: '14px' },
         flowchart: {
           curve: 'basis',
           padding: 18,
           nodeSpacing: 50,
           rankSpacing: 60,
           htmlLabels: true,
-          useMaxWidth: true,
+          useMaxWidth: false,
         },
         sequence: {
-          actorMargin: 80,
+          actorMargin: 60,
           boxMargin: 12,
           messageMargin: 40,
           mirrorActors: false,
           showSequenceNumbers: true,
-          useMaxWidth: true,
+          actorFontSize: 14,
+          messageFontSize: 14,
+          noteFontSize: 13,
+          useMaxWidth: false,
         },
       },
     },

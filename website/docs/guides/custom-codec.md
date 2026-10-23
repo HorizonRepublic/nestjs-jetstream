@@ -8,7 +8,7 @@ schema:
   headline: "How to use a custom codec with NestJS JetStream"
   description: "Replace JSON with MessagePack, Protobuf, or a custom binary codec for NATS message serialization."
   datePublished: "2026-03-21"
-  dateModified: "2026-08-03"
+  dateModified: "2026-10-23"
 ---
 
 # How to use a custom codec
@@ -16,11 +16,9 @@ schema:
 > **Use when:** JSON serialization shows up in profiles, or another language needs a shared wire format.
 > **You get:** the `Codec` interface, the built-in MessagePack codec with measured numbers, and where to set it.
 
-The transport uses a `Codec` to serialize and deserialize message payloads. By default, `JsonCodec` handles everything using the native `TextEncoder`/`TextDecoder` with `JSON.stringify`/`JSON.parse`. You can replace it globally or per-client with any binary format.
+A `Codec` serializes message payloads. The default is `JsonCodec`; you can replace it globally, per connection or per client.
 
 ## The Codec interface
-
-A codec must implement two methods:
 
 ```typescript
 interface Codec {
@@ -32,11 +30,9 @@ interface Codec {
 }
 ```
 
-Both methods work with `Uint8Array`: the binary format that NATS uses on the wire.
-
 ## Default: JsonCodec
 
-The built-in `JsonCodec` uses the native `TextEncoder`/`TextDecoder` with `JSON.stringify`/`JSON.parse` and is used automatically when no codec is specified:
+`JsonCodec` uses `JSON.stringify`/`JSON.parse` with the native `TextEncoder`/`TextDecoder`, and applies when no codec is set. An empty payload decodes to `undefined`.
 
 ```typescript
 import { JsonCodec } from '@horizon-republic/nestjs-jetstream';
@@ -46,15 +42,15 @@ const bytes = codec.encode({ hello: 'world' });   // Uint8Array
 const data = codec.decode(bytes);                  // { hello: 'world' }
 ```
 
-Rule of thumb: stick with JSON until serialization shows up in CPU profiles or your p95 payload exceeds ~1-2 KB on the wire. Below that size, `JsonCodec` wins on constant per-call overhead. Above it, a binary codec like MessagePack starts paying for itself, and the gap widens dramatically as payloads grow.
+Stay on JSON until serialization shows up in CPU profiles or your p95 payload exceeds about 1-2 KB on the wire. Below that size `JsonCodec` wins on per-call overhead; above it a binary codec pays for itself, and the gap grows with payload size.
 
 ## Built-in: MsgpackCodec
 
-The library comes with a ready-to-use [MessagePack](https://msgpack.org/) codec powered by [`msgpackr`](https://www.npmjs.com/package/msgpackr). MessagePack produces a smaller wire frame than JSON and decodes much faster on structured payloads, while staying cross-language, Python, Go, Java, Rust, and other runtimes all have MessagePack libraries.
+`MsgpackCodec` is a [MessagePack](https://msgpack.org/) codec backed by [`msgpackr`](https://www.npmjs.com/package/msgpackr). It produces smaller frames than JSON and decodes structured payloads faster, and the format stays cross-language: Python, Go, Java and Rust all have MessagePack libraries.
 
 ### When to use it
 
-`MsgpackCodec` is the right choice when **any** of these apply:
+Use `MsgpackCodec` when **any** of these apply:
 
 - Average payload size exceeds **~1-2 KB**
 - Payloads contain **deep nesting**, **repeated object shapes**, or **long strings**
@@ -69,7 +65,7 @@ Stick with `JsonCodec` when:
 
 ### Decode performance (relative to JSON)
 
-Measured on the library's own codec bench, sync `decode` throughput. Payload buckets refer to the serialized wire size produced by the fixture generator:
+Sync `decode` throughput on the library's codec bench. Buckets are the serialized wire size:
 
 | Payload         | Shape         | vs JSON             |
 | --------------- | ------------- | ------------------- |
@@ -85,9 +81,9 @@ Measured on the library's own codec bench, sync `decode` throughput. Payload buc
 
 ### Installation
 
-`msgpackr` is an **optional** peer dependency, install it only if you opt into this codec:
+`msgpackr` is an **optional** peer dependency (`^1.11.0 || ^2.0.0`):
 
-```bash
+```bash npm2yarn
 npm install msgpackr
 # or: pnpm add msgpackr
 # or: yarn add msgpackr
@@ -95,7 +91,7 @@ npm install msgpackr
 
 ### Usage
 
-Pass a pre-constructed `Packr` instance so the library stays decoupled from `msgpackr` internals:
+Pass your own `Packr` instance, so the library never imports `msgpackr` itself:
 
 ```typescript
 import { JetstreamModule, MsgpackCodec } from '@horizon-republic/nestjs-jetstream';
@@ -115,7 +111,7 @@ export class AppModule {}
 
 ### Record extension (Node-to-Node)
 
-`msgpackr` supports a structured-clone record extension that deduplicates repeated object shapes across messages, yielding extra decode speed under sustained load with a stable payload schema:
+`msgpackr`'s record extension deduplicates repeated object shapes across messages, which speeds up decoding under sustained load with a stable schema:
 
 ```typescript
 codec: new MsgpackCodec(new Packr({ structuredClone: true })),
@@ -127,7 +123,7 @@ The record extension is a `msgpackr`-specific optimization; use it only when eve
 
 ## Protobuf implementation
 
-For strongly-typed schemas and cross-language compatibility, Protocol Buffers are a natural fit. A Protobuf codec wraps your generated message classes:
+A Protocol Buffers codec wraps your generated message classes:
 
 ```typescript title="src/codec/protobuf.codec.ts"
 import type { Codec } from '@horizon-republic/nestjs-jetstream';
@@ -155,31 +151,18 @@ export class ProtobufCodec implements Codec {
 ```
 
 :::note
-A Protobuf codec is inherently tied to a specific message type. You would typically create a wrapper that dispatches to the correct Protobuf type based on the subject or an envelope field.
+A Protobuf codec is tied to one message type. To cover several, write a wrapper that picks the type from an envelope field.
 :::
 
-## Global codec via forRoot
+## Where to set the codec
 
-Pass a codec instance in the `forRoot()` options to use it for all messages:
+| Level          | Option                                  | Falls back to  |
+| -------------- | --------------------------------------- | -------------- |
+| Whole module   | `codec` in `forRoot()`/`forRootAsync()` | `JsonCodec`    |
+| One connection | `connections.<name>.codec`              | the root codec |
+| One client     | `codec` in `forFeature()`               | the root codec |
 
-```typescript title="src/app.module.ts"
-import { Module } from '@nestjs/common';
-import { JetstreamModule, MsgpackCodec } from '@horizon-republic/nestjs-jetstream';
-import { Packr } from 'msgpackr';
-
-@Module({
-  imports: [
-    JetstreamModule.forRoot({
-      name: 'orders',
-      servers: ['nats://localhost:4222'],
-      codec: new MsgpackCodec(new Packr()),
-    }),
-  ],
-})
-export class AppModule {}
-```
-
-When using `forRootAsync()`:
+The `forRoot()` form is in [Usage](#usage). With `forRootAsync()`, return it from the factory:
 
 ```typescript
 JetstreamModule.forRootAsync({
@@ -191,43 +174,32 @@ JetstreamModule.forRootAsync({
 })
 ```
 
-## Per-client override via forFeature
-
-If a specific client needs a different codec (e.g., it talks to a legacy service that uses JSON while the rest of your system uses MessagePack), override it in `forFeature()`:
+A client that talks to a service on another codec overrides it in `forFeature()`:
 
 ```typescript title="src/payments/payments.module.ts"
-import { Module } from '@nestjs/common';
-import { JetstreamModule, JsonCodec } from '@horizon-republic/nestjs-jetstream';
-
-@Module({
-  imports: [
-    JetstreamModule.forFeature({
-      name: 'legacy-billing',
-      codec: new JsonCodec(), // override: use JSON for this client only
-    }),
-  ],
+JetstreamModule.forFeature({
+  name: 'legacy-billing',
+  codec: new JsonCodec(), // this client only
 })
-export class PaymentsModule {}
 ```
-
-When omitted, `forFeature()` inherits the global codec from `forRoot()`.
 
 ## Codec consistency rule
 
 :::danger All communicating services must use the same codec
-The codec determines the wire format. If the publisher encodes with MsgPack but the consumer expects JSON, deserialization will fail. Ensure every service that publishes to or consumes from one stream uses the same codec.
-
-This applies across service boundaries: if `orders-service` publishes events that `notifications-service` consumes, both must use the same codec.
+The codec is the wire format. A consumer on JSON cannot decode what a MessagePack publisher sends, so every service that publishes to or consumes from a stream must use the same codec, across service boundaries too.
 :::
 
 ## Decode error behavior
 
-When `codec.decode()` throws (e.g., a MsgPack consumer receives a JSON-encoded message), the transport handles it safely:
+When `codec.decode()` throws, redelivery cannot help, so the transport never retries:
 
-- **Workqueue and RPC messages**: the message is **terminated** (`msg.term()`): it will not be redelivered. Retrying a message that cannot be decoded would cause an infinite failure loop.
-- **Ordered events**: the message is **skipped** (logged and dropped) since ordered consumers do not support `term()`.
+| Message                      | Outcome                                                                                                                                           |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Workqueue or broadcast event | Becomes a [dead letter](/docs/guides/dead-letter-queue) at once, original bytes intact. With the DLQ off and no `onDeadLetter`, it is terminated. |
+| RPC                          | Terminated (`msg.term()`) in JetStream mode; in Core mode the caller gets an error reply.                                                         |
+| Ordered event                | Logged and skipped: ordered consumers do not support `term()`.                                                                                    |
 
-In both cases, the error is logged with the full subject and error details.
+Each case logs the subject and the error:
 
 ```text
 [Jetstream:EventRouter] Decode error for orders__microservice.ev.order.created: Error: ...
@@ -235,7 +207,7 @@ In both cases, the error is logged with the full subject and error details.
 ```
 
 :::tip Migrating codecs
-To switch codecs without downtime, deploy consumers that can handle both formats first (using a wrapper codec that tries the new format and falls back to the old one), then switch publishers.
+To switch codecs without downtime, first deploy consumers with a wrapper codec that tries the new format and falls back to the old one, then switch the publishers.
 :::
 
 ## Next steps

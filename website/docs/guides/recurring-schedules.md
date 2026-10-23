@@ -1,6 +1,6 @@
 ---
-sidebar_position: 4
-sidebar_label: "Recurring Schedules (Cron)"
+sidebar_position: 3
+sidebar_label: "Cron and intervals"
 title: "How to run cron and interval jobs: NestJS JetStream (NATS 2.14)"
 description: "Cron and interval schedules for NestJS on NATS JetStream message scheduling (NATS 2.14, ADR-51): declared on a handler or created from a client, kept alive across deploys and replicas."
 schema:
@@ -24,8 +24,8 @@ service.
 ## Requirements
 
 - **NATS Server >= 2.14** for cron and interval schedules, **>= 2.12** for a
-  one-shot `at` from a client. An older server fails the boot, or the call, with
-  a `JetstreamCapabilityError`.
+  one-shot `at`. An older server fails the boot, or the call, with a
+  `JetstreamCapabilityError`.
 - Upgrade every node of a cluster before enabling schedules. While a schedule's
   stream leader runs an older node, the schedule does not fire, and the
   transport cannot see that from the client side.
@@ -134,7 +134,13 @@ const schedules = await client.listSchedules(); // declared and dynamic
 
 Deploy the service with the `schedule: true` handler before a client creates schedules for it. A schedule created while no replica has the handler stays put, but every tick fired in that window is dropped.
 
-With NATS authorization, the service account needs JetStream API access to its schedule stream: `$JS.API.STREAM.INFO`, `$JS.API.STREAM.MSG.GET` and publish on the schedule subjects. A client calling `cancelSchedule()` or `listSchedules()` needs `$JS.API.STREAM.PURGE`, `$JS.API.STREAM.INFO` and `$JS.API.STREAM.MSG.GET` on the target's schedule stream, and `$JS.API.STREAM.NAMES` to find it. `ttl()`, `scheduleAt()` and `schedule()` read `$JS.API.INFO` once per connection to check the server version.
+With NATS authorization, grant:
+
+| Who                                                  | JetStream API                                                                                                                                  |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| The service                                          | `$JS.API.STREAM.INFO` and `$JS.API.STREAM.MSG.GET` on its schedule stream, publish on its schedule subjects                                    |
+| A client that cancels or lists                       | `$JS.API.STREAM.PURGE`, `$JS.API.STREAM.INFO`, `$JS.API.STREAM.MSG.GET` on the target's schedule stream, and `$JS.API.STREAM.NAMES` to find it |
+| Anyone using `ttl()`, `scheduleAt()` or `schedule()` | `$JS.API.INFO`, read once per connection to check the server version                                                                           |
 
 ## Delivery semantics
 
@@ -203,8 +209,8 @@ must capture the schedule namespace, `{prefix}_cron.>` or
 
 ## See also
 
-- [Scheduling (Delayed Jobs)](./scheduling): one-shot `scheduleAt()` on events
-  and broadcasts
+- [Delayed messages](./scheduling): one-shot `scheduleAt()` on events and
+  broadcasts
 - [Lifecycle hooks](./lifecycle-hooks): `TransportEvent.ScheduleReconciled`
   reports what boot wrote
 - [Installation](/docs/getting-started/installation#nats-server-versions): which

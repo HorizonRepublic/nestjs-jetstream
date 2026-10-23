@@ -1,12 +1,13 @@
 ---
 sidebar_position: 5
 title: "Graceful Shutdown"
+description: "Automatic shutdown handling: consumption stops, the NATS connection drains, and unfinished work is redelivered."
 schema:
   type: Article
   headline: "Graceful Shutdown"
   description: "Automatic shutdown handling: consumption stops, the NATS connection drains, and unfinished work is redelivered."
   datePublished: "2026-03-21"
-  dateModified: "2026-08-03"
+  dateModified: "2026-10-23"
 ---
 
 # Graceful Shutdown
@@ -14,17 +15,29 @@ schema:
 > **Use when:** you are working out what a rolling deploy does to messages in flight.
 > **You get:** the shutdown sequence, the drain timeout, and why redelivery is the guarantee instead of waiting.
 
-The transport handles shutdown automatically through the NestJS application lifecycle. Consumption stops, then the connection drains. Whatever was still in flight comes back through redelivery, so you write no shutdown code yourself.
+The transport shuts down through the NestJS application lifecycle: consumption stops, then the connection drains, and whatever was in flight comes back through redelivery. You write no shutdown code beyond enabling the hooks.
+
+## Enabling shutdown hooks
+
+NestJS runs `onApplicationShutdown()` on SIGTERM and SIGINT only after you call `enableShutdownHooks()` in `main.ts`, as the [quick start](/docs/getting-started/quick-start) does:
+
+```typescript title="src/main.ts"
+app.enableShutdownHooks();
+```
+
+:::warning Without enableShutdownHooks(), shutdown is not graceful
+The process dies on the signal without calling `onApplicationShutdown()`, and the NATS connection drops abruptly. JetStream still redelivers in-flight messages once `ack_wait` expires, so you lose nothing, but the exit is not clean.
+:::
 
 ## How it works
 
-The `JetstreamModule` hooks into NestJS's `OnApplicationShutdown` interface. When the application receives a termination signal (SIGTERM, SIGINT), NestJS calls the module's `onApplicationShutdown()` method, which triggers the following sequence:
+`JetstreamModule` implements `OnApplicationShutdown`. On a termination signal it runs:
 
-1. **Emit `ShutdownStart` hook**: notifies lifecycle hooks that shutdown has begun.
-2. **Stop consumers**: calls `strategy.close()`, which closes all RxJS subscriptions and stops JetStream consumer iterators. The transport takes no new messages and tears the routing pipeline down.
-3. **Drain NATS connection**: calls `nc.drain()`, which flushes any pending publishes and closes the connection.
-4. **Safety timeout**: if drain doesn't complete within `shutdownTimeout` milliseconds, the transport proceeds with shutdown anyway. This prevents a stuck connection from blocking the process indefinitely.
-5. **Emit `ShutdownComplete` hook**: notifies lifecycle hooks that shutdown has finished.
+1. **`ShutdownStart` hook.**
+2. **Stop consumers**: `strategy.close()` closes the consumer iterators and tears down the routing pipeline, so no new messages are taken.
+3. **Drain the connection**: `nc.drain()` stops the subscriptions, flushes pending publishes and closes the connection.
+4. **Safety timeout**: a drain that has not finished within `shutdownTimeout` is abandoned and shutdown goes on, so a stuck connection cannot block the process.
+5. **`ShutdownComplete` hook.**
 
 ```mermaid
 flowchart LR
@@ -37,58 +50,36 @@ flowchart LR
     F -- No --> G
 ```
 
-## What "drain" means
-
-NATS `drain()` is a graceful shutdown primitive. When you drain a connection:
-
-- The client stops receiving new messages from all subscriptions.
-- The client flushes pending publishes.
-- Once the client finishes its own subscription work, the connection closes cleanly.
-
 :::warning Handlers are not awaited
-Shutdown stops consumption before draining, which tears down the routing pipeline. A handler that was mid-execution is abandoned, not awaited: its message never gets an ack, so JetStream redelivers it once the consumer's `ack_wait` expires. Delivery stays at-least-once and you lose nothing, but a handler running at SIGTERM will run again on another instance.
+Stopping consumers tears down the routing pipeline, so a handler that is mid-execution is abandoned, not awaited. Its message never gets an ack, and JetStream redelivers it once the consumer's `ack_wait` expires. Delivery stays at-least-once and you lose nothing, but a handler running at SIGTERM runs again on another instance.
 
-Design handlers to be idempotent and keep them short. If a unit of work must run only once, make it resumable or guard it with an idempotency key. Do not lean on shutdown to let it finish.
+Keep handlers short and idempotent. If a unit of work must run only once, make it resumable or guard it with an idempotency key; do not rely on shutdown to let it finish.
 :::
 
 ## Configuring the timeout
 
-The `shutdownTimeout` option controls how long the transport waits for the drain to complete. The default is **10 seconds** (10,000 ms).
+`shutdownTimeout` bounds the drain. The default is **10 seconds** (10,000 ms).
 
 ```typescript title="src/app.module.ts"
-import { Module } from '@nestjs/common';
-import { JetstreamModule } from '@horizon-republic/nestjs-jetstream';
-
-@Module({
-  imports: [
-    JetstreamModule.forRoot({
-      name: 'orders',
-      servers: ['nats://localhost:4222'],
-      shutdownTimeout: 30_000, // 30 seconds for long-running handlers
-    }),
-  ],
+JetstreamModule.forRoot({
+  name: 'orders',
+  servers: ['nats://localhost:4222'],
+  shutdownTimeout: 30_000,
 })
-export class AppModule {}
 ```
 
-:::tip Choosing a timeout value
-This budget covers the connection drain, not handler execution, so it does not need to exceed your slowest handler. The default of 10 seconds is ample for a healthy cluster. Raise it only if you see drains hitting the ceiling against a slow or degraded one.
-:::
+The budget covers the connection drain, not handler execution, so it does not need to exceed your slowest handler. Raise it only if drains hit the ceiling against a slow or degraded cluster. When it fires, the transport closes the connection at once and JetStream redelivers anything unacked after `ack_wait`.
 
-If the timeout fires before the drain completes, the transport closes the connection immediately. JetStream then redelivers anything left unacked once the consumer's `ack_wait` expires.
-
-What actually governs redelivery overlap during a rolling deploy is `ack_wait`, not this timeout: a message abandoned at SIGTERM becomes available to another instance once that window passes.
+During a rolling deploy, `ack_wait` (not this timeout) decides when a message abandoned at SIGTERM becomes available to another instance.
 
 ## Multiple connections
 
-With [connections](/docs/guides/multi-connection) shutdown runs in two phases instead of draining one connection at a time:
+With [connections](/docs/guides/multi-connection), shutdown runs in two phases instead of draining one connection at a time:
 
 1. **Every** connection stops accepting new messages.
 2. **Then** every connection drains in parallel, each bounded by its own `shutdownTimeout`.
 
-The phases are separate on purpose: draining sequentially would let a connection keep taking work while its peers are already winding down.
-
-The ceiling for the whole SIGTERM is `max(timeouts)`, not their sum. A connection that throws while draining does not stop the others from closing, and shutdown skips a non-critical connection that never connected.
+Draining one by one would let a connection keep taking work while its peers are already winding down. The ceiling for the whole SIGTERM is `max(timeouts)`, not their sum. A connection that throws while draining does not stop the others from closing. A connection that never connected has nothing to drain and is skipped.
 
 ```typescript
 JetstreamModule.forRoot({
@@ -102,72 +93,22 @@ JetstreamModule.forRoot({
 })
 ```
 
-Worst case above is 30 seconds, not 35.
-
-## Enabling shutdown hooks
-
-For the shutdown sequence to trigger, NestJS must listen for OS signals. Call `enableShutdownHooks()` in your bootstrap function:
-
-```typescript title="src/main.ts"
-import { NestFactory } from '@nestjs/core';
-import { JetstreamStrategy } from '@horizon-republic/nestjs-jetstream';
-import { AppModule } from './app.module';
-
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-
-  app.connectMicroservice(
-    { strategy: app.get(JetstreamStrategy) },
-    { inheritAppConfig: true },
-  );
-
-  // Required for graceful shutdown to work, without this, SIGTERM
-  // terminates the process before onApplicationShutdown() runs.
-  app.enableShutdownHooks();
-
-  await app.startAllMicroservices();
-  await app.listen(3000);
-}
-
-void bootstrap();
-```
-
-:::warning Without enableShutdownHooks(), shutdown is not graceful
-If you skip `enableShutdownHooks()`, the process dies on SIGTERM/SIGINT without calling `onApplicationShutdown()`. The NATS connection drops abruptly. JetStream still redelivers the in-flight messages once `ack_wait` expires, so you lose nothing, but the exit is not clean.
-:::
-
-## No manual shutdown code needed
-
-Unlike some transports that require you to manage connection lifecycle manually, `nestjs-jetstream` handles everything through the NestJS module lifecycle:
-
-- **Startup**: `forRoot()` creates the connection, streams, and consumers.
-- **Shutdown**: `onApplicationShutdown()` drains the connection and cleans up.
-
-You don't need to call `app.close()` in a signal handler or drain the connection by hand. The transport takes care of it.
+The worst case above is 30 seconds, not 35.
 
 ## Observing shutdown with hooks
 
-Use `ShutdownStart` and `ShutdownComplete` lifecycle hooks for logging or metrics:
+`ShutdownStart` and `ShutdownComplete` serve logging and metrics:
 
 ```typescript
-import { JetstreamModule, TransportEvent } from '@horizon-republic/nestjs-jetstream';
-
-JetstreamModule.forRoot({
-  name: 'orders',
-  servers: ['nats://localhost:4222'],
-  hooks: {
-    [TransportEvent.ShutdownStart]: () => {
-      console.log('NATS transport shutting down...');
-    },
-    [TransportEvent.ShutdownComplete]: () => {
-      console.log('NATS transport shutdown complete');
-    },
-  },
-})
+hooks: {
+  [TransportEvent.ShutdownStart]: () => console.log('NATS transport shutting down...'),
+  [TransportEvent.ShutdownComplete]: () => console.log('NATS transport shutdown complete'),
+},
 ```
 
-See [Lifecycle Hooks](/docs/guides/lifecycle-hooks) for all available events.
+See [Lifecycle Hooks](/docs/guides/lifecycle-hooks) for all events.
 
 ## See also
 
-A handler still running at shutdown is abandoned and its message is not acked. NATS redelivers it to another instance after `ack_wait` expires. Make sure your deployment strategy accounts for this overlap, and see [Dead Letter Queue](/docs/guides/dead-letter-queue) for what happens when a handler fails its final delivery attempt mid-shutdown.
+- [Dead Letter Queue](/docs/guides/dead-letter-queue): what happens when a handler fails its final delivery attempt
+- [Default Configs](/docs/reference/default-configs): the `ack_wait` each consumer starts with

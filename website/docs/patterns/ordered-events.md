@@ -8,7 +8,7 @@ schema:
   headline: "Ordered Events: Strict Sequential Delivery in NATS JetStream"
   description: "Strict sequential NestJS NATS JetStream event delivery with ephemeral ordered consumers, deliver policies, and CQRS replay patterns."
   datePublished: "2026-03-21"
-  dateModified: "2026-08-03"
+  dateModified: "2026-10-23"
 ---
 
 # Ordered Events
@@ -40,7 +40,7 @@ Nothing triggers a retry. The consumer always advances:
 Retrying would block every later message, because order has to hold. One poison message would stop the pipeline. That is the trade-off strict ordering buys.
 
 :::warning A throw loses the message
-Neither `nak()` nor `term()` exists here. Catch errors inside the handler if a failure needs to reach a dead letter table or a retry queue.
+The message is neither redelivered nor dead-lettered, and `ctx.retry()` and `ctx.terminate()` are ignored with a warning. Catch errors inside the handler if a failure needs to reach a dead letter table or a retry queue.
 :::
 
 ## Publishing and handling
@@ -191,7 +191,7 @@ With idempotent handlers and transactional offset storage, `StartSequence` is th
 
 ## Stream and replay configuration
 
-Field reference lives in [OrderedEventOverrides](/docs/reference/module-configuration#orderedeventoverrides).
+Field reference lives in [OrderedEventOverrides](/docs/reference/module-configuration#orderedeventoverrides), defaults in [Default Configs](/docs/reference/default-configs#stream-defaults).
 
 ```typescript
 import { DeliverPolicy, ReplayPolicy } from '@nats-io/jetstream';
@@ -199,11 +199,10 @@ import { toNanos } from '@horizon-republic/nestjs-jetstream';
 
 ordered: {
   stream: {
-    max_age: toNanos(7, 'days'),          // default 1 day
-    max_bytes: 10 * 1024 * 1024 * 1024,   // default 5 GB
-    max_msg_size: 1024 * 1024,            // default 10 MB
+    max_age: toNanos(7, 'days'),        // how far back a replay can reach
+    max_bytes: 4 * 1024 * 1024 * 1024,  // storage cap, reserved against the account
   },
-  consumer: { replay_policy: ReplayPolicy.Original },   // default Instant
+  consumer: { replay_policy: ReplayPolicy.Original }, // default Instant
 }
 ```
 
@@ -260,9 +259,7 @@ Reach for workqueue when processing must be guaranteed and order does not matter
 
 ## Caveats
 
-**`DeliverPolicy.All` hangs the SDK.** Passing `All` explicitly leaves a residual `opt_start_seq` in the consumer configuration, which conflicts with the ordered consumer protocol and makes `consume()` hang. This was seen in `nats` v2.29.x and is still worked around for `@nats-io/jetstream` v3.x.
-
-The transport omits `deliver_policy` when the policy is `All` or unset, which the SDK treats identically. Every other policy passes through untouched. That absence is what you see when you inspect the consumer with `nats consumer info`.
+**`deliver_policy` is missing for `All`.** Passing `All` explicitly makes the SDK's `consume()` hang, so the transport omits the field when the policy is `All` or unset, which the SDK treats the same. `nats consumer info` shows no `deliver_policy` for that reason. Details in [DeliverPolicy.All workaround](/docs/reference/edge-cases#deliverpolicyall-workaround).
 
 **No partial replay.** A reconnect recreates the consumer at the position the deliver policy dictates, not at the last message processed. Resumable processing needs `StartSequence` with your own offset storage.
 

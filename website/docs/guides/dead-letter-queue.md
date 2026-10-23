@@ -8,7 +8,7 @@ schema:
   headline: "How to configure a Dead Letter Queue"
   description: "Capture NestJS NATS JetStream messages that exhaust all delivery attempts via a DLQ stream or onDeadLetter callback."
   datePublished: "2026-03-21"
-  dateModified: "2026-08-03"
+  dateModified: "2026-10-23"
 ---
 
 # How to configure a Dead Letter Queue
@@ -23,7 +23,12 @@ A message that fails every delivery attempt and reaches `max_deliver` (default *
 | `dlq: { stream }`       | v2.9.0 | Republishes to a dedicated JetStream stream with tracking headers. Start here. |
 | `onDeadLetter` callback | v2.2.0 | Full context for custom persistence: database, S3, another queue.              |
 
-Two more cases become dead letters immediately, whatever the delivery count, because redelivery cannot fix them: **no registered handler** for the subject (a handler renamed mid-deploy while producers still publish the old pattern), and an **undecodable payload** (codec mismatch). Original bytes are preserved either way.
+Two more cases become dead letters immediately, whatever the delivery count, because redelivery cannot fix them:
+
+- **No registered handler** for the subject, such as a handler renamed mid-deploy while producers still publish the old pattern. A [schedule tick](/docs/guides/recurring-schedules) without a handler is the exception: it is handed to another replica instead.
+- **Undecodable payload**, a [codec](/docs/guides/custom-codec#decode-error-behavior) mismatch.
+
+The original bytes are preserved either way.
 
 ```mermaid
 sequenceDiagram
@@ -57,7 +62,7 @@ sequenceDiagram
 
 ## Built-in DLQ stream
 
-The stream is provisioned and exhausted messages are republished to it without any configuration. Override it when the defaults do not fit, or turn it off with `dlq: false`:
+The DLQ stream is on by default: the transport provisions it and republishes exhausted messages to it with no configuration. The one exception is global `provisioning.management: ManagementMode.Manual`, where it stays off until you configure `dlq`. Override it when the defaults do not fit, or turn it off with `dlq: false`:
 
 ```typescript
 JetstreamModule.forRoot({
@@ -79,7 +84,7 @@ Override through `dlq.stream`. Leave `name` out and it is derived from the servi
 
 ### Tracking headers
 
-Every republished message holds metadata, so you can investigate, replay or filter without decoding the payload. The `JetstreamDlqHeader` enum is exported for type-safe access.
+Each republished message carries these headers, so you can investigate, replay or filter without decoding the payload. The exported `JetstreamDlqHeader` enum names them. `Nats-*` headers of the original (`Nats-Msg-Id`, `Nats-TTL`) are dropped, so the copy is neither deduplicated nor expired early.
 
 | Header                 | Contents                                                                     |
 | ---------------------- | ---------------------------------------------------------------------------- |
@@ -91,22 +96,7 @@ Every republished message holds metadata, so you can investigate, replay or filt
 
 ### Externally managed stream
 
-When the DLQ stream comes from Terraform or ArgoCD, bind to it instead of creating it:
-
-```typescript
-import { ManagementMode } from '@horizon-republic/nestjs-jetstream';
-
-JetstreamModule.forRoot({
-  name: 'orders',
-  servers: ['nats://localhost:4222'],
-  dlq: {
-    stream: { name: 'ext_dlq' },
-    management: { stream: ManagementMode.Manual },
-  },
-})
-```
-
-The stream's `subjects` list must contain exactly the DLQ stream name, so `ext_dlq` needs `subjects: ["ext_dlq"]`. The library validates this at boot and throws if the subject is not covered. See [Bring Your Own Infrastructure](/docs/guides/external-infrastructure#external-dlq).
+To bind to a DLQ stream from Terraform or ArgoCD instead of creating it, set `dlq.stream.name` and `dlq.management: ManagementMode.Manual`. The stream's `subjects` must contain its own name, which the library checks at boot. [External DLQ](/docs/guides/external-infrastructure#external-dlq) has the full example.
 
 ## Fallback chain
 
@@ -136,10 +126,8 @@ JetstreamModule.forRoot({
 })
 ```
 
-Standalone flow: the handler fails on the final attempt and the transport builds `DeadLetterInfo`. The hook fires, the callback is awaited, and the message is either `term()`'d on success or `nak()`'d on failure.
-
 :::warning A throwing callback keeps the message in the stream
-If the callback fails, the message is `nak`'d instead of terminated, so the data survives. NATS will not deliver it again. It stays until manual recovery (`nats stream get`, a replay tool) or until `max_age`. Pairing the callback with `dlq: { stream }` puts the retried DLQ publish first and leaves the callback as fallback.
+When the callback is the primary path and throws, the message is `nak`'d instead of terminated, so the data survives. NATS will not deliver it again: it stays until manual recovery (`nats stream get`, a replay tool) or until `max_age`. With the DLQ stream on, the retried DLQ publish comes first and the callback is only the fallback.
 :::
 
 ### `DeadLetterInfo`
@@ -230,11 +218,11 @@ JetstreamModule.forRoot({
 })
 ```
 
-The hook is synchronous and fire-and-forget, for metrics and logs. The callback is async and awaited, for persistence that must complete before termination. See [Lifecycle Hooks](/docs/guides/lifecycle-hooks).
+The hook is synchronous and fire-and-forget, for metrics and logs. The callback is async and awaited, for persistence that must complete before termination. [Lifecycle Hooks](/docs/guides/lifecycle-hooks) compares the two.
 
 ## Scope
 
-Dead letters apply to [workqueue](/docs/patterns/events) and [broadcast](/docs/patterns/broadcast) events. [RPC](/docs/patterns/rpc) returns errors to the caller under its own timeout, and [ordered events](/docs/patterns/ordered-events) are auto-acknowledged without an ack/nak cycle, so exhaustion has no meaning there.
+Dead letters apply to [workqueue](/docs/patterns/events) and [broadcast](/docs/patterns/broadcast) events and to [schedule ticks](/docs/guides/recurring-schedules). [RPC](/docs/patterns/rpc) returns errors to the caller under its own timeout, and [ordered events](/docs/patterns/ordered-events) are auto-acknowledged without an ack/nak cycle, so exhaustion has no meaning there.
 
 ## Next
 

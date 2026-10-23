@@ -1,0 +1,78 @@
+/* The scene fills the hero behind its content. On wide screens it fades out
+   towards the text column so the copy keeps a clean ground. */
+.scene {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+}
+
+.scene-stage {
+  position: absolute;
+  inset: 0;
+  mask-image: linear-gradient(90deg, transparent 28%, #000 50%);
+}
+
+/* The tooltip sits over the canvas as plain HTML, placed per frame. */
+.scene-overlay {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.scene-tip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-family: var(--jt-font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+  will-change: transform;
+  display: grid;
+  gap: 2px;
+  padding: 7px 10px;
+  border: 1px solid var(--jt-line-2);
+  border-radius: 6px;
+  background: var(--jt-bg-1);
+  box-shadow: var(--jt-shadow-raised);
+  color: var(--jt-fg-0);
+}
+
+.scene-tip[hidden] {
+  display: none;
+}
+
+.scene-tip-muted {
+  color: var(--jt-fg-3);
+}
+
+.scene-tip-deliver {
+  color: var(--jt-state-deliver);
+}
+
+.scene-tip-redeliver {
+  color: var(--jt-state-redeliver);
+}
+
+.scene-tip-ack {
+  color: var(--jt-state-ack);
+}
+
+.scene-stage canvas {
+  display: block;
+  pointer-events: auto;
+}
+
+/* Narrow: the scene moves under the copy, in the flow, full width. */
+@media (max-width: 996px) {
+  .scene {
+    position: relative;
+    height: 340px;
+    order: 2;
+  }
+
+  .scene-stage {
+    mask-image: linear-gradient(180deg, transparent, #000 8%, #000 92%, transparent);
+  }
+}

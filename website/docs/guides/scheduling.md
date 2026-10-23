@@ -1,6 +1,6 @@
 ---
-sidebar_position: 3
-sidebar_label: "Scheduling (Delayed Jobs)"
+sidebar_position: 2
+sidebar_label: "Delayed messages"
 title: "How to schedule delayed messages: NestJS JetStream (NATS 2.12)"
 description: "One-shot delayed NestJS NATS JetStream message delivery via the Nats-Schedule header (NATS 2.12, ADR-51). Replace Bull or Agenda for simple delayed jobs."
 schema:
@@ -13,21 +13,12 @@ schema:
 
 # How to schedule delayed messages
 
-> **Use when:** a message should arrive later instead of now.
-> **You get:** one-shot delayed delivery through NATS 2.12 scheduling, and the limits around it.
+> **Use when:** an event should reach its handler later instead of now.
+> **You get:** one-shot delayed delivery through NATS message scheduling, and the limits around it.
 
-One-shot delayed message delivery powered by [NATS 2.12 message scheduling](https://github.com/nats-io/nats-architecture-and-design/blob/main/adr/ADR-51.md) (ADR-51).
+`scheduleAt()` publishes an event now and NATS delivers it at the given time ([ADR-51](https://github.com/nats-io/nats-architecture-and-design/blob/main/adr/ADR-51.md)). It needs NATS 2.12 and `allow_msg_schedules: true` on the target stream. For delays past the stream's `max_age`, recurring jobs or a schedule you can cancel, see the [overview](./scheduling-overview).
 
-Publish an event now, have it delivered to the consumer at a future time. Replaces the need for external schedulers like Bull or Agenda for simple delayed jobs.
-
-## Requirements
-
-- **NATS Server >= 2.12**
-- `allow_msg_schedules: true` on the event stream
-
-## Configuration
-
-Enable message scheduling on the event stream:
+## Enable it on the stream
 
 ```typescript
 JetstreamModule.forRoot({
@@ -39,40 +30,26 @@ JetstreamModule.forRoot({
 });
 ```
 
-This flag is not enabled by default to maintain backward compatibility with NATS < 2.12. It can be safely added to existing streams, NATS applies it as a regular update without recreation or downtime.
+The flag is off by default. Turning it on is a regular stream update, without recreation or downtime, and it can never be turned off again. Broadcasts need the same flag on `broadcast.stream`.
 
-## Usage
-
-Use `scheduleAt()` on `JetstreamRecordBuilder` to delay delivery:
+## Schedule an event
 
 ```typescript
 import { JetstreamRecordBuilder } from '@horizon-republic/nestjs-jetstream';
 import { lastValueFrom } from 'rxjs';
 
-// Deliver in 1 hour
 const record = new JetstreamRecordBuilder({ orderId: 42, type: 'reminder' })
-  .scheduleAt(new Date(Date.now() + 60 * 60 * 1000))
+  .scheduleAt(new Date(Date.now() + 60 * 60 * 1000)) // in one hour
   .build();
 
 await lastValueFrom(this.client.emit('order.reminder', record));
 ```
 
-The consumer handles it like any normal event: no changes needed on the receiving side:
-
-```typescript
-@EventPattern('order.reminder')
-handleReminder(@Payload() data: OrderReminder) {
-  // Executed at the scheduled time
-}
-```
+The handler is an ordinary `@EventPattern('order.reminder')` and runs at the scheduled time.
 
 ## How it works
 
-1. `scheduleAt(date)` stores the delivery time in the record
-2. On publish, the library routes to a per-message unique `_sch` subject within the event stream, a convention that keeps scheduled messages apart from regular events. That unique suffix is what makes it work, because the server stores schedules as rollup messages, one active schedule per subject ([ADR-51](https://github.com/nats-io/nats-architecture-and-design/blob/main/adr/ADR-51.md)), so a shared subject would silently replace a pending schedule on every publish
-3. The publish includes `Nats-Schedule` and `Nats-Schedule-Target` headers (ADR-51), which the server reads instead of the subject when managing schedules
-4. NATS holds the message until the scheduled time, then publishes a **new message** to the target event subject and purges the fired schedule holder, so unique `_sch` subjects do not accumulate
-5. The event consumer processes it normally
+The transport publishes the record to a unique subject under `{service}__microservice._sch.` in the same stream, with the `Nats-Schedule` and `Nats-Schedule-Target` headers. NATS keeps one pending schedule per subject, so a shared subject would let each publish replace the previous one. At the scheduled time NATS publishes a new message to the event subject and deletes the holder, and the consumer handles it like any event.
 
 ```mermaid
 flowchart LR
@@ -84,63 +61,27 @@ flowchart LR
     sch -- "at scheduled time" --> ev
     ev --> handler["@EventPattern handler"]
 
-    classDef lib fill:#16201a,stroke:#52d68e,stroke-width:1.5px,color:#52d68e;
+    classDef lib stroke-width:1.5px;
     class sch,ev lib;
 ```
 
-## Important: `max_age` consideration
+With a custom `subjectPrefix` the holders live under `{prefix}_sch.`, and an externally managed stream must capture that prefix. See [scheduling with a custom prefix](/docs/guides/external-infrastructure#scheduling-with-a-custom-prefix).
 
-Scheduled messages are stored in the event stream like any other message. If the stream's `max_age` expires before the scheduled delivery time, **NATS silently purges the message**: neither a delivery nor an error.
+## `max_age` bounds the delay
 
-The default event stream `max_age` is **7 days**. If you need to schedule messages further in the future, increase `max_age`:
+The pending schedule is a stored message. If the stream's `max_age` runs out before the delivery time, NATS deletes it with neither a delivery nor an error. The default `max_age` is 7 days for events and 1 hour for broadcasts.
 
-```typescript
-events: {
-  stream: {
-    allow_msg_schedules: true,
-    max_age: 0, // no expiry, use when scheduling beyond 7 days
-  },
-},
-```
-
-:::warning
-Setting `max_age: 0` disables automatic cleanup for **all** messages in the event stream, not just scheduled ones. Consider the storage implications for high-throughput streams.
-:::
-
-## Scheduling with a custom subject prefix
-
-When a custom `subjectPrefix` is configured for an event or broadcast kind, the schedule holders live under `{prefix}_sch.` instead of the default `{service}__microservice._sch.` prefix:
-
-| Prefix configuration               | Schedule holder prefix          |
-| ---------------------------------- | ------------------------------- |
-| No custom prefix (default)         | `{service}__microservice._sch.` |
-| `subjectPrefix: 'company.orders.'` | `company.orders._sch.`          |
-
-If the stream is **externally managed** (`ManagementMode.Manual`), it must cover this prefix in its `subjects` list. Boot fails with an explicit error if the coverage is missing:
-
-```text
-Stream "…" has scheduling enabled (allow_msg_schedules=true) but its subjects do not cover the schedule prefix "…". Add "…>" to the stream's subjects.
-```
-
-A stream with `subjects: ["company.orders.>"]` already covers `company.orders._sch.>` because the wildcard `>` matches any suffix. No extra entry is needed.
-
-If you used a prefix like `company.orders.events.` (narrower wildcard), you must add `company.orders._sch.>` explicitly or widen the wildcard.
-
-See [Bring Your Own Infrastructure, Scheduling with a custom prefix](/docs/guides/external-infrastructure#scheduling-with-a-custom-prefix) for a full provisioning example.
+For a longer delay, use [`client.schedule()` with `{ at }`](./recurring-schedules#schedules-from-a-client): it lives in a stream with no `max_age`. Raising the events stream's `max_age` also works, but it keeps every other event for that long too.
 
 ## Limitations
 
-- **One-shot.** For cron and interval jobs see [recurring schedules](./recurring-schedules), which also offers a one-shot `at` that outlives the events stream's `max_age`.
-- **Workqueue events and broadcasts only.** `scheduleAt()` is ignored for RPC ([`client.send()`](/docs/patterns/rpc)) with a logged warning, and **throws** for [`ordered:` patterns](/docs/patterns/ordered-events): the schedule holder cannot live in the same stream as an ordered target, which the server requires.
-- **Future dates only.** `scheduleAt()` throws if the date is not in the future.
-- **NATS >= 2.12.** Older servers accept `allow_msg_schedules` and ignore it, so the transport refuses the flag and `scheduleAt()` with a `JetstreamCapabilityError`.
-- **`max_age` constraint.** Schedule delay must not exceed the stream's `max_age`; the pending schedule is an ordinary stored message and expires with the stream's retention. Note the **broadcast stream default is 1 hour**: scheduling a broadcast further out requires raising its `max_age`.
-- **Per-stream opt-in.** Broadcast scheduling requires `allow_msg_schedules: true` on the [broadcast stream](/docs/patterns/broadcast) config separately.
-- **`ttl()` applies to the delivered message.** Combining `.ttl()` with `.scheduleAt()` sets `Nats-Schedule-TTL`: the countdown starts when the scheduled message fires, not when it is published.
+- **Events and broadcasts only.** For RPC (`client.send()`) the transport logs a warning and ignores `scheduleAt()`. For [`ordered:` patterns](/docs/patterns/ordered-events) it throws, because NATS needs the holder and its target in the same stream.
+- **Future dates only.** A date that is not in the future throws.
+- **Server version.** On a server older than 2.12, `scheduleAt()` and `allow_msg_schedules` throw a `JetstreamCapabilityError`. Such servers accept the flag and never fire the schedule.
+- **`ttl()` starts at delivery.** Combined with `scheduleAt()`, the TTL is sent as `Nats-Schedule-TTL` and counts from the moment the schedule fires.
 
 ## See also
 
-- [Record Builder & Deduplication](/docs/guides/record-builder#scheduled-delivery): `JetstreamRecordBuilder.scheduleAt()` in the full builder API
-- [Per-Message TTL](/docs/guides/per-message-ttl): sibling feature for per-message expiration
-- [Naming Conventions: stream subject wildcards](/docs/reference/naming-conventions#stream-subject-wildcards): how the transport routes scheduled messages internally
-- [Default Configs](/docs/reference/default-configs#enable-only-can-be-turned-on-but-never-off): `allow_msg_schedules` in the enable-only stream properties table
+- [Record builder](/docs/guides/record-builder): the rest of the builder API
+- [Message TTL](./per-message-ttl): expiry per message
+- [Default configs](/docs/reference/default-configs#enable-only-can-be-turned-on-but-never-off): `allow_msg_schedules` among the enable-only properties

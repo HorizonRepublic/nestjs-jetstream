@@ -8,15 +8,15 @@ schema:
   headline: "JetstreamRecordBuilder: Headers, Message IDs & Deduplication"
   description: "Build NestJS NATS messages with custom headers, deterministic message IDs for publish-side deduplication, and per-request RPC timeouts."
   datePublished: "2026-03-21"
-  dateModified: "2026-08-03"
+  dateModified: "2026-10-23"
 ---
 
 # Record Builder & Deduplication
 
 > **Use when:** a message needs custom headers, its own timeout or a deduplication ID.
-> **You get:** `JetstreamRecordBuilder`, the server-side dedup window, and the headers the transport sets itself.
+> **You get:** `JetstreamRecordBuilder`, the server-side dedup window, and which headers you cannot set.
 
-`JetstreamRecordBuilder` is a fluent builder for attaching custom headers, per-request timeouts, and deduplication IDs to outbound messages. It follows the same record-builder pattern used by other NestJS transports (`RmqRecord`, `NatsRecord`).
+`JetstreamRecordBuilder` follows the record-builder pattern of the other NestJS transports (`RmqRecord`, `NatsRecord`).
 
 ## Basic usage
 
@@ -29,55 +29,28 @@ const record = new JetstreamRecordBuilder({ orderId: 42 })
   .setHeader('x-tenant', 'acme')
   .build();
 
-// Fire-and-forget event
 await lastValueFrom(this.client.emit('order.created', record));
-
-// RPC request
 const result = await lastValueFrom(this.client.send('get.order', record));
 ```
 
-The builder is immutable after `.build()`; the returned `JetstreamRecord` is a frozen snapshot of the data, headers, timeout, and message ID at the time of construction.
-
-:::note `setTimeout()` is RPC-only
-`.setTimeout()` and the per-request override it provides only apply to `client.send()`. On `client.emit()` it has no effect. See [Per-request timeout override](#per-request-timeout-override) below.
-:::
+`build()` returns a `JetstreamRecord` snapshot: later calls on the builder do not change it.
 
 ## Custom headers
 
-Use `setHeader()` to attach metadata that travels alongside the payload. Headers are available in handlers via [`RpcContext.getHeader()`](/docs/guides/handler-context).
+`setHeader()` adds one header, `setHeaders()` adds several. Handlers read them with [`ctx.getHeader()`](/docs/guides/handler-context).
 
 ```typescript
 const record = new JetstreamRecordBuilder(data)
-  .setHeader('x-tenant', 'acme')
   .setHeader('x-trace-id', traceId)
-  .build();
-```
-
-For multiple headers at once, use `setHeaders()`:
-
-```typescript
-const record = new JetstreamRecordBuilder(data)
-  .setHeaders({
-    'x-tenant': 'acme',
-    'x-trace-id': traceId,
-    'x-request-source': 'api-gateway',
-  })
+  .setHeaders({ 'x-tenant': 'acme', 'x-request-source': 'api-gateway' })
   .build();
 ```
 
 ## Message ID & JetStream deduplication
 
-JetStream has built-in **server-side deduplication**. When a message is published with a message ID, the server remembers that ID for a configurable time window. If a second message with the same ID arrives within the window, it is silently dropped: no duplicate processing occurs.
+When a message carries a message ID, the JetStream server remembers it for the stream's `duplicate_window` and drops a second publish with the same ID inside that window. The window is **2 minutes** on every stream except the command (RPC) stream, where it is **30 seconds** ([defaults](/docs/reference/default-configs)).
 
-### How the dedup window works
-
-Each JetStream stream has a `duplicate_window` setting that controls how long the server remembers message IDs. The default window is **2 minutes** for event, broadcast, and ordered streams, and **30 seconds** for command (RPC) streams.
-
-If you do not set a message ID, the transport generates a random UUID for every publish. Deduplication is off by default: each publish counts as a unique message.
-
-### Setting a deterministic message ID
-
-To enable deduplication, provide a **deterministic** ID derived from your domain data:
+Without `setMessageId()`, the transport generates a unique ID (a NUID) for every publish, so nothing is deduplicated. Pass a **deterministic** ID derived from domain data to turn deduplication on:
 
 ```typescript
 const record = new JetstreamRecordBuilder(orderData)
@@ -87,82 +60,37 @@ const record = new JetstreamRecordBuilder(orderData)
 await lastValueFrom(this.client.emit('order.created', record));
 ```
 
-Now if a network retry or application restart causes the same event to be published twice, the JetStream server drops the duplicate automatically.
+A network retry or a restart that publishes the same event again is now dropped by the server. The client logs a `Duplicate event publish detected` warning when that happens.
 
 :::tip Choose IDs carefully
-Good message IDs are derived from business identifiers: `order-${orderId}`, `payment-${paymentId}-refund`, `user-${userId}-email-changed`. Avoid timestamps or random values: they defeat the purpose of deduplication.
+Derive IDs from business identifiers: `order-${orderId}`, `payment-${paymentId}-refund`, `user-${userId}-email-changed`. Timestamps or random values defeat deduplication.
 :::
 
 :::warning Window expiration
-Deduplication only works within the `duplicate_window`. If your retry logic can span longer than the window, you need application-level idempotency checks in your handlers as well.
+Deduplication only works within the `duplicate_window`. If your retries can span longer than the window, add application-level idempotency checks in your handlers.
 :::
 
 ## Per-request timeout override
 
-The `setTimeout()` method overrides the global RPC timeout for a single request. This is useful for operations that are known to be slow:
+`setTimeout()` overrides the global RPC timeout for one request:
 
 ```typescript
-// This request gets 30 seconds instead of the global default
 const record = new JetstreamRecordBuilder({ reportId: 'annual-2024' })
   .setTimeout(30_000)
   .build();
 
-const report = await lastValueFrom(
-  this.client.send('generate.report', record),
-);
+const report = await lastValueFrom(this.client.send('generate.report', record));
 ```
 
-The timeout only applies to RPC (`client.send()`). For fire-and-forget events (`client.emit()`), timeout has no effect since there is no response to wait for.
+It applies to `client.send()` only. `client.emit()` waits for no response, so the value has no effect there.
 
 ## Scheduled delivery
 
-Use `scheduleAt()` to delay message delivery to a future time. The message is held by the NATS server and delivered to the consumer at the specified time:
-
-```typescript
-const record = new JetstreamRecordBuilder({ orderId: 42, type: 'reminder' })
-  .scheduleAt(new Date(Date.now() + 60 * 60 * 1000)) // deliver in 1 hour
-  .build();
-
-await lastValueFrom(this.client.emit('order.reminder', record));
-```
-
-Scheduling requires NATS Server >= 2.12 and `allow_msg_schedules: true` on the event stream. The consumer handles scheduled messages like any normal event: no changes needed on the receiving side.
-
-:::note Events only
-`scheduleAt()` only works with `client.emit()`. If used with `client.send()` (RPC), the schedule is silently ignored and a warning is logged.
-:::
-
-See [Scheduling (Delayed Jobs)](/docs/guides/scheduling) for the full guide, including configuration, how it works under the hood, and `max_age` considerations.
+`scheduleAt(date)` holds an event on the server and delivers it at `date`. It works with `client.emit()` only and needs a newer NATS server; see [Scheduling (Delayed Jobs)](/docs/guides/scheduling).
 
 ## Headers the transport sets itself
 
-The transport writes five headers of its own on outbound messages, and the builder treats them differently depending on whether overwriting one would break something:
-
-| Header             | Set by the transport                       | `setHeader()`   |
-| ------------------ | ------------------------------------------ | --------------- |
-| `x-correlation-id` | Links an RPC request to its response       | Throws          |
-| `x-reply-to`       | Inbox subject for the RPC response         | Throws          |
-| `x-error`          | Marks a reply payload as an error envelope | Throws          |
-| `x-subject`        | The subject the message was published to   | Your value wins |
-| `x-caller-name`    | Internal name of the sending service       | Your value wins |
-
-The first three carry RPC correlation, so setting them by hand would misroute a reply.
-
-The last two are informational. The transport writes them before your custom headers apply, which means setting either one replaces the transport's value. Reach for that only when you are deliberately relabelling a message, since handlers read what arrived on the wire.
-
-Any header starting with `nats-` also throws, whatever the casing: those are read by the NATS server itself, and a stray `Nats-Rollup` purges every pending message on the subject. Use `setMessageId()`, `ttl()` and `scheduleAt()` to reach the ones the transport supports.
-
-```typescript
-// Throws: Header "x-correlation-id" is reserved by the JetStream transport
-// and cannot be set manually.
-new JetstreamRecordBuilder(data)
-  .setHeader('x-correlation-id', 'my-id')
-  .build();
-```
-
-:::note
-The error is thrown on `setHeader()`, not on `build()`. The failure surfaces at the call site.
-:::
+`setHeader()` throws for the headers the transport reserves (`x-correlation-id`, `x-reply-to`, `x-error`, and the schedule headers `x-schedule-hash` and `x-schedule-pattern`) and for every header starting with `nats-`, whatever the casing. The error is thrown at the `setHeader()` call, not at `build()`. Reach the `Nats-*` headers through `setMessageId()`, `ttl()` and `scheduleAt()`. [Header Contract](/docs/reference/header-contract) lists every header the transport reads and writes, including `x-subject` and `x-caller-name`, which you can overwrite.
 
 ## API summary
 
@@ -186,22 +114,18 @@ class JetstreamRecordBuilder<T = unknown> {
   /** Override the global RPC timeout for this single request. */
   setTimeout(ms: number): this;
 
-  /** Schedule one-shot delayed delivery (NATS >= 2.12). @since 2.8.0 */
+  /** Schedule one-shot delayed delivery. Events only. @since 2.8.0 */
   scheduleAt(date: Date): this;
 
-  /**
-   * Set per-message TTL via the `Nats-TTL` header.
-   * Requires NATS >= 2.11 and `allow_msg_ttl: true` on the target stream.
-   * @since 2.9.0
-   */
-  ttl(durationNs: number): this;
+  /** Set per-message TTL in nanoseconds via the `Nats-TTL` header. Events only. @since 2.9.0 */
+  ttl(nanos: number): this;
 
   /** Return an immutable JetstreamRecord. */
   build(): JetstreamRecord<T>;
 }
 ```
 
-The `RESERVED_HEADERS` set is exported from the package, so custom tooling can check a key before calling `.setHeader()`. It holds the three RPC headers only, so a sanitizer needs the `nats-` prefix check alongside it:
+The exported `RESERVED_HEADERS` set lets custom tooling check a key before calling `setHeader()`. It does not cover the `nats-` prefix, so a sanitizer needs that check alongside it:
 
 ```typescript
 import { RESERVED_HEADERS } from '@horizon-republic/nestjs-jetstream';
@@ -213,8 +137,8 @@ if (RESERVED_HEADERS.has(key.toLowerCase()) || key.toLowerCase().startsWith('nat
 
 ## Next steps
 
-- [Per-Message TTL](/docs/guides/per-message-ttl): set individual message lifetimes via `.ttl()`
-- [Scheduling (Delayed Jobs)](/docs/guides/scheduling): delay message delivery to a future time
-- [Handler Context](/docs/guides/handler-context): access headers and message metadata in your handlers
+- [Per-Message TTL](/docs/guides/per-message-ttl): `ttl()`
+- [Scheduling (Delayed Jobs)](/docs/guides/scheduling): `scheduleAt()`
+- [Handler Context](/docs/guides/handler-context): read headers and metadata in handlers
 - [Custom Codec](/docs/guides/custom-codec): control how payloads are serialized
-- [Module Configuration](/docs/reference/module-configuration): configure dedup windows via stream overrides
+- [Module Configuration](/docs/reference/module-configuration): change `duplicate_window` through stream overrides

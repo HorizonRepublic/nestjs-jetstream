@@ -2,15 +2,22 @@
    the landing and the docs alike. */
 
 .landingRoot {
-  --lp-gutter: clamp(20px, 5vw, 72px);
+  --lp-max: 1140px;
+  --lp-gutter: clamp(16px, 4vw, 32px);
 
-  background: var(--jt-bg-0);
+  /* The hero's glow belongs to the page, not to the hero box, so it fades out
+     across the next section instead of stopping at an edge. */
+  background:
+    radial-gradient(900px 640px at 82% 120px, var(--jt-deliver-soft), transparent 70%),
+    radial-gradient(760px 520px at 62% 560px, var(--jt-ack-soft), transparent 70%),
+    var(--jt-bg-1);
+  background-repeat: no-repeat;
   color: var(--jt-fg-0);
 }
 
 .landingRoot code {
-  font-variation-settings: var(--jt-vf-struct);
-  font-size: 0.92em;
+  font-family: var(--jt-font-mono);
+  font-size: 0.88em;
   background: var(--jt-bg-2);
   border: none;
   border-radius: var(--jt-radius-sm);
@@ -18,239 +25,196 @@
   color: inherit;
 }
 
+.lp-container {
+  max-width: var(--lp-max);
+  margin-inline: auto;
+  padding-inline: var(--lp-gutter);
+}
+
+.lp-section {
+  padding-block: clamp(48px, 6vw, 72px);
+}
+
+.lp-section--alt {
+  background: var(--jt-bg-0);
+  border-block: 1px solid var(--jt-line-1);
+}
+
+.lp-h2 {
+  margin: 0;
+  font-size: clamp(1.5rem, 2.4vw, 1.875rem);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--jt-fg-0);
+}
+
+.lp-h2--center {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.lp-more {
+  display: inline-block;
+  margin-top: 16px;
+  font-weight: 600;
+  color: var(--jt-accent);
+}
+
+.lp-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* ---- hero --------------------------------------------------------------- */
 .lp-hero {
   position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1.04fr) minmax(0, 0.96fr);
-  gap: clamp(32px, 5vw, 72px);
-  align-items: center;
-  padding: clamp(44px, 6vw, 84px) var(--lp-gutter) clamp(48px, 6vw, 76px);
-  border-bottom: 1px solid var(--jt-line-1);
-  overflow: hidden;
+  isolation: isolate;
+  padding-block: clamp(48px, 7vw, 88px) clamp(48px, 6vw, 72px);
 }
 
+.lp-hero-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(32px, 5vw, 56px);
+  align-items: center;
+}
 
-.lp-hero::before {
-  content: '';
-  position: absolute;
-  z-index: 0;
-  inset-block-start: -30%;
-  inset-inline-end: -12%;
-  width: 62%;
-  aspect-ratio: 1;
-  background: radial-gradient(circle, var(--jt-accent-soft), transparent 62%);
+/* The scene sits under the whole hero; the right column only keeps it room. */
+/* Clicks pass through the empty grid to the scene; the copy stays interactive. */
+.lp-hero-grid {
   pointer-events: none;
 }
 
-.lp-hero-lead,
-.lp-record {
+.lp-hero-lead {
   position: relative;
   z-index: 1;
+  pointer-events: auto;
 }
 
-.lp-hero-title {
-  margin: 0;
-  /* ch must stay on max-width: as a grid track it resolves against the
-     container font and collapses. */
-  max-width: 16ch;
-  font-size: clamp(1.9rem, 4.4vw, var(--jt-step-5));
-  line-height: 1.08;
-  font-weight: 620;
-  letter-spacing: -0.018em;
-  font-variation-settings: var(--jt-vf-display);
-  text-wrap: balance;
+/* Long unbreakable lines (the install command) must not widen the column. */
+.lp-hero-grid,
+.lp-hero-lead {
+  min-width: 0;
 }
 
-.lp-hero-sub {
-  margin: 18px 0 0;
-  max-width: 52ch;
-  font-size: clamp(0.98rem, 1.25vw, var(--jt-step-1));
-  line-height: 1.55;
-  color: var(--jt-fg-1);
+.lp-hero > .lp-container {
+  width: 100%;
 }
 
-/* ---- the record --------------------------------------------------------- */
-.lp-record {
-  margin: 0;
+.lp-hero-room {
+  min-height: 480px;
 }
 
-.lp-record-card {
-  position: relative;
-  padding: 16px 20px 26px;
-  background: var(--jt-bg-1);
-  border: 1px solid var(--jt-line-1);
-  border-radius: var(--jt-radius-lg);
-  box-shadow: var(--jt-shadow-raised);
-  font-variation-settings: var(--jt-vf-struct);
-  font-size: var(--jt-step--1);
-}
-
-.lp-record-head {
+.lp-built {
   display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--jt-line-2);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--jt-fg-3);
-}
-
-.lp-record-kind {
-  color: var(--jt-fg-2);
-}
-
-.lp-record-fields {
-  display: grid;
-  gap: 6px;
-  margin: 14px 0 0;
-}
-
-.lp-record-fields > div {
-  display: grid;
-  grid-template-columns: 7.5rem minmax(0, 1fr);
-  gap: 12px;
-}
-
-.lp-record-fields dt {
-  color: var(--jt-fg-3);
-}
-
-.lp-record-fields dd {
-  margin: 0;
-  color: var(--jt-fg-0);
-  overflow-wrap: anywhere;
-}
-
-.lp-record-log {
-  display: grid;
-  gap: 9px;
-  list-style: none;
-  margin: 16px 0 0;
-  padding: 14px 0 0;
-  border-top: 1px dashed var(--jt-line-2);
-}
-
-.lp-record-log li {
-  display: grid;
-  grid-template-columns: 6.4rem minmax(0, 6.8rem) minmax(0, 1fr);
-  gap: 10px;
-  align-items: baseline;
-  animation: lp-row-in 300ms cubic-bezier(0.2, 0, 0, 1) both;
-  animation-delay: calc(120ms + var(--lp-row) * 130ms);
-}
-
-.lp-log-time {
-  color: var(--jt-fg-3);
-  font-variant-numeric: tabular-nums;
-}
-
-.lp-log-event {
-  font-weight: 600;
-  color: var(--jt-fg-0);
-}
-
-.lp-log-note {
-  color: var(--jt-fg-2);
-}
-
-.lp-record-log li[data-state='deliver'] .lp-log-event,
-.lp-record-log li[data-state='ack'] .lp-log-event {
-  color: var(--jt-state-deliver);
-}
-
-.lp-record-log li[data-state='nak'] .lp-log-event,
-.lp-record-log li[data-state='redeliver'] .lp-log-event {
-  color: var(--jt-state-redeliver);
-}
-
-
-.lp-record-log li[data-state='seam'] {
-  padding-block: 8px;
-  border-block: 1px dashed var(--jt-line-2);
-}
-
-.lp-record-log li[data-state='seam'] .lp-log-event {
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 22px 0 0;
+  font-size: 0.875rem;
   font-weight: 500;
   color: var(--jt-fg-2);
 }
 
-.lp-record-log li[data-state='seam'] .lp-log-note {
-  color: var(--jt-fg-3);
+.lp-built span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.lp-record-stamp {
-  position: absolute;
-  inset-block-end: -18px;
-  inset-inline-end: 20px;
-  animation: lp-stamp-in 420ms cubic-bezier(0.2, 0, 0, 1) both;
-  animation-delay: 900ms;
+.lp-btn-icon {
+  margin-inline-end: 8px;
 }
 
-.lp-record-stamp span {
-  display: block;
-  padding: 7px 16px;
-  background: var(--jt-bg-1);
-  border: 2px solid var(--jt-state-deliver);
-  border-radius: var(--jt-radius-md);
-  box-shadow: 0 0 0 3px var(--jt-bg-1), 0 0 0 4px var(--jt-accent-line);
-  font-variation-settings: var(--jt-vf-struct);
-  font-size: var(--jt-step-1);
+.lp-hero-title {
+  margin: 0;
+  max-width: 18ch;
+  font-size: clamp(2.1rem, 4.2vw, 3.25rem);
   font-weight: 700;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--jt-state-deliver);
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
 }
 
-.lp-record-caption {
-  margin: 32px 0 0;
-  max-width: 58ch;
-  font-size: var(--jt-step--1);
+.lp-hero-sub {
+  margin: 20px 0 0;
+  max-width: 56ch;
+  font-size: 1.125rem;
   line-height: 1.6;
-  color: var(--jt-fg-2);
+  color: var(--jt-fg-1);
 }
 
-@keyframes lp-row-in {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes lp-stamp-in {
-  from {
-    opacity: 0;
-    transform: rotate(-16deg) scale(1.45);
-  }
-
-  60% {
-    opacity: 1;
-    transform: rotate(-4deg) scale(0.97);
-  }
-
-  to {
-    opacity: 1;
-    transform: rotate(-6deg) scale(1);
-  }
-}
-
-/* ---- actions ------------------------------------------------------------ */
-.lp-actions {
+.lp-buttons {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 14px 24px;
+  gap: 12px;
   margin-top: 28px;
 }
 
+.lp-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 11px 22px;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background var(--jt-m-fast), border-color var(--jt-m-fast), color var(--jt-m-fast);
+}
+
+.lp-btn:hover {
+  text-decoration: none;
+}
+
+.lp-btn--primary {
+  background: var(--jt-accent);
+  color: var(--jt-accent-fg);
+}
+
+.lp-btn--primary:hover {
+  background: var(--jt-accent-hover);
+  color: var(--jt-accent-fg);
+}
+
+.lp-btn--secondary {
+  border: 1px solid var(--jt-line-2);
+  background: var(--jt-bg-1);
+  color: var(--jt-fg-0);
+}
+
+.lp-btn--secondary:hover {
+  border-color: var(--jt-fg-3);
+  color: var(--jt-fg-0);
+}
+
+.lp-hero .lp-install {
+  font-family: var(--jt-font-mono);
+  margin-top: 20px;
+}
+
+.lp-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lp-badges li {
+  padding: 3px 10px;
+  border: 1px solid var(--jt-line-1);
+  border-radius: 999px;
+  background: var(--jt-bg-1);
+  font-size: 0.8125rem;
+  color: var(--jt-fg-2);
+}
+
+/* ---- install ------------------------------------------------------------ */
 .lp-install {
   display: inline-flex;
   align-items: center;
@@ -285,288 +249,366 @@
   color: var(--jt-fg-3);
 }
 
-/* Wraps as a pair so a narrow column never strands the second link. */
-.lp-links {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 24px;
-}
 
-.lp-cta {
-  font-weight: 550;
-  color: var(--jt-accent);
-  text-decoration: none;
-  border-bottom: 1px solid var(--jt-accent);
-  padding-bottom: 1px;
-}
-
-.lp-cta:hover {
-  color: var(--jt-accent-hover);
-  border-color: var(--jt-accent-hover);
-}
-
-.lp-cta--quiet {
-  color: var(--jt-fg-2);
-  border-bottom-color: transparent;
-}
-
-.lp-cta--quiet:hover {
-  color: var(--jt-fg-0);
-  border-bottom-color: var(--jt-line-2);
-}
-
-.lp-facts {
-  display: block;
-  margin-top: 24px;
-  font-variation-settings: var(--jt-vf-struct);
-  font-size: var(--jt-step--1);
-  color: var(--jt-fg-3);
-}
-
-/* ---- the swap ----------------------------------------------------------- */
-.lp-swap {
+/* ---- reasons ------------------------------------------------------------ */
+.lp-reasons {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  border-bottom: 1px solid var(--jt-line-1);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(24px, 4vw, 48px);
 }
 
-.lp-swap-col {
-  padding: clamp(32px, 4vw, 48px) var(--lp-gutter);
+.lp-reason[data-tone='deliver'] {
+  --lp-tone: var(--jt-state-deliver);
+  --lp-tone-soft: var(--jt-deliver-soft);
 }
 
-.lp-swap-col + .lp-swap-col {
-  border-inline-start: 1px solid var(--jt-line-1);
+.lp-reason[data-tone='redeliver'] {
+  --lp-tone: var(--jt-state-redeliver);
+  --lp-tone-soft: var(--jt-redeliver-soft);
 }
 
-.lp-swap h2 {
-  margin: 0 0 10px;
-  font-size: var(--jt-step-2);
-  font-weight: 600;
-  letter-spacing: -0.008em;
+.lp-reason[data-tone='ack'] {
+  --lp-tone: var(--jt-state-ack);
+  --lp-tone-soft: var(--jt-ack-soft);
 }
 
-.lp-swap p {
-  margin: 0 0 22px;
-  max-width: 52ch;
-  font-size: var(--jt-step-0);
-  line-height: 1.62;
+.lp-reason-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: var(--lp-tone-soft);
+  color: var(--lp-tone);
+}
+
+.lp-reason h2 {
+  margin: 16px 0 8px;
+  font-size: 1.125rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.lp-reason p {
+  margin: 0;
+  font-size: 0.975rem;
+  line-height: 1.6;
   color: var(--jt-fg-1);
 }
 
-.lp-code {
+/* ---- split sections ----------------------------------------------------- */
+.lp-split {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  gap: clamp(32px, 5vw, 64px);
+  align-items: center;
+}
+
+.lp-split-copy p {
+  margin: 14px 0 0;
+  max-width: 48ch;
+  font-size: 1rem;
+  line-height: 1.65;
+  color: var(--jt-fg-1);
+}
+
+/* ---- comparison table --------------------------------------------------- */
+.lp-table-wrap {
+  overflow-x: auto;
   border: 1px solid var(--jt-line-1);
-  border-radius: var(--jt-radius-md);
-  overflow: hidden;
+  border-radius: 10px;
   background: var(--jt-bg-1);
   box-shadow: var(--jt-shadow-card);
 }
 
-.lp-code-head {
-  display: flex;
-  justify-content: space-between;
-  padding: 7px 14px;
-  border-bottom: 1px solid var(--jt-line-1);
-  background: var(--jt-bg-2);
-  font-variation-settings: var(--jt-vf-struct);
-  font-size: var(--jt-step--1);
-  color: var(--jt-fg-3);
+.lp-table {
+  display: table;
+  width: 100%;
+  margin: 0;
+  border-collapse: collapse;
+  font-size: 0.9rem;
 }
 
-.lp-code-body {
-  margin: 0;
-  padding: 15px 16px;
-  overflow-x: auto;
-  font-variation-settings: var(--jt-vf-struct);
-  font-size: 0.82rem;
-  line-height: 1.62;
-  color: var(--jt-fg-0);
+.lp-table th,
+.lp-table td {
+  padding: 10px 16px;
+  border: none;
+  border-bottom: 1px solid var(--jt-line-1);
   background: none;
 }
 
-.c-dim {
-  color: var(--jt-fg-2);
+.lp-table tr:last-child th,
+.lp-table tr:last-child td {
+  border-bottom: none;
 }
 
-.c-accent {
+.lp-table thead th {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--jt-fg-2);
+  text-align: center;
+  background: var(--jt-bg-0);
+}
+
+.lp-table thead th:last-child {
   color: var(--jt-accent);
 }
 
-.c-str {
-  color: var(--jt-code-string);
-}
-
-.c-comment {
-  color: var(--jt-code-comment);
-}
-
-/* ---- capability ledger --------------------------------------------------
-   A ledger, ruled like one. The whole row is the target, not just the link. */
-.lp-ledger {
-  padding: clamp(36px, 5vw, 56px) var(--lp-gutter) clamp(48px, 6vw, 72px);
-}
-
-.lp-ledger-head {
-  margin: 0 0 16px;
-  font-variation-settings: var(--jt-vf-struct);
-  font-size: var(--jt-step--1);
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--jt-fg-3);
-}
-
-.lp-ledger-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  border-top: 1px solid var(--jt-line-2);
-}
-
-.lp-ledger-row {
-  display: grid;
-  grid-template-columns: minmax(0, 15rem) minmax(0, 1fr) minmax(0, 13rem);
-  gap: 24px;
-  align-items: baseline;
-  padding: 15px 12px 15px 0;
-  border-bottom: 1px solid var(--jt-line-1);
-  text-decoration: none;
-  color: inherit;
-  transition: background var(--jt-m-fast), padding-inline-start var(--jt-m-fast);
-}
-
-.lp-ledger-row:hover {
-  background: var(--jt-accent-soft);
-  padding-inline-start: 12px;
-}
-
-.lp-ledger-name {
-  font-weight: 600;
+.lp-table tbody th {
+  font-weight: 500;
+  text-align: left;
   color: var(--jt-fg-0);
 }
 
-.lp-ledger-body {
-  font-size: var(--jt-step-0);
+.lp-table td {
+  width: 8.5rem;
+  text-align: center;
+}
+
+.lp-table tbody tr:nth-child(2n) {
+  background: none;
+}
+
+.lp-yes {
+  font-weight: 700;
+  color: var(--jt-state-ack);
+}
+
+.lp-no {
+  color: var(--jt-fg-3);
+}
+
+/* ---- migration steps and diff ------------------------------------------- */
+.lp-steps {
+  margin: 18px 0 0;
+  padding-inline-start: 22px;
+  display: grid;
+  gap: 8px;
+  font-size: 0.975rem;
   line-height: 1.55;
   color: var(--jt-fg-1);
 }
 
-.lp-ledger-path {
-  justify-self: end;
-  font-variation-settings: var(--jt-vf-struct);
-  font-size: var(--jt-step--1);
-  color: var(--jt-accent);
-  white-space: nowrap;
+.lp-steps strong {
+  color: var(--jt-fg-0);
+  font-weight: 600;
 }
 
-.lp-ledger-path::after {
-  content: ' →';
+.lp-diff {
+  margin: 0;
+  border: 1px solid var(--jt-line-1);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--jt-bg-code);
+  box-shadow: var(--jt-shadow-card);
 }
 
-.lp-ledger-note {
-  margin: 24px 0 0;
-  max-width: 88ch;
-  font-variation-settings: var(--jt-vf-struct);
-  font-size: var(--jt-step--1);
-  line-height: 1.6;
-  color: var(--jt-fg-3);
-}
-
-/* ---- footer ------------------------------------------------------------- */
-.lp-foot {
+.lp-diff-head {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 24px;
-  padding: 18px var(--lp-gutter);
-  border-top: 1px solid var(--jt-line-1);
-  background: var(--jt-bg-1);
-  font-size: var(--jt-step--1);
+  justify-content: space-between;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--jt-line-1);
+  background: var(--jt-bg-0);
+  font-family: var(--jt-font-mono);
+  font-size: 0.75rem;
   color: var(--jt-fg-2);
 }
 
-.lp-foot-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 24px;
+.lp-diff-add {
+  color: var(--jt-state-ack);
 }
 
-.lp-foot-links a {
+.lp-diff-del {
+  color: var(--jt-state-dlq);
+}
+
+.lp-diff-body {
+  margin: 0;
+  padding: 8px 0;
+  overflow-x: auto;
+  background: none;
+  font-family: var(--jt-font-mono);
+  font-size: 0.8rem;
+  line-height: 1.7;
+  color: var(--jt-fg-0);
+}
+
+.lp-diff-line {
+  display: block;
+  padding-inline: 10px 14px;
+  white-space: pre;
+}
+
+.lp-diff-mark {
+  display: inline-block;
+  width: 1.4em;
+}
+
+.lp-diff-line[data-kind='add'] {
+  background: var(--jt-ack-soft);
+}
+
+.lp-diff-line[data-kind='add'] .lp-diff-mark {
+  color: var(--jt-state-ack);
+}
+
+.lp-diff-line[data-kind='del'] {
+  background: var(--jt-dlq-soft);
+  color: var(--jt-fg-2);
+}
+
+.lp-diff-line[data-kind='del'] .lp-diff-mark {
+  color: var(--jt-state-dlq);
+}
+
+/* ---- features ----------------------------------------------------------- */
+.lp-features {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lp-feature {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 14px;
+  row-gap: 4px;
+  height: 100%;
+  padding: 18px 20px;
+  border: 1px solid var(--jt-line-1);
+  border-radius: 10px;
+  background: var(--jt-bg-1);
   color: inherit;
+  text-decoration: none;
+  transition: border-color var(--jt-m-fast), box-shadow var(--jt-m-fast);
+}
+
+.lp-feature:hover {
+  border-color: color-mix(in oklch, var(--lp-tone, var(--jt-accent)) 45%, transparent);
+  box-shadow: var(--jt-shadow-raised);
   text-decoration: none;
 }
 
-.lp-foot-links a:hover {
-  color: var(--jt-accent);
+.lp-feature[data-tone='deliver'] {
+  --lp-tone: var(--jt-state-deliver);
+  --lp-tone-soft: var(--jt-deliver-soft);
 }
 
-.lp-foot-meta {
-  margin-inline-start: auto;
-  font-variation-settings: var(--jt-vf-struct);
-  color: var(--jt-fg-3);
+.lp-feature[data-tone='redeliver'] {
+  --lp-tone: var(--jt-state-redeliver);
+  --lp-tone-soft: var(--jt-redeliver-soft);
+}
+
+.lp-feature[data-tone='dlq'] {
+  --lp-tone: var(--jt-state-dlq);
+  --lp-tone-soft: var(--jt-dlq-soft);
+}
+
+.lp-feature[data-tone='ack'] {
+  --lp-tone: var(--jt-state-ack);
+  --lp-tone-soft: var(--jt-ack-soft);
+}
+
+.lp-feature[data-tone='trace'] {
+  --lp-tone: var(--jt-state-trace);
+  --lp-tone-soft: color-mix(in oklch, var(--jt-state-trace) 12%, transparent);
+}
+
+.lp-feature-icon {
+  grid-row: span 2;
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  background: var(--lp-tone-soft, var(--jt-accent-soft));
+  color: var(--lp-tone, var(--jt-accent));
+}
+
+.lp-feature-name {
+  font-weight: 650;
+  color: var(--jt-fg-0);
+}
+
+.lp-feature-body {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--jt-fg-2);
+}
+
+/* ---- closing call ------------------------------------------------------- */
+.lp-cta-band {
+  background:
+    linear-gradient(100deg, var(--jt-deliver-soft), transparent 45%, var(--jt-ack-soft)),
+    var(--jt-bg-1);
+  border-top: 1px solid var(--jt-line-1);
+}
+
+.lp-cta-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px 32px;
+}
+
+.lp-cta-inner p {
+  margin: 8px 0 0;
+  color: var(--jt-fg-1);
+}
+
+.lp-cta-inner .lp-buttons {
+  margin-top: 0;
 }
 
 /* ---- narrow ------------------------------------------------------------- */
 @media (max-width: 996px) {
+  .lp-hero-grid,
+  .lp-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lp-hero-room {
+    min-height: 0;
+  }
+
   .lp-hero {
-    grid-template-columns: minmax(0, 1fr);
-    align-items: start;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
   }
 
-  .lp-hero::before {
-    inset-block-start: -18%;
-    width: 90%;
+  .lp-reasons,
+  .lp-features {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .lp-swap {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .lp-swap-col + .lp-swap-col {
-    border-inline-start: none;
-    border-top: 1px solid var(--jt-line-1);
-  }
-
-  .lp-ledger-row {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 6px;
-  }
-
-  .lp-ledger-path {
-    justify-self: start;
+  .lp-reasons > :last-child {
+    grid-column: 1 / -1;
   }
 }
 
-/* Stack rather than shrink: a timestamp wrapping mid-value stops reading as one. */
-@media (max-width: 540px) {
-  .lp-record-fields > div,
-  .lp-record-log li {
+@media (max-width: 640px) {
+  .lp-reasons,
+  .lp-features {
     grid-template-columns: minmax(0, 1fr);
-    gap: 2px;
   }
 
-  .lp-record-stamp {
-    inset-inline-end: 12px;
-  }
-
-  .lp-record-stamp span {
-    font-size: var(--jt-step-0);
+  .lp-table td {
+    width: auto;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .lp-install,
-  .lp-ledger-row {
+  .lp-btn,
+  .lp-feature {
     transition: none;
   }
 
-  /* Rotation is part of the drawing, so restate it when the animation goes. */
-  .lp-record-log li,
-  .lp-record-stamp {
-    animation: none;
-  }
-
-  .lp-record-stamp {
-    transform: rotate(-6deg);
-  }
 }
+
+

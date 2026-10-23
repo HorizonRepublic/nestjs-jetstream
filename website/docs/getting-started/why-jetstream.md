@@ -8,7 +8,7 @@ schema:
   headline: "Why JetStream? NestJS NATS Transport Comparison"
   description: "When the built-in NestJS NATS transport is enough, and when your system outgrows Core NATS and needs JetStream for durable messaging."
   datePublished: "2026-04-11"
-  dateModified: "2026-08-03"
+  dateModified: "2026-10-23"
 ---
 
 # Why JetStream?
@@ -60,7 +60,7 @@ Driving JetStream from the `@nats-io/*` packages directly means building this yo
 **Publishing**
 
 - [Per-message TTL](../guides/per-message-ttl)
-- [Scheduled delivery](../guides/scheduling) through NATS 2.12 headers
+- [Delayed delivery](../guides/scheduling) and [cron and interval schedules](../guides/recurring-schedules), fired by NATS itself
 - [Deduplication by deterministic message ID](../guides/record-builder)
 - [Publisher-only mode](../reference/edge-cases#publisher-only-mode) for gateways
 

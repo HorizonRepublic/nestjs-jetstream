@@ -3,12 +3,13 @@
 
 :root {
   /* ---- type ----------------------------------------------------------- */
-  --jt-font-sans: "Recursive", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --jt-font-mono: "Recursive", ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --jt-font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --jt-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  --jt-vf-prose: "MONO" 0, "CASL" 0;
-  --jt-vf-struct: "MONO" 1, "CASL" 0;
-  --jt-vf-display: "MONO" 0, "CASL" 0.32;
+  /* Kept as hooks; the static faces have no variation axes. */
+  --jt-vf-prose: normal;
+  --jt-vf-struct: normal;
+  --jt-vf-display: normal;
 
   /* ---- type scale ------------------------------------------------------ */
   --jt-step--1: 0.8125rem;
@@ -47,27 +48,36 @@
   --jt-fg-3: #666e7d; /* muted, captions - AA at small sizes */
 
   /* deliver, and every interactive affordance */
-  --jt-accent: #2c5fb3;
-  --jt-accent-hover: #234c92;
-  --jt-accent-soft: rgb(44 95 179 / 0.08);
+  --jt-accent: #2557c2;
+  --jt-accent-hover: #1c4499;
+  --jt-accent-soft: rgb(37 87 194 / 0.08);
   --jt-accent-fg: #ffffff;
 
   /* message state */
-  --jt-state-deliver: #2c5fb3;
-  --jt-state-redeliver: #9a660e;
-  --jt-state-dlq: #ad3728;
+  --jt-state-deliver: #2557c2;
+  --jt-state-redeliver: #96600a;
+  --jt-state-dlq: #b3321f;
+  --jt-state-ack: #1b7a4a;
+  --jt-state-trace: #6a4fc0;
+  --jt-tone-teal: #0d7480;
+  --jt-tone-rose: #b0306a;
+
+  --jt-deliver-soft: rgb(37 87 194 / 0.09);
+  --jt-redeliver-soft: rgb(150 96 10 / 0.1);
+  --jt-dlq-soft: rgb(179 50 31 / 0.09);
+  --jt-ack-soft: rgb(27 122 74 / 0.1);
 
   /* docs callouts map onto the same three states */
-  --jt-info: #2c5fb3;
-  --jt-warn: #9a660e;
-  --jt-danger: #ad3728;
+  --jt-info: #2557c2;
+  --jt-warn: #96600a;
+  --jt-danger: #b3321f;
 
   /* syntax */
-  --jt-code-string: #55684a;
-  --jt-code-keyword: #6b5ba8;
+  --jt-code-string: #2f7340;
+  --jt-code-keyword: #6a4fc0;
   --jt-code-comment: #697181;
 
-  --jt-accent-line: rgb(44 95 179 / 0.28);
+  --jt-accent-line: rgb(37 87 194 / 0.28);
   --jt-line-3: #b3b9c6;
   --jt-bg-code: #ffffff;
 
@@ -92,24 +102,33 @@
   --jt-fg-2: #8f97a8;
   --jt-fg-3: #878f9f;
 
-  --jt-accent: #7fa4e0;
-  --jt-accent-hover: #9bb8e9;
-  --jt-accent-soft: rgb(127 164 224 / 0.14);
+  --jt-accent: #86aaf2;
+  --jt-accent-hover: #a5c0f6;
+  --jt-accent-soft: rgb(134 170 242 / 0.14);
   --jt-accent-fg: #11141a;
 
-  --jt-state-deliver: #7fa4e0;
-  --jt-state-redeliver: #d9a24a;
-  --jt-state-dlq: #e08573;
+  --jt-state-deliver: #86aaf2;
+  --jt-state-redeliver: #e2a84b;
+  --jt-state-dlq: #ee8a76;
+  --jt-state-ack: #5fcf95;
+  --jt-state-trace: #b9a6f2;
+  --jt-tone-teal: #5cc6d2;
+  --jt-tone-rose: #f08bb4;
 
-  --jt-info: #7fa4e0;
-  --jt-warn: #d9a24a;
-  --jt-danger: #e08573;
+  --jt-deliver-soft: rgb(134 170 242 / 0.14);
+  --jt-redeliver-soft: rgb(226 168 75 / 0.14);
+  --jt-dlq-soft: rgb(238 138 118 / 0.14);
+  --jt-ack-soft: rgb(95 207 149 / 0.14);
 
-  --jt-code-string: #9cb98a;
-  --jt-code-keyword: #b3a3e0;
+  --jt-info: #86aaf2;
+  --jt-warn: #e2a84b;
+  --jt-danger: #ee8a76;
+
+  --jt-code-string: #8fcf8a;
+  --jt-code-keyword: #b9a6f2;
   --jt-code-comment: #7e8697;
 
-  --jt-accent-line: rgb(127 164 224 / 0.32);
+  --jt-accent-line: rgb(134 170 242 / 0.32);
   --jt-line-3: #4a5364;
   --jt-bg-code: #1b1f27;
 

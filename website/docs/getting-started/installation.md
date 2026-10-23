@@ -20,32 +20,9 @@ Get the package installed, NATS running locally, and the peer dependencies lined
 
 ## Install the package
 
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
-
-<Tabs groupId="pkg-manager">
-  <TabItem value="npm" label="npm">
-
-```bash
+```bash npm2yarn
 npm install @horizon-republic/nestjs-jetstream
 ```
-
-  </TabItem>
-  <TabItem value="pnpm" label="pnpm">
-
-```bash
-pnpm add @horizon-republic/nestjs-jetstream
-```
-
-  </TabItem>
-  <TabItem value="yarn" label="yarn">
-
-```bash
-yarn add @horizon-republic/nestjs-jetstream
-```
-
-  </TabItem>
-</Tabs>
 
 ## Peer dependencies
 

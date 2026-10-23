@@ -16,34 +16,21 @@ schema:
 > **Use when:** something is already broken and you want the cause.
 > **You get:** symptoms grouped by area, each with its usual causes and the command that confirms them.
 
-If something isn't working, start here. The sections below are grouped by symptom, scan them before opening an issue.
-
 ## Connection errors
 
 ### `NATS connection refused`
 
-The transport throws this on startup when the NATS server is unreachable.
+Startup throws `NATS connection refused: <servers>` when a critical connection cannot reach the server. A connection with `critical: false` retries in the background instead (see [Multiple connections](/docs/guides/multi-connection#criticality)).
 
-**Causes:**
-
-- NATS server is not running
-- Wrong server URL in `servers` config
-- Firewall or network policy blocking the port
+**Causes:** the server is not running, the URL in `servers` is wrong for this environment, or a firewall or network policy blocks the port.
 
 **Fix:**
 
 ```bash
-# Verify NATS is running
-nats-server --version
-docker ps | grep nats
-
-# Test connectivity
 nats server check connection --server nats://localhost:4222
 ```
 
-### `CONNECTION_REFUSED` in production
-
-If the app crashes immediately on deploy, ensure the NATS server URL is correct for the environment. Use `forRootAsync()` with `ConfigService` to load URLs from environment variables:
+Load per-environment URLs with `forRootAsync()`:
 
 ```typescript
 JetstreamModule.forRootAsync({
@@ -58,7 +45,7 @@ JetstreamModule.forRootAsync({
 
 ### Reconnection loop
 
-The transport defaults to unlimited reconnection (`maxReconnectAttempts: -1`). If you see repeated `Reconnecting...` logs, the NATS server is flapping or the connection is being dropped.
+The transport reconnects without limit (`maxReconnectAttempts: -1`). Repeated reconnects mean the server is flapping or something drops the connection.
 
 **Diagnosis:**
 
@@ -79,11 +66,11 @@ The transport defaults to unlimited reconnection (`maxReconnectAttempts: -1`). I
 
 **Checklist:**
 
-1. **Handler registered?**: Check startup logs for `Registered handlers: X RPC, Y events, Z broadcasts` (plus `N ordered` when ordered handlers are present). A zero count means the decorator didn't hit the registry, which points to an import-order or module-wiring problem.
-2. **Stream exists?**: The transport creates streams on startup. Check with `nats stream ls`.
-3. **Consumer exists?**: Check with `nats consumer ls <stream-name>`.
-4. **Subject matches?**: Use `nats sub "servicename__microservice.ev.>"` to see if messages arrive on the expected subject.
-5. **Publisher-only mode?**: If `publisherOnly: true` is set, the handler list is empty.
+1. **Handler registered?** The startup log prints `Registered handlers: X RPC, Y events, Z broadcasts`, plus `N ordered` and `N scheduled` when present. A zero count means the decorator never reached the registry: an import-order or module-wiring problem.
+2. **Stream and consumer exist?** `nats stream ls`, then `nats consumer ls <stream-name>`.
+3. **Subject matches?** `nats sub "servicename__microservice.ev.>"` shows whether messages arrive on the expected subject.
+4. **Publisher-only?** With `publisherOnly: true` no handlers are registered.
+5. **Right connection?** With [several connections](/docs/guides/multi-connection#binding-handlers), a handler consumes only from the connection it is bound to.
 
 ### Messages redelivered unexpectedly
 
@@ -91,26 +78,19 @@ Messages are redelivered when the `ack_wait` deadline expires before the handler
 
 **Causes:**
 
-- Handler is too slow (exceeds `ack_wait`)
-- Handler throws an error (message is nak'd for retry)
-- Connection lost during processing
+- The handler outlives `ack_wait`
+- The handler throws, so the message is retried after the retry delay
+- The connection dropped during processing
 
-**Fix:**
-
-- Increase `ack_wait`: `consumer: { ack_wait: toNanos(60, 'seconds') }`
-- Enable `ackExtension: true` for long-running handlers
-- Set explicit `concurrency` to prevent overload
+**Fix:** raise `ack_wait` (`consumer: { ack_wait: toNanos(60, 'seconds') }`), enable `ackExtension: true` for long handlers, or cap `concurrency` to prevent overload. See [Performance Tuning](/docs/guides/performance#ack-extension).
 
 ### Consumer lag growing
 
-If messages accumulate faster than your consumer processes them:
+1. **Profile the handler** first: database queries, external API calls and heavy computation are the usual bottlenecks.
+2. **Raise `concurrency`** (`events: { concurrency: 200 }`) and **`max_ack_pending`** (`consumer: { max_ack_pending: 500 }`).
+3. **Scale horizontally:** each instance takes a share of the workqueue.
 
-1. **Increase concurrency:** `events: { concurrency: 200 }`
-2. **Increase `max_ack_pending`:** `consumer: { max_ack_pending: 500 }`
-3. **Scale horizontally:** Deploy more instances: each gets a share of the workqueue messages.
-4. **Check handler performance:** Profile your handlers. Database queries, external API calls, and heavy computations are common bottlenecks.
-
-Monitor lag with the NATS CLI:
+Watch the lag:
 
 ```bash
 nats consumer info <stream> <consumer> | grep "Num Pending"
@@ -120,7 +100,7 @@ nats consumer info <stream> <consumer> | grep "Num Pending"
 
 ### `RPC timeout` errors
 
-The caller didn't receive a response before the timeout expired.
+The caller gets an `rpc.timeout` error when no response arrives in time. The default is 30 s in Core mode and 3 min in JetStream mode, and the deadline also covers waiting for the connection.
 
 **Causes:**
 
@@ -140,13 +120,12 @@ hooks: {
 
 **Fix:**
 
-- Increase timeout: `rpc: { mode: 'core', timeout: 60_000 }`
-- Per-request timeout: `new JetstreamRecordBuilder(data).setTimeout(120_000).build()`
-- Ensure both sides use the same RPC mode
+- Raise the timeout: `rpc: { mode: 'core', timeout: 60_000 }`, or per request with [`setTimeout()`](/docs/guides/record-builder)
+- Use the same RPC mode on both sides
 
-### `No handler for subject` warnings
+### `No handler for subject` errors
 
-A message arrived on a subject that has no registered handler.
+A message arrived on a subject with no registered handler. An event in that state becomes a dead letter at once (see [Dead Letter Queue](/docs/guides/dead-letter-queue)). A Core RPC request gets an error reply.
 
 **Causes:**
 
@@ -158,40 +137,26 @@ A message arrived on a subject that has no registered handler.
 
 ## Dead letter queue
 
-### `onDeadLetter` not called
+### Dead letters are missing
 
-The callback only fires when **all** of these conditions are met:
+The DLQ stream is on by default and catches workqueue and broadcast events that exhaust `max_deliver` (default 3), plus events with no handler or an undecodable payload. Check what applies:
 
-1. `onDeadLetter` is configured in module options
-2. The message has been delivered `max_deliver` times (default: 3)
-3. The handler throws on every delivery attempt
-
-**Not applicable to:**
-
-- RPC commands (they use `term`, not DLQ)
-- Ordered events (no ack/nak)
-- Messages that are `term`'d (decode errors, missing handlers)
-
-### DLQ callback throws
-
-If your `onDeadLetter` callback throws, the message is nak'd for another retry instead of being terminated. This is intentional: it allows transient failures (e.g., DLQ database is down) to recover.
+1. **`dlq: false`?** Then only the `onDeadLetter` callback, if any, sees dead letters.
+2. **Global `provisioning.management: Manual`?** The implicit DLQ stays off. Configure `dlq` to [bind an external stream](/docs/guides/external-infrastructure#external-dlq).
+3. **RPC or ordered?** Neither dead-letters: RPC returns errors to the caller, and ordered events have no ack cycle.
+4. **`max_deliver` unlimited** on an external consumer? Nothing ever exhausts, and the binder warns at boot.
 
 ### DLQ stream publish fails
 
-When `dlq: { stream }` is configured, the transport republishes exhausted messages to a dedicated DLQ stream. If that publish fails, the transport falls back to the `onDeadLetter` callback and then to `nak()` as a last resort: the full sequence is documented in the [Fallback chain](/docs/guides/dead-letter-queue#fallback-chain).
+The transport retries the publish, falls back to `onDeadLetter`, and finally `nak()`s the message so it stays in the source stream. The full [fallback chain](/docs/guides/dead-letter-queue#fallback-chain) has the order.
 
-**Causes:**
-
-- DLQ stream was deleted manually (`nats stream rm orders__microservice_dlq-stream`)
-- NATS server is out of disk space or has hit `max_bytes`
-- NATS connection dropped between the original publish and the DLQ republish
+**Causes:** the DLQ stream was deleted (`nats stream rm orders__microservice_dlq-stream`), the server is out of disk or the stream hit `max_bytes`, or the connection dropped before the republish.
 
 **Fix:**
 
-1. Check that the DLQ stream exists: `nats stream ls | grep dlq-stream`
-2. If it was deleted, restart the pod: the transport's `ensureDlqStream()` recreates it on startup when `dlq` is configured
-3. Check NATS server disk usage: `nats server report accounts`
-4. Ensure the `dlq.stream` config (if overridden) is compatible with the server's resource limits
+1. Check the stream: `nats stream ls | grep dlq-stream`.
+2. If it was deleted, restart the pod: in Auto mode startup recreates it.
+3. Check server disk usage: `nats server report accounts`.
 
 ## Handler metadata registry
 
@@ -202,9 +167,8 @@ The transport only publishes handler metadata when the handler has a `meta` fiel
 **Checklist:**
 
 1. Does the handler have `meta: { ... }` in `@EventPattern` / `@MessagePattern`?
-2. Is the NATS server version >= 2.10 (KV support)?
-3. Did startup succeed? Check logs for `MetadataRegistry` errors.
-4. Inspect the bucket: `nats kv ls handler_registry`
+2. Did startup succeed? Check logs for `MetadataRegistry` errors.
+3. Inspect the bucket: `nats kv ls handler_registry`
 
 ### Bucket config mismatch error on startup
 
@@ -223,9 +187,7 @@ nats kv rm handler_registry
 
 ### Consumer self-healing waits on "migration in progress"
 
-If a previous migration was interrupted, by a process killed mid-phase or a NATS crash, an orphaned `{stream}__migration_backup` stream is left behind.
-
-During **consumer self-healing**, which runs after a live consumer's iterator breaks, the transport spots that backup stream and refuses to recreate the consumer until it is gone. The self-healing loop waits with exponential backoff. This check runs only in the recovery path, never during initial startup.
+An interrupted migration (process killed mid-phase, NATS crash) leaves a `{stream}__migration_backup` stream behind. Consumer self-healing, which runs after a live consumer's iterator breaks, refuses to recreate the consumer while that backup exists and retries with backoff. Initial startup does not run this check.
 
 **Diagnosis:**
 
@@ -233,17 +195,11 @@ During **consumer self-healing**, which runs after a live consumer's iterator br
 nats stream ls | grep migration_backup
 ```
 
-**Fix:** None needed in most cases, self-healing will recover automatically once the migrating pod finishes and cleans up the backup. If the backup is orphaned permanently (the migrating pod died and nobody retried), manually inspect it and either retain it (if it contains messages you need) or delete it with `nats stream rm <stream>__migration_backup` so self-healing can resume.
-
-See [Stream Migration, Error handling](/docs/guides/stream-migration#error-handling) for the full recovery flow.
+**Fix:** usually none: self-healing recovers once the migrating pod finishes and removes the backup, and the next startup of any pod finishes an interrupted restore. If the backup is stranded for good, inspect it, then keep it (it may hold messages you need) or delete it with `nats stream rm <stream>__migration_backup`. See [Stream Migration, Error handling](/docs/guides/stream-migration#error-handling).
 
 ### Publisher errors during rolling update
 
-During the brief window between Phase 2 (delete) and Phase 3 (create) of a stream migration, publishers may see "stream not found" errors. The window is effectively one NATS round-trip, but is not zero. Mitigations:
-
-- For `client.emit()` (fire-and-forget), accept the loss or add caller-side retry.
-- For `client.send()` (RPC), the caller receives an error and can retry.
-- For zero-loss migrations, schedule migration during a maintenance window with publishers paused.
+From the quiesce until the restore completes, publishes to the migrating stream reject with "no stream matches subject" or no-responders errors. Retry in the caller, or pause publishers during a maintenance window. See [what publishers see](/docs/guides/stream-migration#to-publishers).
 
 ## Startup issues
 
@@ -260,18 +216,32 @@ handle(@Payload() data: OrderCreated, @Ctx() ctx: RpcContext): void {}
 
 `@MessagePattern` has no typed overload and is unaffected.
 
+### `JetstreamCapabilityError`
+
+```text
+Stream orders__microservice_ev-stream (allow_msg_ttl) needs NATS JetStream API level 1 (NATS 2.11 or newer); nats-1 (NATS 2.10.24) reports level 0.
+```
+
+A feature needs a newer server than the one the client talks to: `ttl()` / `allow_msg_ttl` need 2.11, `scheduleAt()` / `allow_msg_schedules` 2.12, cron and interval schedules 2.14. Older servers accept these settings and silently ignore them, so the transport fails the boot or the call instead. Upgrade every node in the cluster, or drop the feature. See [NATS server versions](/docs/getting-started/installation#nats-server-versions).
+
+### Boot fails in Manual mode
+
+A bound stream or consumer is missing, or its subjects or filter do not cover the handlers. The error names the entity and the fix. [Boot validation](/docs/guides/external-infrastructure#boot-validation) lists every check.
+
 ### `listen() hangs` on startup
 
-If the application doesn't finish starting:
+1. **NATS connection timeout**: the initial connection attempt blocks startup.
+2. **Ordered consumer can't connect**: check that the ordered stream exists.
 
-1. **Ordered consumer can't connect**: The stream might not exist yet. Check that the ordered stream is created before the consumer tries to connect.
-2. **NATS connection timeout**: The initial connection attempt blocks startup.
+### `transport-controlled config conflicts`
 
-### `Stream already exists with different config`
+```text
+Stream orders__microservice_ev-stream has transport-controlled config conflicts that cannot be migrated: retention: ...
+```
 
-NATS returns an error when you try to update a stream with incompatible changes (e.g., changing retention policy on an existing stream).
+The existing stream has a `retention` the transport does not use for that kind, usually because something else created it. Other immutable changes (such as `storage`) only log a warning unless you enable [stream migration](/docs/guides/stream-migration).
 
-**Fix:** Delete the stream and let the transport recreate it:
+**Fix:** delete the stream and let the transport recreate it:
 
 ```bash
 nats stream rm <stream-name>
@@ -281,9 +251,19 @@ nats stream rm <stream-name>
 Deleting a stream destroys all messages in it. Only do this in development or when data loss is acceptable.
 :::
 
+## Scheduling
+
+### `JetstreamScheduleError` with reason `server-timezone-data`
+
+```text
+The NATS server rejected the time zone of <subject>. The official scratch images carry no time zone data; run an alpine image, or schedule in UTC.
+```
+
+The client accepted the IANA time zone of a cron schedule, but the server has no time zone database. Run the `nats:<version>-alpine` image, or drop the `timezone` and schedule in UTC. See [Recurring schedules, Requirements](/docs/guides/recurring-schedules#requirements).
+
 ## Typed error handling with `NatsErrorCode`
 
-When your own code needs to react to a NATS JetStream API error, use the `NatsErrorCode` enum instead of matching on error messages. It covers the three error conditions the transport itself observes most often:
+To react to a JetStream API error in your own code, compare its code with the exported `NatsErrorCode` enum instead of matching on messages. It lists the codes the transport itself reacts to:
 
 ```typescript
 import { NatsErrorCode } from '@horizon-republic/nestjs-jetstream';
@@ -304,8 +284,6 @@ try {
   }
 }
 ```
-
-The library itself uses these constants in its self-healing flows (`src/server/infrastructure/consumer.provider.ts`), so consumer code that wraps library calls can reuse the same vocabulary.
 
 ## See also
 

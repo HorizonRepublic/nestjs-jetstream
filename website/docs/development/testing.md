@@ -1,6 +1,7 @@
 ---
 sidebar_position: 1
 title: Testing
+description: "Running unit and integration tests with Vitest and Testcontainers."
 schema:
   type: Article
   headline: Testing
