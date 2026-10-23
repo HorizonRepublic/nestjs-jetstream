@@ -5,16 +5,16 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  vite: ^8.2.4
+  vite: ^8.3.5
   tinypool@<2.1.2: ^2.2.0
-  minimatch@>=9.0.0 <9.0.7: ^9.0.7
-  katex@<0.18.2: ^0.18.2
+  minimatch@>=9.0.0 <9.0.7: ^9.0.9
+  katex@<0.18.2: ^0.19.0
   postcss-selector-parser@<7.1.6: ^7.1.7
   uuid@<11.1.1: ^11.1.1
-  yaml@>=2.0.0 <2.8.3: ^2.8.3
-  qs@>=6.11.1 <6.15.2: 6.15.3
-  ws: ^8.21.3
-  serialize-javascript@>=5.0.0 <7.0.5: ^7.1.0
+  yaml@>=2.0.0 <2.8.3: ^2.9.1
+  qs@>=6.11.1 <6.15.2: 6.16.1
+  ws: ^8.22.0
+  serialize-javascript@>=5.0.0 <7.0.5: ^7.1.2
 
 importers:
 
@@ -3348,7 +3348,7 @@ packages:
     resolution: {integrity: sha512-xLL3lkDegJZw+MGoGaCCsFayDZthGgpAtr3Vziyfc4p7xH89K7KRPcRBBh/kEYm0Aqkt5DtTmkYpBtRV/FrHZg==}
     peerDependencies:
       msw: ^2.4.9 || ^3.0.0
-      vite: ^8.2.4
+      vite: ^8.3.5
     peerDependenciesMeta:
       msw:
         optional: true
@@ -5576,8 +5576,8 @@ packages:
     resolution: {integrity: sha512-p/nXbhSEcu3pZRdkW1OfJhpsVtW1gd4Wa1fnQc9YLiTfAjn0312eMKimbdIQzuZl9aa9xUGaRlP9T/CJE/ditQ==}
     engines: {node: '>=0.10.0'}
 
-  katex@0.18.10:
-    resolution: {integrity: sha512-/B6p9eY9DX7aHBfpkHdpirDTZ5QH9xTwL9y837PWuzuv41O5jFdqNQwVQEQsimY0/iVNkwBY4+4hMfhQ7d4Dbw==}
+  katex@0.19.0:
+    resolution: {integrity: sha512-v6Tznz3zJ7u3niRCoDTsumM2+HA2XXcCu+WAacCeHD2z3p9A9Ks987o5FzfTGBN0e8A0vjEgIDvLbICrXpdw/Q==}
     hasBin: true
 
   keyv@4.5.4:
@@ -8013,7 +8013,7 @@ packages:
       sugarss: ^5.0.0
       terser: ^5.16.0
       tsx: ^4.8.1
-      yaml: ^2.8.3
+      yaml: ^2.9.1
     peerDependenciesMeta:
       '@types/node':
         optional: true
@@ -8056,7 +8056,7 @@ packages:
       '@vitest/ui': 5.0.5
       happy-dom: '*'
       jsdom: '*'
-      vite: ^8.2.4
+      vite: ^8.3.5
     peerDependenciesMeta:
       '@edge-runtime/vm':
         optional: true
@@ -11145,7 +11145,7 @@ snapshots:
       dayjs: 1.11.23
       dompurify: 3.4.17
       elkjs: 0.9.3
-      katex: 0.18.10
+      katex: 0.19.0
       mermaid: 12.2.0
 
   '@mermaid-js/parser@2.0.1':
@@ -14880,7 +14880,7 @@ snapshots:
 
   jsonpointer@5.0.1: {}
 
-  katex@0.18.10:
+  katex@0.19.0:
     dependencies:
       commander: 15.0.0
 
@@ -15335,7 +15335,7 @@ snapshots:
       dompurify: 3.4.17
       elkjs: 0.9.3
       es-toolkit: 1.52.0
-      katex: 0.18.10
+      katex: 0.19.0
       khroma: 2.1.0
       marked: 16.4.2
       roughjs: 4.6.6
@@ -15454,7 +15454,7 @@ snapshots:
     dependencies:
       '@types/katex': 0.16.8
       devlop: 1.1.0
-      katex: 0.18.10
+      katex: 0.19.0
       micromark-factory-space: 2.1.0
       micromark-util-character: 2.1.1
       micromark-util-symbol: 2.0.1
