@@ -74,6 +74,14 @@ describe(ScheduleStore, () => {
     );
   });
 
+  it('should pass any other failure through untouched', async () => {
+    // Given
+    const failure = new Error('connection closed');
+
+    // When / Then
+    await expect(putWith(failure)).rejects.toBe(failure);
+  });
+
   it('should report a momentarily unknown subject sequence as unavailable', async () => {
     await expect(putWith(apiError(10163))).resolves.toBe(PutOutcome.Unavailable);
   });

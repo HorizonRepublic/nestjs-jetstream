@@ -79,6 +79,14 @@ describe(parseCron, () => {
       expect(next(alias, from)).toBe(expected);
     });
 
+    it('should stop a series that has no fire within five years', () => {
+      // Given leap days, and 2100, which is not a leap year
+      const sut = parseCron('0 0 0 29 Feb ?');
+
+      // When / Then the next 29 February after 2096 is in 2104
+      expect(() => nextFireTimes(sut, new Date('2096-03-01T00:00:00Z'), 1)).toThrow(/never fires/);
+    });
+
     it('should fire on the next second for six stars, even a nanosecond before it', () => {
       expect(next('* * * * * *', '2026-01-01T00:00:00.999Z')).toBe('2026-01-01T00:00:01.000Z');
     });

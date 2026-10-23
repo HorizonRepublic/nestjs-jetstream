@@ -123,6 +123,24 @@ describe(ScheduleWriter, () => {
     vi.useRealTimers();
   });
 
+  it('should give up when the stream stays unable to check sequences', async () => {
+    // Given
+    vi.useFakeTimers();
+    store.put.mockResolvedValue(PutOutcome.Unavailable);
+
+    // When
+    const pending = sut.upsert(SUBJECT, TARGET, 'sync.tick', SPEC, NOW);
+    const assertion = expect(pending).rejects.toThrow(
+      /kept reporting its sequences as unavailable/,
+    );
+
+    await vi.runAllTimersAsync();
+
+    // Then
+    await assertion;
+    vi.useRealTimers();
+  });
+
   it('should give up when the holder keeps changing under it', async () => {
     // Given
     store.read.mockResolvedValue(storedWith({ everySeconds: 30 }, 1));

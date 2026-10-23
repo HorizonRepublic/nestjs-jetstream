@@ -188,6 +188,23 @@ describe(EventRouter, () => {
         expect(store.cancel).not.toHaveBeenCalled();
       });
 
+      it('should still settle the tick when cancelling fails', async () => {
+        // Given
+        store.writtenAt.mockResolvedValue(new Date('2020-01-01T00:00:00Z'));
+        store.cancel.mockRejectedValue(new Error('purge denied'));
+
+        const msg = tick(3, 'svc__microservice._cron.decl.gone');
+
+        // When
+        schedules$.next(msg);
+        await vi.waitFor(() => {
+          expect(msg.term).toHaveBeenCalled();
+        });
+
+        // Then
+        expect(store.cancel).toHaveBeenCalled();
+      });
+
       it('should do nothing more for a schedule that is already gone', async () => {
         // Given
         store.writtenAt.mockResolvedValue(null);
