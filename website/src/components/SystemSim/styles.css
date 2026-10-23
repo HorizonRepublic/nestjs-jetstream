@@ -18,17 +18,6 @@
   pointer-events: auto;
 }
 
-.scene-hint {
-  margin-inline-start: 16px;
-  opacity: 0.8;
-}
-
-@media (hover: none) {
-  .scene-hint {
-    display: none;
-  }
-}
-
 .scene-stats {
   position: absolute;
   inset-block-end: 22px;

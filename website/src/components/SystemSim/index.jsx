@@ -3,8 +3,9 @@ import useBaseUrl from '@docusaurus/useBaseUrl';
 import './styles.css';
 
 /* A small JetStream system on a loop, drawn on an isometric floor behind the
-   hero: services emit, the stream queues, NestJS replicas handle. Some handlers
-   throw and some pods restart; every message gets acked in the end.
+   hero: services emit, the stream stores, NestJS replicas handle. Some handlers
+   throw and pods restart, by themselves or when a visitor clicks one; every
+   message gets acked in the end.
 
    The model runs in a flat plane (x along the flow, y across it); the renderer
    lifts it into isometric space and adds height for retries and acks. */
@@ -13,11 +14,14 @@ const FAIL_CHANCE = [0.3, 0.2, 0];
 const RETRY_WAIT_MS = 2000;
 const SLOT = 9;
 const MODEL = { w: 600, h: 240 };
-const LANE_HEIGHT = 34;
+const LANE_HEIGHT = 44;
 const TRAIL = 9;
-const RESTART_MS = 2600;
+const RESTART_MS = 3400;
+const MANUAL_DOWN_MS = 20000;
 const DEPLOY_EVERY_MS = 25000;
+const POD = { size: 34, height: 30, downHeight: 9 };
 const SUBJECTS = ['orders.created', 'payments.captured', 'users.updated', 'emails.send', 'stock.reserved'];
+const HINT_KEY = 'jt-scene-clicked';
 
 const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 
@@ -33,14 +37,18 @@ const quad = (a, c, b, t) => {
 const readPalette = () => {
   const css = getComputedStyle(document.documentElement);
   const token = (name) => css.getPropertyValue(name).trim();
+  const dark = document.documentElement.dataset.theme === 'dark';
 
   return {
+    dark,
     deliver: token('--jt-state-deliver'),
     redeliver: token('--jt-state-redeliver'),
     ack: token('--jt-state-ack'),
+    dlq: token('--jt-state-dlq'),
     line: token('--jt-line-2'),
     faint: token('--jt-line-1'),
     raised: token('--jt-bg-2'),
+    block: token('--jt-bg-3'),
     surface: token('--jt-bg-1'),
     ink: token('--jt-fg-0'),
     label: token('--jt-fg-3'),
@@ -56,16 +64,18 @@ const layout = () => {
     producers: [0.22, 0.5, 0.78].map((f) => ({ x: w * 0.04, y: h * f })),
     tube: { x0: w * 0.3, x1: w * 0.62, y: mid },
     lane: { x0: w * 0.3, x1: w * 0.62, y: mid },
-    replicas: [0.22, 0.5, 0.78].map((f) => ({ x: w * 0.9, y: h * f })),
+    replicas: [0.2, 0.5, 0.8].map((f) => ({ x: w * 0.9, y: h * f })),
   };
 };
+
+/* ---- the model ---------------------------------------------------------- */
 
 const createSim = () => ({
   time: 0,
   nextId: 1,
   messages: [],
   queue: [],
-  replicas: [0, 1, 2].map(() => ({ busy: null, flash: null, flashAt: -1e9, downUntil: 0 })),
+  replicas: [0, 1, 2].map(() => ({ busy: null, flash: null, flashAt: -1e9, downUntil: 0, manual: false })),
   nextSpawn: 300,
   nextBurst: 4000,
   nextRestart: 16000,
@@ -73,27 +83,6 @@ const createSim = () => ({
   deploy: null,
   stats: { published: 0, retried: 0, acked: 0 },
 });
-
-const toLane = (geo, message) => {
-  flight(message, { ...message.pos }, { x: geo.lane.x1, y: geo.lane.y }, 900, 'toLane');
-};
-
-/* A pod goes away: whatever it was handling is redelivered later, never lost. */
-const restartReplica = (sim, geo, index) => {
-  const replica = sim.replicas[index];
-
-  if (sim.time < replica.downUntil) return;
-
-  replica.downUntil = sim.time + RESTART_MS;
-
-  if (replica.busy) {
-    const message = replica.busy;
-
-    replica.busy = null;
-    sim.stats.retried += 1;
-    toLane(geo, message);
-  }
-};
 
 const flight = (message, from, to, duration, state, delay = 0) => {
   message.state = state;
@@ -104,6 +93,40 @@ const flight = (message, from, to, duration, state, delay = 0) => {
   message.delay = delay;
   message.duration = duration;
   message.t = 0;
+};
+
+const toLane = (geo, message) => {
+  flight(message, { ...message.pos }, { x: geo.lane.x1, y: geo.lane.y }, 900, 'toLane');
+};
+
+const isDown = (sim, replica) => sim.time < replica.downUntil;
+
+/* A pod goes away: whatever it was handling is redelivered later, never lost. */
+const takeDown = (sim, geo, index, ms, manual) => {
+  const replica = sim.replicas[index];
+
+  replica.downUntil = sim.time + ms;
+  replica.manual = manual;
+
+  if (replica.busy) {
+    const message = replica.busy;
+
+    replica.busy = null;
+    sim.stats.retried += 1;
+    toLane(geo, message);
+  }
+};
+
+/* A visitor's click: a running pod goes down until clicked again; a down pod comes back. */
+const togglePod = (sim, geo, index) => {
+  const replica = sim.replicas[index];
+
+  if (isDown(sim, replica)) {
+    replica.downUntil = sim.time;
+    replica.manual = false;
+  } else {
+    takeDown(sim, geo, index, MANUAL_DOWN_MS, true);
+  }
 };
 
 const step = (sim, geo, dt) => {
@@ -137,27 +160,34 @@ const step = (sim, geo, dt) => {
     sim.nextBurst = now + 9000 + Math.random() * 6000;
   }
 
-  // A rolling deploy: every replica restarts in turn while the stream holds the work.
+  // A rolling deploy: each running pod restarts in turn while the stream holds the work.
   if (now >= sim.nextDeploy) {
-    sim.deploy = { start: now };
+    sim.deploy = { start: now, done: -1 };
     sim.nextDeploy = now + DEPLOY_EVERY_MS;
     sim.nextRestart = Math.max(sim.nextRestart, now + sim.replicas.length * RESTART_MS + 6000);
   }
 
   if (sim.deploy) {
-    const done = Math.floor((now - sim.deploy.start) / RESTART_MS);
+    const index = Math.floor((now - sim.deploy.start) / RESTART_MS);
 
-    if (done < sim.replicas.length) restartReplica(sim, geo, done);
-    else if (now - sim.deploy.start > sim.replicas.length * RESTART_MS + 600) sim.deploy = null;
+    if (index < sim.replicas.length && index > sim.deploy.done) {
+      sim.deploy.done = index;
+      if (!isDown(sim, sim.replicas[index])) takeDown(sim, geo, index, RESTART_MS, false);
+    } else if (now - sim.deploy.start > sim.replicas.length * RESTART_MS + 600) {
+      sim.deploy = null;
+    }
   }
 
   if (now >= sim.nextRestart) {
-    restartReplica(sim, geo, Math.floor(Math.random() * sim.replicas.length));
+    const up = sim.replicas.map((replica, index) => index).filter((index) => !isDown(sim, sim.replicas[index]));
+
+    if (up.length > 1) takeDown(sim, geo, up[Math.floor(Math.random() * up.length)], RESTART_MS, false);
     sim.nextRestart = now + 11000 + Math.random() * 7000;
   }
 
   sim.replicas.forEach((replica, index) => {
-    if (replica.busy || now < replica.downUntil || !sim.queue.length) return;
+    if (!isDown(sim, replica)) replica.manual = false;
+    if (replica.busy || isDown(sim, replica) || !sim.queue.length) return;
 
     const head = sim.queue[0];
 
@@ -258,15 +288,15 @@ const heightOf = (message) => {
     case 'waiting':
       return LANE_HEIGHT;
     case 'toStream':
-      return message.fromLane ? LANE_HEIGHT * (1 - easeInOut(message.t)) : 6 * Math.sin(message.t * Math.PI);
+      return message.fromLane ? 5 + (LANE_HEIGHT - 5) * (1 - easeInOut(message.t)) : 5 + 8 * Math.sin(message.t * Math.PI);
     case 'toExit':
-      return 18 + 70 * easeInOut(message.t);
+      return POD.height + 4 + 80 * easeInOut(message.t);
     case 'processing':
-      return 18;
+      return POD.height + 4;
     case 'toReplica':
-      return 18 * easeInOut(message.t);
+      return 5 + (POD.height - 1) * easeInOut(message.t);
     default:
-      return 0;
+      return 5;
   }
 };
 
@@ -281,7 +311,7 @@ const makeProjector = (cw, ch, region) => {
     raw(MODEL.w + 30, -30),
     raw(-30, MODEL.h + 30),
     raw(MODEL.w + 30, MODEL.h + 30),
-    raw(MODEL.w, MODEL.h / 2, 120),
+    raw(MODEL.w, MODEL.h / 2, 140),
   ];
   const minX = Math.min(...corners.map((c) => c.x));
   const maxX = Math.max(...corners.map((c) => c.x));
@@ -310,52 +340,107 @@ const path = (ctx, points) => {
   ctx.closePath();
 };
 
-/* An isometric box: top face plus the two faces turned to the viewer. */
-const box = (ctx, project, cx, cy, size, height, fill, stroke, alpha = 1) => {
+const shade = (ctx, points, base, light, alpha = 1) => {
+  path(ctx, points);
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = base;
+  ctx.fill();
+  ctx.fillStyle = light > 0 ? '#ffffff' : '#000000';
+  ctx.globalAlpha = alpha * Math.abs(light);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+};
+
+/* A lit isometric block: a soft contact shadow, three shaded faces, a bright rim. */
+const block = (ctx, project, { cx, cy, size, height, base, edge, alpha = 1, dashed = false, lift = 0 }) => {
   const s = size / 2;
-  const at = (dx, dy, dz) => project(cx + dx, cy + dy, dz);
+  const at = (dx, dy, dz) => project(cx + dx, cy + dy, dz + lift);
   const top = [at(-s, -s, height), at(s, -s, height), at(s, s, height), at(-s, s, height)];
   const right = [at(s, -s, height), at(s, s, height), at(s, s, 0), at(s, -s, 0)];
   const front = [at(-s, s, height), at(s, s, height), at(s, s, 0), at(-s, s, 0)];
+  const foot = [project(cx - s, cy - s), project(cx + s + 6, cy - s), project(cx + s + 6, cy + s + 6), project(cx - s, cy + s + 6)];
 
   ctx.save();
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = stroke;
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
+  ctx.shadowBlur = 14 * project.k;
+  path(ctx, foot);
+  ctx.globalAlpha = 0.18 * alpha;
+  ctx.fillStyle = '#000000';
+  ctx.fill();
+  ctx.restore();
 
-  for (const [face, shade] of [
-    [right, 0.55],
-    [front, 0.75],
-    [top, 1],
-  ]) {
+  ctx.save();
+  if (dashed) ctx.setLineDash([3, 3]);
+  shade(ctx, right, base, -0.32, alpha);
+  shade(ctx, front, base, -0.14, alpha);
+  shade(ctx, top, base, 0.1, alpha);
+
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = edge;
+  ctx.globalAlpha = alpha;
+  for (const face of [right, front, top]) {
     path(ctx, face);
-    ctx.fillStyle = fill;
-    ctx.globalAlpha = alpha * shade;
-    ctx.fill();
-    ctx.globalAlpha = alpha;
     ctx.stroke();
   }
 
+  // rim light along the two near top edges
+  if (!dashed) {
+    ctx.strokeStyle = '#ffffff';
+    ctx.globalAlpha = 0.18 * alpha;
+    ctx.beginPath();
+    ctx.moveTo(top[3].x, top[3].y);
+    ctx.lineTo(top[0].x, top[0].y);
+    ctx.lineTo(top[1].x, top[1].y);
+    ctx.stroke();
+  }
   ctx.restore();
 
-  return top;
+  return { top, front, right };
 };
 
-const glowDot = (ctx, x, y, r, color, alpha) => {
+/* A small light on a face: the pod's status, like a server's front panel. */
+const led = (ctx, face, color, alpha = 1) => {
+  const [a, b, c, d] = face;
+  const x = a.x + (b.x - a.x) * 0.22 + (d.x - a.x) * 0.5;
+  const y = a.y + (b.y - a.y) * 0.22 + (d.y - a.y) * 0.5;
+
+  ctx.save();
   ctx.fillStyle = color;
-  ctx.globalAlpha = alpha * 0.16;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 8;
+  ctx.globalAlpha = alpha;
+  ctx.beginPath();
+  ctx.arc(x, y, 2.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+};
+
+/* A message as a small lit sphere with a halo. */
+const sphere = (ctx, x, y, r, color, alpha) => {
+  ctx.save();
+  ctx.globalAlpha = alpha * 0.18;
+  ctx.fillStyle = color;
   ctx.beginPath();
   ctx.arc(x, y, r * 2.6, 0, Math.PI * 2);
   ctx.fill();
+
+  const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.1, x, y, r);
+
+  g.addColorStop(0, '#ffffff');
+  g.addColorStop(0.35, color);
+  g.addColorStop(1, color);
   ctx.globalAlpha = alpha;
+  ctx.fillStyle = g;
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.fill();
+  ctx.restore();
 };
 
-const label = (ctx, palette, value, x, y, align, color = palette.label) => {
-  ctx.font = `11px ${palette.mono}`;
+const label = (ctx, palette, value, x, y, align, color = palette.label, weight = 400) => {
+  ctx.font = `${weight} 11px ${palette.mono}`;
   ctx.fillStyle = color;
-  ctx.globalAlpha = 0.85;
+  ctx.globalAlpha = 0.9;
   ctx.textAlign = align;
   ctx.fillText(value, x, y);
   ctx.globalAlpha = 1;
@@ -369,12 +454,15 @@ const tooltip = (ctx, palette, lines, x, y) => {
   const top = y - height - 10;
 
   ctx.save();
-  ctx.globalAlpha = 0.96;
+  ctx.globalAlpha = 0.97;
   ctx.fillStyle = palette.surface;
   ctx.strokeStyle = palette.line;
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
+  ctx.shadowBlur = 12;
   ctx.beginPath();
   ctx.roundRect(left, top, width, height, 6);
   ctx.fill();
+  ctx.shadowBlur = 0;
   ctx.stroke();
   ctx.textAlign = 'left';
   lines.forEach((line, index) => {
@@ -385,6 +473,15 @@ const tooltip = (ctx, palette, lines, x, y) => {
 };
 
 const drawFloor = (ctx, project, palette) => {
+  // a soft light spot under the system
+  const centre = project(MODEL.w / 2, MODEL.h / 2);
+  const spot = ctx.createRadialGradient(centre.x, centre.y, 0, centre.x, centre.y, 420 * project.k);
+
+  spot.addColorStop(0, palette.dark ? 'rgba(255, 255, 255, 0.045)' : 'rgba(37, 87, 194, 0.05)');
+  spot.addColorStop(1, 'transparent');
+  ctx.fillStyle = spot;
+  ctx.fillRect(centre.x - 600 * project.k, centre.y - 400 * project.k, 1200 * project.k, 800 * project.k);
+
   ctx.lineWidth = 1;
   ctx.strokeStyle = palette.faint;
 
@@ -424,46 +521,233 @@ const colorOf = (message, palette) => {
   return palette.deliver;
 };
 
-const draw = (ctx, sim, geo, view, palette, logo, ui) => {
-  const { project, cw, ch } = view;
-  const k = project.k;
+/* The stream as a glass channel: floor, back wall, contents, front wall. */
+const drawChannel = (ctx, project, geo, palette, sim, drawContents) => {
+  const x0 = geo.tube.x0 - 10;
+  const x1 = geo.tube.x1 + 10;
+  const y0 = geo.tube.y - 13;
+  const y1 = geo.tube.y + 13;
+  const wall = 12;
+  const p = (x, y, z) => project(x, y, z);
+  const fill = Math.min(1, sim.queue.length / 10);
 
-  ctx.clearRect(0, 0, cw, ch);
-  drawFloor(ctx, project, palette);
-
-  // a pool of light under the stream, brighter as the queue grows
-  const pool = project((geo.tube.x0 + geo.tube.x1) / 2, geo.tube.y);
-  const fill = Math.min(1, sim.queue.length / 8);
-  const glow = ctx.createRadialGradient(pool.x, pool.y, 0, pool.x, pool.y, 150 * k);
+  // pool of light under the channel, brighter as the queue grows
+  const pool = project((x0 + x1) / 2, geo.tube.y);
+  const glow = ctx.createRadialGradient(pool.x, pool.y, 0, pool.x, pool.y, 160 * project.k);
 
   glow.addColorStop(0, palette.deliver);
   glow.addColorStop(1, 'transparent');
   ctx.save();
-  ctx.globalAlpha = 0.06 + 0.16 * fill;
+  ctx.globalAlpha = 0.08 + 0.22 * fill;
   ctx.fillStyle = glow;
-  ctx.setTransform(view.ratio, 0, 0, view.ratio * 0.5, 0, pool.y * view.ratio * 0.5);
+  ctx.translate(pool.x, pool.y);
+  ctx.scale(1, 0.5);
   ctx.beginPath();
-  ctx.arc(pool.x, pool.y, 150 * k, 0, Math.PI * 2);
+  ctx.arc(0, 0, 160 * project.k, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 
-  // shadows of everything in the air, softer the higher it flies
-  for (const message of sim.messages) {
-    const height = heightOf(message);
+  const floor = [p(x0, y0, 0), p(x1, y0, 0), p(x1, y1, 0), p(x0, y1, 0)];
+  const back = [p(x0, y0, 0), p(x1, y0, 0), p(x1, y0, wall), p(x0, y0, wall)];
+  const end = [p(x1, y0, 0), p(x1, y1, 0), p(x1, y1, wall), p(x1, y0, wall)];
+  const front = [p(x0, y1, 0), p(x1, y1, 0), p(x1, y1, wall), p(x0, y1, wall)];
 
-    if (height < 3) continue;
+  shade(ctx, floor, palette.raised, -0.1);
+  path(ctx, floor);
+  ctx.fillStyle = palette.deliver;
+  ctx.globalAlpha = 0.06 + 0.1 * fill;
+  ctx.fill();
+  ctx.globalAlpha = 1;
 
-    const floor = project(message.pos.x, message.pos.y);
-    const fade = Math.max(0, 1 - height / 110);
-    const alpha = message.state === 'toExit' ? Math.max(0, 1 - message.t) : 1;
-
-    ctx.globalAlpha = 0.28 * fade * alpha;
-    ctx.fillStyle = colorOf(message, palette);
-    ctx.beginPath();
-    ctx.ellipse(floor.x, floor.y, (4 + height * 0.06) * k * 1.6, (2 + height * 0.03) * k * 1.6, 0, 0, Math.PI * 2);
+  for (const face of [back, end]) {
+    path(ctx, face);
+    ctx.fillStyle = palette.deliver;
+    ctx.globalAlpha = 0.07;
     ctx.fill();
+    ctx.strokeStyle = palette.deliver;
+    ctx.globalAlpha = 0.35;
+    ctx.stroke();
   }
   ctx.globalAlpha = 1;
+
+  drawContents();
+
+  path(ctx, front);
+  ctx.fillStyle = palette.deliver;
+  ctx.globalAlpha = 0.1;
+  ctx.fill();
+  ctx.strokeStyle = palette.deliver;
+  ctx.globalAlpha = 0.6;
+  ctx.stroke();
+
+  // glass rim
+  ctx.strokeStyle = '#ffffff';
+  ctx.globalAlpha = 0.22;
+  ctx.beginPath();
+  ctx.moveTo(front[3].x, front[3].y);
+  ctx.lineTo(front[2].x, front[2].y);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+};
+
+const drawMessage = (ctx, project, palette, message, ui) => {
+  const color = colorOf(message, palette);
+  const alpha = message.state === 'toExit' ? Math.max(0, 1 - message.t) : 1;
+  const height = heightOf(message);
+  const p = project(message.pos.x, message.pos.y, height);
+  const k = project.k;
+
+  message.screen = p;
+  message.trail.push(p);
+  if (message.trail.length > TRAIL) message.trail.shift();
+
+  if (message.state !== 'queued' && message.trail.length > 1) {
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineCap = 'round';
+    for (let i = 1; i < message.trail.length; i += 1) {
+      const share = i / message.trail.length;
+
+      ctx.globalAlpha = alpha * share * 0.5;
+      ctx.lineWidth = 2.4 * share;
+      ctx.beginPath();
+      ctx.moveTo(message.trail[i - 1].x, message.trail[i - 1].y);
+      ctx.lineTo(message.trail[i].x, message.trail[i].y);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  sphere(ctx, p.x, p.y, Math.max(2.6, 4 * k), color, alpha);
+
+  if (ui.hoverMessage === message) {
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, Math.max(7, 9 * k), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+
+const drawShadow = (ctx, project, palette, message) => {
+  const height = heightOf(message);
+
+  if (height < 8) return;
+
+  const floor = project(message.pos.x, message.pos.y);
+  const fade = Math.max(0, 1 - height / 130);
+  const alpha = message.state === 'toExit' ? Math.max(0, 1 - message.t) : 1;
+  const k = project.k;
+
+  ctx.globalAlpha = 0.3 * fade * alpha;
+  ctx.fillStyle = colorOf(message, palette);
+  ctx.beginPath();
+  ctx.ellipse(floor.x, floor.y, (5 + height * 0.06) * k * 1.6, (2.5 + height * 0.03) * k * 1.6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+};
+
+const drawPod = (ctx, project, palette, sim, geo, index, logo, view, ui) => {
+  const replica = sim.replicas[index];
+  const r = geo.replicas[index];
+  const down = isDown(sim, replica);
+  const flashing = !down && sim.time - replica.flashAt < 600;
+  const hovered = ui.hoverReplica === index;
+  const height = down ? POD.downHeight : POD.height;
+  const tone = flashing ? palette[replica.flash] : null;
+  const faces = block(ctx, project, {
+    cx: r.x,
+    cy: r.y,
+    size: POD.size,
+    height,
+    base: down ? palette.raised : (tone ?? palette.block),
+    edge: down ? palette.dlq : (tone ?? (hovered ? palette.deliver : palette.line)),
+    alpha: down ? 0.7 : 1,
+    dashed: down,
+    lift: hovered && !down ? 3 : 0,
+  });
+
+  let ledColor = palette.ack;
+
+  if (down) ledColor = palette.dlq;
+  else if (replica.busy) ledColor = palette.deliver;
+  else if (flashing) ledColor = palette[replica.flash];
+  led(ctx, faces.front, ledColor, down ? 0.9 : 1);
+
+  if (logo && !down) {
+    // the NestJS mark, laid flat on the top face
+    const [p0, p1, , p3] = faces.top;
+    const size = 0.5;
+
+    ctx.save();
+    ctx.globalAlpha = 0.95;
+    ctx.setTransform(
+      (p1.x - p0.x) * view.ratio,
+      (p1.y - p0.y) * view.ratio,
+      (p3.x - p0.x) * view.ratio,
+      (p3.y - p0.y) * view.ratio,
+      p0.x * view.ratio,
+      p0.y * view.ratio,
+    );
+    ctx.drawImage(logo, 0.5 - size / 2, 0.5 - size / 2, size, size);
+    ctx.restore();
+  }
+
+  if (down) {
+    const above = project(r.x, r.y, height + 16);
+
+    label(ctx, palette, replica.manual ? 'down · click to start' : 'restarting', above.x, above.y, 'center', palette.dlq, 600);
+  }
+
+  const busy = replica.busy;
+
+  if (busy && busy.state === 'processing') {
+    const c = project(r.x, r.y, POD.height);
+    const progress = Math.min(1, (sim.time - busy.since) / (busy.until - busy.since));
+    const k = project.k;
+
+    ctx.save();
+    ctx.strokeStyle = palette.deliver;
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.ellipse(c.x, c.y, 27 * k, 15 * k, 0, -Math.PI / 2, -Math.PI / 2 + progress * Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+
+/* Until the visitor has clicked once, ripples around the middle pod say it can be clicked. */
+const drawHint = (ctx, project, palette, sim, geo, ui) => {
+  if (ui.clicked) return;
+
+  const r = geo.replicas[1];
+  const c = project(r.x, r.y, POD.height / 2);
+  const k = project.k;
+
+  for (let i = 0; i < 2; i += 1) {
+    const phase = ((sim.time / 1800 + i / 2) % 1 + 1) % 1;
+
+    ctx.save();
+    ctx.strokeStyle = palette.deliver;
+    ctx.globalAlpha = 0.55 * (1 - phase);
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.ellipse(c.x, c.y + 8 * k, (30 + phase * 26) * k, (17 + phase * 15) * k, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  const tag = project(r.x + 34, r.y + 60);
+
+  label(ctx, palette, '↖ click a pod to take it down', tag.x, tag.y, 'left', palette.deliver, 600);
+};
+
+const draw = (ctx, sim, geo, view, palette, logo, ui) => {
+  const { project, cw, ch } = view;
+
+  ctx.clearRect(0, 0, cw, ch);
+  drawFloor(ctx, project, palette);
 
   // connectors on the floor
   ctx.strokeStyle = palette.line;
@@ -471,13 +755,13 @@ const draw = (ctx, sim, geo, view, palette, logo, ui) => {
   ctx.beginPath();
   for (const p of geo.producers) {
     const a = project(p.x, p.y);
-    const b = project(geo.tube.x0, geo.tube.y);
+    const b = project(geo.tube.x0 - 10, geo.tube.y);
 
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
   }
   for (const r of geo.replicas) {
-    const a = project(geo.tube.x1, geo.tube.y);
+    const a = project(geo.tube.x1 + 10, geo.tube.y);
     const b = project(r.x, r.y);
 
     ctx.moveTo(a.x, a.y);
@@ -486,142 +770,67 @@ const draw = (ctx, sim, geo, view, palette, logo, ui) => {
   ctx.stroke();
   ctx.globalAlpha = 1;
 
-  for (const p of geo.producers) box(ctx, project, p.x, p.y, 22, 12, palette.raised, palette.line);
+  for (const message of sim.messages) drawShadow(ctx, project, palette, message);
 
-  // the stream: a long low channel on the floor
-  const len = geo.tube.x1 - geo.tube.x0 + 16;
-  const at = (dx, dy) => project(geo.tube.x0 - 8 + dx, geo.tube.y + dy);
+  for (const p of geo.producers) {
+    const faces = block(ctx, project, { cx: p.x, cy: p.y, size: 26, height: 20, base: palette.block, edge: palette.line });
 
-  path(ctx, [at(0, -10), at(len, -10), at(len, 10), at(0, 10)]);
-  ctx.fillStyle = palette.deliver;
-  ctx.globalAlpha = 0.08;
-  ctx.fill();
-  ctx.globalAlpha = 0.7;
-  ctx.strokeStyle = palette.deliver;
-  ctx.stroke();
-  ctx.globalAlpha = 1;
+    led(ctx, faces.front, palette.deliver);
+  }
 
-  // the retry rail, hanging over the stream
+  const inChannel = (message) => message.state === 'queued';
+
+  drawChannel(ctx, project, geo, palette, sim, () => {
+    for (const message of sim.messages) if (inChannel(message)) drawMessage(ctx, project, palette, message, ui);
+  });
+
+  // the retry rail, hanging over the stream on two posts
   const r0 = project(geo.lane.x0, geo.lane.y, LANE_HEIGHT);
   const r1 = project(geo.lane.x1, geo.lane.y, LANE_HEIGHT);
 
   ctx.save();
-  ctx.setLineDash([3, 4]);
   ctx.strokeStyle = palette.redeliver;
-  ctx.globalAlpha = 0.6;
+  ctx.globalAlpha = 0.25;
+  for (const x of [geo.lane.x0, geo.lane.x1]) {
+    const a = project(x, geo.lane.y - 18, 0);
+    const b = project(x, geo.lane.y - 18, LANE_HEIGHT);
+
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+  ctx.setLineDash([4, 4]);
+  ctx.globalAlpha = 0.7;
+  ctx.lineWidth = 1.4;
   ctx.beginPath();
   ctx.moveTo(r0.x, r0.y);
   ctx.lineTo(r1.x, r1.y);
   ctx.stroke();
   ctx.restore();
 
-  sim.replicas.forEach((replica, index) => {
-    const r = geo.replicas[index];
-    const down = sim.time < replica.downUntil;
-    const flashing = sim.time - replica.flashAt < 600;
-    const tone = flashing ? palette[replica.flash] : null;
-    const top = box(ctx, project, r.x, r.y, 30, down ? 8 : 18, tone ?? palette.raised, tone ?? palette.line, down ? 0.45 : 1);
+  // pods back to front, then everything in flight on top
+  geo.replicas.forEach((_, index) => drawPod(ctx, project, palette, sim, geo, index, logo, view, ui));
+  drawHint(ctx, project, palette, sim, geo, ui);
 
-    if (logo && !down) {
-      // the NestJS mark, laid flat on the top face
-      const [p0, p1, , p3] = top;
-      const size = 0.5;
+  for (const message of sim.messages) if (!inChannel(message)) drawMessage(ctx, project, palette, message, ui);
 
-      ctx.save();
-      ctx.globalAlpha = 0.9;
-      ctx.setTransform(
-        (p1.x - p0.x) * view.ratio,
-        (p1.y - p0.y) * view.ratio,
-        (p3.x - p0.x) * view.ratio,
-        (p3.y - p0.y) * view.ratio,
-        p0.x * view.ratio,
-        p0.y * view.ratio,
-      );
-      ctx.drawImage(logo, 0.5 - size / 2, 0.5 - size / 2, size, size);
-      ctx.restore();
-    }
-
-    if (ui.hoverReplica === index) {
-      const c = project(r.x, r.y, down ? 8 : 18);
-
-      ctx.save();
-      ctx.setLineDash([2, 3]);
-      ctx.strokeStyle = palette.ink;
-      ctx.globalAlpha = 0.5;
-      ctx.beginPath();
-      ctx.ellipse(c.x, c.y, 30 * k, 17 * k, 0, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
-    }
-
-    const busy = replica.busy;
-
-    if (busy && busy.state === 'processing') {
-      const c = project(r.x, r.y, 18);
-      const progress = Math.min(1, (sim.time - busy.since) / (busy.until - busy.since));
-
-      ctx.strokeStyle = palette.deliver;
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.ellipse(c.x, c.y, 24 * k, 13 * k, 0, -Math.PI / 2, -Math.PI / 2 + progress * Math.PI * 2);
-      ctx.stroke();
-      ctx.lineWidth = 1;
-    }
-  });
-
-  // messages, each with a short trail of light
-  for (const message of sim.messages) {
-    const color = colorOf(message, palette);
-    const alpha = message.state === 'toExit' ? Math.max(0, 1 - message.t) : 1;
-    const p = project(message.pos.x, message.pos.y, heightOf(message));
-
-    message.screen = p;
-    message.trail.push(p);
-    if (message.trail.length > TRAIL) message.trail.shift();
-
-    if (message.state !== 'queued' && message.trail.length > 1) {
-      ctx.strokeStyle = color;
-      ctx.lineCap = 'round';
-      for (let i = 1; i < message.trail.length; i += 1) {
-        const share = i / message.trail.length;
-
-        ctx.globalAlpha = alpha * share * 0.5;
-        ctx.lineWidth = 2.2 * share;
-        ctx.beginPath();
-        ctx.moveTo(message.trail[i - 1].x, message.trail[i - 1].y);
-        ctx.lineTo(message.trail[i].x, message.trail[i].y);
-        ctx.stroke();
-      }
-      ctx.lineWidth = 1;
-    }
-
-    glowDot(ctx, p.x, p.y, Math.max(2.4, 3.6 * k), color, alpha);
-
-    if (ui.hoverMessage === message) {
-      ctx.globalAlpha = 1;
-      ctx.strokeStyle = color;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, Math.max(6, 8 * k), 0, Math.PI * 2);
-      ctx.stroke();
-    }
-  }
-  ctx.globalAlpha = 1;
-
-  const pl = project(geo.producers[0].x, geo.producers[0].y, 12);
-  const sl = project((geo.tube.x0 + geo.tube.x1) / 2, geo.tube.y + 14);
+  // labels
+  const pl = project(geo.producers[0].x, geo.producers[0].y, 20);
+  const sl = project((geo.tube.x0 + geo.tube.x1) / 2, geo.tube.y + 16);
   const ll = project((geo.lane.x0 + geo.lane.x1) / 2, geo.lane.y, LANE_HEIGHT);
-  const rl = project(geo.replicas.at(-1).x, geo.replicas.at(-1).y + 20);
+  const rl = project(geo.replicas.at(-1).x, geo.replicas.at(-1).y + 24);
 
   label(ctx, palette, 'services', pl.x, pl.y - 14, 'center');
-  label(ctx, palette, 'stream', sl.x + 10, sl.y + 16, 'left');
+  label(ctx, palette, sim.queue.length ? `stream · ${sim.queue.length} stored` : 'stream', sl.x + 10, sl.y + 18, 'left');
   label(ctx, palette, 'retry · 2 s, 10 s', ll.x, ll.y - 10, 'center', palette.redeliver);
-  label(ctx, palette, 'NestJS replicas', rl.x + 4, rl.y + 18, 'center');
+  label(ctx, palette, 'NestJS replicas', rl.x + 4, rl.y + 20, 'center');
 
   if (sim.deploy) {
     const done = Math.min(sim.replicas.length, Math.floor((sim.time - sim.deploy.start) / RESTART_MS) + 1);
-    const top = project(geo.replicas[0].x, geo.replicas[0].y, 40);
+    const top = project(geo.replicas[0].x, geo.replicas[0].y, 70);
 
-    label(ctx, palette, `rolling deploy · ${done}/${sim.replicas.length}`, top.x, top.y - 8, 'center', palette.deliver);
+    label(ctx, palette, `rolling deploy · ${done}/${sim.replicas.length}`, top.x, top.y, 'center', palette.deliver, 600);
   }
 
   const hovered = ui.hoverMessage;
@@ -642,15 +851,32 @@ const draw = (ctx, sim, geo, view, palette, logo, ui) => {
     );
   } else if (ui.hoverReplica !== null) {
     const r = geo.replicas[ui.hoverReplica];
-    const at = project(r.x, r.y, 18);
+    const at = project(r.x, r.y, POD.height);
+    const down = isDown(sim, sim.replicas[ui.hoverReplica]);
 
-    tooltip(ctx, palette, [{ text: 'click to restart this pod' }], at.x, at.y);
+    tooltip(ctx, palette, [{ text: down ? 'click to start this pod' : 'click to take this pod down' }], at.x, at.y);
   }
 };
 
 const REGION = {
-  wide: { x0: 0.5, x1: 0.98, y0: 0.06, y1: 0.9 },
+  wide: { x0: 0.5, x1: 0.98, y0: 0.04, y1: 0.9 },
   narrow: { x0: 0.02, x1: 0.98, y0: 0.04, y1: 0.96 },
+};
+
+const readClicked = () => {
+  try {
+    return window.localStorage.getItem(HINT_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
+
+const rememberClicked = () => {
+  try {
+    window.localStorage.setItem(HINT_KEY, '1');
+  } catch {
+    /* storage blocked; the hint just shows again next time */
+  }
 };
 
 const HeroScene = () => {
@@ -666,6 +892,7 @@ const HeroScene = () => {
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const geo = layout();
     const sim = createSim();
+    const ui = { hoverMessage: null, hoverReplica: null, clicked: readClicked() };
     let palette = readPalette();
     let view = null;
     let logo = null;
@@ -674,7 +901,6 @@ const HeroScene = () => {
     let visible = true;
     let statsAt = 0;
     let pointer = null;
-    const ui = { hoverMessage: null, hoverReplica: null };
 
     const resize = () => {
       const ratio = window.devicePixelRatio || 1;
@@ -693,7 +919,7 @@ const HeroScene = () => {
       draw(ctx, sim, geo, view, palette, logo, ui);
     };
 
-    // What the pointer is over: a replica (clickable) or a message (inspectable).
+    // What the pointer is over: a pod (clickable) or a message (inspectable).
     const hitTest = () => {
       ui.hoverMessage = null;
       ui.hoverReplica = null;
@@ -715,26 +941,14 @@ const HeroScene = () => {
 
         if (!ui.hoverMessage) {
           geo.replicas.forEach((r, index) => {
-            const c = view.project(r.x, r.y, 9);
+            const c = view.project(r.x, r.y, POD.height / 2);
 
-            if (Math.hypot((c.x - pointer.x) / 1.7, c.y - pointer.y) < 22 * k + 4) ui.hoverReplica = index;
+            if (Math.hypot((c.x - pointer.x) / 1.6, c.y - pointer.y) < 26 * k + 6) ui.hoverReplica = index;
           });
         }
       }
 
       canvas.style.cursor = ui.hoverReplica === null ? 'default' : 'pointer';
-    };
-
-    const onMove = (event) => {
-      const rect = canvas.getBoundingClientRect();
-
-      pointer = { x: event.clientX - rect.left, y: event.clientY - rect.top };
-    };
-    const onLeave = () => {
-      pointer = null;
-    };
-    const onClick = () => {
-      if (ui.hoverReplica !== null) restartReplica(sim, geo, ui.hoverReplica);
     };
 
     const image = new Image();
@@ -771,11 +985,34 @@ const HeroScene = () => {
 
     if (reduce) {
       for (let t = 0; t < 9000; t += 16) step(sim, geo, 16);
+      ui.clicked = true;
       render();
       setStats({ ...sim.stats });
 
       return undefined;
     }
+
+    const onMove = (event) => {
+      const rect = canvas.getBoundingClientRect();
+
+      pointer = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    };
+    const onLeave = () => {
+      pointer = null;
+    };
+    const onClick = (event) => {
+      onMove(event);
+      hitTest();
+
+      if (ui.hoverReplica === null) return;
+
+      togglePod(sim, geo, ui.hoverReplica);
+
+      if (!ui.clicked) {
+        ui.clicked = true;
+        rememberClicked();
+      }
+    };
 
     const sizeObserver = new ResizeObserver(() => {
       resize();
@@ -823,7 +1060,6 @@ const HeroScene = () => {
         published <b data-tone="deliver">{stats.published}</b> · retried{' '}
         <b data-tone="redeliver">{stats.retried}</b> · acked <b data-tone="ack">{stats.acked}</b> · lost{' '}
         <b>0</b>
-        <span className="scene-hint">click a replica to restart it</span>
       </p>
     </div>
   );
