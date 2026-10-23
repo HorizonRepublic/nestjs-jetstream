@@ -15,6 +15,9 @@ const SLOT = 9;
 const MODEL = { w: 600, h: 240 };
 const LANE_HEIGHT = 34;
 const TRAIL = 9;
+const RESTART_MS = 2600;
+const DEPLOY_EVERY_MS = 25000;
+const SUBJECTS = ['orders.created', 'payments.captured', 'users.updated', 'emails.send', 'stock.reserved'];
 
 const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 
@@ -38,6 +41,8 @@ const readPalette = () => {
     line: token('--jt-line-2'),
     faint: token('--jt-line-1'),
     raised: token('--jt-bg-2'),
+    surface: token('--jt-bg-1'),
+    ink: token('--jt-fg-0'),
     label: token('--jt-fg-3'),
     mono: token('--jt-font-mono') || 'monospace',
   };
@@ -63,9 +68,32 @@ const createSim = () => ({
   replicas: [0, 1, 2].map(() => ({ busy: null, flash: null, flashAt: -1e9, downUntil: 0 })),
   nextSpawn: 300,
   nextBurst: 4000,
-  nextRestart: 9000,
+  nextRestart: 16000,
+  nextDeploy: 6000,
+  deploy: null,
   stats: { published: 0, retried: 0, acked: 0 },
 });
+
+const toLane = (geo, message) => {
+  flight(message, { ...message.pos }, { x: geo.lane.x1, y: geo.lane.y }, 900, 'toLane');
+};
+
+/* A pod goes away: whatever it was handling is redelivered later, never lost. */
+const restartReplica = (sim, geo, index) => {
+  const replica = sim.replicas[index];
+
+  if (sim.time < replica.downUntil) return;
+
+  replica.downUntil = sim.time + RESTART_MS;
+
+  if (replica.busy) {
+    const message = replica.busy;
+
+    replica.busy = null;
+    sim.stats.retried += 1;
+    toLane(geo, message);
+  }
+};
 
 const flight = (message, from, to, duration, state, delay = 0) => {
   message.state = state;
@@ -84,15 +112,19 @@ const step = (sim, geo, dt) => {
 
   const spawn = (delay = 0) => {
     const producer = Math.floor(Math.random() * geo.producers.length);
-    const message = { id: sim.nextId++, attempt: 0, pos: { ...geo.producers[producer] }, trail: [] };
+    const id = sim.nextId++;
+    const message = {
+      id,
+      subject: SUBJECTS[Math.floor(Math.random() * SUBJECTS.length)],
+      seq: 4812000 + id,
+      attempt: 0,
+      pos: { ...geo.producers[producer] },
+      trail: [],
+    };
 
     flight(message, geo.producers[producer], { x: geo.tube.x0, y: geo.tube.y }, 1100, 'toStream', delay);
     sim.messages.push(message);
     sim.stats.published += 1;
-  };
-
-  const toLane = (message) => {
-    flight(message, { ...message.pos }, { x: geo.lane.x1, y: geo.lane.y }, 900, 'toLane');
   };
 
   if (now >= sim.nextSpawn) {
@@ -105,19 +137,22 @@ const step = (sim, geo, dt) => {
     sim.nextBurst = now + 9000 + Math.random() * 6000;
   }
 
+  // A rolling deploy: every replica restarts in turn while the stream holds the work.
+  if (now >= sim.nextDeploy) {
+    sim.deploy = { start: now };
+    sim.nextDeploy = now + DEPLOY_EVERY_MS;
+    sim.nextRestart = Math.max(sim.nextRestart, now + sim.replicas.length * RESTART_MS + 6000);
+  }
+
+  if (sim.deploy) {
+    const done = Math.floor((now - sim.deploy.start) / RESTART_MS);
+
+    if (done < sim.replicas.length) restartReplica(sim, geo, done);
+    else if (now - sim.deploy.start > sim.replicas.length * RESTART_MS + 600) sim.deploy = null;
+  }
+
   if (now >= sim.nextRestart) {
-    const replica = sim.replicas[Math.floor(Math.random() * sim.replicas.length)];
-
-    replica.downUntil = now + 2600;
-
-    if (replica.busy) {
-      const message = replica.busy;
-
-      replica.busy = null;
-      sim.stats.retried += 1;
-      toLane(message);
-    }
-
+    restartReplica(sim, geo, Math.floor(Math.random() * sim.replicas.length));
     sim.nextRestart = now + 11000 + Math.random() * 7000;
   }
 
@@ -187,7 +222,7 @@ const step = (sim, geo, dt) => {
         sim.stats.retried += 1;
         replica.flash = 'redeliver';
         replica.flashAt = now;
-        toLane(message);
+        toLane(geo, message);
       } else {
         sim.stats.acked += 1;
         replica.flash = 'ack';
@@ -326,6 +361,29 @@ const label = (ctx, palette, value, x, y, align, color = palette.label) => {
   ctx.globalAlpha = 1;
 };
 
+const tooltip = (ctx, palette, lines, x, y) => {
+  ctx.font = `11px ${palette.mono}`;
+  const width = Math.max(...lines.map((line) => ctx.measureText(line.text).width)) + 18;
+  const height = lines.length * 16 + 10;
+  const left = x + 14;
+  const top = y - height - 10;
+
+  ctx.save();
+  ctx.globalAlpha = 0.96;
+  ctx.fillStyle = palette.surface;
+  ctx.strokeStyle = palette.line;
+  ctx.beginPath();
+  ctx.roundRect(left, top, width, height, 6);
+  ctx.fill();
+  ctx.stroke();
+  ctx.textAlign = 'left';
+  lines.forEach((line, index) => {
+    ctx.fillStyle = line.color ?? palette.ink;
+    ctx.fillText(line.text, left + 9, top + 18 + index * 16);
+  });
+  ctx.restore();
+};
+
 const drawFloor = (ctx, project, palette) => {
   ctx.lineWidth = 1;
   ctx.strokeStyle = palette.faint;
@@ -357,12 +415,55 @@ const drawFloor = (ctx, project, palette) => {
   ctx.globalAlpha = 1;
 };
 
-const draw = (ctx, sim, geo, view, palette, logo) => {
+const colorOf = (message, palette) => {
+  if (message.state === 'toExit') return palette.ack;
+  if (message.attempt > 0 || message.fromLane || message.state === 'toLane' || message.state === 'waiting') {
+    return palette.redeliver;
+  }
+
+  return palette.deliver;
+};
+
+const draw = (ctx, sim, geo, view, palette, logo, ui) => {
   const { project, cw, ch } = view;
   const k = project.k;
 
   ctx.clearRect(0, 0, cw, ch);
   drawFloor(ctx, project, palette);
+
+  // a pool of light under the stream, brighter as the queue grows
+  const pool = project((geo.tube.x0 + geo.tube.x1) / 2, geo.tube.y);
+  const fill = Math.min(1, sim.queue.length / 8);
+  const glow = ctx.createRadialGradient(pool.x, pool.y, 0, pool.x, pool.y, 150 * k);
+
+  glow.addColorStop(0, palette.deliver);
+  glow.addColorStop(1, 'transparent');
+  ctx.save();
+  ctx.globalAlpha = 0.06 + 0.16 * fill;
+  ctx.fillStyle = glow;
+  ctx.setTransform(view.ratio, 0, 0, view.ratio * 0.5, 0, pool.y * view.ratio * 0.5);
+  ctx.beginPath();
+  ctx.arc(pool.x, pool.y, 150 * k, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // shadows of everything in the air, softer the higher it flies
+  for (const message of sim.messages) {
+    const height = heightOf(message);
+
+    if (height < 3) continue;
+
+    const floor = project(message.pos.x, message.pos.y);
+    const fade = Math.max(0, 1 - height / 110);
+    const alpha = message.state === 'toExit' ? Math.max(0, 1 - message.t) : 1;
+
+    ctx.globalAlpha = 0.28 * fade * alpha;
+    ctx.fillStyle = colorOf(message, palette);
+    ctx.beginPath();
+    ctx.ellipse(floor.x, floor.y, (4 + height * 0.06) * k * 1.6, (2 + height * 0.03) * k * 1.6, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
 
   // connectors on the floor
   ctx.strokeStyle = palette.line;
@@ -440,6 +541,19 @@ const draw = (ctx, sim, geo, view, palette, logo) => {
       ctx.restore();
     }
 
+    if (ui.hoverReplica === index) {
+      const c = project(r.x, r.y, down ? 8 : 18);
+
+      ctx.save();
+      ctx.setLineDash([2, 3]);
+      ctx.strokeStyle = palette.ink;
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath();
+      ctx.ellipse(c.x, c.y, 30 * k, 17 * k, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     const busy = replica.busy;
 
     if (busy && busy.state === 'processing') {
@@ -457,16 +571,11 @@ const draw = (ctx, sim, geo, view, palette, logo) => {
 
   // messages, each with a short trail of light
   for (const message of sim.messages) {
-    let color = palette.deliver;
-
-    if (message.state === 'toExit') color = palette.ack;
-    else if (message.attempt > 0 || message.fromLane || message.state === 'toLane' || message.state === 'waiting') {
-      color = palette.redeliver;
-    }
-
+    const color = colorOf(message, palette);
     const alpha = message.state === 'toExit' ? Math.max(0, 1 - message.t) : 1;
     const p = project(message.pos.x, message.pos.y, heightOf(message));
 
+    message.screen = p;
     message.trail.push(p);
     if (message.trail.length > TRAIL) message.trail.shift();
 
@@ -487,6 +596,14 @@ const draw = (ctx, sim, geo, view, palette, logo) => {
     }
 
     glowDot(ctx, p.x, p.y, Math.max(2.4, 3.6 * k), color, alpha);
+
+    if (ui.hoverMessage === message) {
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, Math.max(6, 8 * k), 0, Math.PI * 2);
+      ctx.stroke();
+    }
   }
   ctx.globalAlpha = 1;
 
@@ -499,6 +616,36 @@ const draw = (ctx, sim, geo, view, palette, logo) => {
   label(ctx, palette, 'stream', sl.x + 10, sl.y + 16, 'left');
   label(ctx, palette, 'retry · 2 s, 10 s', ll.x, ll.y - 10, 'center', palette.redeliver);
   label(ctx, palette, 'NestJS replicas', rl.x + 4, rl.y + 18, 'center');
+
+  if (sim.deploy) {
+    const done = Math.min(sim.replicas.length, Math.floor((sim.time - sim.deploy.start) / RESTART_MS) + 1);
+    const top = project(geo.replicas[0].x, geo.replicas[0].y, 40);
+
+    label(ctx, palette, `rolling deploy · ${done}/${sim.replicas.length}`, top.x, top.y - 8, 'center', palette.deliver);
+  }
+
+  const hovered = ui.hoverMessage;
+
+  if (hovered?.screen && sim.messages.includes(hovered)) {
+    const status = { toExit: 'acked', waiting: 'waiting to retry', toLane: 'nak', queued: 'stored', processing: 'handling' };
+
+    tooltip(
+      ctx,
+      palette,
+      [
+        { text: hovered.subject },
+        { text: `seq ${hovered.seq} · attempt ${hovered.attempt + 1}`, color: palette.label },
+        { text: status[hovered.state] ?? 'in flight', color: colorOf(hovered, palette) },
+      ],
+      hovered.screen.x,
+      hovered.screen.y,
+    );
+  } else if (ui.hoverReplica !== null) {
+    const r = geo.replicas[ui.hoverReplica];
+    const at = project(r.x, r.y, 18);
+
+    tooltip(ctx, palette, [{ text: 'click to restart this pod' }], at.x, at.y);
+  }
 };
 
 const REGION = {
@@ -526,6 +673,8 @@ const HeroScene = () => {
     let last = 0;
     let visible = true;
     let statsAt = 0;
+    let pointer = null;
+    const ui = { hoverMessage: null, hoverReplica: null };
 
     const resize = () => {
       const ratio = window.devicePixelRatio || 1;
@@ -541,7 +690,51 @@ const HeroScene = () => {
 
     const render = () => {
       ctx.setTransform(view.ratio, 0, 0, view.ratio, 0, 0);
-      draw(ctx, sim, geo, view, palette, logo);
+      draw(ctx, sim, geo, view, palette, logo, ui);
+    };
+
+    // What the pointer is over: a replica (clickable) or a message (inspectable).
+    const hitTest = () => {
+      ui.hoverMessage = null;
+      ui.hoverReplica = null;
+
+      if (pointer) {
+        const k = view.project.k;
+        let best = 12;
+
+        for (const message of sim.messages) {
+          if (!message.screen) continue;
+
+          const d = Math.hypot(message.screen.x - pointer.x, message.screen.y - pointer.y);
+
+          if (d < best) {
+            best = d;
+            ui.hoverMessage = message;
+          }
+        }
+
+        if (!ui.hoverMessage) {
+          geo.replicas.forEach((r, index) => {
+            const c = view.project(r.x, r.y, 9);
+
+            if (Math.hypot((c.x - pointer.x) / 1.7, c.y - pointer.y) < 22 * k + 4) ui.hoverReplica = index;
+          });
+        }
+      }
+
+      canvas.style.cursor = ui.hoverReplica === null ? 'default' : 'pointer';
+    };
+
+    const onMove = (event) => {
+      const rect = canvas.getBoundingClientRect();
+
+      pointer = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    };
+    const onLeave = () => {
+      pointer = null;
+    };
+    const onClick = () => {
+      if (ui.hoverReplica !== null) restartReplica(sim, geo, ui.hoverReplica);
     };
 
     const image = new Image();
@@ -557,6 +750,7 @@ const HeroScene = () => {
 
       last = ts;
       step(sim, geo, dt);
+      hitTest();
       render();
 
       if (ts - statsAt > 400) {
@@ -603,6 +797,9 @@ const HeroScene = () => {
     viewObserver.observe(wrap);
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     document.addEventListener('visibilitychange', onVisibility);
+    canvas.addEventListener('pointermove', onMove);
+    canvas.addEventListener('pointerleave', onLeave);
+    canvas.addEventListener('click', onClick);
     start();
 
     return () => {
@@ -611,18 +808,22 @@ const HeroScene = () => {
       viewObserver.disconnect();
       themeObserver.disconnect();
       document.removeEventListener('visibilitychange', onVisibility);
+      canvas.removeEventListener('pointermove', onMove);
+      canvas.removeEventListener('pointerleave', onLeave);
+      canvas.removeEventListener('click', onClick);
     };
   }, [logoUrl]);
 
   return (
-    <div className="scene" aria-hidden="true">
-      <div className="scene-stage" ref={wrapRef}>
+    <div className="scene">
+      <div className="scene-stage" ref={wrapRef} aria-hidden="true">
         <canvas ref={canvasRef} />
       </div>
       <p className="scene-stats">
         published <b data-tone="deliver">{stats.published}</b> · retried{' '}
         <b data-tone="redeliver">{stats.retried}</b> · acked <b data-tone="ack">{stats.acked}</b> · lost{' '}
         <b>0</b>
+        <span className="scene-hint">click a replica to restart it</span>
       </p>
     </div>
   );

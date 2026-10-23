@@ -85,9 +85,15 @@
 }
 
 /* The scene sits under the whole hero; the right column only keeps it room. */
+/* Clicks pass through the empty grid to the scene; the copy stays interactive. */
+.lp-hero-grid {
+  pointer-events: none;
+}
+
 .lp-hero-lead {
   position: relative;
   z-index: 1;
+  pointer-events: auto;
 }
 
 .lp-hero-room {
