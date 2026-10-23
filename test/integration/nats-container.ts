@@ -9,7 +9,7 @@ import {
   Wait,
 } from 'testcontainers';
 
-export const NATS_IMAGE = 'nats:2.14.1';
+export const NATS_IMAGE = 'nats:2.15.1';
 
 export interface NatsContainerResult {
   container: StartedTestContainer;
