@@ -68,11 +68,11 @@ const RECORD_FIELDS = [
 ];
 
 const RECORD_LOG = [
-  { state: 'deliver', time: '19:04:02.118', event: 'deliver', note: 'attempt 1/5' },
-  { state: 'nak', time: '19:04:02.204', event: 'nak', note: 'handler threw · backoff 1s' },
+  { state: 'deliver', time: '19:04:02.118', event: 'deliver', note: 'attempt 1/3' },
+  { state: 'nak', time: '19:04:02.204', event: 'nak', note: 'handler threw · retry in 2 s' },
   { state: 'seam', time: '', event: 'pod restart', note: 'in flight, not lost' },
-  { state: 'redeliver', time: '19:04:03.336', event: 'redeliver', note: 'attempt 2/5 · new pod' },
-  { state: 'ack', time: '19:04:03.402', event: 'ack', note: 'handled in 66 ms' },
+  { state: 'redeliver', time: '19:04:04.336', event: 'redeliver', note: 'attempt 2/3 · new pod' },
+  { state: 'ack', time: '19:04:04.402', event: 'ack', note: 'handled in 66 ms' },
 ];
 
 const DeliveryRecord = () => (
@@ -113,7 +113,8 @@ const DeliveryRecord = () => (
 
     <figcaption className="lp-record-caption">
       One message across a deploy that restarts the pod holding it. When the attempts run out
-      instead, the message lands in <code>dlq.orders</code> with its headers intact.
+      instead, the message lands in <code>orders__microservice_dlq-stream</code> with its headers
+      intact.
     </figcaption>
   </figure>
 );
@@ -131,7 +132,7 @@ const CodeCard = ({ file, lang, children }) => (
 const CAPABILITIES = [
   {
     name: 'At-least-once delivery',
-    body: 'Every event acked after the handler resolves, with bounded retries and exponential backoff.',
+    body: 'Every event acked after the handler resolves, retried on a paced curve, 2 s then 10 s by default.',
     to: '/docs/patterns/events',
     label: 'patterns/events',
   },
@@ -143,7 +144,7 @@ const CAPABILITIES = [
   },
   {
     name: 'Ordered delivery',
-    body: 'Sequential per partition key, without giving up horizontal scale.',
+    body: 'Every replica reads the stream in strict order and can replay it from any point.',
     to: '/docs/patterns/ordered-events',
     label: 'patterns/ordered-events',
   },
@@ -158,6 +159,12 @@ const CAPABILITIES = [
     body: 'Core NATS for latency, JetStream for durability, under the same decorator either way.',
     to: '/docs/patterns/rpc',
     label: 'patterns/rpc',
+  },
+  {
+    name: 'Cron and delayed jobs',
+    body: 'Cron, intervals and one-shot delays fired by NATS itself, with no scheduler process to run.',
+    to: '/docs/guides/scheduling-overview',
+    label: 'guides/scheduling',
   },
   {
     name: 'Tracing built in',
@@ -226,7 +233,9 @@ export default function Home() {
               <span className="c-dim">@Module</span>({'{'}
               {'\n  imports: [\n    '}
               <span className="c-accent">JetstreamModule.forRoot</span>({'{'}
-              {'\n      servers: ['}
+              {'\n      name: '}
+              <span className="c-str">&apos;orders&apos;</span>
+              {',\n      servers: ['}
               <span className="c-str">&apos;nats://localhost:4222&apos;</span>
               {'],\n    }),\n  ],\n'}
               {'})\n'}
@@ -238,9 +247,8 @@ export default function Home() {
           <div className="lp-swap-col">
             <h2>The handler you already wrote.</h2>
             <p>
-              Ack after resolve. A throw becomes a <code>nak</code> with exponential backoff, and
-              exhausted retries land in a typed dead-letter queue with the original headers
-              intact.
+              Ack after resolve. A throw becomes a <code>nak</code> with a paced retry delay, and
+              exhausted retries land in a dead-letter stream with the original headers intact.
             </p>
             <CodeCard file="orders.controller.ts" lang="ts">
               <span className="c-dim">@EventPattern</span>(
@@ -251,7 +259,7 @@ export default function Home() {
               {'() order: Order) {\n  '}
               <span className="c-dim">await</span>
               {' this.billing.charge(order);\n  '}
-              <span className="c-comment">{'// throws → nak → redelivered with backoff'}</span>
+              <span className="c-comment">{'// throws → nak → redelivered after 2 s'}</span>
               {'\n}'}
             </CodeCard>
           </div>
