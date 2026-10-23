@@ -1,7 +1,7 @@
 import { Controller, Get, Module } from '@nestjs/common';
 
 import { JetstreamHealthIndicator, JetstreamModule } from '../../src';
-import type { JetstreamHealthStatus } from '../../src';
+import type { JetstreamHealthIndicatorResult, JetstreamHealthStatus } from '../../src';
 
 @Controller('health')
 class HealthController {
@@ -21,7 +21,7 @@ class HealthController {
    * Use this with @nestjs/terminus HealthCheckService.
    */
   @Get('terminus')
-  async terminus(): Promise<{ jetstream: JetstreamHealthStatus }> {
+  async terminus(): Promise<JetstreamHealthIndicatorResult> {
     return this.health.isHealthy();
   }
 }

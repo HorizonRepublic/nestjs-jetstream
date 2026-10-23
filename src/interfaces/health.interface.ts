@@ -22,3 +22,10 @@ export interface JetstreamHealthStatus {
    */
   connections?: Record<string, JetstreamConnectionHealth>;
 }
+
+/**
+ * Terminus-shaped result of `JetstreamHealthIndicator.isHealthy()`: the
+ * indicator key mapped to its details (`status`, `server`, `latency`, and
+ * `degraded` / `connections` when several connections are configured).
+ */
+export type JetstreamHealthIndicatorResult = Record<string, Record<string, unknown>>;
