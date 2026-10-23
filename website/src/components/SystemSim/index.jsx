@@ -2,8 +2,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import useBaseUrl from '@docusaurus/useBaseUrl';
 import './styles.css';
 
-/* The hero's system scene. Three.js loads only in the browser and only after
-   the hero has rendered, so the copy never waits for it. */
+/* The hero's system scene. Three.js loads in the browser only, and starts
+   loading as soon as this module does, so the scene is ready by the time the
+   hero has rendered. */
+const sceneModule = typeof window === 'undefined' ? null : import('./scene');
+
 const HeroScene = () => {
   const stageRef = useRef(null);
   const overlayRef = useRef(null);
@@ -15,8 +18,8 @@ const HeroScene = () => {
     let cancelled = false;
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    import('./scene')
-      .then(({ createScene }) => {
+    sceneModule
+      ?.then(({ createScene }) => {
         if (cancelled) return;
 
         dispose = createScene({

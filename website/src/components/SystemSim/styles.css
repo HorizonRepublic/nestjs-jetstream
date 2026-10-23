@@ -14,6 +14,30 @@
 }
 
 /* Labels and the tooltip sit over the canvas as plain HTML, placed per frame. */
+.scene-step {
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-family: var(--jt-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  color: var(--jt-fg-3);
+  will-change: transform;
+}
+
+.scene-step--ack {
+  color: var(--jt-state-ack);
+}
+
+.scene-step--retry {
+  color: var(--jt-state-redeliver);
+}
+
+.scene-step[hidden] {
+  display: none;
+}
+
 .scene-overlay {
   position: absolute;
   inset: 0;

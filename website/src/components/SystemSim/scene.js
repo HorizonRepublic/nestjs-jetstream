@@ -1,33 +1,88 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { ACK_MS, FALL_MS, PODS, RESTART_MS, SLOTS, createSim, isDown, liveTiles, step, togglePod } from './model';
+import { ACK_MS, CAPACITY, PODS, RESTART_MS, createSim, isDown, step, togglePod } from './model';
 
-/* The hero scene: the model from ./model drawn as an isometric log.
+/* The hero scene: a message's whole life, drawn isometrically.
 
-   Tiles are messages in a stream, oldest at the front. NestJS pods hover over
-   the front of the log and reach a tile with a beam while they handle it. An
-   ack sinks the tile into the floor; a nak leaves it in the log, glowing amber
-   until it may be delivered again. */
+   Services publish along lines that converge on the stream, a glass capsule
+   where messages wait in order. From its far end, lines fan out to NestJS
+   pods. An ack lifts the message away; a nak sends it up the retry arc, the
+   backoff, and back into the stream. Every message moves along a drawn path. */
 
-const SPACING = 0.66;
-const FRONT_X = 3.0;
-const TILE = { w: 0.5, h: 0.14, d: 0.5, y: 0.1 };
-const DROP = 2.4;
-const POD = { w: 0.92, h: 0.5, d: 0.92 };
-const POD_Y = 1.45;
-const POD_POS = [
-  [2.9, -1.7],
-  [1.6, -1.7],
-  [0.3, -1.7],
-];
+const Z = [-1.7, 0, 1.7];
+const SERVICE_X = -5.3;
+const POD_X = 4.3;
+const BELT_Y = 0.36;
+const TUBE = { x0: -2.6, x1: 1.5, radius: 0.27 };
+const SPACING = (TUBE.x1 - TUBE.x0 - 0.5) / (CAPACITY - 1);
+const POD = { w: 0.98, h: 0.38, d: 0.98 };
+const POD_TOP = POD.h + 0.12;
+const SERVICE = { w: 0.86, h: 0.3, d: 0.6 };
 const REGION = {
-  wide: { x0: 0.5, x1: 0.98, y0: 0.06, y1: 0.94 },
+  wide: { x0: 0.48, x1: 0.99, y0: 0.05, y1: 0.95 },
   narrow: { x0: 0.02, x1: 0.98, y0: 0.04, y1: 0.96 },
 };
 const HINT_KEY = 'jt-scene-clicked';
+const WARMUP_MS = 7000;
 
-const easeOut = (t) => 1 - (1 - t) ** 3;
-const tailX = FRONT_X - (SLOTS - 1) * SPACING;
+const v3 = (x, y, z) => new THREE.Vector3(x, y, z);
+const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+const clamp01 = (t) => Math.max(0, Math.min(1, t));
+
+/* ---- paths: every message rides one of these ------------------------------ */
+
+const entrance = v3(TUBE.x0 + 0.05, BELT_Y, 0);
+const exit = v3(TUBE.x1 + 0.1, BELT_Y, 0);
+
+const fanIn = Z.map(
+  (z) => new THREE.CubicBezierCurve3(v3(SERVICE_X + 0.5, BELT_Y - 0.12, z), v3(-4.0, BELT_Y, z), v3(-3.6, BELT_Y, 0), v3(TUBE.x0 - 0.2, BELT_Y, 0)),
+);
+const fanOut = Z.map(
+  (z) => new THREE.CubicBezierCurve3(exit.clone(), v3(2.6, BELT_Y, 0), v3(3.1, BELT_Y + 0.05, z), v3(POD_X, POD_TOP, z)),
+);
+const retryArcs = Z.map(
+  (z) =>
+    new THREE.CatmullRomCurve3(
+      [
+        v3(POD_X, POD_TOP, z),
+        v3(POD_X - 0.1, 1.3, z * 0.8),
+        v3(3.0, 2.15, -0.7),
+        v3(0.2, 2.45, -1.1),
+        v3(-2.3, 1.75, -0.6),
+        v3(-3.0, 0.75, 0),
+        v3(TUBE.x0 - 0.2, BELT_Y, 0),
+      ],
+      false,
+      'centripetal',
+    ),
+);
+
+const queueSlot = (index) => v3(TUBE.x1 - 0.2 - index * SPACING, BELT_Y, 0);
+const waitSlot = (index) => v3(TUBE.x0 - 0.45 - index * 0.22, BELT_Y, 0);
+
+/* Where a message is, from its state and how far into it the clock is. */
+const positionOf = (sim, message, queueIndex, waitIndex) => {
+  const t = clamp01((sim.time - message.since) / (message.until - message.since));
+
+  switch (message.state) {
+    case 'in':
+      return waitIndex >= 0 ? waitSlot(waitIndex) : fanIn[message.service].getPointAt(ease(t));
+    case 'queued':
+      return queueSlot(queueIndex);
+    case 'out':
+      return fanOut[message.pod].getPointAt(ease(t));
+    case 'work':
+      return v3(POD_X, POD_TOP + 0.02, Z[message.pod]);
+    case 'retry':
+      return waitIndex >= 0 ? waitSlot(waitIndex) : retryArcs[message.from].getPointAt(ease(t));
+    case 'ack':
+      return v3(POD_X, POD_TOP + 1.3 * ease(t), Z[message.pod]);
+    default:
+      return entrance.clone();
+  }
+};
+
+/* ---- look ------------------------------------------------------------------ */
 
 const readPalette = () => {
   const css = getComputedStyle(document.documentElement);
@@ -40,12 +95,30 @@ const readPalette = () => {
     ack: color('--jt-state-ack'),
     dlq: color('--jt-state-dlq'),
     bg0: color('--jt-bg-0'),
-    bg1: color('--jt-bg-1'),
     bg2: color('--jt-bg-2'),
     bg3: color('--jt-bg-3'),
     line: color('--jt-line-2'),
-    faint: color('--jt-line-1'),
+    strong: color('--jt-line-3'),
   };
+};
+
+const glowTexture = () => {
+  const size = 64;
+  const canvas = document.createElement('canvas');
+
+  canvas.width = size;
+  canvas.height = size;
+
+  const ctx = canvas.getContext('2d');
+  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.35, 'rgba(255,255,255,0.35)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+
+  return new THREE.CanvasTexture(canvas);
 };
 
 const readClicked = () => {
@@ -64,11 +137,11 @@ const rememberClicked = () => {
   }
 };
 
-/* A floor grid whose lines fade out away from the centre. */
+/* A floor grid whose lines fade out away from the middle. */
 const makeGrid = (palette) => {
   const positions = [];
   const colors = [];
-  const reach = 9;
+  const reach = 10;
   const push = (x1, z1, x2, z2) => {
     positions.push(x1, 0.002, z1, x2, 0.002, z2);
 
@@ -76,9 +149,7 @@ const makeGrid = (palette) => {
       [x1, z1],
       [x2, z2],
     ]) {
-      const fade = Math.max(0, 1 - Math.hypot(x + 1, z) / reach);
-
-      colors.push(palette.line.r, palette.line.g, palette.line.b, fade * 0.55);
+      colors.push(palette.line.r, palette.line.g, palette.line.b, Math.max(0, 1 - Math.hypot(x + 0.5, z) / reach) * 0.5);
     }
   };
 
@@ -97,14 +168,25 @@ const makeGrid = (palette) => {
   return new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false }));
 };
 
+const curveLine = (curve, material, segments = 64) => {
+  const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(curve.getSpacedPoints(segments)), material);
+
+  line.computeLineDistances();
+
+  return line;
+};
+
+/* ---- the scene ------------------------------------------------------------- */
+
 export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) => {
   const sim = createSim();
   let palette = readPalette();
   let clicked = readClicked() || reduce;
 
-  /* ---- renderer, camera, light -------------------------------------------- */
+  // start in the middle of things rather than on an empty floor
+  for (let t = 0; t < WARMUP_MS; t += 16) step(sim, 16);
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
 
   renderer.setClearColor(0x000000, 0);
   renderer.shadowMap.enabled = true;
@@ -113,25 +195,19 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
 
   const scene = new THREE.Scene();
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
-  const viewDir = new THREE.Vector3(1, 1.08, 1).normalize();
-  const target = new THREE.Vector3(-1, 0.4, -0.6);
+  const viewDir = v3(1, 1.12, 1).normalize();
+  const target = v3(-0.4, 0.6, 0);
 
-  const hemi = new THREE.HemisphereLight(0xffffff, 0x000000, 1.6);
-  const sun = new THREE.DirectionalLight(0xffffff, 1.7);
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x000000, 1.5);
+  const sun = new THREE.DirectionalLight(0xffffff, 1.5);
 
-  sun.position.set(-3, 9, 5);
-  sun.target.position.set(-1, 0, -0.6);
+  sun.position.set(-3, 10, 4);
+  sun.target.position.set(-0.4, 0, 0);
   sun.castShadow = true;
   sun.shadow.mapSize.set(1024, 1024);
-  sun.shadow.camera.left = -9;
-  sun.shadow.camera.right = 9;
-  sun.shadow.camera.top = 9;
-  sun.shadow.camera.bottom = -9;
-  sun.shadow.radius = 6;
-  sun.shadow.bias = -0.0005;
+  Object.assign(sun.shadow.camera, { left: -8, right: 8, top: 8, bottom: -8 });
+  sun.shadow.bias = -0.0006;
   scene.add(hemi, sun, sun.target);
-
-  /* ---- floor, log, pods --------------------------------------------------- */
 
   const shadowCatcher = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.ShadowMaterial({ opacity: 0.3 }));
 
@@ -143,68 +219,157 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
 
   scene.add(grid);
 
-  // the stream itself: a low slab the tiles rest on
-  const railLength = (SLOTS - 1) * SPACING + 0.9;
-  const railMaterial = new THREE.MeshStandardMaterial({ roughness: 0.85 });
-  const rail = new THREE.Mesh(new RoundedBoxGeometry(railLength, 0.06, 0.82, 3, 0.03), railMaterial);
+  // paths
+  const pathMaterial = new THREE.LineBasicMaterial({ transparent: true, opacity: 0.9 });
+  const retryMaterial = new THREE.LineDashedMaterial({ transparent: true, opacity: 0.75, dashSize: 0.09, gapSize: 0.08 });
 
-  rail.position.set((FRONT_X + tailX) / 2, 0.03, 0);
-  rail.receiveShadow = true;
-  scene.add(rail);
+  for (const curve of [...fanIn, ...fanOut]) scene.add(curveLine(curve, pathMaterial));
+  for (const curve of retryArcs) scene.add(curveLine(curve, retryMaterial, 96));
 
-  const tileGeometry = new RoundedBoxGeometry(TILE.w, TILE.h, TILE.d, 4, 0.05);
+  // the stream: a glass capsule, with a glow inside that grows as it fills
+  const tubeLength = TUBE.x1 - TUBE.x0;
+  const tubeMaterial = new THREE.MeshStandardMaterial({ transparent: true, opacity: 0.16, roughness: 0.2, depthWrite: false });
+  const tube = new THREE.Mesh(new THREE.CapsuleGeometry(TUBE.radius, tubeLength, 8, 32), tubeMaterial);
+  const tubeEdge = new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.CapsuleGeometry(TUBE.radius, tubeLength, 2, 12), 30),
+    new THREE.LineBasicMaterial({ transparent: true, opacity: 0.35 }),
+  );
+  const tubeGlow = new THREE.Mesh(
+    new THREE.CapsuleGeometry(TUBE.radius * 0.7, tubeLength, 4, 16),
+    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }),
+  );
+
+  for (const mesh of [tube, tubeEdge, tubeGlow]) {
+    mesh.rotation.z = Math.PI / 2;
+    mesh.position.set((TUBE.x0 + TUBE.x1) / 2, BELT_Y, 0);
+    scene.add(mesh);
+  }
+
+  const tubeShadow = new THREE.Mesh(
+    new THREE.CapsuleGeometry(TUBE.radius * 0.9, tubeLength, 4, 12),
+    new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }),
+  );
+
+  tubeShadow.rotation.z = Math.PI / 2;
+  tubeShadow.position.copy(tube.position);
+  tubeShadow.castShadow = true;
+  scene.add(tubeShadow);
+
+  // services and pods
+  const blockGeometry = new RoundedBoxGeometry(SERVICE.w, SERVICE.h, SERVICE.d, 4, 0.08);
   const podGeometry = new RoundedBoxGeometry(POD.w, POD.h, POD.d, 5, 0.1);
-  const ledGeometry = new THREE.SphereGeometry(0.04, 16, 12);
-  const beamGeometry = new THREE.CylinderGeometry(0.012, 0.012, 1, 8, 1, true);
+  const ledGeometry = new THREE.SphereGeometry(0.035, 16, 12);
+  const serviceMaterial = new THREE.MeshStandardMaterial({ roughness: 0.55 });
   const logoTexture = new THREE.TextureLoader().load(logoUrl);
+  const glow = glowTexture();
 
   logoTexture.colorSpace = THREE.SRGBColorSpace;
   logoTexture.anisotropy = 4;
 
-  const pods = POD_POS.map(([x, z]) => {
-    const material = new THREE.MeshStandardMaterial({ roughness: 0.55, transparent: true });
+  for (const z of Z) {
+    const service = new THREE.Mesh(blockGeometry, serviceMaterial);
+    const led = new THREE.Mesh(ledGeometry, new THREE.MeshBasicMaterial());
+
+    service.position.set(SERVICE_X, SERVICE.h / 2, z);
+    service.castShadow = true;
+    led.position.set(SERVICE_X + SERVICE.w / 2 - 0.14, SERVICE.h / 2, z + SERVICE.d / 2 + 0.004);
+    led.userData.serviceLed = true;
+    scene.add(service, led);
+  }
+
+  const ringPoints = Array.from({ length: 65 }, (_, i) => {
+    const a = (i / 64) * Math.PI * 2;
+
+    return v3(Math.cos(a) * 0.62, 0, Math.sin(a) * 0.62);
+  });
+
+  const pods = Z.map((z, index) => {
+    const material = new THREE.MeshStandardMaterial({ roughness: 0.5, transparent: true });
     const body = new THREE.Mesh(podGeometry, material);
-    const group = new THREE.Group();
     const logo = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.42, 0.42),
+      new THREE.PlaneGeometry(0.4, 0.4),
       new THREE.MeshBasicMaterial({ map: logoTexture, transparent: true, depthWrite: false }),
     );
     const ledMaterial = new THREE.MeshBasicMaterial();
     const led = new THREE.Mesh(ledGeometry, ledMaterial);
-    const beam = new THREE.Mesh(beamGeometry, new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }));
+    const progress = new THREE.Line(new THREE.BufferGeometry().setFromPoints(ringPoints), new THREE.LineBasicMaterial({ transparent: true }));
+    const burst = new THREE.Mesh(
+      new THREE.RingGeometry(0.62, 0.66, 64),
+      new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }),
+    );
+    const group = new THREE.Group();
 
     body.castShadow = true;
+    body.userData.pod = index;
     logo.rotation.x = -Math.PI / 2;
     logo.rotation.z = Math.PI / 4;
     logo.position.y = POD.h / 2 + 0.002;
-    led.position.set(POD.w / 2 - 0.16, 0.02, POD.d / 2 + 0.005);
-    group.add(body, logo, led);
-    group.position.set(x, POD_Y, z);
-    body.userData.pod = POD_POS.findIndex((p) => p[0] === x);
-    scene.add(group, beam);
+    led.position.set(POD.w / 2 - 0.16, 0, POD.d / 2 + 0.004);
+    progress.position.y = POD.h / 2 + 0.01;
+    group.add(body, logo, led, progress);
+    group.position.set(POD_X, POD.h / 2, z);
+    burst.rotation.x = -Math.PI / 2;
+    burst.position.set(POD_X, 0.01, z);
+    scene.add(group, burst);
 
-    return { group, body, material, logo, ledMaterial, beam, base: new THREE.Vector3(x, POD_Y, z), lift: 0 };
+    return { group, body, material, logo, ledMaterial, progress, burst, lift: 0 };
   });
 
-  // until the first click, ripples around the middle pod say pods can be clicked
-  const ripple = new THREE.Mesh(
-    new THREE.RingGeometry(0.72, 0.76, 64),
-    new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide }),
-  );
+  // messages: a lit sphere, a soft halo and a short trail of light
+  const sphereGeometry = new THREE.SphereGeometry(0.085, 20, 14);
+  const visuals = new Map();
+  const TRAIL = 12;
 
-  ripple.rotation.x = -Math.PI / 2;
-  scene.add(ripple);
+  const visualFor = (message) => {
+    let visual = visuals.get(message.id);
 
-  const tiles = new Map();
+    if (!visual) {
+      const core = new THREE.Mesh(sphereGeometry, new THREE.MeshBasicMaterial({ transparent: true }));
+      const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, transparent: true, depthWrite: false }));
+      const trailGeometry = new THREE.BufferGeometry();
+
+      trailGeometry.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(TRAIL * 3), 3));
+      trailGeometry.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(TRAIL * 4), 4));
+
+      const trail = new THREE.Line(trailGeometry, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false }));
+
+      halo.scale.setScalar(0.55);
+      core.castShadow = true;
+      visual = { core, halo, trail, history: [], color: new THREE.Color() };
+      visuals.set(message.id, visual);
+      scene.add(core, halo, trail);
+    }
+
+    return visual;
+  };
+
+  const dropVisual = (id) => {
+    const visual = visuals.get(id);
+
+    scene.remove(visual.core, visual.halo, visual.trail);
+    visual.core.material.dispose();
+    visual.halo.material.dispose();
+    visual.trail.geometry.dispose();
+    visual.trail.material.dispose();
+    visuals.delete(id);
+  };
 
   const applyPalette = () => {
-    railMaterial.color.copy(palette.bg2);
-    shadowCatcher.material.opacity = palette.dark ? 0.38 : 0.14;
-    hemi.color.set(0xffffff);
+    serviceMaterial.color.copy(palette.bg3);
+    shadowCatcher.material.opacity = palette.dark ? 0.36 : 0.12;
     hemi.groundColor.copy(palette.bg0);
-    hemi.intensity = palette.dark ? 1.5 : 2.3;
-    sun.intensity = palette.dark ? 1.6 : 1.4;
-    ripple.material.color.copy(palette.deliver);
+    hemi.intensity = palette.dark ? 1.5 : 2.4;
+    sun.intensity = palette.dark ? 1.5 : 1.3;
+    pathMaterial.color.copy(palette.strong);
+    retryMaterial.color.copy(palette.redeliver);
+    tubeMaterial.color.copy(palette.deliver);
+    tubeEdge.material.color.copy(palette.deliver);
+    tubeGlow.material.color.copy(palette.deliver);
+    for (const pod of pods) pod.progress.material.color.copy(palette.deliver);
+
+    scene.traverse((object) => {
+      if (object.userData.serviceLed) object.material.color.copy(palette.deliver);
+    });
 
     scene.remove(grid);
     grid.geometry.dispose();
@@ -215,24 +380,31 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
 
   applyPalette();
 
-  /* ---- overlay: labels and tooltips as plain HTML ----------------------- */
+  /* ---- overlay ------------------------------------------------------------ */
 
-  const makeLabel = (className) => {
+  const view = { cw: 1, ch: 1 };
+  const make = (className, text = '') => {
     const el = document.createElement('div');
 
     el.className = className;
+    el.textContent = text;
     el.hidden = true;
     overlay.appendChild(el);
 
     return el;
   };
 
-  const podLabels = pods.map(() => makeLabel('scene-label scene-label--down'));
-  const deployLabel = makeLabel('scene-label scene-label--deploy');
-  const hintLabel = makeLabel('scene-label scene-label--hint');
-  const tip = makeLabel('scene-tip');
-
-  hintLabel.textContent = 'click a pod to take it down';
+  const steps = [
+    { el: make('scene-step', 'publish'), at: v3(SERVICE_X, 0.5, -2.55) },
+    { el: make('scene-step', 'stream'), at: v3((TUBE.x0 + TUBE.x1) / 2, 0.85, 0) },
+    { el: make('scene-step', 'deliver'), at: v3(2.75, 0.55, -1.25) },
+    { el: make('scene-step scene-step--ack', 'ack'), at: v3(POD_X, 1.9, Z[0] - 0.2) },
+    { el: make('scene-step scene-step--retry', 'nak · retry after backoff'), at: v3(0.2, 2.75, -1.1) },
+  ];
+  const podLabels = pods.map(() => make('scene-label scene-label--down'));
+  const deployLabel = make('scene-label scene-label--deploy');
+  const hintLabel = make('scene-label scene-label--hint', 'click a pod to take it down');
+  const tip = make('scene-tip');
 
   const toScreen = (vector) => {
     const v = vector.clone().project(camera);
@@ -240,14 +412,12 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
     return { x: ((v.x + 1) / 2) * view.cw, y: ((1 - v.y) / 2) * view.ch };
   };
 
-  const place = (el, at, show = true) => {
+  const place = (el, at, show = true, anchor = 'translate(-50%, -50%)') => {
     el.hidden = !show;
-    if (show) el.style.transform = `translate(${Math.round(at.x)}px, ${Math.round(at.y)}px) translate(-50%, -50%)`;
+    if (show) el.style.transform = `translate(${Math.round(at.x)}px, ${Math.round(at.y)}px) ${anchor}`;
   };
 
   /* ---- framing ------------------------------------------------------------ */
-
-  const view = { cw: 1, ch: 1 };
 
   const frame = () => {
     const cw = container.clientWidth;
@@ -262,195 +432,173 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
     renderer.domElement.style.width = `${cw}px`;
     renderer.domElement.style.height = `${ch}px`;
 
-    camera.position.copy(target).addScaledVector(viewDir, 20);
+    camera.position.copy(target).addScaledVector(viewDir, 30);
     camera.up.set(0, 1, 0);
     camera.lookAt(target);
     camera.updateMatrixWorld();
 
-    // the scene's extent in view space, from the points that bound it
-    const points = [
-      [tailX - 0.6, 0, -0.5],
-      [tailX - 0.6, DROP, 0],
-      [FRONT_X + 0.6, 0, 0.6],
-      ...POD_POS.flatMap(([x, z]) => [
-        [x - 0.6, POD_Y + 0.4, z - 0.6],
-        [x + 0.6, POD_Y - 0.3, z + 0.6],
-      ]),
-    ].map(([x, y, z]) => new THREE.Vector3(x, y, z).applyMatrix4(camera.matrixWorldInverse));
-    const minX = Math.min(...points.map((p) => p.x));
-    const maxX = Math.max(...points.map((p) => p.x));
-    const minY = Math.min(...points.map((p) => p.y));
-    const maxY = Math.max(...points.map((p) => p.y));
+    const bounds = [
+      v3(SERVICE_X - 0.6, 0, -2.2),
+      v3(SERVICE_X - 0.6, 0, 2.2),
+      v3(POD_X + 0.7, 0, -2.2),
+      v3(POD_X + 0.7, 0, 2.2),
+      v3(0.2, 2.9, -1.1),
+      v3(POD_X, 2.0, Z[0]),
+    ].map((p) => p.applyMatrix4(camera.matrixWorldInverse));
+    const minX = Math.min(...bounds.map((p) => p.x));
+    const maxX = Math.max(...bounds.map((p) => p.x));
+    const minY = Math.min(...bounds.map((p) => p.y));
+    const maxY = Math.max(...bounds.map((p) => p.y));
     const rw = region.x1 - region.x0;
     const rh = region.y1 - region.y0;
-    const height = Math.max((maxY - minY) / rh, (maxX - minX) / (rw * aspect)) * 1.04;
+    const height = Math.max((maxY - minY) / rh, (maxX - minX) / (rw * aspect)) * 1.02;
     const width = height * aspect;
 
-    camera.left = -width / 2;
-    camera.right = width / 2;
-    camera.top = height / 2;
-    camera.bottom = -height / 2;
+    Object.assign(camera, { left: -width / 2, right: width / 2, top: height / 2, bottom: -height / 2 });
 
-    // slide the camera so the scene sits in its region of the canvas
-    const cx = (minX + maxX) / 2;
-    const cy = (minY + maxY) / 2;
-    const fx = (region.x0 + region.x1) / 2;
-    const fy = (region.y0 + region.y1) / 2;
-    const shiftX = cx - (fx - 0.5) * width;
-    const shiftY = cy + (fy - 0.5) * height;
-    const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
-    const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
+    const right = v3(0, 0, 0).setFromMatrixColumn(camera.matrixWorld, 0);
+    const up = v3(0, 0, 0).setFromMatrixColumn(camera.matrixWorld, 1);
+    const shiftX = (minX + maxX) / 2 - ((region.x0 + region.x1) / 2 - 0.5) * width;
+    const shiftY = (minY + maxY) / 2 + ((region.y0 + region.y1) / 2 - 0.5) * height;
 
     camera.position.addScaledVector(right, shiftX).addScaledVector(up, shiftY);
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld();
   };
 
-  /* ---- per-frame update --------------------------------------------------- */
+  /* ---- per frame ------------------------------------------------------------ */
 
-  const ui = { hoverPod: null, hoverTile: null };
-  const tmp = new THREE.Color();
+  const ui = { hoverPod: null, hoverMessage: null };
 
-  const tileMesh = (tile) => {
-    let mesh = tiles.get(tile.id);
+  const colorOf = (message) => {
+    if (message.state === 'ack') return palette.ack;
+    if (message.state === 'retry' || message.attempt > 0) return palette.redeliver;
 
-    if (!mesh) {
-      mesh = new THREE.Mesh(tileGeometry, new THREE.MeshStandardMaterial({ roughness: 0.45, transparent: true }));
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      mesh.userData.tile = tile;
-      mesh.userData.x = null;
-      tiles.set(tile.id, mesh);
-      scene.add(mesh);
-    }
-
-    return mesh;
-  };
-
-  const tileColor = (tile) => {
-    if (tile.state === 'acked') return palette.ack;
-    if (tile.state === 'delivered') return palette.deliver;
-    if (tile.retrying) return palette.redeliver;
-
-    return tmp.copy(palette.bg3).lerp(palette.deliver, 0.32);
+    return palette.deliver;
   };
 
   const update = (dt) => {
     const now = sim.time;
-    const live = liveTiles(sim);
-    const smooth = 1 - Math.exp(-dt / 140);
+    const smooth = 1 - Math.exp(-dt / 110);
+    const additive = palette.dark ? THREE.AdditiveBlending : THREE.NormalBlending;
 
-    // tiles: slide toward their slot, drop in when new, sink when acked
-    for (const tile of sim.tiles) {
-      const mesh = tileMesh(tile);
-      const slot = live.indexOf(tile);
-      const targetX = slot >= 0 ? FRONT_X - slot * SPACING : mesh.userData.x;
+    for (const message of sim.messages) {
+      const visual = visualFor(message);
+      const queueIndex = sim.queue.indexOf(message);
+      const waitIndex = sim.waiting.indexOf(message);
+      const target = positionOf(sim, message, queueIndex, waitIndex);
+      const first = !visual.placed;
 
-      if (mesh.userData.x === null) mesh.userData.x = targetX;
-      mesh.userData.x += (targetX - mesh.userData.x) * smooth;
-
-      let y = TILE.y;
-      let opacity = 1;
-      let emissive = 0;
-      const age = now - tile.bornAt;
-
-      if (age < FALL_MS) y += DROP * (1 - easeOut(age / FALL_MS));
-
-      if (tile.state === 'delivered') {
-        y += 0.1;
-        emissive = 0.45;
-      } else if (tile.state === 'acked') {
-        const t = Math.min(1, (now - tile.ackAt) / ACK_MS);
-
-        y -= 0.22 * t;
-        opacity = 1 - t;
-        emissive = 0.5 * (1 - t);
-      } else if (tile.retrying && now < tile.readyAt) {
-        emissive = 0.25 + 0.2 * Math.sin(now / 160);
-      } else if (tile.retrying) {
-        emissive = 0.15;
+      // the queue and the waiting line glide; paths are followed exactly
+      if (message.state === 'queued' || waitIndex >= 0) {
+        if (first) visual.core.position.copy(target);
+        else visual.core.position.lerp(target, smooth);
+      } else {
+        visual.core.position.copy(target);
       }
 
-      const color = tileColor(tile);
+      visual.placed = true;
 
-      mesh.material.color.lerp(color, Math.min(1, smooth * 2));
-      mesh.material.emissive.copy(color).multiplyScalar(emissive);
-      mesh.material.opacity = opacity;
-      mesh.position.set(mesh.userData.x, y, 0);
-      mesh.scale.setScalar(ui.hoverTile === tile ? 1.12 : 1);
-    }
+      const color = colorOf(message);
+      const fade = message.state === 'ack' ? 1 - clamp01((now - message.since) / ACK_MS) : 1;
 
-    for (const [id, mesh] of tiles) {
-      if (!sim.tiles.some((tile) => tile.id === id)) {
-        scene.remove(mesh);
-        mesh.material.dispose();
-        tiles.delete(id);
+      visual.color.lerp(color, first ? 1 : Math.min(1, smooth * 2));
+      visual.core.material.color.copy(visual.color);
+      visual.core.material.opacity = fade;
+      visual.halo.position.copy(visual.core.position);
+      visual.halo.material.color.copy(visual.color);
+      visual.halo.material.blending = additive;
+      visual.halo.material.opacity = (palette.dark ? 0.9 : 0.45) * fade;
+      visual.halo.scale.setScalar(ui.hoverMessage === message ? 0.85 : 0.55);
+
+      // trail: recent positions, fading towards the tail
+      visual.history.unshift(visual.core.position.clone());
+      if (visual.history.length > TRAIL) visual.history.length = TRAIL;
+
+      const positions = visual.trail.geometry.attributes.position;
+      const colors = visual.trail.geometry.attributes.color;
+      const moving = message.state !== 'queued' && message.state !== 'work' && waitIndex < 0;
+
+      for (let i = 0; i < TRAIL; i += 1) {
+        const p = visual.history[Math.min(i, visual.history.length - 1)];
+
+        positions.setXYZ(i, p.x, p.y, p.z);
+        colors.setXYZW(i, visual.color.r, visual.color.g, visual.color.b, moving ? (1 - i / TRAIL) * 0.7 * fade : 0);
       }
+
+      positions.needsUpdate = true;
+      colors.needsUpdate = true;
+      visual.trail.material.blending = additive;
+      message.screen = toScreen(visual.core.position);
     }
 
-    // pods: float, dim and sink when down, reach the tile they handle
+    for (const id of [...visuals.keys()]) {
+      if (!sim.messages.some((message) => message.id === id)) dropVisual(id);
+    }
+
+    // the stream glows brighter as it fills
+    const fill = sim.queue.length / CAPACITY;
+
+    tubeGlow.material.opacity = (palette.dark ? 0.12 : 0.06) + fill * (palette.dark ? 0.3 : 0.14);
+    tubeGlow.material.blending = additive;
+
     sim.pods.forEach((state, index) => {
       const pod = pods[index];
       const down = isDown(sim, state);
       const hovered = ui.hoverPod === index;
       const flashAge = now - state.flashAt;
       const flash = flashAge < 650 ? (state.flash === 'ack' ? palette.ack : palette.redeliver) : null;
-      const lift = down ? -0.5 : hovered ? 0.08 : 0;
 
-      pod.lift += (lift - pod.lift) * smooth;
-      pod.group.position.set(pod.base.x, pod.base.y + pod.lift + Math.sin(now / 900 + index) * 0.02, pod.base.z);
-
+      pod.lift += ((down ? -0.22 : hovered ? 0.06 : 0) - pod.lift) * smooth;
+      pod.group.position.y = POD.h / 2 + pod.lift;
       pod.material.color.copy(palette.bg3);
-      pod.material.opacity = down ? 0.45 : 1;
-      pod.material.emissive.copy(flash ?? palette.deliver).multiplyScalar(flash ? 0.35 * (1 - flashAge / 650) : hovered ? 0.12 : 0);
-      pod.logo.material.opacity = down ? 0.2 : 0.95;
+      pod.material.opacity = down ? 0.4 : 1;
+      pod.material.emissive.copy(flash ?? palette.deliver).multiplyScalar(flash ? 0.3 * (1 - flashAge / 650) : hovered ? 0.12 : 0);
+      pod.logo.material.opacity = down ? 0.15 : 0.95;
 
       let led = palette.ack;
 
       if (down) led = palette.dlq;
       else if (flash) led = flash;
-      else if (state.tile) led = palette.deliver;
+      else if (state.message) led = palette.deliver;
       pod.ledMaterial.color.copy(led);
 
-      // the beam from the pod to the tile it is handling
-      const tile = state.tile;
-      const mesh = tile && tiles.get(tile.id);
+      // progress ring while handling
+      const work = state.message?.state === 'work' ? clamp01((now - state.message.since) / (state.message.until - state.message.since)) : 0;
 
-      if (mesh && !down) {
-        const from = pod.group.position.clone().add(new THREE.Vector3(0, -POD.h / 2, 0));
-        const to = mesh.position.clone().add(new THREE.Vector3(0, TILE.h / 2, 0));
-        const grow = Math.min(1, (now - tile.since) / 160);
-        const end = from.clone().lerp(to, grow);
-        const length = from.distanceTo(end);
+      pod.progress.geometry.setDrawRange(0, Math.max(0, Math.round(work * 65)));
 
-        pod.beam.position.copy(from).lerp(end, 0.5);
-        pod.beam.scale.set(1, Math.max(0.001, length), 1);
-        pod.beam.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), end.clone().sub(from).normalize());
-        pod.beam.material.color.copy(palette.deliver);
-        pod.beam.material.opacity = 0.75;
+      // a ring spreads over the floor when a pod acks or goes down
+      const burstAge = down ? now - state.downAt : state.flash === 'ack' ? flashAge : Infinity;
+      const burstT = burstAge / 900;
+
+      if (burstT >= 0 && burstT < 1) {
+        pod.burst.scale.setScalar(1 + burstT * 0.8);
+        pod.burst.material.color.copy(state.flash === 'ack' && !down ? palette.ack : palette.dlq);
+        pod.burst.material.opacity = 0.5 * (1 - burstT);
       } else {
-        pod.beam.material.opacity = Math.max(0, pod.beam.material.opacity - dt / 200);
+        pod.burst.material.opacity = 0;
       }
 
-      // labels
-      const above = toScreen(pod.group.position.clone().add(new THREE.Vector3(0, 0.55, 0)));
-
       podLabels[index].textContent = state.manual ? 'down' : 'restarting';
-      place(podLabels[index], above, down);
+      place(podLabels[index], toScreen(v3(POD_X, POD.h + 0.55, Z[index])), down);
     });
 
-    // hint ripple around the middle pod
-    if (!clicked) {
-      const phase = (now / 1800) % 1;
-      const middle = pods[1].group.position;
+    for (const stepLabel of steps) place(stepLabel.el, toScreen(stepLabel.at));
+    steps[1].el.textContent = sim.queue.length ? `stream · ${sim.queue.length} stored` : 'stream';
 
-      ripple.visible = true;
-      ripple.position.set(middle.x, middle.y - POD.h / 2, middle.z);
-      ripple.scale.setScalar(1 + phase * 0.6);
-      ripple.material.opacity = 0.55 * (1 - phase);
-      place(hintLabel, toScreen(pods[0].group.position.clone().add(new THREE.Vector3(0.9, -1.1, 0.9))), true);
+    if (!clicked) {
+      place(hintLabel, toScreen(v3(POD_X + 1.2, 0, Z[2] + 1.0)), true);
+      const ring = pods[1].burst;
+
+      if (ring.material.opacity === 0) {
+        const phase = (now / 1700) % 1;
+
+        ring.scale.setScalar(1 + phase * 0.6);
+        ring.material.color.copy(palette.deliver);
+        ring.material.opacity = 0.45 * (1 - phase);
+      }
     } else {
-      ripple.visible = false;
       hintLabel.hidden = true;
     }
 
@@ -458,51 +606,48 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
       const done = Math.min(PODS, Math.floor((now - sim.deploy.start) / RESTART_MS) + 1);
 
       deployLabel.textContent = `rolling deploy ${done}/${PODS}`;
-      place(deployLabel, toScreen(pods[1].group.position.clone().add(new THREE.Vector3(-0.6, 1.0, -0.6))), true);
+      place(deployLabel, toScreen(v3(POD_X + 0.9, 1.2, Z[0] - 1.0)), true);
     } else {
       deployLabel.hidden = true;
     }
 
     // tooltip
-    if (ui.hoverTile && sim.tiles.includes(ui.hoverTile)) {
-      const tile = ui.hoverTile;
-      const mesh = tiles.get(tile.id);
-      let status = 'stored';
+    const hovered = ui.hoverMessage;
 
-      if (tile.state === 'delivered') status = 'delivered · awaiting ack';
-      else if (tile.state === 'acked') status = 'acked · removed from the stream';
-      else if (tile.retrying) status = sim.time < tile.readyAt ? 'nak · redelivery after backoff' : 'stored · ready to redeliver';
+    if (hovered && sim.messages.includes(hovered)) {
+      const status = {
+        in: 'published',
+        queued: 'stored in the stream',
+        out: 'delivered to a pod',
+        work: 'handling · awaiting ack',
+        retry: 'nak · back after backoff',
+        ack: 'acked · removed from the stream',
+      }[hovered.state];
 
-      tip.innerHTML = '';
+      tip.replaceChildren(
+        ...[
+          [hovered.subject, ''],
+          [`seq ${hovered.seq} · attempt ${hovered.attempt + 1}`, 'scene-tip-muted'],
+          [status, hovered.state === 'ack' ? 'scene-tip-ack' : hovered.state === 'retry' || hovered.attempt > 0 ? 'scene-tip-redeliver' : 'scene-tip-deliver'],
+        ].map(([text, cls]) => {
+          const line = document.createElement('span');
 
-      for (const [text, cls] of [
-        [tile.subject, ''],
-        [`seq ${tile.seq} · attempt ${tile.attempt + 1}`, 'scene-tip-muted'],
-        [status, `scene-tip-${tile.state === 'acked' ? 'ack' : tile.state === 'delivered' ? 'deliver' : tile.retrying ? 'redeliver' : 'muted'}`],
-      ]) {
-        const line = document.createElement('span');
+          line.textContent = text;
+          if (cls) line.className = cls;
 
-        line.textContent = text;
-        if (cls) line.className = cls;
-        tip.appendChild(line);
-      }
-
-      const at = toScreen(mesh.position.clone().add(new THREE.Vector3(0, 0.3, 0)));
-
-      tip.hidden = false;
-      tip.style.transform = `translate(${Math.round(at.x + 14)}px, ${Math.round(at.y - 14)}px) translate(0, -100%)`;
+          return line;
+        }),
+      );
+      place(tip, { x: hovered.screen.x + 14, y: hovered.screen.y - 12 }, true, 'translate(0, -100%)');
     } else if (ui.hoverPod !== null) {
-      const at = toScreen(pods[ui.hoverPod].group.position);
-
       tip.textContent = isDown(sim, sim.pods[ui.hoverPod]) ? 'click to start this pod' : 'click to take this pod down';
-      tip.hidden = false;
-      tip.style.transform = `translate(${Math.round(at.x + 30)}px, ${Math.round(at.y - 20)}px) translate(0, -100%)`;
+      place(tip, toScreen(v3(POD_X + 0.5, POD.h, Z[ui.hoverPod])), true, 'translate(8px, -100%)');
     } else {
       tip.hidden = true;
     }
   };
 
-  /* ---- pointer ------------------------------------------------------------ */
+  /* ---- pointer -------------------------------------------------------------- */
 
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
@@ -510,17 +655,30 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
 
   const hitTest = () => {
     ui.hoverPod = null;
-    ui.hoverTile = null;
+    ui.hoverMessage = null;
 
     if (pointer) {
-      ndc.set((pointer.x / view.cw) * 2 - 1, -(pointer.y / view.ch) * 2 + 1);
-      raycaster.setFromCamera(ndc, camera);
+      let best = 11;
 
-      const hits = raycaster.intersectObjects([...pods.map((pod) => pod.body), ...tiles.values()], false);
-      const hit = hits[0]?.object;
+      for (const message of sim.messages) {
+        if (!message.screen) continue;
 
-      if (hit?.userData.tile) ui.hoverTile = hit.userData.tile;
-      else if (hit && hit.userData.pod !== undefined) ui.hoverPod = hit.userData.pod;
+        const d = Math.hypot(message.screen.x - pointer.x, message.screen.y - pointer.y);
+
+        if (d < best) {
+          best = d;
+          ui.hoverMessage = message;
+        }
+      }
+
+      if (!ui.hoverMessage) {
+        ndc.set((pointer.x / view.cw) * 2 - 1, -(pointer.y / view.ch) * 2 + 1);
+        raycaster.setFromCamera(ndc, camera);
+
+        const hit = raycaster.intersectObjects(pods.map((pod) => pod.body), false)[0];
+
+        if (hit) ui.hoverPod = hit.object.userData.pod;
+      }
     }
 
     renderer.domElement.style.cursor = ui.hoverPod === null ? 'default' : 'pointer';
@@ -548,7 +706,7 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
     }
   };
 
-  /* ---- loop --------------------------------------------------------------- */
+  /* ---- loop ------------------------------------------------------------------ */
 
   let raf = 0;
   let last = 0;
@@ -583,6 +741,8 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
   };
 
   frame();
+  render(16);
+  onStats({ ...sim.stats });
 
   const sizeObserver = new ResizeObserver(() => {
     frame();
@@ -596,7 +756,7 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
   const themeObserver = new MutationObserver(() => {
     palette = readPalette();
     applyPalette();
-    if (reduce) render(16);
+    render(16);
   });
   const onVisibility = () => {
     if (!document.hidden && visible && !reduce) start();
@@ -606,10 +766,6 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
   if (reduce) {
-    for (let t = 0; t < 9000; t += 16) step(sim, 16);
-    for (let i = 0; i < 30; i += 1) update(50);
-    renderer.render(scene, camera);
-    onStats({ ...sim.stats });
     logoTexture.onUpdate = () => render(16);
   } else {
     viewObserver.observe(container);
@@ -635,8 +791,10 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
       if (object.material) object.material.dispose();
     });
     logoTexture.dispose();
+    glow.dispose();
     renderer.dispose();
     renderer.domElement.remove();
     overlay.replaceChildren();
   };
 };
+
