@@ -116,7 +116,12 @@ export const deleteStreamIfExists = async (jsm: JetStreamManager, name: string):
 export const cleanupStreams = async (nc: NatsConnection, serviceName: string): Promise<void> => {
   const jsm = await jetstreamManager(nc);
 
-  for (const kind of [StreamKind.Event, StreamKind.Command, StreamKind.Ordered] as const) {
+  for (const kind of [
+    StreamKind.Event,
+    StreamKind.Command,
+    StreamKind.Ordered,
+    StreamKind.Schedule,
+  ] as const) {
     await deleteStreamIfExists(jsm, streamName(serviceName, kind));
   }
 

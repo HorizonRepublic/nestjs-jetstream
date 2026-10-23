@@ -292,6 +292,7 @@ describe(PatternRegistry, () => {
           events: [],
           broadcasts: [],
           ordered: [],
+          schedules: [],
         });
       });
     });

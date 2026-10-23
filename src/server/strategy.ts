@@ -8,6 +8,7 @@ import type { ConnectionBinding } from '../connection/connection.types';
 import { StreamKind } from '../interfaces';
 import type { JetstreamModuleOptions } from '../interfaces';
 import { isCoreRpcMode, isJetStreamRpcMode } from '../jetstream.constants';
+import type { ScheduleReconciler } from '../schedule/schedule-reconciler';
 import { CoreRpcServer } from './core-rpc.server';
 import {
   ConsumerProvider,
@@ -49,6 +50,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     private readonly ackWaitMap: Map<StreamKind, number> = new Map(),
     private readonly metadataProvider?: MetadataProvider | undefined,
     private readonly binding?: ConnectionBinding | undefined,
+    private readonly scheduleReconciler?: ScheduleReconciler | undefined,
   ) {
     super();
   }
@@ -273,6 +275,8 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
           this.eventRouter.updateMaxDeliverMap(this.buildMaxDeliverMap(consumers));
         }
 
+        await this.reconcileSchedules();
+
         // close() can land while provisioning is awaiting. Starting routers and
         // consumers now would leave live consumers behind a torn-down pipeline,
         // with no further close() coming to clean them up.
@@ -311,6 +315,23 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     callback();
   }
 
+  /** Write the declared schedules before ticks start flowing; a failure fails the boot. */
+  private async reconcileSchedules(): Promise<void> {
+    if (!this.scheduleReconciler || !this.patternRegistry.hasScheduleHandlers()) return;
+
+    const report = await this.scheduleReconciler.reconcile(
+      this.patternRegistry.getDeclaredSchedules(),
+    );
+    const total = report.created.length + report.updated.length + report.unchanged.length;
+
+    if (total > 0) {
+      this.logger.log(
+        `Schedules: ${report.created.length} created, ${report.updated.length} updated, ` +
+          `${report.unchanged.length} unchanged`,
+      );
+    }
+  }
+
   /** Determine which streams and durable consumers are needed. */
   private resolveRequiredKinds(): { streams: StreamKind[]; durableConsumers: StreamKind[] } {
     const streams: StreamKind[] = [];
@@ -336,6 +357,11 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
       streams.push(StreamKind.Ordered);
     }
 
+    if (this.patternRegistry.hasScheduleHandlers()) {
+      streams.push(StreamKind.Schedule);
+      durableConsumers.push(StreamKind.Schedule);
+    }
+
     return { streams, durableConsumers };
   }
 
@@ -344,7 +370,8 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     if (
       this.patternRegistry.hasEventHandlers() ||
       this.patternRegistry.hasBroadcastHandlers() ||
-      this.patternRegistry.hasOrderedHandlers()
+      this.patternRegistry.hasOrderedHandlers() ||
+      this.patternRegistry.hasScheduleHandlers()
     ) {
       this.eventRouter.start();
     }

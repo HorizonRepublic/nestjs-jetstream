@@ -14,6 +14,7 @@ import type {
   DeadLetterConfig,
   EventProcessingConfig,
   JetstreamModuleOptions,
+  KindProcessingConfig,
 } from '../../interfaces';
 import {
   ConsumeKind,
@@ -22,6 +23,7 @@ import {
   type ResolvedOtelOptions,
   type ServerEndpoint,
 } from '../../otel';
+import type { ScheduleStore } from '../../schedule/schedule-store';
 import {
   resolveAckExtensionInterval,
   resolveRetryDelays,
@@ -33,7 +35,22 @@ import { ConcurrencyGate } from './concurrency-gate';
 import { DeadLetterCapture } from './dead-letter-capture';
 import { createOrderedPipeline, createWorkqueuePipeline } from './event-pipeline';
 import { PatternRegistry } from './pattern-registry';
-import type { EventConsumeKind, ParkTimerFn, RoutePipelineContext } from './routing.types';
+import { OrphanOutcome } from './routing.types';
+import type {
+  EventConsumeKind,
+  OrphanTickPolicy,
+  ParkTimerFn,
+  RoutePipelineContext,
+} from './routing.types';
+
+/** Delay before an unhandled tick is offered to another replica. */
+const ORPHAN_REDELIVER_DELAY_MS = 5_000;
+
+/** Server and replica clocks may disagree; a holder this close to startup is treated as newer. */
+const CLOCK_SKEW_ALLOWANCE_MS = 10_000;
+
+/** Deliveries before an orphan is cancelled when the consumer sets no limit. */
+const ORPHAN_FALLBACK_DELIVERIES = 3;
 
 const eventConsumeKindFor = (kind: StreamKind): EventConsumeKind => {
   if (kind === StreamKind.Broadcast) return ConsumeKind.Broadcast;
@@ -57,6 +74,8 @@ export class EventRouter {
   private readonly serviceName: string;
   private readonly serverEndpoint: ServerEndpoint | null;
   private readonly capture: DeadLetterCapture | null;
+  private maxDeliverByStream = new Map<string, number>();
+  private readonly startedAt = Date.now();
 
   public constructor(
     private readonly messageProvider: MessageProvider,
@@ -68,7 +87,8 @@ export class EventRouter {
     private readonly ackWaitMap?: Map<StreamKind, number> | undefined,
     connection?: ConnectionProvider,
     options?: JetstreamModuleOptions,
-    names?: NameResolver,
+    private readonly names?: NameResolver | undefined,
+    private readonly scheduleStore?: ScheduleStore | undefined,
   ) {
     if (options) {
       const derived = deriveOtelAttrs(options);
@@ -104,6 +124,7 @@ export class EventRouter {
    * Called after consumers are ensured so the DLQ map reflects reality.
    */
   public updateMaxDeliverMap(consumerMaxDelivers: Map<string, number>): void {
+    this.maxDeliverByStream = consumerMaxDelivers;
     if (!this.deadLetterConfig) return;
     this.deadLetterConfig.maxDeliverByStream = consumerMaxDelivers;
   }
@@ -115,6 +136,10 @@ export class EventRouter {
 
     if (this.patternRegistry.hasOrderedHandlers()) {
       this.subscribeToStream(this.messageProvider.ordered$, StreamKind.Ordered);
+    }
+
+    if (this.patternRegistry.hasScheduleHandlers()) {
+      this.subscribeToStream(this.messageProvider.schedules$, StreamKind.Schedule);
     }
   }
 
@@ -147,6 +172,7 @@ export class EventRouter {
       ackExtensionInterval,
       retryDelays: resolveRetryDelays(this.getRetryConfig(kind)),
       capture: this.capture,
+      orphans: kind === StreamKind.Schedule ? this.orphanPolicy() : null,
     };
 
     const route = isOrdered ? createOrderedPipeline(rctx) : createWorkqueuePipeline(rctx);
@@ -174,24 +200,58 @@ export class EventRouter {
     this.subscriptions.push(subscription);
   }
 
-  private getRetryConfig(kind: StreamKind): RetryConfig | undefined {
-    if (kind === StreamKind.Event) return this.processingConfig?.events?.retry;
-    if (kind === StreamKind.Broadcast) return this.processingConfig?.broadcast?.retry;
+  private orphanPolicy(): OrphanTickPolicy | null {
+    const { scheduleStore, names } = this;
 
+    if (!scheduleStore || !names) return null;
+
+    const stream = names.streamName(StreamKind.Schedule);
+
+    return {
+      // An unlimited consumer would hand an orphan around forever; bound it like the default.
+      maxDeliver: () => {
+        const configured = this.maxDeliverByStream.get(stream) ?? 0;
+
+        return configured > 0 ? configured : ORPHAN_FALLBACK_DELIVERIES;
+      },
+      redeliverDelayMs: ORPHAN_REDELIVER_DELAY_MS,
+      cancelIfOrphaned: async (holderSubject) => {
+        const writtenAt = await scheduleStore.writtenAt(holderSubject);
+
+        if (writtenAt === null) return OrphanOutcome.Gone;
+
+        // A replica is never the authority on a schedule written after it started:
+        // during a rollout that is a newer replica's schedule, not an orphan.
+        if (writtenAt.getTime() > this.startedAt - CLOCK_SKEW_ALLOWANCE_MS) {
+          return OrphanOutcome.Newer;
+        }
+
+        await scheduleStore.cancel(holderSubject);
+
+        return OrphanOutcome.Cancelled;
+      },
+    };
+  }
+
+  private getRetryConfig(kind: StreamKind): RetryConfig | undefined {
     // Ordered consumers never redeliver, so a curve would have nothing to pace.
-    return false;
+    if (kind === StreamKind.Ordered) return false;
+
+    return this.kindConfig(kind)?.retry;
   }
 
   private getConcurrency(kind: StreamKind): number | undefined {
-    if (kind === StreamKind.Event) return this.processingConfig?.events?.concurrency;
-    if (kind === StreamKind.Broadcast) return this.processingConfig?.broadcast?.concurrency;
-
-    return undefined;
+    return this.kindConfig(kind)?.concurrency;
   }
 
   private getAckExtensionConfig(kind: StreamKind): AckExtensionConfig | undefined {
-    if (kind === StreamKind.Event) return this.processingConfig?.events?.ackExtension;
-    if (kind === StreamKind.Broadcast) return this.processingConfig?.broadcast?.ackExtension;
+    return this.kindConfig(kind)?.ackExtension;
+  }
+
+  private kindConfig(kind: StreamKind): KindProcessingConfig | undefined {
+    if (kind === StreamKind.Event) return this.processingConfig?.events;
+    if (kind === StreamKind.Broadcast) return this.processingConfig?.broadcast;
+    if (kind === StreamKind.Schedule) return this.processingConfig?.schedule;
 
     return undefined;
   }

@@ -73,6 +73,62 @@ describe(ConnectionProvider, () => {
 
   afterEach(vi.resetAllMocks);
 
+  describe('getCapabilities()', () => {
+    const jsmWithLevel = (level: number): Mocked<JetStreamManager> =>
+      createMock<JetStreamManager>({
+        getAccountInfo: vi.fn().mockResolvedValue({ api: { level } }),
+      });
+
+    it('should probe the API level once and reuse it', async () => {
+      // Given
+      const jsm = jsmWithLevel(5);
+
+      mockJetstreamManager.mockResolvedValue(jsm);
+
+      // When
+      const first = await sut.getCapabilities();
+      const second = await sut.getCapabilities();
+
+      // Then
+      expect(first.apiLevel).toBe(5);
+      expect(second).toBe(first);
+      expect(jsm.getAccountInfo).toHaveBeenCalledTimes(1);
+    });
+
+    it('should probe again after a reconnect, which may land on another server', async () => {
+      // Given a connection whose status stream reconnects on demand
+      let emitReconnect!: () => void;
+      const reconnectGate = new Promise<void>((resolve) => {
+        emitReconnect = resolve;
+      });
+
+      mockConnect.mockResolvedValue(
+        createNc({
+          status: vi.fn().mockReturnValue(
+            (async function* (): AsyncGenerator<Status> {
+              await reconnectGate;
+              yield { type: 'reconnect', server: '' } as Status;
+            })(),
+          ),
+        }),
+      );
+      mockJetstreamManager
+        .mockResolvedValueOnce(jsmWithLevel(3))
+        .mockResolvedValueOnce(jsmWithLevel(5));
+      sut = new ConnectionProvider(options, eventBus);
+
+      const before = await sut.getCapabilities();
+
+      // When
+      emitReconnect();
+      await new Promise((resolve) => setImmediate(resolve));
+
+      // Then
+      expect(before.apiLevel).toBe(3);
+      expect((await sut.getCapabilities()).apiLevel).toBe(5);
+    });
+  });
+
   describe('getConnection()', () => {
     describe('happy path', () => {
       it('should establish and return connection', async () => {

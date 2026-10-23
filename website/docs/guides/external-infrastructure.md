@@ -191,13 +191,16 @@ When a custom `subjectPrefix` is set:
 
 Binding validates that the external entity can carry this service's traffic. The **stream's subjects** must include every subject this service publishes or handles, and the **consumer's filter** must include every subject it handles. What that means per kind:
 
-| Kind      | Stream subjects must cover                                                                          | Consumer filter                                       |
-| --------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| Event     | Every registered handler subject: a wildcard like `ext.orders.>` or the individual subjects         | `filter_subject` or `filter_subjects`, covering each  |
-| Command   | Same as event; only when `rpc: { mode: 'jetstream' }`                                               | Same as event                                         |
-| Broadcast | Every broadcast subject this service registers, `broadcast.{pattern}` unless a custom prefix is set | `filter_subject` or `filter_subjects`                 |
-| Ordered   | `{service}__microservice.ordered.{pattern}` unless a custom prefix is set                           | Nothing to configure: ordered consumers are ephemeral |
-| DLQ       | The DLQ stream's own name, since dead letters publish to a subject equal to it                      | Nothing: the transport creates no DLQ consumer        |
+| Kind      | Stream subjects must cover                                                                                                          | Consumer filter                                       |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Event     | Every registered handler subject: a wildcard like `ext.orders.>` or the individual subjects                                         | `filter_subject` or `filter_subjects`, covering each  |
+| Command   | Same as event; only when `rpc: { mode: 'jetstream' }`                                                                               | Same as event                                         |
+| Broadcast | Every broadcast subject this service registers, `broadcast.{pattern}` unless a custom prefix is set                                 | `filter_subject` or `filter_subjects`                 |
+| Ordered   | `{service}__microservice.ordered.{pattern}` unless a custom prefix is set                                                           | Nothing to configure: ordered consumers are ephemeral |
+| Schedule  | Tick subjects `{service}__microservice.sched.>` and holders `{service}__microservice._cron.>`, or `{prefix}>` under a custom prefix | The tick subjects only, never `_cron.>`               |
+| DLQ       | The DLQ stream's own name, since dead letters publish to a subject equal to it                                                      | Nothing: the transport creates no DLQ consumer        |
+
+The schedule stream also needs `allow_msg_schedules: true` and `allow_msg_ttl: true`, and `max_age: 0`: a holder that ages out stops its schedule without an error. The binder warns about each.
 
 Event and command streams should also carry `retention: workqueue`. Anything else boots with a warning. And with `allow_msg_schedules: true` in the app config, the stream's subjects must cover `{prefix}_sch.>` as well, or scheduled publishes have nowhere to land.
 

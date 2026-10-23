@@ -9,6 +9,8 @@ import {
 } from '@nats-io/jetstream';
 
 import { ConnectionProvider } from '../../connection';
+import { NatsCapability } from '../../connection/server-capabilities.types';
+import type { CapabilityUsage } from '../../connection/server-capabilities.types';
 import { ManagementMode, StreamKind } from '../../interfaces';
 import type { JetstreamModuleOptions } from '../../interfaces';
 import {
@@ -16,6 +18,7 @@ import {
   DEFAULT_COMMAND_STREAM_CONFIG,
   DEFAULT_EVENT_STREAM_CONFIG,
   DEFAULT_ORDERED_STREAM_CONFIG,
+  DEFAULT_SCHEDULE_STREAM_CONFIG,
   DEFAULT_DLQ_STREAM_CONFIG,
   STREAM_OWNER_METADATA_KEY,
 } from '../../jetstream.constants';
@@ -125,6 +128,8 @@ export class StreamProvider {
 
     this.logger.log(`\n${formatProvisioningSummary(this.options.name, reservations, external)}`);
 
+    await this.assertServerSupports(kinds);
+
     if (this.options.provisioning?.preflightStorageCheck && reservations.length > 0) {
       await assertStorageBudget(jsm, this.options.name, reservations, this.logger);
     }
@@ -143,6 +148,40 @@ export class StreamProvider {
     }
   }
 
+  /**
+   * Refuse stream features the server would silently drop: NATS before 2.11
+   * accepts `allow_msg_ttl` and ignores it, and before 2.12 does the same with
+   * `allow_msg_schedules`, so the stream would look fine and never expire or fire.
+   */
+  private async assertServerSupports(kinds: StreamKind[]): Promise<void> {
+    const gated: CapabilityUsage[] = [];
+
+    for (const kind of kinds) {
+      const config = { ...this.getDefaults(kind), ...this.getOverrides(kind) };
+      const stream = this.getStreamName(kind);
+
+      if (config.allow_msg_ttl === true) {
+        gated.push({
+          capability: NatsCapability.MessageTtl,
+          usage: `Stream ${stream} (allow_msg_ttl)`,
+        });
+      }
+
+      if (config.allow_msg_schedules === true) {
+        gated.push({
+          capability: NatsCapability.MessageSchedules,
+          usage: `Stream ${stream} (allow_msg_schedules)`,
+        });
+      }
+    }
+
+    if (gated.length === 0) return;
+
+    const capabilities = await this.connection.getCapabilities();
+
+    for (const { capability, usage } of gated) capabilities.assert(capability, usage);
+  }
+
   /** Get the stream name for a given kind. */
   public getStreamName(kind: StreamKind): string {
     return this.names.streamName(kind);
@@ -151,10 +190,10 @@ export class StreamProvider {
   /** Get the subjects pattern for a given kind. */
   public getSubjects(kind: StreamKind): string[] {
     const filter = this.names.filterSubject(kind);
-    const dedicatedSchedule =
-      kind === StreamKind.Event &&
-      this.isSchedulingEnabled(kind) &&
-      !this.names.hasCustomPrefix(kind);
+    // Holders need their own subject unless the kind's wildcard already covers them.
+    const holdsSchedules =
+      kind === StreamKind.Schedule || (kind === StreamKind.Event && this.isSchedulingEnabled(kind));
+    const dedicatedSchedule = holdsSchedules && !this.names.hasCustomPrefix(kind);
 
     return dedicatedSchedule ? [filter, `${this.names.schedulePrefix(kind)}>`] : [filter];
   }
@@ -365,6 +404,15 @@ export class StreamProvider {
       return currentInfo;
     }
 
+    if (config.name === this.getStreamName(StreamKind.Schedule)) {
+      throw new Error(
+        `Stream ${config.name} is a schedule stream and cannot be migrated: NATS refuses ` +
+          'sourcing into a stream with allow_msg_schedules, which the migration relies on. ' +
+          'Revert the immutable change, or recreate the stream by hand and let the next boot ' +
+          'reconcile the declared schedules (dynamic schedules have to be created again).',
+      );
+    }
+
     if (this.isSharedStream(config.name)) {
       throw new Error(
         `Stream ${config.name} is shared across services and cannot be destructively migrated: ` +
@@ -552,6 +600,17 @@ export class StreamProvider {
     const overrides = this.getOverrides(kind);
     const ownership = this.ownershipMetadata(kind);
 
+    if (
+      kind === StreamKind.Schedule &&
+      overrides.max_age !== undefined &&
+      overrides.max_age !== 0
+    ) {
+      this.logger.warn(
+        `Stream ${name}: schedule.stream.max_age is ${overrides.max_age}ns. ` +
+          'A schedule holder that ages out stops its schedule without an error; keep max_age at 0.',
+      );
+    }
+
     const metadata = mergeOwnedMetadata(overrides.metadata, ownership);
 
     return {
@@ -652,6 +711,8 @@ export class StreamProvider {
         return DEFAULT_BROADCAST_STREAM_CONFIG;
       case StreamKind.Ordered:
         return DEFAULT_ORDERED_STREAM_CONFIG;
+      case StreamKind.Schedule:
+        return DEFAULT_SCHEDULE_STREAM_CONFIG;
     }
   }
 

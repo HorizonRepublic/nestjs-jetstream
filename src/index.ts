@@ -31,6 +31,30 @@ export type {
   TransportHooks,
 } from './interfaces';
 
+// Schedules
+export { ScheduleChange, ScheduleOrigin } from './interfaces';
+
+export type {
+  CronAlias,
+  CronExpression,
+  AtSchedule,
+  CronSchedule,
+  IntervalSchedule,
+  RecurringScheduleSpec,
+  ScheduleReconcileReport,
+  ScheduleHandlerOption,
+  ScheduleInfo,
+  ScheduleSpec,
+  ClientScheduleSpec,
+} from './interfaces';
+
+export { JetstreamScheduleError, ScheduleErrorReason } from './schedule';
+
+// Server capabilities
+export { JetstreamCapabilityError } from './connection/server-capabilities';
+
+export { NatsCapability } from './connection/server-capabilities.types';
+
 // Client
 export { JetstreamClient } from './client';
 
@@ -71,11 +95,13 @@ export {
   DEFAULT_EVENT_STREAM_CONFIG,
   DEFAULT_COMMAND_STREAM_CONFIG,
   DEFAULT_BROADCAST_STREAM_CONFIG,
+  DEFAULT_SCHEDULE_STREAM_CONFIG,
   DEFAULT_ORDERED_STREAM_CONFIG,
   DEFAULT_DLQ_STREAM_CONFIG,
   DEFAULT_EVENT_CONSUMER_CONFIG,
   DEFAULT_COMMAND_CONSUMER_CONFIG,
   DEFAULT_BROADCAST_CONSUMER_CONFIG,
+  DEFAULT_SCHEDULE_CONSUMER_CONFIG,
   // Default timeouts and metadata-registry settings
   DEFAULT_RPC_TIMEOUT,
   DEFAULT_JETSTREAM_RPC_TIMEOUT,

@@ -11,6 +11,9 @@ import type {
   RpcRouterOptions,
 } from '../interfaces';
 import { deriveOtelAttrs, withSelfHealingSpan } from '../otel';
+import { ScheduleReconciler } from '../schedule/schedule-reconciler';
+import { ScheduleStore } from '../schedule/schedule-store';
+import { ScheduleWriter } from '../schedule/schedule-writer';
 import {
   ConsumerProvider,
   CoreRpcServer,
@@ -41,6 +44,7 @@ const buildConsumeOptions = (
 
   if (options.events?.consume) map.set(StreamKind.Event, options.events.consume);
   if (options.broadcast?.consume) map.set(StreamKind.Broadcast, options.broadcast.consume);
+  if (options.schedule?.consume) map.set(StreamKind.Schedule, options.schedule.consume);
   if (options.rpc?.mode === 'jetstream' && options.rpc.consume) {
     map.set(StreamKind.Command, options.rpc.consume);
   }
@@ -58,6 +62,11 @@ const buildProcessingConfig = (options: ResolvedConnectionOptions): EventProcess
     concurrency: options.broadcast?.concurrency,
     ackExtension: options.broadcast?.ackExtension,
     retry: options.broadcast?.retry,
+  },
+  schedule: {
+    concurrency: options.schedule?.concurrency,
+    ackExtension: options.schedule?.ackExtension,
+    retry: options.schedule?.retry,
   },
 });
 
@@ -167,6 +176,12 @@ export const createConnectionScope = (
       ? { maxDeliverByStream: new Map(), onDeadLetter: options.onDeadLetter }
       : undefined;
 
+  const scheduleStore = new ScheduleStore(
+    connection,
+    names.streamName(StreamKind.Schedule),
+    names.schedulePrefix(StreamKind.Schedule),
+  );
+
   const eventRouter = new EventRouter(
     messages,
     patterns,
@@ -178,6 +193,7 @@ export const createConnectionScope = (
     connection,
     options,
     names,
+    scheduleStore,
   );
 
   const rpcRouter = new RpcRouter(
@@ -194,6 +210,14 @@ export const createConnectionScope = (
   const coreRpc = new CoreRpcServer(options, connection, patterns, codec, eventBus, names);
   const metadata = new MetadataProvider(options, connection);
 
+  const scheduleReconciler = new ScheduleReconciler(
+    new ScheduleWriter(scheduleStore, codec),
+    scheduleStore,
+    names.subjects,
+    async () => connection.getCapabilities(),
+    eventBus,
+  );
+
   const strategy = new JetstreamStrategy(
     options,
     connection,
@@ -207,6 +231,7 @@ export const createConnectionScope = (
     ackWaitMap,
     metadata,
     binding,
+    scheduleReconciler,
   );
 
   return {

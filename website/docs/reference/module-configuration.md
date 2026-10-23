@@ -230,11 +230,12 @@ JetstreamModule.forFeature({
 });
 ```
 
-| Key       | Mirrors the target's    |
-| --------- | ----------------------- |
-| `events`  | `events.subjectPrefix`  |
-| `ordered` | `ordered.subjectPrefix` |
-| `rpc`     | `rpc.subjectPrefix`     |
+| Key        | Mirrors the target's     |
+| ---------- | ------------------------ |
+| `events`   | `events.subjectPrefix`   |
+| `ordered`  | `ordered.subjectPrefix`  |
+| `rpc`      | `rpc.subjectPrefix`      |
+| `schedule` | `schedule.subjectPrefix` |
 
 Kinds you leave out keep the convention. Scheduled events follow the prefix too, so `scheduleAt()` lands in the target's `{prefix}_sch.` namespace. Broadcast has no key: it is one stream shared by every service and follows the caller's own `broadcast.subjectPrefix`.
 
@@ -257,6 +258,7 @@ Every field in `JetstreamModuleOptions`. The blocks that need more than a line h
 | `rpc`               | `RpcConfig`                                  | `{ mode: 'core' }`     | RPC transport mode. See [RpcConfig](#rpcconfig).                                                      |
 | `events`            | `StreamConsumerOverrides`                    | production defaults    | Workqueue event stream and consumer. See [StreamConsumerOverrides](#streamconsumeroverrides).         |
 | `broadcast`         | `StreamConsumerOverrides`                    | production defaults    | Broadcast event stream and consumer, same shape as `events`.                                          |
+| `schedule`          | `StreamConsumerOverrides`                    | production defaults    | [Recurring schedules](/docs/guides/recurring-schedules) stream and consumer, same shape as `events`.  |
 | `ordered`           | `OrderedEventOverrides`                      | production defaults    | Ordered event consumers. See [OrderedEventOverrides](#orderedeventoverrides).                         |
 | `dlq`               | `DlqOptions \| boolean`                      | enabled                | Republishes exhausted messages to a dedicated stream. See [dlq](#dlq).                                |
 | `onDeadLetter`      | `(info: DeadLetterInfo) => Promise<void>`    | none                   | Awaited when a message exhausts every delivery attempt.                                               |
@@ -272,7 +274,7 @@ Every field in `JetstreamModuleOptions`. The blocks that need more than a line h
 
 ### connections
 
-Each entry inherits every root field it does not name, and may override `critical`, `publisherOnly`, `codec`, `connectionOptions`, `events`, `broadcast`, `ordered`, `rpc`, `dlq`, `metadata`, `provisioning` and `shutdownTimeout`.
+Each entry inherits every root field it does not name, and may override `critical`, `publisherOnly`, `codec`, `connectionOptions`, `events`, `broadcast`, `schedule`, `ordered`, `rpc`, `dlq`, `metadata`, `provisioning` and `shutdownTimeout`.
 
 `critical` defaults to `true`. A `false` connection connects lazily in the background, retrying with exponential backoff capped at 30 s. It reports `degraded` health instead of failing readiness.
 

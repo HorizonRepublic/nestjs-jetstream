@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 
 import type { DeliveryInfo, JsMsg } from '@nats-io/jetstream';
+import { headers as natsHeaders } from '@nats-io/transport-node';
 
 import { faker } from '@faker-js/faker';
 import { createMock } from '@golevelup/ts-vitest';
@@ -19,6 +20,7 @@ import type {
   JetstreamModuleOptions,
 } from '../../../interfaces';
 import { dlqStreamName, JetstreamDlqHeader } from '../../../jetstream.constants';
+import type { ScheduleStore } from '../../../schedule/schedule-store';
 import { MessageProvider } from '../../infrastructure';
 import { NameResolver } from '../../infrastructure/name-resolver';
 import { EventRouter } from '../event.router';
@@ -34,14 +36,17 @@ describe(EventRouter, () => {
 
   let events$: Subject<JsMsg>;
   let broadcasts$: Subject<JsMsg>;
+  let schedules$: Subject<JsMsg>;
 
   beforeEach(() => {
     events$ = new Subject<JsMsg>();
     broadcasts$ = new Subject<JsMsg>();
+    schedules$ = new Subject<JsMsg>();
 
     messageProvider = createMock<MessageProvider>({
       events$: events$.asObservable(),
       broadcasts$: broadcasts$.asObservable(),
+      schedules$: schedules$.asObservable(),
     });
     patternRegistry = createMock<PatternRegistry>();
     codec = createMock<Codec>({
@@ -65,6 +70,168 @@ describe(EventRouter, () => {
           expect(events$.observed).toBe(true);
           expect(broadcasts$.observed).toBe(true);
         });
+      });
+    });
+
+    describe('when schedule handlers are registered', () => {
+      it('should route schedule ticks with the schedule retry curve', async () => {
+        // Given a router whose schedule kind retries after 7 s
+        sut = new EventRouter(messageProvider, patternRegistry, codec, eventBus, undefined, {
+          schedule: { retry: [7_000] },
+        });
+        patternRegistry.hasScheduleHandlers.mockReturnValue(true);
+        patternRegistry.getHandler.mockReturnValue(vi.fn().mockRejectedValue(new Error('boom')));
+        sut.start();
+
+        const msg = createMock<JsMsg>({
+          ack: vi.fn(),
+          subject: faker.lorem.word(),
+          data: new TextEncoder().encode('{}'),
+          info: { deliveryCount: 1 },
+        });
+
+        // When
+        schedules$.next(msg);
+        await new Promise(process.nextTick);
+
+        // Then
+        expect(schedules$.observed).toBe(true);
+        expect(msg.nak).toHaveBeenCalledWith(7_000);
+      });
+    });
+
+    describe('when a schedule tick finds no handler', () => {
+      let store: Mocked<ScheduleStore>;
+
+      const tick = (deliveryCount: number, scheduler?: string): Mocked<JsMsg> => {
+        const hdrs = natsHeaders();
+
+        if (scheduler !== undefined) hdrs.set('Nats-Scheduler', scheduler);
+
+        return createMock<JsMsg>({
+          ack: vi.fn(),
+          subject: 'svc__microservice.sched.gone',
+          data: new Uint8Array(),
+          headers: hdrs,
+          info: { deliveryCount, stream: 'svc__microservice_sched-stream' },
+        });
+      };
+
+      beforeEach(() => {
+        store = createMock<ScheduleStore>({
+          cancel: vi.fn().mockResolvedValue(undefined),
+          writtenAt: vi.fn().mockResolvedValue(null),
+        });
+        sut = new EventRouter(
+          messageProvider,
+          patternRegistry,
+          codec,
+          eventBus,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          { name: 'svc', servers: ['nats://localhost:4222'] },
+          new NameResolver({ name: 'svc', servers: ['nats://localhost:4222'] }),
+          store,
+        );
+        sut.updateMaxDeliverMap(new Map([['svc__microservice_sched-stream', 3]]));
+        patternRegistry.hasScheduleHandlers.mockReturnValue(true);
+        patternRegistry.getHandler.mockReturnValue(null);
+        sut.start();
+      });
+
+      it('should hand it back for another replica before giving up', async () => {
+        // Given
+        const msg = tick(1, 'svc__microservice._cron.decl.gone');
+
+        // When
+        schedules$.next(msg);
+        await new Promise(process.nextTick);
+
+        // Then
+        expect(msg.nak).toHaveBeenCalledWith(5_000);
+        expect(msg.term).not.toHaveBeenCalled();
+        expect(store.cancel).not.toHaveBeenCalled();
+      });
+
+      it('should cancel a schedule older than this replica on the last delivery', async () => {
+        // Given
+        store.writtenAt.mockResolvedValue(new Date('2020-01-01T00:00:00Z'));
+
+        const msg = tick(3, 'svc__microservice._cron.decl.gone');
+
+        // When
+        schedules$.next(msg);
+        await vi.waitFor(() => {
+          expect(msg.term).toHaveBeenCalled();
+        });
+
+        // Then
+        expect(store.cancel).toHaveBeenCalledWith('svc__microservice._cron.decl.gone');
+        expect(msg.nak).not.toHaveBeenCalled();
+      });
+
+      it('should leave a schedule newer than this replica to the replicas that handle it', async () => {
+        // Given a schedule written after this replica started, as during a rollout
+        store.writtenAt.mockResolvedValue(new Date(Date.now() + 1_000));
+
+        const msg = tick(3, 'svc__microservice._cron.decl.gone');
+
+        // When
+        schedules$.next(msg);
+        await vi.waitFor(() => {
+          expect(msg.term).toHaveBeenCalled();
+        });
+
+        // Then
+        expect(store.cancel).not.toHaveBeenCalled();
+      });
+
+      it('should still settle the tick when cancelling fails', async () => {
+        // Given
+        store.writtenAt.mockResolvedValue(new Date('2020-01-01T00:00:00Z'));
+        store.cancel.mockRejectedValue(new Error('purge denied'));
+
+        const msg = tick(3, 'svc__microservice._cron.decl.gone');
+
+        // When
+        schedules$.next(msg);
+        await vi.waitFor(() => {
+          expect(msg.term).toHaveBeenCalled();
+        });
+
+        // Then
+        expect(store.cancel).toHaveBeenCalled();
+      });
+
+      it('should do nothing more for a schedule that is already gone', async () => {
+        // Given
+        store.writtenAt.mockResolvedValue(null);
+
+        const msg = tick(3, 'svc__microservice._cron.decl.gone');
+
+        // When
+        schedules$.next(msg);
+        await vi.waitFor(() => {
+          expect(msg.term).toHaveBeenCalled();
+        });
+
+        // Then
+        expect(store.cancel).not.toHaveBeenCalled();
+      });
+
+      it('should terminate a tick that names no schedule without cancelling anything', async () => {
+        // Given
+        const msg = tick(3);
+
+        // When
+        schedules$.next(msg);
+        await new Promise(process.nextTick);
+
+        // Then
+        expect(store.cancel).not.toHaveBeenCalled();
+        expect(msg.term).toHaveBeenCalled();
       });
     });
 

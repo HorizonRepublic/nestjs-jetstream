@@ -167,6 +167,10 @@ A service used to reserve up to 17 GB before processing a single message, which 
 
 **Node 20 is no longer supported.** The minimum is Node 22.
 
+**Recurring schedules.** Cron and interval schedules, declared on a handler or created from a client, run on NATS 2.14 or newer. See [recurring schedules](/docs/guides/recurring-schedules). Nothing changes for a service that does not use them.
+
+**Features the server would ignore now raise an error.** On NATS 2.10, `allow_msg_ttl` and TTL headers have no effect, and on NATS 2.11 neither do `allow_msg_schedules` and `scheduleAt()`. The boot or the call now stops with a `JetstreamCapabilityError` where messages used to never expire or never fire. A service that used them on a server too old for them was already broken without knowing it.
+
 **Metrics accept `@prometheus-io/client`.** `prom-client` was renamed to `@prometheus-io/client`, and either package now works. If both end up installed, startup fails until `metrics.register` names the registry your `/metrics` endpoint serves, because the two global registries are different objects. A service with only `prom-client` installed changes nothing.
 
 **`servers` is now optional, paired with `connections`.** Configuration accepts either the flat `servers` form or the new `connections` map, and rejects supplying both. Existing flat configurations are unchanged. Internally they become a single connection called `default`, and stream, consumer and subject names stay exactly as they were. See [Multiple connections](/docs/guides/multi-connection).

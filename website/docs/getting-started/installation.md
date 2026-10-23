@@ -65,7 +65,20 @@ Optional, install only for the feature that needs it:
 
 - **Node.js** >= 22.0.0
 - **TypeScript** >= 5.7 (required by `@nats-io/*` v3 typed array generics)
-- **NATS Server** >= 2.10 with JetStream enabled (>= 2.12 for [message scheduling](/docs/guides/scheduling))
+- **NATS Server** >= 2.10 with JetStream enabled; some features need a newer server, see below
+
+## NATS server versions
+
+Measured against real servers. A feature used on an older server fails the boot, or the call, with a `JetstreamCapabilityError`, because those servers accept the settings and silently ignore them.
+
+| Feature                                                                                                                  | Minimum NATS | JetStream API level |
+| ------------------------------------------------------------------------------------------------------------------------ | ------------ | ------------------- |
+| Events, RPC, broadcast, ordered events, dead letters, health, metrics, tracing                                           | 2.10         | none                |
+| [Per-message TTL](/docs/guides/per-message-ttl): `ttl()`, `allow_msg_ttl`                                                | 2.11         | 1                   |
+| [Scheduled messages](/docs/guides/scheduling): `scheduleAt()`, `allow_msg_schedules`, one-shot `client.schedule({ at })` | 2.12         | 2                   |
+| [Recurring schedules](/docs/guides/recurring-schedules): cron and intervals                                              | 2.14         | 4                   |
+
+In a cluster, upgrade every node before using a feature: the check reads the level of the server the client talks to, which says nothing about a stream leader still on an older node.
 
 ## Run NATS locally
 

@@ -54,7 +54,24 @@ export type {
   DeadLetterConfig,
   EventProcessingConfig,
   KindProcessingConfig,
+  DeclaredSchedule,
   PatternsByKind,
   RegisteredHandler,
   RpcRouterOptions,
 } from './routing.interface';
+
+export { ScheduleChange, ScheduleOrigin } from './schedule.interface';
+
+export type {
+  CronAlias,
+  CronExpression,
+  AtSchedule,
+  CronSchedule,
+  IntervalSchedule,
+  RecurringScheduleSpec,
+  ScheduleReconcileReport,
+  ScheduleHandlerOption,
+  ScheduleInfo,
+  ScheduleSpec,
+  ClientScheduleSpec,
+} from './schedule.interface';

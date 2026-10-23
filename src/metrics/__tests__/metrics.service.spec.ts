@@ -677,8 +677,11 @@ describe(JetstreamMetricsService, () => {
       events?: boolean;
       rpc?: boolean;
       broadcasts?: boolean;
+      schedules?: boolean;
     }): PatternRegistry => {
       const registry = createMock<PatternRegistry>();
+
+      registry.hasScheduleHandlers.mockReturnValue(kinds.schedules ?? false);
 
       registry.hasEventHandlers.mockReturnValue(kinds.events ?? false);
       registry.hasRpcHandlers.mockReturnValue(kinds.rpc ?? false);
@@ -694,7 +697,7 @@ describe(JetstreamMetricsService, () => {
         { register, pollInterval: 0 },
         client,
         { ...options, rpc: { mode: 'jetstream' } },
-        makeRegistry({ events: true, rpc: true, broadcasts: true }),
+        makeRegistry({ events: true, rpc: true, broadcasts: true, schedules: true }),
       );
 
       await sut.onApplicationBootstrap();
@@ -707,6 +710,7 @@ describe(JetstreamMetricsService, () => {
         StreamKind.Event,
         StreamKind.Command,
         StreamKind.Broadcast,
+        StreamKind.Schedule,
       ]);
     });
 

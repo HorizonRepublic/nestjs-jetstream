@@ -8,7 +8,7 @@ schema:
   headline: "How to schedule delayed messages with NestJS JetStream"
   description: "One-shot delayed message delivery via the Nats-Schedule header (NATS 2.12, ADR-51)."
   datePublished: "2026-04-01"
-  dateModified: "2026-08-03"
+  dateModified: "2026-10-23"
 ---
 
 # How to schedule delayed messages
@@ -130,10 +130,10 @@ See [Bring Your Own Infrastructure, Scheduling with a custom prefix](/docs/guide
 
 ## Limitations
 
-- **One-shot only.** No cron or interval scheduling. NATS supports these ([ADR-51](https://github.com/nats-io/nats-architecture-and-design/blob/main/adr/ADR-51.md)), but the library currently exposes only `scheduleAt()` for one-shot delivery.
+- **One-shot.** For cron and interval jobs see [recurring schedules](./recurring-schedules), which also offers a one-shot `at` that outlives the events stream's `max_age`.
 - **Workqueue events and broadcasts only.** `scheduleAt()` is ignored for RPC ([`client.send()`](/docs/patterns/rpc)) with a logged warning, and **throws** for [`ordered:` patterns](/docs/patterns/ordered-events): the schedule holder cannot live in the same stream as an ordered target, which the server requires.
 - **Future dates only.** `scheduleAt()` throws if the date is not in the future.
-- **NATS >= 2.12.** `allow_msg_schedules` is not supported by older server versions.
+- **NATS >= 2.12.** Older servers accept `allow_msg_schedules` and ignore it, so the transport refuses the flag and `scheduleAt()` with a `JetstreamCapabilityError`.
 - **`max_age` constraint.** Schedule delay must not exceed the stream's `max_age`; the pending schedule is an ordinary stored message and expires with the stream's retention. Note the **broadcast stream default is 1 hour**: scheduling a broadcast further out requires raising its `max_age`.
 - **Per-stream opt-in.** Broadcast scheduling requires `allow_msg_schedules: true` on the [broadcast stream](/docs/patterns/broadcast) config separately.
 - **`ttl()` applies to the delivered message.** Combining `.ttl()` with `.scheduleAt()` sets `Nats-Schedule-TTL`: the countdown starts when the scheduled message fires, not when it is published.

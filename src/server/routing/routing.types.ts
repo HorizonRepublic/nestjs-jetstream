@@ -53,4 +53,28 @@ export interface RoutePipelineContext {
   /** Delay before each redelivery, in ms; empty means nak immediately. */
   readonly retryDelays: readonly number[];
   readonly capture: DeadLetterCapture | null;
+  /** How a schedule tick with no handler is settled; `null` outside the schedule stream. */
+  readonly orphans: OrphanTickPolicy | null;
+}
+
+/**
+ * A tick no handler takes may reach a replica that has the handler on a later
+ * delivery, during a rollout. Only when every delivery is spent is the schedule
+ * an orphan, and it is cancelled so it stops firing.
+ */
+export interface OrphanTickPolicy {
+  /** Deliveries before a tick counts as an orphan. */
+  maxDeliver(): number;
+  readonly redeliverDelayMs: number;
+  /** Cancel the schedule whose holder fired the tick, unless a newer replica wrote it. */
+  cancelIfOrphaned(holderSubject: string): Promise<OrphanOutcome>;
+}
+
+/** What happened to a schedule whose tick no handler took. */
+export enum OrphanOutcome {
+  Cancelled = 'cancelled',
+  /** Written after this replica started, so a newer replica owns it. */
+  Newer = 'newer',
+  /** Already cancelled, by another replica or an earlier tick. */
+  Gone = 'gone',
 }

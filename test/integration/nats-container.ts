@@ -65,8 +65,9 @@ const waitForJetStreamReady = async (port: number, timeoutMs = 30_000): Promise<
   throw new Error(`NATS JetStream on port ${port} not ready within ${timeoutMs / 1_000}s`);
 };
 
-export const startNatsContainer = async (): Promise<NatsContainerResult> => {
-  const container = await new GenericContainer(NATS_IMAGE)
+/** @param image Another NATS image, for tests that pin behaviour to a server version. */
+export const startNatsContainer = async (image = NATS_IMAGE): Promise<NatsContainerResult> => {
+  const container = await new GenericContainer(image)
     .withCommand(['--js', '--store_dir', '/data'])
     .withExposedPorts(4222)
     .withWaitStrategy(Wait.forLogMessage(/Server is ready/))

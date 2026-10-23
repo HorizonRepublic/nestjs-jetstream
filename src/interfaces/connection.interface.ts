@@ -54,6 +54,9 @@ export interface JetstreamConnectionOptions {
   /** Broadcast event stream/consumer overrides for this connection. */
   broadcast?: StreamConsumerOverrides;
 
+  /** Schedule stream/consumer overrides for this connection. */
+  schedule?: StreamConsumerOverrides;
+
   /** Ordered event consumer configuration for this connection. */
   ordered?: OrderedEventOverrides;
 

@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vi
 import { ConnectionProvider } from '../../connection';
 import type { JetstreamModuleOptions } from '../../interfaces';
 import { StreamKind } from '../../interfaces';
+import type { ScheduleReconciler } from '../../schedule/schedule-reconciler';
 import { CoreRpcServer } from '../core-rpc.server';
 import {
   ConsumerProvider,
@@ -41,6 +42,7 @@ describe(JetstreamStrategy, () => {
     patternRegistry = createMock<PatternRegistry>({
       hasEventHandlers: vi.fn().mockReturnValue(false),
       hasOrderedHandlers: vi.fn().mockReturnValue(false),
+      hasScheduleHandlers: vi.fn().mockReturnValue(false),
       hasBroadcastHandlers: vi.fn().mockReturnValue(false),
       hasRpcHandlers: vi.fn().mockReturnValue(false),
       hasMetadata: vi.fn().mockReturnValue(false),
@@ -55,7 +57,11 @@ describe(JetstreamStrategy, () => {
     coreRpcServer = createMock<CoreRpcServer>();
     metadataProvider = createMock<MetadataProvider>();
 
-    sut = new JetstreamStrategy(
+    sut = makeStrategy();
+  });
+
+  const makeStrategy = (reconciler?: ScheduleReconciler): JetstreamStrategy =>
+    new JetstreamStrategy(
       options,
       connection,
       patternRegistry,
@@ -67,8 +73,9 @@ describe(JetstreamStrategy, () => {
       coreRpcServer,
       new Map(),
       metadataProvider,
+      undefined,
+      reconciler,
     );
-  });
 
   afterEach(vi.resetAllMocks);
 
@@ -249,6 +256,67 @@ describe(JetstreamStrategy, () => {
       expect(rpcRouter.start).toHaveBeenCalled();
 
       expect(coreRpcServer.start).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('schedule kinds', () => {
+    it('should provision the schedule stream and consumer and start routing', async () => {
+      // Given
+      patternRegistry.hasScheduleHandlers.mockReturnValue(true);
+
+      // When
+      await sut.listen(() => {});
+
+      // Then
+      expect(streamProvider.ensureStreams).toHaveBeenCalledWith([StreamKind.Schedule]);
+      expect(consumerProvider.ensureConsumers).toHaveBeenCalledWith([StreamKind.Schedule]);
+      expect(eventRouter.start).toHaveBeenCalled();
+    });
+
+    it('should reconcile declared schedules after provisioning and before routing', async () => {
+      // Given
+      const declared = [{ pattern: 'sync.tick', spec: { everySeconds: 60 } }];
+      const reconciler = createMock<ScheduleReconciler>({
+        reconcile: vi
+          .fn()
+          .mockResolvedValue({ created: ['sync.tick'], updated: [], unchanged: [] }),
+      });
+
+      patternRegistry.hasScheduleHandlers.mockReturnValue(true);
+      patternRegistry.getDeclaredSchedules.mockReturnValue(declared);
+      sut = makeStrategy(reconciler);
+
+      // When
+      await sut.listen(() => {});
+
+      // Then
+      expect(reconciler.reconcile).toHaveBeenCalledWith(declared);
+      expect(consumerProvider.ensureConsumers.mock.invocationCallOrder[0]).toBeLessThan(
+        reconciler.reconcile.mock.invocationCallOrder[0] ?? 0,
+      );
+      expect(reconciler.reconcile.mock.invocationCallOrder[0]).toBeLessThan(
+        eventRouter.start.mock.invocationCallOrder[0] ?? 0,
+      );
+    });
+
+    it('should fail startup when the schedules cannot be reconciled', async () => {
+      // Given
+      const failure = new Error('needs NATS 2.14');
+      const reconciler = createMock<ScheduleReconciler>({
+        reconcile: vi.fn().mockRejectedValue(failure),
+      });
+      const callback = vi.fn();
+
+      patternRegistry.hasScheduleHandlers.mockReturnValue(true);
+      patternRegistry.getDeclaredSchedules.mockReturnValue([]);
+      sut = makeStrategy(reconciler);
+
+      // When
+      await sut.listen(callback);
+
+      // Then
+      expect(callback).toHaveBeenCalledWith(failure);
+      expect(messageProvider.start).not.toHaveBeenCalled();
     });
   });
 

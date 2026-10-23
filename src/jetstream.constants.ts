@@ -119,6 +119,25 @@ export const DEFAULT_EVENT_STREAM_CONFIG: Partial<StreamConfig> = {
   duplicate_window: toNanos(2, 'minutes'),
 };
 
+/**
+ * Default config for the schedule stream, which holds recurring schedule holders
+ * and their ticks.
+ *
+ * `max_age: 0` because an aged-out holder silently stops its schedule. Ticks
+ * expire through their own TTL instead, so the stream stays small.
+ */
+export const DEFAULT_SCHEDULE_STREAM_CONFIG: Partial<StreamConfig> = {
+  ...baseStreamConfig,
+  allow_rollup_hdrs: true,
+  allow_msg_schedules: true,
+  allow_msg_ttl: true,
+  max_consumers: 100,
+  max_msg_size: MB,
+  max_bytes: 64 * MB,
+  max_age: 0,
+  duplicate_window: toNanos(2, 'minutes'),
+};
+
 /** Default config for RPC command streams (jetstream mode only). */
 export const DEFAULT_COMMAND_STREAM_CONFIG: Partial<StreamConfig> = {
   ...baseStreamConfig,
@@ -205,6 +224,16 @@ export const DEFAULT_COMMAND_CONSUMER_CONFIG: Partial<ConsumerConfig> = {
   replay_policy: ReplayPolicy.Instant,
 };
 
+/** Default config for schedule tick consumers. */
+export const DEFAULT_SCHEDULE_CONSUMER_CONFIG: Partial<ConsumerConfig> = {
+  ack_wait: toNanos(10, 'seconds'),
+  max_deliver: 3,
+  max_ack_pending: 100,
+  ack_policy: AckPolicy.Explicit,
+  deliver_policy: DeliverPolicy.All,
+  replay_policy: ReplayPolicy.Instant,
+};
+
 /** Default config for broadcast event consumers. */
 export const DEFAULT_BROADCAST_CONSUMER_CONFIG: Partial<ConsumerConfig> = {
   ack_wait: toNanos(10, 'seconds'),
@@ -268,6 +297,10 @@ export enum JetstreamHeader {
   CallerName = 'x-caller-name',
   /** Set to `'true'` on error responses so the client can distinguish success from failure. */
   Error = 'x-error',
+  /** Hash of a schedule definition, stored on its holder to skip unchanged rewrites. */
+  ScheduleHash = 'x-schedule-hash',
+  /** Handler pattern a schedule's ticks are delivered to, stored on its holder. */
+  SchedulePattern = 'x-schedule-pattern',
 }
 
 /** Headers the transport attaches to a message when it is routed to the DLQ. */
@@ -289,6 +322,8 @@ export const RESERVED_HEADERS: ReadonlySet<string> = new Set<string>([
   JetstreamHeader.CorrelationId,
   JetstreamHeader.ReplyTo,
   JetstreamHeader.Error,
+  JetstreamHeader.ScheduleHash,
+  JetstreamHeader.SchedulePattern,
 ]);
 
 /**
@@ -333,6 +368,9 @@ export const BROADCAST_SUBJECT_PREFIX = 'broadcast.';
 
 /** Subject segment that namespaces schedule-holder messages away from consumer filters. */
 export const SCHEDULE_SEGMENT = '_sch.';
+
+/** Namespace of the recurring schedule holders inside a schedule stream. */
+export const SCHEDULE_HOLDER_SEGMENT = '_cron.';
 
 /**
  * Build a broadcast subject.

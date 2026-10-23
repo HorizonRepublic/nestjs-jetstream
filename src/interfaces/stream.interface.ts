@@ -11,6 +11,7 @@ export enum StreamKind {
   Command = 'cmd',
   Broadcast = 'broadcast',
   Ordered = 'ordered',
+  Schedule = 'sched',
 }
 
 /**

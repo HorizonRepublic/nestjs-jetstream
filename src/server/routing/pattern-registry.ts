@@ -2,8 +2,22 @@ import { Logger } from '@nestjs/common';
 import { MessageHandler } from '@nestjs/microservices';
 
 import { MessageKind, StreamKind } from '../../interfaces';
-import type { JetstreamModuleOptions, PatternsByKind, RegisteredHandler } from '../../interfaces';
+import type {
+  DeclaredSchedule,
+  JetstreamModuleOptions,
+  PatternsByKind,
+  RegisteredHandler,
+  RecurringScheduleSpec,
+  ScheduleSpec,
+} from '../../interfaces';
 import { metadataKey } from '../../jetstream.constants';
+import {
+  assertLiteralSubject,
+  isAtSchedule,
+  JetstreamScheduleError,
+  ScheduleErrorReason,
+  validateScheduleSpec,
+} from '../../schedule';
 import { NameResolver } from '../infrastructure/name-resolver';
 
 /** Maps StreamKind to a human-readable label for logging. */
@@ -12,6 +26,22 @@ const HANDLER_LABELS: Record<StreamKind, string> = {
   [StreamKind.Ordered]: StreamKind.Ordered,
   [StreamKind.Event]: MessageKind.Event,
   [StreamKind.Command]: MessageKind.Rpc,
+  [StreamKind.Schedule]: 'schedule',
+};
+
+/** The stream a handler consumes from, given its delivery flags. */
+const resolveHandlerKind = (
+  isScheduled: boolean,
+  isBroadcast: boolean,
+  isOrdered: boolean,
+  isEvent: boolean,
+): StreamKind => {
+  if (isScheduled) return StreamKind.Schedule;
+  if (isBroadcast) return StreamKind.Broadcast;
+  if (isOrdered) return StreamKind.Ordered;
+  if (isEvent) return StreamKind.Event;
+
+  return StreamKind.Command;
 };
 
 /**
@@ -32,6 +62,7 @@ export class PatternRegistry {
   private _hasCommands = false;
   private _hasBroadcasts = false;
   private _hasOrdered = false;
+  private _hasSchedules = false;
   private _hasMetadata = false;
 
   public constructor(
@@ -50,6 +81,9 @@ export class PatternRegistry {
       const isEvent = handler.isEventHandler ?? false;
       const isBroadcast = !!extras?.broadcast;
       const isOrdered = !!extras?.ordered;
+      const rawSchedule: unknown = extras?.schedule;
+      // `schedule: false` from JavaScript reads as no schedule rather than a malformed one.
+      const isScheduled = rawSchedule !== undefined && rawSchedule !== false;
       const meta = extras?.meta as Record<string, unknown> | undefined;
 
       if (isBroadcast && isOrdered) {
@@ -58,12 +92,11 @@ export class PatternRegistry {
         );
       }
 
-      let kind: StreamKind;
+      const declared = isScheduled
+        ? this.declaredSchedule(pattern, rawSchedule, isEvent, isBroadcast || isOrdered)
+        : undefined;
 
-      if (isBroadcast) kind = StreamKind.Broadcast;
-      else if (isOrdered) kind = StreamKind.Ordered;
-      else if (isEvent) kind = StreamKind.Event;
-      else kind = StreamKind.Command;
+      const kind = resolveHandlerKind(isScheduled, isBroadcast, isOrdered, isEvent);
 
       const fullSubject = this.names.subject(kind, pattern);
 
@@ -73,6 +106,8 @@ export class PatternRegistry {
         isEvent: isEvent && !isOrdered,
         isBroadcast,
         isOrdered,
+        isScheduled,
+        ...(declared ? { schedule: declared } : {}),
         meta,
       });
 
@@ -84,6 +119,7 @@ export class PatternRegistry {
     this._hasCommands = this.cachedPatterns.commands.length > 0;
     this._hasBroadcasts = this.cachedPatterns.broadcasts.length > 0;
     this._hasOrdered = this.cachedPatterns.ordered.length > 0;
+    this._hasSchedules = this.cachedPatterns.schedules.length > 0;
     this._hasMetadata = [...this.registry.values()].some((entry) => entry.meta !== undefined);
     this.logSummary();
   }
@@ -141,6 +177,24 @@ export class PatternRegistry {
     return this._hasOrdered;
   }
 
+  public hasScheduleHandlers(): boolean {
+    return this._hasSchedules;
+  }
+
+  /** Fully-qualified tick subjects of the handlers that receive schedules. */
+  public getScheduleSubjects(): string[] {
+    return this.getPatternsByKind().schedules.map((p) =>
+      this.names.subject(StreamKind.Schedule, p),
+    );
+  }
+
+  /** The schedules handlers declare, reconciled at boot. Dynamic-only handlers declare none. */
+  public getDeclaredSchedules(): DeclaredSchedule[] {
+    return [...this.registry.values()].flatMap((entry) =>
+      entry.schedule ? [{ pattern: entry.pattern, spec: entry.schedule }] : [],
+    );
+  }
+
   /** Get fully-qualified NATS subjects for ordered handlers. */
   public getOrderedSubjects(): string[] {
     return this.getPatternsByKind().ordered.map((p) => this.names.subject(StreamKind.Ordered, p));
@@ -181,6 +235,7 @@ export class PatternRegistry {
       commands: [...patterns.commands],
       broadcasts: [...patterns.broadcasts],
       ordered: [...patterns.ordered],
+      schedules: [...patterns.schedules],
     };
   }
 
@@ -189,18 +244,21 @@ export class PatternRegistry {
     const commands: string[] = [];
     const broadcasts: string[] = [];
     const ordered: string[] = [];
+    const schedules: string[] = [];
 
     for (const entry of this.registry.values()) {
-      if (entry.isBroadcast) broadcasts.push(entry.pattern);
+      if (entry.isScheduled) schedules.push(entry.pattern);
+      else if (entry.isBroadcast) broadcasts.push(entry.pattern);
       else if (entry.isOrdered) ordered.push(entry.pattern);
       else if (entry.isEvent) events.push(entry.pattern);
       else commands.push(entry.pattern);
     }
 
-    return { events, commands, broadcasts, ordered };
+    return { events, commands, broadcasts, ordered, schedules };
   }
 
   private resolveStreamKind(entry: RegisteredHandler): StreamKind {
+    if (entry.isScheduled) return StreamKind.Schedule;
     if (entry.isBroadcast) return StreamKind.Broadcast;
     if (entry.isOrdered) return StreamKind.Ordered;
     if (entry.isEvent) return StreamKind.Event;
@@ -208,8 +266,52 @@ export class PatternRegistry {
     return StreamKind.Command;
   }
 
+  /** Validate a handler's schedule extra and return the schedule it declares, if any. */
+  private declaredSchedule(
+    pattern: string,
+    schedule: unknown,
+    isEvent: boolean,
+    hasOtherDelivery: boolean,
+  ): RecurringScheduleSpec | undefined {
+    if (!isEvent) {
+      throw new Error(
+        `Handler "${pattern}" has a schedule; schedules belong on @EventPattern only.`,
+      );
+    }
+
+    if (hasOtherDelivery) {
+      throw new Error(
+        `Handler "${pattern}" cannot be both scheduled and broadcast or ordered. Use one or the other.`,
+      );
+    }
+
+    assertLiteralSubject(pattern, ScheduleErrorReason.InvalidPattern);
+    if (schedule === true) return undefined;
+
+    if (typeof schedule !== 'object' || schedule === null) {
+      throw new JetstreamScheduleError(
+        ScheduleErrorReason.InvalidSpec,
+        `Handler "${pattern}" has schedule ${JSON.stringify(schedule)}; expected a schedule spec or true.`,
+      );
+    }
+
+    const spec = schedule as ScheduleSpec;
+
+    // Declared schedules are re-created on every boot, so a one-shot would fire again each time.
+    if (isAtSchedule(spec)) {
+      throw new JetstreamScheduleError(
+        ScheduleErrorReason.InvalidAt,
+        `Handler "${pattern}" declares a one-shot schedule; create one-shot schedules with JetstreamClient.schedule().`,
+      );
+    }
+
+    validateScheduleSpec(spec);
+
+    return spec;
+  }
+
   private logSummary(): void {
-    const { events, commands, broadcasts, ordered } = this.getPatternsByKind();
+    const { events, commands, broadcasts, ordered, schedules } = this.getPatternsByKind();
 
     const parts = [
       `${commands.length} RPC`,
@@ -219,6 +321,10 @@ export class PatternRegistry {
 
     if (ordered.length > 0) {
       parts.push(`${ordered.length} ordered`);
+    }
+
+    if (schedules.length > 0) {
+      parts.push(`${schedules.length} scheduled`);
     }
 
     this.logger.log(`Registered handlers: ${parts.join(', ')}`);

@@ -1,4 +1,4 @@
-import type { JetStreamClient as NatsJsClient, PubAck } from '@nats-io/jetstream';
+import type { JetStreamClient as NatsJsClient, JetStreamManager, PubAck } from '@nats-io/jetstream';
 import type { Msg, MsgHdrs, NatsConnection, Status, Subscription } from '@nats-io/transport-node';
 import { headers as natsHeaders } from '@nats-io/transport-node';
 
@@ -8,14 +8,17 @@ import { firstValueFrom, Subject } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 
 import { ConnectionProvider } from '../../connection';
+import { ServerCapabilities } from '../../connection/server-capabilities';
 import { EventBus } from '../../hooks';
 import type { Codec, JetstreamModuleOptions, TargetSubjectPrefixes } from '../../interfaces';
 import { TransportEvent } from '../../interfaces';
 import {
   DEFAULT_JETSTREAM_RPC_TIMEOUT,
   DEFAULT_RPC_TIMEOUT,
+  toNanos,
   JetstreamHeader,
 } from '../../jetstream.constants';
+import { ScheduleErrorReason } from '../../schedule';
 import { NameResolver } from '../../server/infrastructure/name-resolver';
 import { JetstreamClient } from '../jetstream.client';
 import { JetstreamRecordBuilder } from '../jetstream.record';
@@ -467,6 +470,66 @@ describe(JetstreamClient, () => {
 
         expect(publishOpts.schedule).toBeUndefined();
       });
+    });
+  });
+
+  describe('server capabilities', () => {
+    beforeEach(() => {
+      connection.getCapabilities.mockResolvedValue(new ServerCapabilities(1, 'n1 (NATS 2.11.0)'));
+    });
+
+    it('should refuse scheduleAt() on a server that would store the holder and never fire it', async () => {
+      // Given
+      const record = new JetstreamRecordBuilder({})
+        .scheduleAt(new Date(Date.now() + 60_000))
+        .build();
+
+      // When / Then
+      await expect(firstValueFrom(sut.emit('order.reminder', record))).rejects.toThrow(
+        /scheduleAt\(\) needs NATS JetStream API level 2 \(NATS 2\.12 or newer\)/,
+      );
+      expect(mockJs.publish).not.toHaveBeenCalled();
+    });
+
+    it('should publish ttl() on a server that supports it', async () => {
+      // Given
+      const record = new JetstreamRecordBuilder({}).ttl(toNanos(5, 'seconds')).build();
+
+      // When
+      await firstValueFrom(sut.emit('order.created', record));
+
+      // Then
+      expect(mockJs.publish).toHaveBeenCalled();
+    });
+
+    it('should not ask the server for a plain emit', async () => {
+      // When
+      await firstValueFrom(sut.emit('order.created', {}));
+
+      // Then
+      expect(connection.getCapabilities).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('schedules', () => {
+    it('should validate a dynamic schedule on the target before any I/O', async () => {
+      await expect(
+        sut.schedule('not.a.token', 'reminder.due', {}, { everySeconds: 60 }),
+      ).rejects.toThrow(expect.objectContaining({ reason: ScheduleErrorReason.InvalidId }));
+      await expect(sut.cancelSchedule('a b')).rejects.toThrow(
+        expect.objectContaining({ reason: ScheduleErrorReason.InvalidId }),
+      );
+    });
+
+    it('should look the schedule stream up under the target tick prefix', async () => {
+      // Given a target without a schedule stream
+      const jsm = createMock<JetStreamManager>();
+
+      vi.mocked(jsm.streams.find).mockRejectedValue(new Error('no stream'));
+      connection.getJetStreamManager.mockResolvedValue(jsm);
+
+      // When / Then
+      await expect(sut.listSchedules()).rejects.toThrow(`${targetName}__microservice.sched.`);
     });
   });
 
