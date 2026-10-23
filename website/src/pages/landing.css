@@ -39,7 +39,9 @@
   inset-inline-end: -12%;
   width: 62%;
   aspect-ratio: 1;
-  background: radial-gradient(circle, var(--jt-accent-soft), transparent 62%);
+  background:
+    radial-gradient(circle at 38% 42%, var(--jt-deliver-soft), transparent 58%),
+    radial-gradient(circle at 64% 70%, var(--jt-ack-soft), transparent 52%);
   pointer-events: none;
 }
 
@@ -103,6 +105,21 @@
   color: var(--jt-fg-2);
 }
 
+/* The message's path as a strip: one segment per log entry, in its state colour. */
+.lp-record-life {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 3px;
+  margin: 14px 0 0;
+}
+
+.lp-record-life span {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--lp-tone, var(--jt-line-2));
+}
+
 .lp-record-fields {
   display: grid;
   gap: 6px;
@@ -157,14 +174,28 @@
   color: var(--jt-fg-2);
 }
 
-.lp-record-log li[data-state='deliver'] .lp-log-event,
-.lp-record-log li[data-state='ack'] .lp-log-event {
-  color: var(--jt-state-deliver);
+.landingRoot [data-state='deliver'] {
+  --lp-tone: var(--jt-state-deliver);
+  --lp-tone-soft: var(--jt-deliver-soft);
 }
 
-.lp-record-log li[data-state='nak'] .lp-log-event,
-.lp-record-log li[data-state='redeliver'] .lp-log-event {
-  color: var(--jt-state-redeliver);
+.landingRoot [data-state='nak'],
+.landingRoot [data-state='redeliver'] {
+  --lp-tone: var(--jt-state-redeliver);
+  --lp-tone-soft: var(--jt-redeliver-soft);
+}
+
+.landingRoot [data-state='ack'] {
+  --lp-tone: var(--jt-state-ack);
+  --lp-tone-soft: var(--jt-ack-soft);
+}
+
+.lp-log-pill {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: var(--jt-radius-sm);
+  background: var(--lp-tone-soft, transparent);
+  color: var(--lp-tone, inherit);
 }
 
 
@@ -194,15 +225,15 @@
   display: block;
   padding: 7px 16px;
   background: var(--jt-bg-1);
-  border: 2px solid var(--jt-state-deliver);
+  border: 2px solid var(--jt-state-ack);
   border-radius: var(--jt-radius-md);
-  box-shadow: 0 0 0 3px var(--jt-bg-1), 0 0 0 4px var(--jt-accent-line);
+  box-shadow: 0 0 0 3px var(--jt-bg-1), 0 0 0 4px var(--jt-ack-soft);
   font-variation-settings: var(--jt-vf-struct);
   font-size: var(--jt-step-1);
   font-weight: 700;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: var(--jt-state-deliver);
+  color: var(--jt-state-ack);
 }
 
 .lp-record-caption {
@@ -306,6 +337,20 @@
   border-color: var(--jt-accent-hover);
 }
 
+.lp-cta--solid {
+  padding: 10px 18px;
+  border: none;
+  border-radius: var(--jt-radius-md);
+  background: var(--jt-accent);
+  color: var(--jt-accent-fg);
+}
+
+.lp-cta--solid:hover {
+  background: var(--jt-accent-hover);
+  color: var(--jt-accent-fg);
+  text-decoration: none;
+}
+
 .lp-cta--quiet {
   color: var(--jt-fg-2);
   border-bottom-color: transparent;
@@ -388,6 +433,14 @@
   color: var(--jt-fg-2);
 }
 
+.c-deco {
+  color: var(--jt-accent);
+}
+
+.c-kw {
+  color: var(--jt-code-keyword);
+}
+
 .c-accent {
   color: var(--jt-accent);
 }
@@ -435,14 +488,52 @@
   transition: background var(--jt-m-fast), padding-inline-start var(--jt-m-fast);
 }
 
+.lp-ledger-row[data-tone='deliver'] {
+  --lp-tone: var(--jt-state-deliver);
+  --lp-tone-soft: var(--jt-deliver-soft);
+}
+
+.lp-ledger-row[data-tone='redeliver'] {
+  --lp-tone: var(--jt-state-redeliver);
+  --lp-tone-soft: var(--jt-redeliver-soft);
+}
+
+.lp-ledger-row[data-tone='dlq'] {
+  --lp-tone: var(--jt-state-dlq);
+  --lp-tone-soft: var(--jt-dlq-soft);
+}
+
+.lp-ledger-row[data-tone='ack'] {
+  --lp-tone: var(--jt-state-ack);
+  --lp-tone-soft: var(--jt-ack-soft);
+}
+
+.lp-ledger-row[data-tone='trace'] {
+  --lp-tone: var(--jt-state-trace);
+  --lp-tone-soft: var(--jt-accent-soft);
+}
+
 .lp-ledger-row:hover {
-  background: var(--jt-accent-soft);
+  background: var(--lp-tone-soft, var(--jt-accent-soft));
   padding-inline-start: 12px;
 }
 
 .lp-ledger-name {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
   font-weight: 600;
   color: var(--jt-fg-0);
+}
+
+/* Which part of a message's life the capability touches. */
+.lp-ledger-name::before {
+  content: '';
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--lp-tone, var(--jt-line-2));
 }
 
 .lp-ledger-body {

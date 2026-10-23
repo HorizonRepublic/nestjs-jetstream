@@ -92,6 +92,12 @@ const DeliveryRecord = () => (
         ))}
       </dl>
 
+      <div className="lp-record-life" aria-hidden="true">
+        {RECORD_LOG.map((entry) => (
+          <span key={entry.event} data-state={entry.state} />
+        ))}
+      </div>
+
       <ol className="lp-record-log">
         {RECORD_LOG.map((entry, index) => (
           <li
@@ -100,7 +106,9 @@ const DeliveryRecord = () => (
             style={{ '--lp-row': String(index) }}
           >
             <span className="lp-log-time">{entry.time}</span>
-            <span className="lp-log-event">{entry.event}</span>
+            <span className="lp-log-event">
+              <span className="lp-log-pill">{entry.event}</span>
+            </span>
             <span className="lp-log-note">{entry.note}</span>
           </li>
         ))}
@@ -132,42 +140,49 @@ const CodeCard = ({ file, lang, children }) => (
 const CAPABILITIES = [
   {
     name: 'At-least-once delivery',
+    tone: 'ack',
     body: 'Every event acked after the handler resolves, retried on a paced curve, 2 s then 10 s by default.',
     to: '/docs/patterns/events',
     label: 'patterns/events',
   },
   {
     name: 'Dead-letter queue',
+    tone: 'dlq',
     body: 'A typed sink that keeps the original headers once retries are exhausted, with an onDeadLetter callback.',
     to: '/docs/guides/dead-letter-queue',
     label: 'guides/dead-letter-queue',
   },
   {
     name: 'Ordered delivery',
+    tone: 'deliver',
     body: 'Every replica reads the stream in strict order and can replay it from any point.',
     to: '/docs/patterns/ordered-events',
     label: 'patterns/ordered-events',
   },
   {
     name: 'Broadcast',
+    tone: 'deliver',
     body: 'One message reaches every running pod through per-service durable consumers.',
     to: '/docs/patterns/broadcast',
     label: 'patterns/broadcast',
   },
   {
     name: 'RPC, both speeds',
+    tone: 'deliver',
     body: 'Core NATS for latency, JetStream for durability, under the same decorator either way.',
     to: '/docs/patterns/rpc',
     label: 'patterns/rpc',
   },
   {
     name: 'Cron and delayed jobs',
+    tone: 'redeliver',
     body: 'Cron, intervals and one-shot delays fired by NATS itself, with no scheduler process to run.',
     to: '/docs/guides/scheduling-overview',
     label: 'guides/scheduling',
   },
   {
     name: 'Tracing built in',
+    tone: 'trace',
     body: 'W3C traceparent propagated through every hop, with OpenTelemetry consumer spans out of the box.',
     to: '/docs/observability/tracing',
     label: 'observability/tracing',
@@ -204,7 +219,7 @@ export default function Home() {
             <div className="lp-actions">
               <CopyInstall />
               <span className="lp-links">
-                <Link className="lp-cta" to="/docs/getting-started/quick-start">
+                <Link className="lp-cta lp-cta--solid" to="/docs/getting-started/quick-start">
                   Quick start
                 </Link>
                 <Link className="lp-cta lp-cta--quiet" to="/docs/getting-started/why-jetstream">
@@ -230,7 +245,7 @@ export default function Home() {
               underneath the decorators, not the decorators.
             </p>
             <CodeCard file="app.module.ts" lang="ts">
-              <span className="c-dim">@Module</span>({'{'}
+              <span className="c-deco">@Module</span>({'{'}
               {'\n  imports: [\n    '}
               <span className="c-accent">JetstreamModule.forRoot</span>({'{'}
               {'\n      name: '}
@@ -239,7 +254,7 @@ export default function Home() {
               <span className="c-str">&apos;nats://localhost:4222&apos;</span>
               {'],\n    }),\n  ],\n'}
               {'})\n'}
-              <span className="c-dim">export class</span>
+              <span className="c-kw">export class</span>
               {' AppModule {}'}
             </CodeCard>
           </div>
@@ -251,13 +266,13 @@ export default function Home() {
               exhausted retries land in a dead-letter stream with the original headers intact.
             </p>
             <CodeCard file="orders.controller.ts" lang="ts">
-              <span className="c-dim">@EventPattern</span>(
+              <span className="c-deco">@EventPattern</span>(
               <span className="c-str">&apos;orders.created&apos;</span>){'\n'}
-              <span className="c-dim">async</span>
+              <span className="c-kw">async</span>
               {' onCreated('}
-              <span className="c-dim">@Payload</span>
+              <span className="c-deco">@Payload</span>
               {'() order: Order) {\n  '}
-              <span className="c-dim">await</span>
+              <span className="c-kw">await</span>
               {' this.billing.charge(order);\n  '}
               <span className="c-comment">{'// throws → nak → redelivered after 2 s'}</span>
               {'\n}'}
@@ -270,7 +285,7 @@ export default function Home() {
           <ul className="lp-ledger-list">
             {CAPABILITIES.map((cap) => (
               <li key={cap.name}>
-                <Link to={cap.to} className="lp-ledger-row">
+                <Link to={cap.to} className="lp-ledger-row" data-tone={cap.tone}>
                   <span className="lp-ledger-name">{cap.name}</span>
                   <span className="lp-ledger-body">{cap.body}</span>
                   <span className="lp-ledger-path">{cap.label}</span>

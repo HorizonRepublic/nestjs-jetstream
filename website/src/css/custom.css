@@ -506,14 +506,14 @@ button[class*="copyButton"]:hover {
 
 .theme-admonition-note::before,
 .theme-admonition-info::before {
-  background: var(--jt-line-2);
+  background: var(--jt-state-deliver);
 }
 
 .theme-admonition-note [class*="admonitionHeading"],
 .theme-admonition-info [class*="admonitionHeading"],
 .theme-admonition-note [class*="admonitionIcon"] svg,
 .theme-admonition-info [class*="admonitionIcon"] svg {
-  color: var(--jt-fg-2);
+  color: var(--jt-state-deliver);
 }
 
 .theme-admonition-tip {
@@ -521,12 +521,12 @@ button[class*="copyButton"]:hover {
 }
 
 .theme-admonition-tip::before {
-  background: var(--jt-state-deliver);
+  background: var(--jt-state-ack);
 }
 
 .theme-admonition-tip [class*="admonitionHeading"],
 .theme-admonition-tip [class*="admonitionIcon"] svg {
-  color: var(--jt-state-deliver);
+  color: var(--jt-state-ack);
 }
 
 .theme-admonition-warning,
