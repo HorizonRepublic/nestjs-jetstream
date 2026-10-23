@@ -100,5 +100,11 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # The tests run the sources; this loads what is published, in both formats.
+      - name: Load the built package
+        run: |
+          node -e "require('./dist/index.cjs')"
+          node --input-type=module -e "await import('./dist/index.js')"
+
       - name: Run all tests
         run: pnpm test
