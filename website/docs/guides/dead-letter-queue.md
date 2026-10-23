@@ -124,7 +124,7 @@ Replicas of a service share one queue group, so each advisory is handled by one 
 
 Advisories are plain NATS messages. One sent while no replica is running, for instance during a crash loop on every pod, is not seen, and that message stays in the stream until recovered by hand or expired by `max_age`.
 
-With restricted NATS permissions, the service user needs to subscribe to `$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.>`, and to call `$JS.API.STREAM.MSG.GET.*` and `$JS.API.STREAM.MSG.DELETE.*` on its streams.
+With restricted NATS permissions, the service user needs to subscribe to `$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.>`, and to call `$JS.API.STREAM.INFO.*`, `$JS.API.STREAM.MSG.GET.*` and `$JS.API.STREAM.MSG.DELETE.*` on its streams.
 
 ## The callback
 
