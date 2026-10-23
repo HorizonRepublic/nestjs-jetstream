@@ -103,8 +103,6 @@ export interface DeadLetterSource {
 export interface DeadLetterWatchTarget {
   readonly stream: string;
   readonly consumer: string;
-  /** Delete the message after capture: true for work-queue streams, false where other services still read it. */
-  readonly removeOnCapture: boolean;
 }
 
 /** The fields this transport reads from a `MAX_DELIVERIES` consumer advisory. */

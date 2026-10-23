@@ -22,6 +22,19 @@ import type { DeadLetterSource } from './routing.types';
 /** How many times a dead letter is published to the DLQ stream before falling back. */
 const DLQ_PUBLISH_ATTEMPTS = 3;
 
+/** How long a captured message is remembered, so a second report of it is dropped. */
+const CAPTURED_MEMORY_MS = 10 * 60_000;
+
+/** Upper bound on remembered captures; the oldest are forgotten first. */
+const CAPTURED_MEMORY_LIMIT = 10_000;
+
+/*
+ * Identifies one stream message across both capture paths. The sequence alone
+ * repeats once a stream is recreated, so the stored time goes with it.
+ */
+const captureKey = (msg: DeadLetterSource): string =>
+  `${msg.stream}:${msg.streamSequence}:${msg.timestamp.getTime()}`;
+
 /** The live delivery a handler just failed: settled with term or nak. */
 const liveSource = (msg: JsMsg, logger: Logger): DeadLetterSource => ({
   subject: msg.subject,
@@ -50,6 +63,8 @@ const liveSource = (msg: JsMsg, logger: Logger): DeadLetterSource => ({
  */
 export class DeadLetterCapture {
   private readonly logger = new Logger('Jetstream:DeadLetter');
+  /** Capture key -> when it may be forgotten. Insertion order is age order. */
+  private readonly captured = new Map<string, number>();
 
   public constructor(
     private readonly patternRegistry: PatternRegistry,
@@ -78,11 +93,42 @@ export class DeadLetterCapture {
 
   /** Emit the dead-letter event and route the message to the DLQ or the fallback callback. */
   public async capture(msg: JsMsg, data: unknown, error: unknown): Promise<void> {
-    await this.captureSource(liveSource(msg, this.logger), data, error);
+    const source = liveSource(msg, this.logger);
+
+    // A handler that outlived ack_wait on its final delivery may finish after
+    // another replica already captured the message from the server's advisory.
+    if (await this.isGone(source)) {
+      await source.release('Already dead-lettered');
+
+      return;
+    }
+
+    await this.captureSource(source, data, error);
   }
 
   /** Same as {@link capture}, for a message that is not a live delivery. */
-  public async captureSource(msg: DeadLetterSource, data: unknown, error: unknown): Promise<void> {
+  public async captureSource(
+    source: DeadLetterSource,
+    data: unknown,
+    error: unknown,
+  ): Promise<void> {
+    const key = captureKey(source);
+
+    if (!this.claim(key)) {
+      await source.release('Already dead-lettered');
+
+      return;
+    }
+
+    // A capture that keeps the message leaves it for a later report to retry.
+    const msg: DeadLetterSource = {
+      ...source,
+      retain: () => {
+        this.captured.delete(key);
+        source.retain();
+      },
+    };
+
     const info: DeadLetterInfo = {
       subject: msg.subject,
       data,
@@ -153,7 +199,7 @@ export class DeadLetterCapture {
 
     // One DLQ entry per stream message, even when a capture is repeated: a
     // term that never reached the server lets the message dead-letter twice.
-    const msgID = `${msg.stream}:${msg.streamSequence}`;
+    const msgID = captureKey(msg);
 
     try {
       await this.publishWithRetry(this.connection, destinationSubject, msg.data, hdrs, msgID);
@@ -269,6 +315,34 @@ export class DeadLetterCapture {
     }
 
     await msg.release('Dead letter processed via fallback callback');
+  }
+
+  private claim(key: string): boolean {
+    const now = Date.now();
+
+    for (const [old, forgetAt] of this.captured) {
+      if (forgetAt > now && this.captured.size < CAPTURED_MEMORY_LIMIT) break;
+      this.captured.delete(old);
+    }
+
+    if (this.captured.has(key)) return false;
+    this.captured.set(key, now + CAPTURED_MEMORY_MS);
+
+    return true;
+  }
+
+  /** True only when the stream confirms the message is no longer there. */
+  private async isGone(msg: DeadLetterSource): Promise<boolean> {
+    if (!this.connection) return false;
+
+    try {
+      const jsm = await this.connection.getJetStreamManager();
+
+      return (await jsm.streams.getMessage(msg.stream, { seq: msg.streamSequence })) === null;
+    } catch {
+      // Capturing twice is recoverable; skipping a dead letter is not.
+      return false;
+    }
   }
 
   private extractErrorReason(error: unknown): string {

@@ -50,12 +50,11 @@ const CLOCK_SKEW_ALLOWANCE_MS = 10_000;
 /** Deliveries before an orphan is cancelled when the consumer sets no limit. */
 const ORPHAN_FALLBACK_DELIVERIES = 3;
 
-/** Kinds whose exhausted deliveries are captured from advisories, and whether the message is deleted after. */
-const ADVISORY_WATCHED_KINDS = new Map<StreamKind, boolean>([
-  [StreamKind.Event, true],
-  [StreamKind.Schedule, true],
-  // The broadcast stream is shared: other services still read the message.
-  [StreamKind.Broadcast, false],
+/** Kinds whose exhausted deliveries are captured from server advisories. */
+const ADVISORY_WATCHED_KINDS: ReadonlySet<StreamKind> = new Set([
+  StreamKind.Event,
+  StreamKind.Schedule,
+  StreamKind.Broadcast,
 ]);
 
 const eventConsumeKindFor = (kind: StreamKind): EventConsumeKind => {
@@ -165,12 +164,10 @@ export class EventRouter {
     const targets: DeadLetterWatchTarget[] = [];
 
     for (const [kind, info] of consumers) {
-      const removeOnCapture = ADVISORY_WATCHED_KINDS.get(kind);
-
       // Without a delivery limit the server never gives up on a message.
-      if (removeOnCapture === undefined || (info.config.max_deliver ?? 0) <= 0) continue;
+      if (!ADVISORY_WATCHED_KINDS.has(kind) || (info.config.max_deliver ?? 0) <= 0) continue;
 
-      targets.push({ stream: info.stream_name, consumer: info.name, removeOnCapture });
+      targets.push({ stream: info.stream_name, consumer: info.name });
     }
 
     await this.advisories.watch(targets);

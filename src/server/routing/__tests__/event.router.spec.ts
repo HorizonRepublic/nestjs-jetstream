@@ -1289,7 +1289,9 @@ describe(EventRouter, () => {
           await new Promise(process.nextTick);
 
           // Then: the publish carries the stream and sequence as its message ID
-          expect(mockJs.publish.mock.calls[0]![2].msgID).toBe(`${streamName}:42`);
+          expect(mockJs.publish.mock.calls[0]![2].msgID).toMatch(
+            new RegExp(`^${streamName}:42:\\d+$`),
+          );
         });
 
         it('should forward original message headers to the DLQ publish', async () => {

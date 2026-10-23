@@ -62,6 +62,18 @@ describe(JetstreamRecord, () => {
         expect(record instanceof JetstreamRecord).toBe(true);
       });
 
+      it('should keep ordinary instanceof semantics for subclasses', () => {
+        // Given
+        class TaggedRecord extends JetstreamRecord {}
+        const base = new JetstreamRecord(faker.lorem.word(), new Map());
+        const tagged = new TaggedRecord(faker.lorem.word(), new Map());
+
+        // When / Then: a subclass matches its own instances only
+        expect(base instanceof TaggedRecord).toBe(false);
+        expect(tagged instanceof TaggedRecord).toBe(true);
+        expect(tagged instanceof JetstreamRecord).toBe(true);
+      });
+
       it('should not match plain objects shaped like a record', () => {
         // Given: an object with the same fields
         const lookalike = { data: faker.lorem.word(), headers: new Map() };

@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 
-import type { JetStreamManager, StoredMsg } from '@nats-io/jetstream';
+import { RetentionPolicy } from '@nats-io/jetstream';
+import type { JetStreamManager, StoredMsg, StreamInfo } from '@nats-io/jetstream';
 import { headers as natsHeaders } from '@nats-io/transport-node';
 import type { Msg, MsgCallback, NatsConnection, Subscription } from '@nats-io/transport-node';
 
@@ -23,6 +24,7 @@ describe(DeadLetterAdvisoryListener, () => {
   let subscribe: Mock;
   let getMessage: Mock;
   let deleteMessage: Mock;
+  let streamInfo: Mock;
   let captureSource: Mock;
   let target: DeadLetterWatchTarget;
 
@@ -69,6 +71,11 @@ describe(DeadLetterAdvisoryListener, () => {
     });
     getMessage = vi.fn();
     deleteMessage = vi.fn().mockResolvedValue(true);
+    streamInfo = vi
+      .fn()
+      .mockResolvedValue(
+        createMock<StreamInfo>({ config: { retention: RetentionPolicy.Workqueue } }),
+      );
     captureSource = vi.fn().mockImplementation(async (source: DeadLetterSource) => {
       await source.release('Moved to DLQ stream');
     });
@@ -77,18 +84,14 @@ describe(DeadLetterAdvisoryListener, () => {
 
     const connection = createMock<ConnectionProvider>({
       getConnection: vi.fn().mockResolvedValue(createMock<NatsConnection>({ subscribe })),
-      getJetStreamManager: vi
-        .fn()
-        .mockResolvedValue(
-          createMock<JetStreamManager>({ streams: { getMessage, deleteMessage } }),
-        ),
+      getJetStreamManager: vi.fn().mockResolvedValue(
+        createMock<JetStreamManager>({
+          streams: { getMessage, deleteMessage, info: streamInfo },
+        }),
+      ),
     });
 
-    target = {
-      stream: faker.string.alpha(12),
-      consumer: faker.string.alpha(12),
-      removeOnCapture: true,
-    };
+    target = { stream: faker.string.alpha(12), consumer: faker.string.alpha(12) };
     sut = new DeadLetterAdvisoryListener(
       connection,
       createMock<DeadLetterCapture>({ captureSource }),
@@ -163,9 +166,26 @@ describe(DeadLetterAdvisoryListener, () => {
   });
 
   describe('edge cases', () => {
-    it('should keep the message in a stream other services still read', async () => {
-      // Given: a broadcast-style target
-      target = { ...target, removeOnCapture: false };
+    it.each([RetentionPolicy.Limits, RetentionPolicy.Interest])(
+      'should keep the message in a %s stream, which other consumers may still read',
+      async (retention) => {
+        // Given
+        streamInfo.mockResolvedValue(createMock<StreamInfo>({ config: { retention } }));
+        getMessage.mockResolvedValue(stored(5, {}));
+        await sut.watch([target]);
+
+        // When
+        await receive({ stream: target.stream, stream_seq: 5, deliveries: 2 });
+
+        // Then
+        expect(captureSource).toHaveBeenCalledTimes(1);
+        expect(deleteMessage).not.toHaveBeenCalled();
+      },
+    );
+
+    it('should keep the message when the stream retention cannot be read', async () => {
+      // Given
+      streamInfo.mockRejectedValue(new Error('timeout'));
       getMessage.mockResolvedValue(stored(5, {}));
       await sut.watch([target]);
 
@@ -236,12 +256,44 @@ describe(DeadLetterAdvisoryListener, () => {
       expect(deleteMessage).not.toHaveBeenCalled();
     });
 
+    it('should handle at most eight advisories at once and queue the rest', async () => {
+      // Given: fetching hangs until released
+      let release: () => void = () => undefined;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+
+      getMessage.mockImplementation(async () => {
+        await gate;
+
+        return null;
+      });
+      await sut.watch([target]);
+      const callback = callbacks.get(
+        `$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.${target.stream}.${target.consumer}`,
+      );
+
+      // When: a burst of ten arrives
+      for (let seq = 1; seq <= 10; seq += 1) {
+        void callback?.(null, advisory({ stream: target.stream, stream_seq: seq, deliveries: 2 }));
+      }
+
+      // Then: eight run, two wait, and the queue drains once they finish
+      await vi.waitFor(() => {
+        expect(getMessage).toHaveBeenCalledTimes(8);
+      });
+      release();
+      await vi.waitFor(() => {
+        expect(getMessage).toHaveBeenCalledTimes(10);
+      });
+    });
+
     it('should stop listening on stop()', async () => {
       // Given
       const unsubscribe = vi.fn();
 
       subscribe.mockReturnValue(createMock<Subscription>({ unsubscribe }));
-      await sut.watch([target, { ...target, consumer: faker.string.alpha(10) }]);
+      await sut.watch([target, { stream: target.stream, consumer: faker.string.alpha(10) }]);
 
       // When
       sut.stop();

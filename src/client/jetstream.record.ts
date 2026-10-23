@@ -41,7 +41,10 @@ export class JetstreamRecord<TData = unknown> {
     public readonly ttl?: string | undefined,
   ) {}
 
-  public static [Symbol.hasInstance](value: unknown): boolean {
+  public static [Symbol.hasInstance](this: Function, value: unknown): boolean {
+    // Subclasses keep the ordinary prototype check.
+    if (this !== JetstreamRecord) return Function.prototype[Symbol.hasInstance].call(this, value);
+
     return typeof value === 'object' && value !== null && Reflect.get(value, RECORD_BRAND) === true;
   }
 }

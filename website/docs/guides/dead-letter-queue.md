@@ -116,9 +116,11 @@ After step 5 the server reports the exhausted message (see below), so capture ru
 
 A final attempt can also end without the handler failing: the process crashes, a pod is stopped mid-handler, or the handler outlives `ack_wait` (with [ack extension](/docs/guides/performance#ack-extension) off or past its limit). The server then gives up on the message, keeps it in the stream, and publishes a `MAX_DELIVERIES` advisory.
 
-The transport listens for that advisory on every event, broadcast and schedule consumer with a delivery limit, whenever dead letters are enabled. It reads the message back from the stream and runs it through the same fallback chain, with `deliveryCount` from the advisory and an error explaining that no attempt settled it. A captured event or schedule tick is then deleted from its work-queue stream; a broadcast stays, because other services read the same stream.
+The transport listens for that advisory on every event, broadcast and schedule consumer with a delivery limit, whenever dead letters are enabled. It reads the message back from the stream and runs it through the same fallback chain, with `deliveryCount` from the advisory and an error explaining that no attempt settled it. A captured message is then deleted if its stream has work-queue retention, as event and schedule streams do. Under limits or interest retention, the broadcast stream among them, it stays, because other consumers may still read it.
 
-Replicas of a service share one queue group, so each advisory is handled by one replica. The DLQ publish carries the stream and sequence as its message ID, so a message captured twice within the DLQ stream's duplicate window lands once.
+A handler that is still running when the server gives up is treated the same way: the message is dead-lettered, and whatever the handler does when it finishes is ignored.
+
+Replicas of a service share one queue group, so each advisory is handled by one replica. Each message is captured once: a replica remembers what it captured, a live delivery is not captured if its message has already left the stream, and the DLQ publish carries the stream, sequence and stored time as its message ID, so a repeat within the DLQ stream's duplicate window lands once. Two replicas capturing the same message at the same moment can still both call `onDeadLetter`, so key anything it writes on `stream` and `streamSequence`.
 
 Advisories are plain NATS messages. One sent while no replica is running, for instance during a crash loop on every pod, is not seen, and that message stays in the stream until recovered by hand or expired by `max_age`.
 
