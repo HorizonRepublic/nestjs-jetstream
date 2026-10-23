@@ -4,6 +4,7 @@ import type {
   NormalizedConnectionsConfig,
   ResolvedConnectionOptions,
 } from '../interfaces';
+import { assertNoRemovedOptions } from './removed-options';
 
 const DEFAULT_CONNECTION_NAME = 'default';
 const DEFAULT_NATS_PORT = '4222';
@@ -114,6 +115,8 @@ const assertDistinctClusters = (connections: ResolvedConnectionOptions[]): void 
  * @returns Every resolved connection plus the default connection's name.
  */
 export const normalizeOptions = (options: JetstreamModuleOptions): NormalizedConnectionsConfig => {
+  assertNoRemovedOptions(options);
+
   const hasServers = options.servers !== undefined;
   const hasConnections = options.connections !== undefined;
 
