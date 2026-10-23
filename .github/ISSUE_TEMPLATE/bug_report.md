@@ -1,38 +1,31 @@
 ---
 name: Bug report
-about: Create a report to help us improve
+about: Something in the transport does not behave as documented
 title: ''
 labels: ''
 assignees: ''
-
 ---
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+**What happened**
 
-**To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+**What you expected**
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
+**How to reproduce**
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+The smallest module config and handler that show it, and the calls that trigger it.
 
-**Desktop (please complete the following information):**
- - OS: [e.g. iOS]
- - Browser [e.g. chrome, safari]
- - Version [e.g. 22]
+```ts
 
-**Smartphone (please complete the following information):**
- - Device: [e.g. iPhone6]
- - OS: [e.g. iOS8.1]
- - Browser [e.g. stock browser, safari]
- - Version [e.g. 22]
+```
 
-**Additional context**
-Add any other context about the problem here.
+**Versions**
+
+- `@horizon-republic/nestjs-jetstream`:
+- NestJS:
+- NATS server:
+- Node.js:
+- Module format (CommonJS or ESM):
+
+**Logs**
+
+Transport logs around the failure (`Jetstream:*` loggers), with secrets removed.

@@ -46,7 +46,7 @@ We welcome contributions from the community. The full contribution guidelines li
 ## Prerequisites
 
 - Node.js >= 22.0.0
-- pnpm >= 10
+- pnpm >= 12.15
 - Docker (integration tests use [Testcontainers](https://testcontainers.com/) to start NATS automatically)
 
 ## Development Commands
@@ -118,4 +118,4 @@ Use a scope in parentheses (e.g., `feat(client):`, `fix(strategy):`) to show the
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the [MIT License](https://github.com/HorizonRepublic/nestjs-jetstream/blob/main/LICENSE).
+By contributing, you agree that your contributions will be licensed under the [MIT License](https://github.com/HorizonRepublic/nestjs-jetstream/blob/main/LICENSE.md).

@@ -1,122 +1,71 @@
 # Contributing to @horizon-republic/nestjs-jetstream
 
-Thank you for your interest in contributing to this project! We welcome contributions from the community.
+Contributions are welcome. This file covers what you need to open a pull
+request; the [contributing guide](https://nestjs-jetstream.horizon-republic.dev/docs/development/contributing)
+and the [testing guide](https://nestjs-jetstream.horizon-republic.dev/docs/development/testing)
+go into more detail.
 
-## Getting Started
+## Prerequisites
 
-### Prerequisites
+- Node.js >= 22
+- pnpm >= 12.15
+- Docker: integration tests start NATS through [Testcontainers](https://testcontainers.com/)
 
-- Node.js >= 20.0.0
-- pnpm 10.12.1 or higher
-
-### Setting Up Your Development Environment
-
-1. Fork the repository on GitHub
-2. Clone your fork locally:
-   ```bash
-   git clone https://github.com/your-username/nestjs-jetstream.git
-   cd nestjs-jetstream
-   ```
-
-3. Install dependencies:
-   ```bash
-   pnpm install
-   ```
-
-4. Create a new branch for your feature or bugfix:
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-
-## Development Workflow
-
-### Building the Project
+## Setup
 
 ```bash
-pnpm build
+git clone https://github.com/<your-username>/nestjs-jetstream.git
+cd nestjs-jetstream
+pnpm install
+git checkout -b <type>/<short-description>
 ```
 
-To watch for changes during development:
+## Before you open a pull request
 
-```shell
-pnpm build:watch
+CI runs these, and each one fails the build on its own:
+
+```bash
+pnpm lint          # oxlint, type-aware
+pnpm lint:md       # markdownlint
+pnpm format:check  # oxfmt over source, tests, examples and docs
+pnpm typecheck
+pnpm test:cov      # unit and integration tests
 ```
 
-### Running Examples
+`pnpm format` and `pnpm lint:fix` repair most of what the first three report.
+To run an example against a local NATS, start one with `docker compose up -d`
+and run `pnpm dev:example`.
 
-```shell
-# Build and run example
-pnpm start:example
+## Code
 
-# Run example in development mode
-pnpm dev:example
-```
+- TypeScript, strict. No `as any`.
+- Exported types live apart from implementations: shared contracts in
+  `src/interfaces/`, module-local ones in a `<module>.types.ts` file.
+- New behaviour comes with tests: `sut` for the system under test,
+  `createMock<T>()` for mocks, Given-When-Then comments.
+- Public APIs carry JSDoc. Docs under `website/docs/` change with the code
+  they describe.
 
-### Code Quality
+## Commits and pull requests
 
-Before submitting your changes, ensure your code passes linting:
+Commits and PR titles follow
+[Conventional Commits](https://www.conventionalcommits.org/):
+`feat(client): ...`, `fix(routing): ...`, `docs: ...`.
+[Release Please](https://github.com/googleapis/release-please) turns the PR
+title into the changelog entry and the version bump, so write it for a reader
+of the changelog. A PR that carries several changes can list them between
+`BEGIN_COMMIT_OVERRIDE` and `END_COMMIT_OVERRIDE` in its description, one
+conventional line each.
 
-```shell
-# Check for linting issues
-pnpm lint
+Keep a pull request to one concern. Every PR is reviewed before it is merged.
 
-# Automatically fix linting issues
-pnpm lint:fix
-```
+## Reporting bugs and security issues
 
-### Testing
+Bugs and feature requests go to
+[GitHub issues](https://github.com/HorizonRepublic/nestjs-jetstream/issues).
+Security issues do not: follow [SECURITY.md](SECURITY.md).
 
-```shell
-pnpm test
-```
+## License
 
-### Coding Standards
-
-Follow the existing code style
-
-* Use TypeScript for all new code
-* Write clear, descriptive commit messages
-* Add JSDoc comments for public APIs
-* Ensure your code passes ESLint checks
-
-### Commit Message Guidelines
-
-We follow conventional commit messages format:
-
-* feat: - A new feature
-* fix: - A bug fix
-* docs: - Documentation changes
-* style: - Code style changes (formatting, etc.)
-* refactor: - Code refactoring
-* test: - Adding or updating tests
-* chore: - Maintenance tasks
-
-Example:
-
-```shell
-feat: add support for custom stream configuration
-```
-
-### Pull Request Process
-
-1. Ensure your code builds without errors
-2. Run linting and fix any issues
-3. Update documentation if needed
-4. Push your changes to your fork
-5. Open a Pull Request with a clear description of your changes
-6. Wait for review and address any feedback
-
-### Code Review
-
-All submissions require review before being merged. We'll review your PR and may suggest changes or improvements.
-
-### Need Help?
-
-* Open an issue for bug reports or feature requests
-* Check existing issues before creating a new one
-* Be respectful and constructive in all interactions
-
-### License
-
-By contributing, you agree that your contributions will be licensed under the MIT License.
-Thank you for contributing! 🚀
+By contributing, you agree that your contributions are licensed under the
+[MIT License](LICENSE.md).
