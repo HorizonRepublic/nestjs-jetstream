@@ -10,6 +10,8 @@
     "dependencies"
   ],
   "rangeStrategy": "bump",
+  "minimumReleaseAge": "1 day",
+  "internalChecksFilter": "strict",
   "packageRules": [
     {
       "description": "Group major updates separately per package",
