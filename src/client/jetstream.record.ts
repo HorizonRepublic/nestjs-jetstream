@@ -1,6 +1,14 @@
 import type { ScheduleRecordOptions } from '../interfaces';
 import { NATS_CONTROL_HEADER_PREFIX, RESERVED_HEADERS } from '../jetstream.constants';
 
+/*
+ * The CJS and ESM builds each define their own JetstreamRecord. When an app
+ * loads both, a record from one copy fails a plain `instanceof` in the other
+ * and its headers, TTL and schedule are silently dropped. A registry symbol is
+ * shared by every copy, so the check goes through it instead.
+ */
+const RECORD_BRAND = Symbol.for('@horizon-republic/nestjs-jetstream/JetstreamRecord');
+
 /**
  * Immutable message record for JetStream transport.
  *
@@ -32,7 +40,13 @@ export class JetstreamRecord<TData = unknown> {
     /** Per-message TTL as Go duration string (e.g. "30s", "5m"). */
     public readonly ttl?: string | undefined,
   ) {}
+
+  public static [Symbol.hasInstance](value: unknown): boolean {
+    return typeof value === 'object' && value !== null && Reflect.get(value, RECORD_BRAND) === true;
+  }
 }
+
+Object.defineProperty(JetstreamRecord.prototype, RECORD_BRAND, { value: true });
 
 /**
  * Fluent builder for constructing JetstreamRecord instances.

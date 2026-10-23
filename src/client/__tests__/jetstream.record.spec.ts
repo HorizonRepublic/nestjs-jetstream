@@ -45,6 +45,31 @@ describe(JetstreamRecord, () => {
         expect(sut.timeout).toBeUndefined();
       });
     });
+
+    describe('when the record comes from another copy of the package', () => {
+      afterEach(() => {
+        vi.resetModules();
+      });
+
+      it('should still pass instanceof', async () => {
+        // Given: a second module instance, as with the CJS and ESM builds loaded side by side
+        vi.resetModules();
+        const other = await import('../jetstream.record');
+        const record = new other.JetstreamRecordBuilder({ id: faker.number.int() }).build();
+
+        // When / Then: the record is recognised by this copy's class
+        expect(other.JetstreamRecord).not.toBe(JetstreamRecord);
+        expect(record instanceof JetstreamRecord).toBe(true);
+      });
+
+      it('should not match plain objects shaped like a record', () => {
+        // Given: an object with the same fields
+        const lookalike = { data: faker.lorem.word(), headers: new Map() };
+
+        // When / Then
+        expect(lookalike instanceof JetstreamRecord).toBe(false);
+      });
+    });
   });
 });
 
