@@ -5,7 +5,7 @@
   "scripts": {
     "docusaurus": "docusaurus",
     "start": "docusaurus start",
-    "build": "docusaurus build",
+    "build": "node scripts/og/generate.mjs && docusaurus build",
     "swizzle": "docusaurus swizzle",
     "serve": "docusaurus serve",
     "clear": "docusaurus clear",
@@ -17,6 +17,7 @@
     "@docusaurus/core": "^3.10.2",
     "@docusaurus/plugin-content-docs": "^3.10.2",
     "@docusaurus/preset-classic": "^3.10.2",
+    "@docusaurus/remark-plugin-npm2yarn": "^3.10.2",
     "@docusaurus/theme-mermaid": "^3.10.2",
     "@mdx-js/react": "^3.1.1",
     "clsx": "^2.1.1",
@@ -31,6 +32,7 @@
     "@docusaurus/tsconfig": "^3.10.2",
     "@docusaurus/types": "^3.10.2",
     "@mermaid-js/layout-elk": "^1.0.1",
+    "@resvg/resvg-js": "2.6.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0"
   },

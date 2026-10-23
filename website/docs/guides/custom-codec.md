@@ -83,7 +83,7 @@ Sync `decode` throughput on the library's codec bench. Buckets are the serialize
 
 `msgpackr` is an **optional** peer dependency (`^1.11.0 || ^2.0.0`):
 
-```bash
+```bash npm2yarn
 npm install msgpackr
 # or: pnpm add msgpackr
 # or: yarn add msgpackr

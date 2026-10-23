@@ -1,6 +1,7 @@
 import { themes as prismThemes } from 'prism-react-renderer';
 import type { Config } from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
+import npm2yarn from '@docusaurus/remark-plugin-npm2yarn';
 import rehypeJetstream from './src/plugins/rehype-jetstream.mjs';
 
 const config: Config = {
@@ -28,6 +29,7 @@ const config: Config = {
           editUrl: 'https://github.com/HorizonRepublic/nestjs-jetstream/tree/main/website/',
           showLastUpdateTime: true,
           showLastUpdateAuthor: true,
+          remarkPlugins: [[npm2yarn, { sync: true, converters: ['pnpm', 'yarn'] }]],
           rehypePlugins: [rehypeJetstream],
         },
         blog: false,

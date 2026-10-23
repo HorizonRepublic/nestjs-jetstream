@@ -1,12 +1,13 @@
 ---
 sidebar_position: 2
 title: Contributing
+description: "How to contribute to the project."
 schema:
   type: Article
   headline: "Contributing"
   description: "How to contribute to the project."
   datePublished: "2026-03-21"
-  dateModified: "2026-08-03"
+  dateModified: "2026-10-23"
 ---
 
 # Contributing

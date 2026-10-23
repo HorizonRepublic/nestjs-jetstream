@@ -37,7 +37,7 @@ The semantic shift is from at-most-once to at-least-once delivery:
 
 ## Step 1: Install the library
 
-```bash
+```bash npm2yarn
 npm install @horizon-republic/nestjs-jetstream
 ```
 

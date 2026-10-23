@@ -1,6 +1,7 @@
 ---
 sidebar_position: 5
 title: "Graceful Shutdown"
+description: "Automatic shutdown handling: consumption stops, the NATS connection drains, and unfinished work is redelivered."
 schema:
   type: Article
   headline: "Graceful Shutdown"

@@ -31,8 +31,8 @@ Traces tell you what happened to one message; metrics answer aggregate questions
 
 Install one Prometheus client:
 
-```bash
-pnpm add @prometheus-io/client
+```bash npm2yarn
+npm install @prometheus-io/client
 ```
 
 The transport accepts either package. Both are **optional peers**: without `metrics` enabled, neither is imported. Tested against `@prometheus-io/client@^0.16` and `prom-client@^15`.

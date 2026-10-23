@@ -1,6 +1,7 @@
 ---
 sidebar_position: 6
 title: "Performance Tuning"
+description: "Tune ackWait, maxAckPending, batch sizes, and ack extension for high-throughput workloads."
 schema:
   type: Article
   headline: "Performance Tuning"

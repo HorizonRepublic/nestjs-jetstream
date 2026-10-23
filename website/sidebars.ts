@@ -7,6 +7,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Start',
+      link: { type: 'generated-index', description: 'Install the transport, run a first service, and move over from the built-in NATS transport.' },
       collapsed: false,
       items: [
         'getting-started/why-jetstream',
@@ -18,12 +19,14 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Delivery patterns',
+      link: { type: 'generated-index', description: 'How a message reaches handlers: one replica, every service, in strict order, or as a request with a reply.' },
       collapsed: false,
       items: ['patterns/events', 'patterns/rpc', 'patterns/broadcast', 'patterns/ordered-events'],
     },
     {
       type: 'category',
       label: 'Messages and handlers',
+      link: { type: 'generated-index', description: 'Build messages with headers and IDs, read delivery details in handlers, and change the wire format.' },
       collapsed: false,
       items: [
         'guides/record-builder',
@@ -42,12 +45,14 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Reliability',
+      link: { type: 'generated-index', description: 'What happens when handlers fail or pods go away: dead letters, graceful shutdown and health probes.' },
       collapsed: false,
       items: ['guides/dead-letter-queue', 'guides/graceful-shutdown', 'guides/health-checks'],
     },
     {
       type: 'category',
       label: 'Infrastructure',
+      link: { type: 'generated-index', description: 'Streams and consumers in production: external provisioning, migrations, storage, clusters and tuning.' },
       collapsed: false,
       items: [
         'guides/external-infrastructure',
@@ -67,12 +72,14 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Troubleshooting',
+      link: { type: 'generated-index', description: 'Symptoms and their causes, and the transport\'s less obvious behaviour.' },
       collapsed: false,
       items: ['guides/troubleshooting', 'reference/edge-cases'],
     },
     {
       type: 'category',
       label: 'Reference',
+      link: { type: 'generated-index', description: 'Every option, default, header and name the transport uses.' },
       collapsed: true,
       items: [
         'reference/module-configuration',

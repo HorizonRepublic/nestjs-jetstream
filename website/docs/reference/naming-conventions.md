@@ -1,6 +1,7 @@
 ---
 sidebar_position: 1
 title: Naming Conventions
+description: "Stream, consumer, and subject naming patterns derived from the service name."
 schema:
   type: Article
   headline: Naming Conventions

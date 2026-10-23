@@ -1534,3 +1534,58 @@ html:has(.jt-doc[data-tone='neutral']) { --jt-tone: var(--jt-fg-2); }
 .markdown :not(pre) > code {
   font-size: 0.88em;
 }
+
+/* ---- section index cards ------------------------------------------------ */
+.jt-doc [class*='cardContainer'] {
+  height: 100%;
+  border: 1px solid var(--jt-line-1);
+  border-radius: 10px;
+  background: var(--jt-bg-1);
+  box-shadow: none;
+  transition: border-color var(--jt-m-fast), background var(--jt-m-fast);
+}
+
+.jt-doc [class*='cardContainer']:hover {
+  border-color: color-mix(in oklch, var(--jt-tone) 45%, var(--jt-line-1));
+  background: color-mix(in oklch, var(--jt-tone) 5%, var(--jt-bg-1));
+}
+
+.jt-doc [class*='cardContainer'] h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--jt-fg-0);
+}
+
+.jt-doc [class*='cardContainer'] p {
+  display: -webkit-box;
+  overflow: hidden;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--jt-fg-2);
+}
+
+.jt-card-mark {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--jt-tone);
+}
+
+.jt-card-mark {
+  display: inline-block;
+}
+
+/* section index pages: the title matches a doc page's */
+.jt-doc header h1 {
+  font-size: 38px;
+  font-weight: 700;
+  letter-spacing: -0.022em;
+}

@@ -159,3 +159,6 @@ benchmarks/baseline.md
 .vale.ini
 .stetignore
 .synced-.vale.ini
+
+# social preview images, generated at build time
+website/static/img/og/
