@@ -19,7 +19,7 @@ const POD = { w: 1.15, h: 0.12, d: 1.15 };
 const POD_TOP = POD.h + 0.12;
 const SERVICE = { w: 1.0, h: 0.1, d: 0.72 };
 const REGION = {
-  wide: { x0: 0.47, x1: 0.95, y0: 0.04, y1: 0.96 },
+  wide: { x0: 0.47, x1: 0.95, y0: 0.02, y1: 0.98 },
   narrow: { x0: 0.02, x1: 0.98, y0: 0.04, y1: 0.96 },
 };
 const HINT_KEY = 'jt-scene-clicked';
@@ -33,24 +33,46 @@ const clamp01 = (t) => Math.max(0, Math.min(1, t));
 
 const entrance = v3(TUBE.x0 + 0.05, BELT_Y, 0);
 const exit = v3(TUBE.x1 + 0.1, BELT_Y, 0);
+const JOIN_X = -3.9;
+const SPLIT_X = 2.6;
+const RAIL = { y: 0.95, z: -3.0, dropX: -3.3 };
 
-const fanIn = Z.map(
-  (z) => new THREE.CubicBezierCurve3(v3(SERVICE_X + 0.5, BELT_Y - 0.12, z), v3(-4.0, BELT_Y, z), v3(-3.6, BELT_Y, 0), v3(TUBE.x0 - 0.2, BELT_Y, 0)),
+/* A schematic route: straight runs along the axes, corners rounded off. */
+const route = (points, radius = 0.3) => {
+  const path = new THREE.CurvePath();
+  let cursor = points[0].clone();
+
+  for (let i = 1; i < points.length - 1; i += 1) {
+    const corner = points[i];
+    const r = Math.min(radius, corner.distanceTo(points[i - 1]) / 2, corner.distanceTo(points[i + 1]) / 2);
+    const a = corner.clone().addScaledVector(corner.clone().sub(points[i - 1]).normalize(), -r);
+    const b = corner.clone().addScaledVector(points[i + 1].clone().sub(corner).normalize(), r);
+
+    if (cursor.distanceTo(a) > 1e-4) path.add(new THREE.LineCurve3(cursor, a));
+    path.add(new THREE.QuadraticBezierCurve3(a, corner.clone(), b));
+    cursor = b;
+  }
+
+  path.add(new THREE.LineCurve3(cursor, points.at(-1).clone()));
+
+  return path;
+};
+
+const intoStream = v3(TUBE.x0 - 0.2, BELT_Y, 0);
+const fanIn = Z.map((z) =>
+  z === 0
+    ? route([v3(SERVICE_X + 0.5, BELT_Y, 0), intoStream])
+    : route([v3(SERVICE_X + 0.5, BELT_Y, z), v3(JOIN_X, BELT_Y, z), v3(JOIN_X, BELT_Y, 0), intoStream]),
 );
-const fanOut = Z.map(
-  (z) => new THREE.CubicBezierCurve3(exit.clone(), v3(2.6, BELT_Y, 0), v3(3.1, BELT_Y + 0.05, z), v3(POD_X, POD_TOP, z)),
+const fanOut = Z.map((z) =>
+  z === 0
+    ? route([exit.clone(), v3(POD_X - 0.6, BELT_Y, 0), v3(POD_X, POD_TOP, 0)], 0.15)
+    : route([exit.clone(), v3(SPLIT_X, BELT_Y, 0), v3(SPLIT_X, BELT_Y, z), v3(POD_X - 0.6, BELT_Y, z), v3(POD_X, POD_TOP, z)], 0.3),
 );
-// nak: a short lift from the pod to one shared arc that runs back, low and behind the stream
-const COLLECT = v3(3.25, 1.0, -1.5);
-const retryLifts = Z.map(
-  (z) => new THREE.CatmullRomCurve3([v3(POD_X, POD_TOP, z), v3(POD_X - 0.15, 0.95, z * 0.6), COLLECT], false, 'centripetal'),
-);
-const retryArc = new THREE.CatmullRomCurve3(
-  [COLLECT, v3(1.8, 1.25, -1.7), v3(-0.5, 1.25, -1.7), v3(-2.4, 1.0, -1.2), v3(-3.05, 0.55, -0.25), v3(TUBE.x0 - 0.2, BELT_Y, 0)],
-  false,
-  'centripetal',
-);
-const LIFT_SHARE = 0.2;
+// nak: straight up out of the pod onto a raised rail along the back, and down into the stream
+const retryLifts = Z.map((z) => route([v3(POD_X, POD_TOP, z), v3(POD_X, RAIL.y, z), v3(POD_X, RAIL.y, RAIL.z)], 0.25));
+const retryArc = route([v3(POD_X, RAIL.y, RAIL.z), v3(RAIL.dropX, RAIL.y, RAIL.z), v3(RAIL.dropX, RAIL.y, 0), v3(RAIL.dropX, BELT_Y, 0), intoStream], 0.3);
+const LIFT_SHARE = retryLifts.map((lift) => lift.getLength() / (lift.getLength() + retryArc.getLength()));
 
 const queueSlot = (index) => v3(TUBE.x1 - 0.2 - index * SPACING, BELT_Y, 0);
 const waitSlot = (index) => v3(TUBE.x0 - 0.42 - Math.min(index, 3) * 0.17, BELT_Y, 0);
@@ -70,9 +92,12 @@ const positionOf = (sim, message, queueIndex, waitIndex) => {
       return v3(POD_X, POD_TOP + 0.02, Z[message.pod]);
     case 'retry':
       if (waitIndex >= 0) return waitSlot(waitIndex);
-      if (t < LIFT_SHARE) return retryLifts[message.from].getPointAt(ease(t / LIFT_SHARE));
+      {
+        const share = LIFT_SHARE[message.from];
+        const u = ease(t);
 
-      return retryArc.getPointAt(ease((t - LIFT_SHARE) / (1 - LIFT_SHARE)));
+        return u < share ? retryLifts[message.from].getPointAt(u / share) : retryArc.getPointAt((u - share) / (1 - share));
+      }
     case 'ack':
       return v3(POD_X, POD_TOP + 1.3 * ease(t), Z[message.pod]);
     default:
@@ -222,9 +247,45 @@ export const createScene = ({ container, overlay, logoUrl, natsUrl, reduce }) =>
   const pathMaterial = new THREE.LineBasicMaterial({ transparent: true, opacity: 0.9 });
   const retryMaterial = new THREE.LineDashedMaterial({ transparent: true, opacity: 0.75, dashSize: 0.09, gapSize: 0.08 });
 
-  for (const curve of [...fanIn, ...fanOut]) scene.add(curveLine(curve, pathMaterial));
-  for (const curve of retryLifts) scene.add(curveLine(curve, retryMaterial, 32));
-  scene.add(curveLine(retryArc, retryMaterial, 96));
+  for (const curve of [...fanIn, ...fanOut]) scene.add(curveLine(curve, pathMaterial, 160));
+  for (const curve of retryLifts) scene.add(curveLine(curve, retryMaterial, 64));
+  scene.add(curveLine(retryArc, retryMaterial, 240));
+
+  // the board the system sits on: a thin plate with a rounded outline
+  const PLATE = { x0: SERVICE_X - 0.95, x1: POD_X + 0.95, z0: RAIL.z - 0.55, z1: Z[2] + 0.95, r: 0.5 };
+  const plateShape = new THREE.Shape();
+
+  plateShape.moveTo(PLATE.x0 + PLATE.r, PLATE.z0);
+  plateShape.lineTo(PLATE.x1 - PLATE.r, PLATE.z0);
+  plateShape.quadraticCurveTo(PLATE.x1, PLATE.z0, PLATE.x1, PLATE.z0 + PLATE.r);
+  plateShape.lineTo(PLATE.x1, PLATE.z1 - PLATE.r);
+  plateShape.quadraticCurveTo(PLATE.x1, PLATE.z1, PLATE.x1 - PLATE.r, PLATE.z1);
+  plateShape.lineTo(PLATE.x0 + PLATE.r, PLATE.z1);
+  plateShape.quadraticCurveTo(PLATE.x0, PLATE.z1, PLATE.x0, PLATE.z1 - PLATE.r);
+  plateShape.lineTo(PLATE.x0, PLATE.z0 + PLATE.r);
+  plateShape.quadraticCurveTo(PLATE.x0, PLATE.z0, PLATE.x0 + PLATE.r, PLATE.z0);
+
+  const plateMaterial = new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide });
+  const plate = new THREE.Mesh(new THREE.ShapeGeometry(plateShape, 12), plateMaterial);
+  const plateEdgeMaterial = new THREE.LineBasicMaterial({ transparent: true });
+  const plateEdge = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(plateShape.getSpacedPoints(160)), plateEdgeMaterial);
+
+  // the shape is drawn in x/y; lay it on the floor so its y becomes the floor's z
+  for (const mesh of [plate, plateEdge]) {
+    mesh.rotation.x = Math.PI / 2;
+    mesh.position.y = 0.004;
+    scene.add(mesh);
+  }
+
+  // junction dots where lines merge and split
+  const junctionMaterial = new THREE.MeshBasicMaterial();
+
+  for (const at of [v3(JOIN_X, BELT_Y, 0), v3(SPLIT_X, BELT_Y, 0), v3(POD_X, RAIL.y, RAIL.z), v3(RAIL.dropX, RAIL.y, 0)]) {
+    const dot = new THREE.Mesh(new THREE.SphereGeometry(0.05, 16, 12), junctionMaterial);
+
+    dot.position.copy(at);
+    scene.add(dot);
+  }
 
   // the stream: a glass capsule, with a glow inside that grows as it fills
   const tubeLength = TUBE.x1 - TUBE.x0;
@@ -296,14 +357,18 @@ export const createScene = ({ container, overlay, logoUrl, natsUrl, reduce }) =>
   natsBadge.position.set((TUBE.x0 + TUBE.x1) / 2, BELT_Y + 0.62, 0);
   scene.add(natsBadge);
 
+  const serviceLeds = [];
+  const lastPublish = Z.map(() => -1e9);
+
   for (const z of Z) {
     const service = new THREE.Mesh(blockGeometry, serviceMaterial);
     const led = new THREE.Mesh(ledGeometry, new THREE.MeshBasicMaterial());
 
+    serviceLeds.push(led);
+
     service.position.set(SERVICE_X, SERVICE.h / 2, z);
     service.castShadow = true;
     led.position.set(SERVICE_X + SERVICE.w / 2 - 0.14, SERVICE.h / 2, z + SERVICE.d / 2 + 0.004);
-    led.userData.serviceLed = true;
     const outline = new THREE.LineSegments(serviceOutline, outlineMaterial);
 
     outline.position.copy(service.position);
@@ -405,9 +470,11 @@ export const createScene = ({ container, overlay, logoUrl, natsUrl, reduce }) =>
     tubeGlow.material.color.copy(palette.deliver);
     for (const pod of pods) pod.progress.material.color.copy(palette.deliver);
 
-    scene.traverse((object) => {
-      if (object.userData.serviceLed) object.material.color.copy(palette.deliver);
-    });
+    plateMaterial.color.copy(palette.dark ? palette.bg2 : palette.bg0);
+    plateMaterial.opacity = palette.dark ? 0.55 : 0.8;
+    plateEdgeMaterial.color.copy(palette.line);
+    plateEdgeMaterial.opacity = 0.9;
+    junctionMaterial.color.copy(palette.strong);
 
     scene.remove(grid);
     grid.geometry.dispose();
@@ -454,7 +521,7 @@ export const createScene = ({ container, overlay, logoUrl, natsUrl, reduce }) =>
     const content = Math.min(cw, 1140);
     const left = (cw - content) / 2;
     const region =
-      cw < 760 ? REGION.narrow : { ...REGION.wide, x0: (left + content * 0.5) / cw, x1: (left + content - 8) / cw };
+      cw < 760 ? REGION.narrow : { ...REGION.wide, x0: (left + content * 0.48) / cw, x1: Math.min(1, (left + content + 40) / cw) };
     const aspect = cw / ch;
 
     view.cw = cw;
@@ -470,12 +537,12 @@ export const createScene = ({ container, overlay, logoUrl, natsUrl, reduce }) =>
     camera.updateMatrixWorld();
 
     const bounds = [
-      v3(SERVICE_X - 0.6, 0, -2.6),
-      v3(SERVICE_X - 0.6, 0, 2.6),
-      v3(POD_X + 0.8, 0, -2.6),
-      v3(POD_X + 0.8, 0, 2.6),
-      v3(0.2, 1.6, -1.25),
-      v3(POD_X, 1.8, Z[0]),
+      v3(SERVICE_X - 0.95, 0, RAIL.z - 0.55),
+      v3(SERVICE_X - 0.95, 0, Z[2] + 0.95),
+      v3(POD_X + 0.95, 0, RAIL.z - 0.55),
+      v3(POD_X + 0.95, 0, Z[2] + 0.95),
+      v3(POD_X, RAIL.y + 0.2, RAIL.z),
+      v3(POD_X, POD_TOP + 1.3, Z[0]),
     ].map((p) => p.applyMatrix4(camera.matrixWorldInverse));
     const minX = Math.min(...bounds.map((p) => p.x));
     const maxX = Math.max(...bounds.map((p) => p.x));
@@ -520,6 +587,8 @@ export const createScene = ({ container, overlay, logoUrl, natsUrl, reduce }) =>
       const waitIndex = sim.waiting.indexOf(message);
       const target = positionOf(sim, message, queueIndex, waitIndex);
       const first = !visual.placed;
+
+      if (first && message.state === 'in') lastPublish[message.service] = now;
 
       // the queue and the waiting line glide; paths are followed exactly
       if (message.state === 'queued' || waitIndex >= 0) {
@@ -567,6 +636,14 @@ export const createScene = ({ container, overlay, logoUrl, natsUrl, reduce }) =>
     for (const id of Array.from(visuals.keys())) {
       if (!sim.messages.some((message) => message.id === id)) dropVisual(id);
     }
+
+    // a service's lamp flares as it publishes
+    serviceLeds.forEach((led, index) => {
+      const flare = Math.max(0, 1 - (now - lastPublish[index]) / 450);
+
+      led.material.color.copy(palette.deliver).lerp(new THREE.Color(1, 1, 1), flare * 0.6);
+      led.scale.setScalar(1 + flare * 1.2);
+    });
 
     // the stream glows brighter as it fills
     const fill = sim.queue.length / CAPACITY;
