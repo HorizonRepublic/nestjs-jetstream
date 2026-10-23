@@ -8,7 +8,7 @@ schema:
   headline: "Troubleshooting: NestJS JetStream Transport"
   description: "Fix common NestJS JetStream issues, from connection errors and consumer lag to RPC timeouts, DLQ publish failures and stream migration recovery."
   datePublished: "2026-03-26"
-  dateModified: "2026-08-03"
+  dateModified: "2026-10-23"
 ---
 
 # Troubleshooting
@@ -246,6 +246,19 @@ During the brief window between Phase 2 (delete) and Phase 3 (create) of a strea
 - For zero-loss migrations, schedule migration during a maintenance window with publishers paused.
 
 ## Startup issues
+
+### `Unable to resolve signature of method decorator` on `@EventPattern`
+
+NestJS 12 adds a typed `@EventPattern` overload, and a plain string topic matches it. Under `strict` TypeScript that overload accepts only a handler shaped exactly `(data, ...args: unknown[])`, so a handler with no parameters, or one that takes `@Ctx() ctx: RpcContext`, fails to compile with error TS1241.
+
+**Fix:** pass the topic type explicitly to select the untyped overload. It exists in NestJS 10 and 11 too, so the same code compiles on every supported major:
+
+```typescript
+@EventPattern<string>('order.created')
+handle(@Payload() data: OrderCreated, @Ctx() ctx: RpcContext): void {}
+```
+
+`@MessagePattern` has no typed overload and is unaffected.
 
 ### `listen() hangs` on startup
 

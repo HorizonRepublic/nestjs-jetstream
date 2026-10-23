@@ -16,6 +16,7 @@ export type {
   JetstreamConnectionHealth,
   JetstreamConnectionOptions,
   JetstreamFeatureOptions,
+  JetstreamHealthIndicatorResult,
   JetstreamHealthStatus,
   JetstreamModuleAsyncOptions,
   JetstreamModuleOptions,

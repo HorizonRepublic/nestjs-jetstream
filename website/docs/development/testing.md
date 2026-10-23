@@ -6,7 +6,7 @@ schema:
   headline: Testing
   description: "Running unit and integration tests with Vitest and Testcontainers."
   datePublished: "2026-03-21"
-  dateModified: "2026-08-03"
+  dateModified: "2026-10-23"
 ---
 
 # Testing
@@ -58,7 +58,7 @@ Unit tests mock all external dependencies and test individual classes/functions 
 - **Location:** `test/**/*.spec.ts`
 - **Timeout:** 30 seconds per test (60s for self-healing scenarios)
 - **Parallelism:** Enabled: each suite starts its own NATS container
-- **Container image:** `nats:2.12.6` with JetStream and persistent store
+- **Container image:** `nats:2.15.1` with JetStream and persistent store
 
 Integration tests verify end-to-end behavior: stream/consumer provisioning, message delivery, RPC round-trips, broadcast fan-out, ordered delivery, dead-letter handling, graceful shutdown, and self-healing recovery.
 

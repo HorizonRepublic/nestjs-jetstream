@@ -37,7 +37,7 @@ import { getTracer } from '../tracer';
 const logger = new Logger('Jetstream:Otel');
 
 /** Optional attribute map used by infrastructure span builders. */
-type AttributeBag = Record<string, AttributeValue | undefined>;
+type AttributeBag = Partial<Record<string, AttributeValue>>;
 
 /** Attributes accepted by {@link ConnectionLifecycleSpanHandle.recordEvent}. */
 export type SpanEventAttributes = Record<string, AttributeValue>;

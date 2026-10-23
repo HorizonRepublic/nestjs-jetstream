@@ -2,7 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 
 import type { ConnectionRegistry } from '../connection/connection-registry';
 import type { ConnectionScope } from '../connection/connection.types';
-import type { JetstreamConnectionHealth, JetstreamHealthStatus } from '../interfaces';
+import type {
+  JetstreamConnectionHealth,
+  JetstreamHealthIndicatorResult,
+  JetstreamHealthStatus,
+} from '../interfaces';
 
 /** Upper bound on a single connection's round-trip probe. */
 const PROBE_TIMEOUT_MS = 5_000;
@@ -125,7 +129,7 @@ export class JetstreamHealthIndicator {
    * @returns Object with status, server, and latency under the given key.
    * @throws Error with `isHealthCheckError`, `causes`, and `{ [key]: { status: 'down' } }`.
    */
-  public async isHealthy(key = 'jetstream'): Promise<Record<string, Record<string, unknown>>> {
+  public async isHealthy(key = 'jetstream'): Promise<JetstreamHealthIndicatorResult> {
     const status = await this.check();
 
     const details: Record<string, unknown> = {

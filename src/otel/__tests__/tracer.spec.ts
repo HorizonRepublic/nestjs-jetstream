@@ -1,9 +1,9 @@
 import { trace } from '@opentelemetry/api';
 import {
-  BasicTracerProvider,
+  TracerProvider,
   InMemorySpanExporter,
   SimpleSpanProcessor,
-} from '@opentelemetry/sdk-trace-base';
+} from '@opentelemetry/sdk-trace';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { getTracer } from '../tracer';
@@ -29,8 +29,8 @@ describe('getTracer', () => {
 
     // When: host app registers an SDK afterwards
     const exporter = new InMemorySpanExporter();
-    const provider = new BasicTracerProvider({
-      spanProcessors: [new SimpleSpanProcessor(exporter)],
+    const provider = new TracerProvider({
+      spanProcessors: [new SimpleSpanProcessor({ exporter })],
     });
 
     trace.setGlobalTracerProvider(provider);

@@ -11,11 +11,11 @@ import { NodeSDK } from '@opentelemetry/sdk-node';
  *   import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
  *   const exporter = new OTLPTraceExporter({ url: 'http://localhost:4318/v1/traces' });
  */
-import { ConsoleSpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
+import { ConsoleSpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace';
 
 export const sdk = new NodeSDK({
   serviceName: 'distributed-tracing-example',
-  spanProcessors: [new SimpleSpanProcessor(new ConsoleSpanExporter())],
+  spanProcessors: [new SimpleSpanProcessor({ exporter: new ConsoleSpanExporter() })],
 });
 
 sdk.start();

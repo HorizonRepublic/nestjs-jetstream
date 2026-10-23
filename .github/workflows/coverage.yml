@@ -21,12 +21,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: '24.19.0'
+          node-version: '24.22.1'
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
         with:
-          version: 11.21.0
+          version: 12.15.0
 
       - name: Install dependencies
         run: pnpm install
@@ -55,14 +55,17 @@ jobs:
           name: codecov-umbrella
           fail_ci_if_error: true
 
-  # NestJS 12 is still a prerelease. peerDependencies declare `^12.0.0`, which
-  # does not match `12.0.0-alpha.*`, so this job installs the prerelease
-  # explicitly to catch transport contract changes before users hit them.
-  # Advisory only: it must never block a merge.
-  nestjs-prerelease:
-    name: NestJS 12 prerelease
+  # Development runs on the newest NestJS major. peerDependencies also accept
+  # the older majors, so each of them gets the full suite: typecheck, build,
+  # unit and integration tests.
+  nestjs-compat:
+    name: NestJS ${{ matrix.nestjs }}
     runs-on: ubuntu-latest
-    continue-on-error: true
+
+    strategy:
+      fail-fast: false
+      matrix:
+        nestjs: [10, 11]
 
     steps:
       - uses: actions/checkout@v7
@@ -72,24 +75,24 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: '24.19.0'
+          node-version: '24.22.1'
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
         with:
-          version: 11.21.0
+          version: 12.15.0
 
       - name: Install dependencies
         run: pnpm install
 
-      - name: Install NestJS prerelease
+      - name: Install NestJS ${{ matrix.nestjs }}
         run: >
           pnpm add -D
-          @nestjs/common@next
-          @nestjs/core@next
-          @nestjs/microservices@next
-          @nestjs/platform-express@next
-          @nestjs/testing@next
+          @nestjs/common@^${{ matrix.nestjs }}
+          @nestjs/core@^${{ matrix.nestjs }}
+          @nestjs/microservices@^${{ matrix.nestjs }}
+          @nestjs/platform-express@^${{ matrix.nestjs }}
+          @nestjs/testing@^${{ matrix.nestjs }}
 
       - name: Type check
         run: pnpm typecheck
@@ -97,5 +100,5 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Unit tests
-        run: pnpm vitest run --project unit
+      - name: Run all tests
+        run: pnpm test
