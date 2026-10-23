@@ -10,10 +10,7 @@
 .scene-stage {
   position: absolute;
   inset: 0;
-  mask-image:
-    linear-gradient(90deg, transparent 28%, #000 50%, #000 92%, transparent),
-    linear-gradient(180deg, transparent, #000 8%, #000 92%, transparent);
-  mask-composite: intersect;
+  mask-image: linear-gradient(90deg, transparent 28%, #000 50%);
 }
 
 /* Labels and the tooltip sit over the canvas as plain HTML, placed per frame. */

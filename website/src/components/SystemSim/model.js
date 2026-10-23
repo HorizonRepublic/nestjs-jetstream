@@ -22,8 +22,8 @@ export const createSim = () => ({
   nextId: 1,
   tiles: [],
   pods: Array.from({ length: PODS }, () => ({ tile: null, downUntil: 0, manual: false, flash: null, flashAt: -1e9 })),
-  nextSpawn: 400,
-  nextBurst: 4500,
+  nextSpawn: 200,
+  nextBurst: 2500,
   burstLeft: 0,
   burstAt: 0,
   nextRestart: 16000,
@@ -94,18 +94,18 @@ export const step = (sim, dt) => {
 
   if (now >= sim.nextSpawn) {
     publish(sim);
-    sim.nextSpawn = now + 850 + Math.random() * 900;
+    sim.nextSpawn = now + 600 + Math.random() * 500;
   }
 
   if (now >= sim.nextBurst) {
-    sim.burstLeft = 4;
-    sim.nextBurst = now + 11000 + Math.random() * 6000;
+    sim.burstLeft = 5;
+    sim.nextBurst = now + 9000 + Math.random() * 4000;
   }
 
   if (sim.burstLeft && now >= sim.burstAt) {
     publish(sim);
     sim.burstLeft -= 1;
-    sim.burstAt = now + 180;
+    sim.burstAt = now + 140;
   }
 
   // a rolling deploy: each running pod restarts in turn while the log holds the work
@@ -162,7 +162,7 @@ export const step = (sim, dt) => {
         next.state = 'delivered';
         next.pod = index;
         next.since = now;
-        next.until = now + 650 + Math.random() * 700;
+        next.until = now + 800 + Math.random() * 500;
         pod.tile = next;
       }
     }

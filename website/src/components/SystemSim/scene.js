@@ -122,7 +122,7 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
   sun.position.set(-3, 9, 5);
   sun.target.position.set(-1, 0, -0.6);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(1024, 1024);
   sun.shadow.camera.left = -9;
   sun.shadow.camera.right = 9;
   sun.shadow.camera.top = 9;
@@ -257,7 +257,7 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
 
     view.cw = cw;
     view.ch = ch;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
     renderer.setSize(cw, ch, false);
     renderer.domElement.style.width = `${cw}px`;
     renderer.domElement.style.height = `${ch}px`;
@@ -561,7 +561,7 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
   };
 
   const tick = (ts) => {
-    const dt = last ? Math.min(50, ts - last) : 16;
+    const dt = last ? Math.min(100, ts - last) : 16;
 
     last = ts;
     step(sim, dt);
