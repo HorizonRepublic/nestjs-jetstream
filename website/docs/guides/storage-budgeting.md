@@ -8,7 +8,7 @@ schema:
   headline: "Storage budgeting & provisioning"
   description: "How JetStream stream reservations relate to the server max_file_store, and how to read the boot-time provisioning summary."
   datePublished: "2026-06-02"
-  dateModified: "2026-08-03"
+  dateModified: "2026-10-23"
 ---
 
 # Storage budgeting & provisioning
@@ -16,9 +16,8 @@ schema:
 > **Use when:** provisioning fails on storage, or you need to size a cluster before deploying.
 > **You get:** the arithmetic behind stream reservations, the boot summary, and the pre-flight check.
 
-When your service starts, the transport ensures its JetStream streams exist. Each stream
-reserves storage up front, and that reservation is charged against a budget shared by **every
-service** on the cluster.
+Each stream the transport creates reserves storage up front, and the reservation is charged
+against a budget shared by **every service** on the cluster.
 
 ## The arithmetic
 
@@ -30,8 +29,11 @@ per-node footprint (your service) ~ Total max_bytes   (worst case: replicas = no
 ```
 
 On a 3-node cluster with `num_replicas: 3`, every stream keeps a replica on every node, so each
-node must hold the **sum of `max_bytes`** across all your streams. With the library defaults
-(event 5 GiB + broadcast 2 GiB + ordered 5 GiB + DLQ 5 GiB) that is ~17 GiB **per node**.
+node must hold the **sum of `max_bytes`** across all your streams. A stream exists only for a kind
+with registered handlers. With the [library defaults](/docs/reference/default-configs#stream-defaults),
+a service with event, broadcast and ordered handlers reserves event 512 MiB + broadcast 256 MiB +
+ordered 1 GiB + DLQ 256 MiB = 2 GiB **per node**. JetStream-mode RPC adds a 64 MiB command stream,
+and recurring schedules a 64 MiB schedule stream.
 
 The NATS server's `max_file_store` is a **per-node** ceiling shared by all services. Provisioning
 fails when the sum of reservations across every service exceeds it.
@@ -41,21 +43,21 @@ fails when the sum of reservations across every service exceeds it.
 On startup the transport logs a summary at `INFO` (always on):
 
 ```text
-Provisioning 2 stream(s) for "orders":
-  - orders__microservice_ev-stream [ev] storage=file replicas=3 max_bytes=5.00 GiB max_age=7.0d retention=workqueue -> cluster reservation 15.00 GiB
-  - broadcast-stream [broadcast] storage=file replicas=3 max_bytes=2.00 GiB max_age=1.0h retention=limits -> cluster reservation 6.00 GiB
-  Total per-node file-backed footprint ~ 7.00 GiB (sum of max_bytes; worst case replicas = nodes). Ensure the NATS server max_file_store accommodates the sum across ALL services.
+Provisioning 3 stream(s) for "orders":
+  - orders__microservice_ev-stream [ev] storage=file replicas=3 max_bytes=0.50 GiB max_age=7.0d retention=workqueue -> cluster reservation 1.50 GiB
+  - broadcast-stream [broadcast] storage=file replicas=3 max_bytes=0.25 GiB max_age=1.0h retention=limits -> cluster reservation 0.75 GiB
+  - orders__microservice_dlq-stream [dlq] storage=file replicas=3 max_bytes=0.25 GiB max_age=30.0d retention=limits -> cluster reservation 0.75 GiB
+  Total per-node file-backed footprint ~ 1.00 GiB (sum of max_bytes; worst case replicas = nodes). Ensure the NATS server max_file_store accommodates the sum across ALL services.
 ```
 
-Read the `Total per-node file-backed footprint` line first: that is what each node must accommodate
-from this service alone.
+Read the `Total per-node file-backed footprint` line first: that is what each node must hold for
+this service alone. Memory-backed streams are left out of it.
 
 ## When provisioning fails
 
-If a stream cannot be created, the transport throws a `JetstreamProvisioningError` with the
-stream name, the requested `max_bytes`/`num_replicas`, the reservation, the NATS `err_code` and
-description, and a remediation hint, instead of crashing with an opaque API error. Two common
-cases:
+A stream that cannot be created throws a `JetstreamProvisioningError` carrying the stream name,
+the requested `max_bytes` and `num_replicas`, the reservation, the NATS `err_code` and description,
+and a remediation hint. Two common cases:
 
 - **Insufficient storage**: the aggregate reservation exceeds `max_file_store`. Lower
   `max_bytes`/`num_replicas` for the service, or raise `max_file_store` on the servers.
@@ -64,9 +66,9 @@ cases:
 
 ## Opt-in pre-flight check
 
-Set `provisioning.preflightStorageCheck: true` to have the transport query account limits via
-`getAccountInfo()` before provisioning and **warn** when this service's reservation would exceed
-the remaining budget:
+With `provisioning.preflightStorageCheck: true` the transport reads the account limits via
+`getAccountInfo()` before provisioning and **warns** (never throws) when this service's reservation
+would exceed the remaining budget:
 
 ```ts
 JetstreamModule.forRoot({

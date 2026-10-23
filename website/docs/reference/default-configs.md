@@ -2,11 +2,11 @@
 sidebar_position: 2
 sidebar_label: "Default Configs"
 title: "Default Stream & Consumer Configs for NATS JetStream"
-description: "Default stream, consumer, and connection settings for every NestJS JetStream StreamKind (event, broadcast, ordered, command, DLQ)."
+description: "Default stream, consumer, and connection settings for every NestJS JetStream StreamKind (event, broadcast, ordered, command, schedule, DLQ)."
 schema:
   type: Article
   headline: "Default Stream & Consumer Configs for NATS JetStream"
-  description: "Default stream, consumer, and connection settings for every NestJS JetStream StreamKind (event, broadcast, ordered, command, DLQ)."
+  description: "Default stream, consumer, and connection settings for every NestJS JetStream StreamKind (event, broadcast, ordered, command, schedule, DLQ)."
   datePublished: "2026-03-21"
   dateModified: "2026-10-23"
 ---
@@ -16,7 +16,7 @@ schema:
 > **Use when:** you need the exact value the transport starts from before overriding it.
 > **You get:** every stream, consumer and connection default, and the exported constant that holds it.
 
-Every stream and consumer the transport creates starts from the values below, taken from the source. Override any of them through [module configuration](/docs/reference/module-configuration).
+Override any of these through [module configuration](/docs/reference/module-configuration). Your values merge on top of the defaults, so name only what you change.
 
 ## Stream Defaults
 
@@ -43,14 +43,14 @@ Sizes are binary: `1 MB` is 1,048,576 bytes, `512 MB` is 536,870,912 bytes. Dura
 What each kind is for:
 
 - **Event** carries workqueue events. A message is removed once a consumer acks it.
-- **Command** carries RPC requests in [JetStream RPC mode](/docs/patterns/rpc) only. Everything about it is short-lived, because a request nobody answered within three minutes is a request nobody wants answered.
-- **Broadcast** is one stream shared by every service. An hour of `max_age` is enough catch-up for a pod that just started and short enough that config updates do not accumulate.
+- **Command** carries RPC requests in [JetStream RPC mode](/docs/patterns/rpc) only. It is short-lived: a request nobody answered within three minutes is a request nobody wants answered.
+- **Broadcast** is one stream shared by every service. An hour of `max_age` gives a starting pod enough catch-up without letting config updates pile up.
 - **Ordered** keeps messages for a day under `Limits` retention, because an ordered consumer replays a subject from the beginning instead of consuming it away.
-- **Schedule** holds [recurring schedules](/docs/guides/recurring-schedules) and their ticks, created only when a handler declares `schedule`. It also sets `allow_msg_schedules` and `allow_msg_ttl`. `max_age` stays off because NATS stops a schedule whose stored message ages out; ticks expire through their own TTL instead.
+- **Schedule** holds [recurring schedules](/docs/guides/recurring-schedules) and their ticks, and exists only when a handler declares `schedule`. It also sets `allow_msg_schedules` and `allow_msg_ttl`. `max_age` stays off because an aged-out holder silently stops its schedule; ticks expire through their own TTL instead.
 - **DLQ** is created unless you pass `dlq: false`. Thirty days under `Limits` retention: reading a dead letter must not remove it. See [Dead Letter Queue](/docs/guides/dead-letter-queue#built-in-dlq-stream).
 
 :::note S2 compression
-[S2](https://github.com/klauspost/compress/tree/master/s2) is a Snappy-compatible codec with better ratios. It cuts disk I/O and storage for CPU that varies with payload entropy and size, and needs NATS Server >= 2.10 (see [runtime requirements](/docs/getting-started/installation#runtime-requirements)). Override per kind:
+[S2](https://github.com/klauspost/compress/tree/master/s2) is a Snappy-compatible codec with better ratios. It trades some CPU, depending on payload size and entropy, for less disk I/O and storage. Override per kind:
 
 ```typescript
 import { StoreCompression } from '@nats-io/jetstream';
@@ -63,7 +63,7 @@ events: {
 :::
 
 :::tip Scheduling
-To enable [message scheduling](/docs/guides/scheduling), add `allow_msg_schedules: true` to the event stream config. This requires NATS Server >= 2.12.
+To enable [message scheduling](/docs/guides/scheduling), add `allow_msg_schedules: true` to the event stream config. On a server too old for it, startup throws `JetstreamCapabilityError`; see [NATS server versions](/docs/getting-started/installation#nats-server-versions).
 :::
 
 ## Consumer Defaults
@@ -76,37 +76,24 @@ Every durable consumer uses `ack_policy: Explicit`, `deliver_policy: All` and `r
 | `max_deliver`     | `3`          | `1`         | `3`          | `3`          |
 | `max_ack_pending` | `100`        | `100`       | `100`        | `100`        |
 
-An event that fails three times is [dead-lettered](/docs/guides/dead-letter-queue). Between attempts the transport naks with a delay taken from the retry curve, so the three attempts span roughly twelve seconds instead of burning out in milliseconds.
+An event that fails three times is [dead-lettered](/docs/guides/dead-letter-queue). Between attempts the transport naks with a delay from the retry curve (`[2000, 10000]` ms), so the three attempts span roughly twelve seconds instead of burning out in milliseconds.
 
-The delay is applied client-side, which leaves `ack_wait` at its full value, so a slow handler is not redelivered while it still runs. Tune the curve with `events.retry`, or pass `false` to nak immediately.
+The delay is applied client-side, which leaves `ack_wait` at its full value, so a slow handler is not redelivered while it still runs. Tune the curve per kind with [`retry`](/docs/reference/module-configuration#retry), or pass `false` to nak immediately.
 
 A command is delivered once and never retried, so an RPC failure reaches the caller instead of being repeated behind their back.
 
 :::note
-Ordered consumers have no durable configuration. They are ephemeral and managed entirely by the `@nats-io/jetstream` client library.
+Ordered consumers have no durable configuration: they are ephemeral and managed by the `@nats-io/jetstream` client.
 :::
 
 ## Connection Defaults
-
-The transport applies the following connection defaults for production resilience:
 
 | Property               | Value  | Notes                                  |
 | ---------------------- | ------ | -------------------------------------- |
 | `maxReconnectAttempts` | `-1`   | Unlimited reconnection attempts        |
 | `reconnectTimeWait`    | `1000` | 1 second between reconnection attempts |
 
-These defaults ensure the transport automatically recovers from transient network failures without manual intervention. Override them via `connectionOptions` in `forRoot()`:
-
-```typescript
-JetstreamModule.forRoot({
-  name: 'orders',
-  servers: ['nats://localhost:4222'],
-  connectionOptions: {
-    maxReconnectAttempts: 10,   // limit to 10 attempts
-    reconnectTimeWait: 2_000,  // 2 seconds between attempts
-  },
-})
-```
+The transport keeps reconnecting after a network failure. Override either value through [`connectionOptions`](/docs/reference/module-configuration#connectionoptions).
 
 ## Timeouts
 
@@ -118,11 +105,11 @@ JetstreamModule.forRoot({
 
 The JetStream RPC timeout is longer on purpose: the message is persisted to a stream first, and the consumer may take a while to reach it.
 
-The shutdown value bounds `drain()` on the NATS connection, after which the transport forces the connection closed. It covers the drain, not handler execution, so raise it only if drains are hitting the ceiling. See [Graceful Shutdown](/docs/guides/graceful-shutdown).
+The shutdown value bounds `drain()` on each NATS connection, which waits for in-flight messages; when it runs out, the transport closes the connection anyway. Raise it only if drains hit the ceiling. See [Graceful Shutdown](/docs/guides/graceful-shutdown).
 
 ## Replicas in production
 
-The default `num_replicas: 1` is suitable for development and single-node NATS. **For production NATS clusters, set `num_replicas: 3`** to ensure data survives node failures via Raft consensus:
+The default `num_replicas: 1` suits development and single-node NATS. **On a production cluster, set `num_replicas: 3`** so data survives a node failure:
 
 ```typescript
 JetstreamModule.forRoot({
@@ -131,38 +118,34 @@ JetstreamModule.forRoot({
   events: { stream: { num_replicas: 3 } },
   broadcast: { stream: { num_replicas: 3 } },
   ordered: { stream: { num_replicas: 3 } },
+  schedule: { stream: { num_replicas: 3 } },
   rpc: { mode: 'jetstream', stream: { num_replicas: 3 } },
+  dlq: { stream: { num_replicas: 3 } },
 });
 ```
 
 :::tip
-`num_replicas` can be changed on an existing stream, NATS will add or remove replicas automatically. No downtime or stream recreation required.
+`num_replicas` is mutable: NATS adds or removes replicas on an existing stream without downtime or recreation.
 :::
 
 ## Immutable vs mutable stream properties
-
-NATS JetStream divides stream configuration into properties that can be updated on an existing stream and properties that are **locked at creation time**.
 
 ### Mutable (can be changed at any time)
 
 `num_replicas`, `max_age`, `max_bytes`, `max_msgs`, `max_msg_size`, `max_msgs_per_subject`, `discard`, `duplicate_window`, `subjects`, `compression`, `description`, `allow_rollup_hdrs`, `allow_direct`
 
-The transport applies mutable changes automatically on startup, just update the value in `forRoot()` and restart the service.
+The transport applies mutable changes on startup: update the value in `forRoot()` and restart.
 
 ### Enable-only (can be turned on, but never off)
 
-These properties can be **enabled** on an existing stream via a normal update, but once enabled they cannot be disabled. No stream recreation required.
+A normal update enables these on an existing stream, without recreating it or losing messages. Once on, they cannot be turned off.
 
-| Property              | Default | Notes                                                                                 |
-| --------------------- | ------- | ------------------------------------------------------------------------------------- |
-| `allow_msg_schedules` | `false` | Enable [message scheduling](/docs/guides/scheduling): safe to add to existing streams |
-| `allow_msg_ttl`       | `false` | Enable per-message TTL                                                                |
-| `deny_delete`         | `false` | Prevent message deletion via API                                                      |
-| `deny_purge`          | `false` | Prevent stream purging via API                                                        |
-
-:::tip Enabling scheduling on existing streams
-You can safely add `allow_msg_schedules: true` to an existing stream config, and NATS applies it as a regular update. Uptime, messages and the stream itself all survive. Just update `forRoot()` and restart.
-:::
+| Property              | Default | Notes                                                                                  |
+| --------------------- | ------- | -------------------------------------------------------------------------------------- |
+| `allow_msg_schedules` | `false` | Enables [message scheduling](/docs/guides/scheduling). `true` on the schedule stream   |
+| `allow_msg_ttl`       | `false` | Enables [per-message TTL](/docs/guides/per-message-ttl). `true` on the schedule stream |
+| `deny_delete`         | `false` | Prevents message deletion through the API                                              |
+| `deny_purge`          | `false` | Prevents stream purging through the API                                                |
 
 ### Immutable (locked after creation)
 
@@ -172,47 +155,15 @@ You can safely add `allow_msg_schedules: true` to an existing stream config, and
 | `retention` | `Workqueue` or `Limits`   | **No**     | Controlled by the transport: a mismatch is always an error |
 | `storage`   | `File`                    | **Yes**    | Migrated with `provisioning.allowDestructiveMigration`     |
 
-The transport can automatically migrate `storage` via blue-green stream recreation. See the full **[Stream Migration guide](/docs/guides/stream-migration)** for how it works, rolling update behavior, performance benchmarks, and limitations.
+The transport migrates `storage` through blue-green stream recreation. The [Stream Migration guide](/docs/guides/stream-migration) covers how it works, rolling updates and limitations.
 
 :::warning retention is never migratable
-`retention` is controlled by the transport (`Workqueue` for events/commands, `Limits` for broadcast/ordered). A mismatch between the running stream and the expected retention policy always throws an error on startup, whatever `provisioning.allowDestructiveMigration` says.
+`retention` follows the kind (`Workqueue` for events, commands and schedules, `Limits` for broadcast, ordered and DLQ). A running stream with a different policy fails startup, whatever `provisioning.allowDestructiveMigration` says.
 :::
-
-## Overriding Defaults
-
-All stream and consumer defaults can be overridden in `forRoot()` options. User-provided values are merged on top of the defaults: you only need to specify the properties you want to change.
-
-```typescript
-import { RetentionPolicy, StorageType } from '@nats-io/jetstream';
-import { JetstreamModule, toNanos } from '@horizon-republic/nestjs-jetstream';
-
-JetstreamModule.forRoot({
-  name: 'orders',
-  servers: ['nats://localhost:4222'],
-  events: {
-    stream: {
-      storage: StorageType.Memory,   // override just storage type
-      max_age: toNanos(3, 'days'), // 3 days instead of 7
-    },
-    consumer: {
-      max_deliver: 5, // 5 retries instead of 3
-    },
-  },
-  rpc: {
-    mode: 'jetstream',
-    timeout: 60_000, // 1 minute instead of 3
-    stream: {
-      max_msg_size: 1024 * 1024, // 1 MB limit for RPC payloads
-    },
-  },
-});
-```
-
-See [Module Configuration](/docs/reference/module-configuration) for the full options reference.
 
 ## Exported constants
 
-Every default above is exposed as a typed constant from the package, so you can import and reuse it when composing overrides programmatically or writing tests.
+Every default above is exported as a typed constant, for composing overrides or writing tests.
 
 **Stream and consumer defaults:**
 
@@ -221,11 +172,13 @@ Every default above is exposed as a typed constant from the package, so you can 
 | `DEFAULT_EVENT_STREAM_CONFIG`       | Event (workqueue) stream defaults                                                       |
 | `DEFAULT_BROADCAST_STREAM_CONFIG`   | Broadcast stream defaults (shared `broadcast-stream`)                                   |
 | `DEFAULT_ORDERED_STREAM_CONFIG`     | Ordered stream defaults                                                                 |
+| `DEFAULT_SCHEDULE_STREAM_CONFIG`    | Schedule stream defaults                                                                |
 | `DEFAULT_COMMAND_STREAM_CONFIG`     | JetStream RPC command stream defaults                                                   |
 | `DEFAULT_DLQ_STREAM_CONFIG`         | [Dead Letter Queue](/docs/guides/dead-letter-queue#built-in-dlq-stream) stream defaults |
 | `DEFAULT_EVENT_CONSUMER_CONFIG`     | Event consumer defaults                                                                 |
 | `DEFAULT_BROADCAST_CONSUMER_CONFIG` | Broadcast consumer defaults                                                             |
 | `DEFAULT_COMMAND_CONSUMER_CONFIG`   | JetStream RPC command consumer defaults                                                 |
+| `DEFAULT_SCHEDULE_CONSUMER_CONFIG`  | Schedule tick consumer defaults                                                         |
 
 **Timeouts and the handler metadata registry:**
 

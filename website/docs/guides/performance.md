@@ -6,49 +6,45 @@ schema:
   headline: "Performance Tuning"
   description: "Tune ackWait, maxAckPending, batch sizes, and ack extension for high-throughput workloads."
   datePublished: "2026-03-26"
-  dateModified: "2026-08-03"
+  dateModified: "2026-10-23"
 ---
 
 # Performance Tuning
 
 > **Use when:** throughput or latency is not where you want it.
-> **You get:** the backpressure and concurrency knobs in the order they matter, with the numbers to expect.
-
-Backpressure controls and concurrency limits move throughput the most.
+> **You get:** the backpressure and concurrency knobs in the order they matter, and how to measure the result.
 
 ## Backpressure & flow control
 
-Pull consumers provide **implicit backpressure**: the client controls how fast it pulls messages from the server. The transport never receives more messages than it can handle.
-
-The message flow through the system:
+Consumers pull, so the client decides how fast messages arrive:
 
 ```text
 NATS Server -> pull consumer (max_ack_pending) -> consume() buffer -> concurrency gate -> handler -> ack -> frees slot
 ```
 
-The primary flow control knob is `max_ack_pending` on the consumer. It caps how many messages are in flight, meaning delivered but not yet acknowledged. At the limit the server stops delivering until existing messages are acknowledged, which is backpressure for free.
+The primary knob is the consumer's `max_ack_pending`: the cap on messages delivered but not yet acknowledged. At the cap the server stops delivering until acks free a slot.
 
 ### Configuration options
 
-| Option                       | Default                      | Effect                            |
-| ---------------------------- | ---------------------------- | --------------------------------- |
-| `consumer.max_ack_pending`   | 100                          | Max in-flight unacked messages    |
-| `consumer.ack_wait`          | 10s (events) / 5min (RPC)    | Ack deadline before redelivery    |
-| `concurrency`                | unlimited                    | Limits parallel handler execution |
-| `consume.max_messages`       | `@nats-io/jetstream` default | Internal prefetch buffer size     |
-| `consume.threshold_messages` | 75% of max_messages          | Auto-refill trigger               |
+| Option                       | Default                    | Effect                            |
+| ---------------------------- | -------------------------- | --------------------------------- |
+| `consumer.max_ack_pending`   | 100                        | Max in-flight unacked messages    |
+| `consumer.ack_wait`          | 10s (events) / 5min (RPC)  | Ack deadline before redelivery    |
+| `concurrency`                | unlimited                  | Limits parallel handler execution |
+| `consume.max_messages`       | 100 (`@nats-io/jetstream`) | Internal prefetch buffer size     |
+| `consume.threshold_messages` | 75% of max_messages        | Auto-refill trigger               |
 
 ### How these interact
 
-- **`max_ack_pending`** is the ceiling. The server will never deliver more than this many unacked messages.
-- **`concurrency`** controls how many messages are processed in parallel by your handlers. If `concurrency` is lower than `max_ack_pending`, excess messages wait in the internal buffer.
-- **`consume.max_messages`** and **`consume.threshold_messages`** control the prefetch buffer: how many messages the `@nats-io/jetstream` client requests from the server in one batch, and when it asks for more.
+- **`max_ack_pending`** is the ceiling on unacked messages.
+- **`concurrency`** caps parallel handlers. Below `max_ack_pending`, the excess waits in the internal buffer.
+- **`consume.max_messages`** and **`consume.threshold_messages`** size the prefetch batch the client requests and decide when it asks for more.
 
-For most workloads, tuning `max_ack_pending` and `concurrency` is enough.
+For most workloads, `max_ack_pending` and `concurrency` are enough.
 
 ## Consume options
 
-The `consume` field controls the internal prefetch buffer used by the `@nats-io/jetstream` `consume()` call. These options determine how aggressively the client pulls messages from the server.
+`consume` passes options to the `@nats-io/jetstream` `consume()` call, which decides how aggressively the client pulls:
 
 ```typescript
 events: {
@@ -60,7 +56,7 @@ events: {
 }
 ```
 
-The `idle_heartbeat` option enables the server to send periodic heartbeats when there are no messages to deliver. The client detects broken connections this way and re-establishes the subscription.
+With `idle_heartbeat` the server sends heartbeats while it has nothing to deliver, so the client notices a broken subscription and re-establishes it.
 
 ## Concurrency control
 
@@ -72,13 +68,11 @@ events: {
 }
 ```
 
-**Guideline:** Set `concurrency` at or below `max_ack_pending`. If `concurrency` exceeds `max_ack_pending`, the server-side limit will be the effective bottleneck anyway.
-
-When `concurrency` is set, messages that exceed the limit are buffered in the RxJS pipeline until a handler slot frees up. This prevents overloading downstream resources (databases, external APIs) while still maintaining a full prefetch buffer.
+Set `concurrency` at or below `max_ack_pending`; above it, the server-side cap is the bottleneck anyway. The cap protects downstream resources (databases, external APIs) while the prefetch buffer stays full.
 
 ## Ack extension
 
-Long-running handlers risk exceeding the `ack_wait` deadline, causing redelivery of messages that are still being processed. The `ackExtension` option prevents this by periodically extending the ack deadline while the handler is running. This is the right knob when you can't predict handler duration upfront (e.g., slow external APIs, long-running [RPC JetStream mode](/docs/patterns/rpc) calls).
+A handler that outlives `ack_wait` gets its message redelivered while it is still working. `ackExtension` extends the deadline while the handler runs, which fits handlers whose duration you cannot predict: slow external APIs, long [JetStream-mode RPC](/docs/patterns/rpc) calls.
 
 ```typescript
 events: {
@@ -87,30 +81,21 @@ events: {
 }
 ```
 
-When enabled, the transport calls `msg.working()` at regular intervals (at half the `ack_wait` period) to signal that the message is still being processed. This resets the ack deadline on the server.
+The transport calls `msg.working()` every half `ack_wait`, which resets the deadline on the server.
 
-**When to use:**
-
-- Handlers that call slow external APIs or run complex computations.
-- RPC handlers with long timeouts: `ackExtension` keeps the command message alive while the handler runs.
-
-**Interaction with RPC timeout:** For JetStream RPC, the RPC timeout determines how long the caller waits. The `ackExtension` keeps the server-side message alive independently. Both should be configured to accommodate the expected handler duration.
+For JetStream RPC the RPC timeout bounds how long the caller waits, and `ackExtension` keeps the command message alive independently. Size both for the expected handler duration.
 
 ## S2 compression
 
-All streams default to [S2 compression](https://github.com/klauspost/compress/tree/master/s2) (a Snappy-compatible codec), reducing disk I/O and storage with modest CPU overhead. The actual cost varies with payload entropy, message size, and CPU, measure before assuming it's free. Requires **NATS Server >= 2.10**.
-
-See [Default Configs, S2 Compression](/docs/reference/default-configs) for details and how to override per stream kind.
+All streams default to [S2 compression](https://github.com/klauspost/compress/tree/master/s2), a Snappy-compatible codec that trades some CPU for less disk I/O and storage. The cost depends on payload entropy, message size and CPU, so measure it. [Default Configs](/docs/reference/default-configs#stream-defaults) shows how to override it per stream kind.
 
 ## Connection defaults
 
-The transport configures unlimited reconnection attempts (`maxReconnectAttempts: -1`) and a 1-second reconnection interval by default. The application recovers from transient network failures on its own.
-
-See [Default Configs, Connection Defaults](/docs/reference/default-configs#connection-defaults) for the full list and how to override.
+The transport reconnects without limit, once per second (`maxReconnectAttempts: -1`, `reconnectTimeWait: 1000`). See [Connection Defaults](/docs/reference/default-configs#connection-defaults) to override.
 
 ## Complete example
 
-A configuration tuned for high throughput:
+Up to 500 unacked events with 200 handled in parallel, ack extension on long event and RPC handlers, 50 concurrent broadcast handlers, and a 60-second JetStream RPC timeout:
 
 ```typescript
 import { toNanos } from '@horizon-republic/nestjs-jetstream';
@@ -136,30 +121,20 @@ JetstreamModule.forRoot({
 })
 ```
 
-This configuration:
-
-- Allows up to 500 unacked event messages, with 200 processed in parallel.
-- Extends ack deadlines automatically for long-running event and RPC handlers.
-- Limits broadcast processing to 50 concurrent handlers.
-- Sets a 60-second RPC timeout with ack extension to prevent redelivery during processing.
-
 ## Performance expectations
 
-Published benchmark numbers for this library don't exist yet, any figures you see elsewhere are guesses. A real benchmark suite is planned (see the project issues), and this section will be updated with reproducible results when it arrives.
+The library publishes no benchmark figures, so treat any number you see elsewhere as a guess and measure your own workload. What holds without numbers:
 
-In the meantime, here is what you can rely on without numbers:
-
-- **The bottleneck is almost always the handler**, not the transport. Database writes, external API calls, and serialization dominate. Profile the handler first.
-- **Core NATS RPC is the lowest-latency path of the two RPC modes**: skipping the stream write and the inbox routing. Use it when in-cluster latency is the priority.
-- **JetStream RPC adds a stream persist plus an inbox reply** on top of Core NATS. You trade a fixed amount of added latency for the guarantee that the command survives a server restart. Quantify the trade-off on your own workload before planning around it.
-- **Event handler throughput scales with [`concurrency`](/docs/guides/performance#concurrency-control)** up to the point where your downstream dependencies become the bottleneck. CPU-bound handlers scale with core count, while I/O-bound handlers gain from higher concurrency and a larger `max_ack_pending`.
-- **Broadcast is not a throughput hit**: each instance processes its copy independently through its own consumer.
+- **The bottleneck is almost always the handler**: database writes, external API calls, serialization. Profile it first.
+- **Core NATS RPC is the faster of the two RPC modes**: it skips the stream write. JetStream RPC adds a stream persist and an inbox reply, and in exchange the command survives a server restart.
+- **Event throughput scales with [`concurrency`](#concurrency-control)** until a downstream dependency saturates. CPU-bound handlers scale with cores, while I/O-bound handlers gain from higher `concurrency` and `max_ack_pending`.
+- **Broadcast does not slow consumers down**: each service processes its copy through its own consumer.
 
 ### Measuring your throughput
 
-1. **NATS monitoring:** Enable the [NATS monitoring endpoint](https://docs.nats.io/running-a-nats-service/configuration/monitoring) (`-m 8222`) and check `msgs_in`/`msgs_out` rates.
-2. **Consumer lag:** run `nats consumer info <stream> <consumer>` and watch "Num Pending" climb.
-3. **Application metrics:** Use [Lifecycle Hooks](/docs/guides/lifecycle-hooks) to emit Prometheus counters for `MessageRouted`, `Error`, and `RpcTimeout` events.
+1. **NATS monitoring:** enable the [monitoring endpoint](https://docs.nats.io/running-a-nats-service/configuration/monitoring) (`-m 8222`) and watch the `msgs_in` / `msgs_out` rates.
+2. **Consumer lag:** `nats consumer info <stream> <consumer>` shows "Num Pending".
+3. **Application metrics:** the built-in [Prometheus metrics](/docs/observability/metrics) cover handler duration, consumer lag and errors.
 
 ## See also
 

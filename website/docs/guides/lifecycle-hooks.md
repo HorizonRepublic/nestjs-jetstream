@@ -16,36 +16,36 @@ schema:
 > **Use when:** you want the transport to feed your metrics, tracing or alerting.
 > **You get:** every event it emits, the signature of each, and where in the flow they fire.
 
-The transport emits lifecycle events at key moments, connection changes, errors, message routing, shutdown, dead letters, and observability checkpoints. Register hook callbacks to integrate with your monitoring, alerting, or logging infrastructure.
-
 ## Available events
 
-The full event set is defined in the `TransportEvent` enum:
+Every event is a member of the `TransportEvent` enum:
 
-| Event                | Signature                                                 | When it fires                                                          |
-| -------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `Connect`            | `(server: string) => void`                                | NATS connection established                                            |
-| `Disconnect`         | `() => void`                                              | NATS connection lost                                                   |
-| `Reconnect`          | `(server: string) => void`                                | NATS connection re-established after a disconnect                      |
-| `Error`              | `(error: Error, context?: string) => void`                | Any transport-level error                                              |
-| `RpcTimeout`         | `(subject: string, correlationId: string) => void`        | A deadline expires on either side of an RPC call                       |
-| `MessageRouted`      | `(subject: string, kind: MessageKind) => void`            | A message is successfully routed to its handler                        |
-| `HandlerCompleted`   | `(subject, kind: StreamKind, durationMs, status) => void` | A handler returns or throws (success/error/retried/terminated).        |
-| `Published`          | `(subject, kind: StreamKind, durationMs, status) => void` | Every client-side publish leg completes (event emit or RPC publish).   |
-| `RpcCompleted`       | `(subject, durationMs, status) => void`                   | RPC round-trip settles on the caller side (success / error / timeout). |
-| `ConsumerRecovered`  | `(label, attempts: number) => void`                       | Self-healing recovers a consumer after one or more failed restarts     |
-| `ShutdownStart`      | `() => void`                                              | Graceful shutdown sequence begins                                      |
-| `ShutdownComplete`   | `() => void`                                              | Graceful shutdown sequence finishes                                    |
-| `DeadLetter`         | `(info: DeadLetterInfo) => void`                          | A message exhausts all delivery attempts                               |
-| `ScheduleReconciled` | `(report: ScheduleReconcileReport) => void`               | Boot wrote the declared [recurring schedules](./recurring-schedules)   |
+| Event                | Signature                                                 | When it fires                                                                                                       |
+| -------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `Connect`            | `(server: string) => void`                                | NATS connection established                                                                                         |
+| `Disconnect`         | `() => void`                                              | NATS connection lost                                                                                                |
+| `Reconnect`          | `(server: string) => void`                                | NATS connection re-established after a disconnect                                                                   |
+| `Error`              | `(error: Error, context?: string) => void`                | Any transport-level error                                                                                           |
+| `RpcTimeout`         | `(subject: string, correlationId: string) => void`        | A deadline expires on either side of an RPC call                                                                    |
+| `MessageRouted`      | `(subject: string, kind: MessageKind) => void`            | A message is successfully routed to its handler                                                                     |
+| `HandlerCompleted`   | `(subject, kind: StreamKind, durationMs, status) => void` | A handler returns or throws (success/error/retried/terminated).                                                     |
+| `Published`          | `(subject, kind: StreamKind, durationMs, status) => void` | Every client-side publish leg completes (event emit or RPC publish).                                                |
+| `RpcCompleted`       | `(subject, durationMs, status) => void`                   | RPC round-trip settles on the caller side (success / error / timeout).                                              |
+| `ConsumerRecovered`  | `(label, attempts: number) => void`                       | Self-healing recovers a consumer after one or more failed restarts                                                  |
+| `ShutdownStart`      | `() => void`                                              | Graceful shutdown sequence begins                                                                                   |
+| `ShutdownComplete`   | `() => void`                                              | Graceful shutdown sequence finishes                                                                                 |
+| `DeadLetter`         | `(info: DeadLetterInfo) => void`                          | A message exhausts all delivery attempts                                                                            |
+| `ScheduleReconciled` | `(report: ScheduleReconcileReport) => void`               | Once per connection at boot, after the declared [recurring schedules](/docs/guides/recurring-schedules) are written |
 
-The `MessageKind` enum on `MessageRouted` has two values, `Event` and `Rpc`, and is importable from `@horizon-republic/nestjs-jetstream`.
+- `MessageKind` on `MessageRouted` has two values, `Event` and `Rpc`.
+- `ScheduleReconcileReport` lists handler patterns in three arrays: `created`, `updated` and `unchanged`.
+- The built-in [metrics](/docs/observability/metrics) subscribe to these events next to your hooks, so a hook of yours never replaces them.
 
 `RpcTimeout` fires on the caller when a request never gets its reply, and on the responder when a handler runs past the deadline. Core-mode caller timeouts have no correlation ID to report and pass an empty string, so read `subject` first and treat `correlationId` as optional detail.
 
 ## Registering hooks
 
-Pass a `hooks` object in `forRoot()` or `forRootAsync()`. Only register the events you care about, unregistered events are silently ignored.
+Pass a `hooks` object in `forRoot()` or `forRootAsync()` with the events you care about.
 
 ```typescript title="src/app.module.ts"
 import { Module } from '@nestjs/common';
@@ -77,8 +77,6 @@ export class AppModule {}
 
 ### Sentry error tracking
 
-Report transport errors and dead letters to Sentry:
-
 ```typescript
 import * as Sentry from '@sentry/node';
 import { JetstreamModule, TransportEvent } from '@horizon-republic/nestjs-jetstream';
@@ -108,49 +106,9 @@ JetstreamModule.forRoot({
 
 ### Prometheus metrics
 
-Track message throughput, RPC timeouts, and connection state:
-
-```typescript
-import { Counter, Gauge } from '@prometheus-io/client';
-import { JetstreamModule, MessageKind, TransportEvent } from '@horizon-republic/nestjs-jetstream';
-
-const messagesRouted = new Counter({
-  name: 'jetstream_messages_routed_total',
-  help: 'Total messages routed to handlers',
-  labelNames: ['subject', 'kind'],
-});
-
-const rpcTimeouts = new Counter({
-  name: 'jetstream_rpc_timeouts_total',
-  help: 'Total RPC handler timeouts',
-  labelNames: ['subject'],
-});
-
-const connected = new Gauge({
-  name: 'jetstream_connected',
-  help: 'Whether the NATS connection is active (1 = up, 0 = down)',
-});
-
-JetstreamModule.forRoot({
-  name: 'orders',
-  servers: ['nats://localhost:4222'],
-  hooks: {
-    [TransportEvent.Connect]: () => connected.set(1),
-    [TransportEvent.Disconnect]: () => connected.set(0),
-    [TransportEvent.Reconnect]: () => connected.set(1),
-    [TransportEvent.MessageRouted]: (subject, kind) => {
-      messagesRouted.inc({ subject, kind });
-    },
-    [TransportEvent.RpcTimeout]: (subject) => {
-      rpcTimeouts.inc({ subject });
-    },
-  },
-})
-```
+`metrics: true` gives you counters and histograms for handlers, publishes, RPC, dead letters and connection state without writing hooks. See [Metrics](/docs/observability/metrics).
 
 ### Structured logging
-
-Emit structured JSON logs for all lifecycle events:
 
 ```typescript
 import { JetstreamModule, TransportEvent } from '@horizon-republic/nestjs-jetstream';
@@ -175,7 +133,7 @@ JetstreamModule.forRoot({
 
 ## Hooks with multiple connections
 
-Hooks are registered once, at the root, and fire for every [connection](/docs/guides/multi-connection). Each callback receives the originating connection name as a trailing argument when more than one connection is configured:
+Hooks are registered once, at the root, and fire for every [connection](/docs/guides/multi-connection). With more than one connection configured, each callback gets the originating connection name as a trailing argument:
 
 ```typescript
 JetstreamModule.forRoot({
@@ -196,22 +154,15 @@ JetstreamModule.forRoot({
 })
 ```
 
-`connection` is the last parameter of every hook and is `undefined` for single-connection applications, so existing hooks keep receiving exactly the payloads they always did.
+`connection` is the last parameter of every hook and is `undefined` in single-connection applications.
 
 ## No hook = silence
 
-Events without a registered hook are silently ignored: with default logging, warnings and overhead all absent. The `EventBus` checks if a hook is registered and returns immediately if not. This is intentional: the transport doesn't make assumptions about what you want to observe.
-
-If you want to log everything during development, register hooks for all events. In production, register only the ones that feed your monitoring stack.
+An event without a registered hook is dropped: no default logging, no warning, no overhead beyond one lookup. To log everything during development, register a hook for every event.
 
 ## Async hook error handling
 
-Hooks can be synchronous or return a Promise. The `EventBus` handles both cases safely:
-
-- **Synchronous hooks** that throw: the error is caught and logged via the NestJS `Logger`. The transport continues normally.
-- **Async hooks** that reject: the rejection is caught via `.catch()` and logged. No `unhandledRejection` event is emitted.
-
-In either case, hook errors **never crash the application** and never affect message processing. Hooks are observability side-channels alongside the message handling pipeline.
+Hooks can be synchronous or return a Promise. A hook that throws, or a Promise that rejects, is caught and logged through the NestJS `Logger`, with no `unhandledRejection`. Hook errors **never crash the application** and never affect message processing.
 
 ```typescript
 hooks: {
@@ -224,8 +175,6 @@ hooks: {
 
 ## DeadLetter hook vs onDeadLetter callback
 
-The transport has two dead letter mechanisms that serve different purposes:
-
 |                           | `hooks[TransportEvent.DeadLetter]`   | `onDeadLetter` callback                    |
 | ------------------------- | ------------------------------------ | ------------------------------------------ |
 | **Type**                  | Sync or async hook (fire-and-forget) | Async callback (awaited)                   |
@@ -234,7 +183,7 @@ The transport has two dead letter mechanisms that serve different purposes:
 | **Use case**              | Metrics, logging, alerting           | Persisting dead letters to a store         |
 | **Error behavior**        | Caught and logged                    | Causes message to be `nak`'d for retry     |
 
-Use **both** together for complete observability:
+They work together:
 
 ```typescript
 JetstreamModule.forRoot({
@@ -253,7 +202,7 @@ JetstreamModule.forRoot({
 })
 ```
 
-The hook fires first, then the callback. If the callback fails and the message is `nak`'d, the hook will fire again on the next delivery attempt.
+If the callback fails and the message is naked, the hook fires again on the next delivery attempt.
 
 ## What's next?
 

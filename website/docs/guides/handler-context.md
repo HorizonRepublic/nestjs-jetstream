@@ -8,7 +8,7 @@ schema:
   headline: "RpcContext: Handler Context & Message Settlement"
   description: "Access JetStream metadata and control ack, retry, and terminate actions in NestJS message handlers via RpcContext."
   datePublished: "2026-03-21"
-  dateModified: "2026-08-03"
+  dateModified: "2026-10-23"
 ---
 
 # Handler Context
@@ -16,11 +16,9 @@ schema:
 > **Use when:** a handler needs the message metadata, the delivery count or manual control over settlement.
 > **You get:** `RpcContext`, its getters, and the settlement methods to call instead of `msg.ack()`.
 
-Every `@EventPattern` and `@MessagePattern` handler can inject `RpcContext`. It exposes the message metadata and JetStream delivery info, and it controls settlement.
-
 ## Injecting the context
 
-Use the standard NestJS `@Ctx()` decorator:
+Every `@EventPattern` and `@MessagePattern` handler can take it through the standard NestJS `@Ctx()` decorator:
 
 ```typescript
 import { Controller } from '@nestjs/common';
@@ -92,17 +90,19 @@ class RpcContext {
 
 ### Settlement actions
 
-Control how the transport acknowledges the message, without throwing errors.
+```typescript
+class RpcContext {
+  /** Redeliver the message (nak) instead of acknowledging it. */
+  retry(opts?: { delayMs?: number }): void;
 
-**`ctx.retry({ delayMs? })`** -> `msg.nak(delayMs)`, redelivering the message. Use for business-level retries (external service unavailable, resource locked). Each retry consumes a delivery attempt; a `retry()` on the final permitted delivery is routed through [dead-letter handling](/docs/guides/dead-letter-queue) just like a throwing handler, so the message is captured instead of stranded.
+  /** Reject the message permanently (term), with no retry and no dead letter. */
+  terminate(reason?: string): void;
+}
+```
 
-**`ctx.terminate(reason?)`** -> `msg.term(reason)`, permanently rejecting. Use when the message is no longer relevant (order cancelled, entity deleted).
-
-**No action** → `msg.ack()`, the default. The transport acknowledges automatically when the handler returns successfully.
+Both throw on a Core NATS message. See [Controlling message settlement](#controlling-message-settlement).
 
 ## Accessing JetStream metadata
-
-Access delivery info directly without type narrowing:
 
 ```typescript
 @EventPattern('order.created')
@@ -115,7 +115,7 @@ async handle(@Payload() data: OrderCreatedDto, @Ctx() ctx: RpcContext) {
 }
 ```
 
-Use `getDeliveryCount()` for fallback logic on retries:
+`getDeliveryCount()` drives fallback logic on retries:
 
 ```typescript
 @EventPattern('payment.process')
@@ -134,11 +134,19 @@ async handle(@Payload() data: PaymentDto, @Ctx() ctx: RpcContext) {
 
 ## Controlling message settlement
 
-By default, the transport automatically acks on success and naks on error. Use `retry()` and `terminate()` to override this without throwing:
+The transport acks when the handler returns and naks when it throws. `retry()` and `terminate()` override that without throwing:
+
+| Call                      | Settles as                           | Use for                                                             |
+| ------------------------- | ------------------------------------ | ------------------------------------------------------------------- |
+| nothing                   | `msg.ack()`                          | the default after a successful return                               |
+| `ctx.retry({ delayMs? })` | `msg.nak(delay)`, redelivery         | business retries: a dependency is unavailable, a resource is locked |
+| `ctx.terminate(reason?)`  | `msg.term(reason)`, permanent reject | messages that are no longer relevant: the order was cancelled       |
+
+Each retry consumes a delivery attempt. A `retry()` on the final permitted delivery goes through [dead-letter handling](/docs/guides/dead-letter-queue) like a throwing handler, so the message is captured instead of stranded.
 
 ### Business retry
 
-When conditions aren't right to process the message now, but will be later:
+When the message cannot be processed now but can be later:
 
 ```typescript
 @EventPattern('order.fulfill')
@@ -153,15 +161,11 @@ async handle(@Payload() data: FulfillDto, @Ctx() ctx: RpcContext) {
 }
 ```
 
-Without `delayMs`, the message is redelivered immediately:
-
-```typescript
-ctx.retry(); // immediate redelivery
-```
+Without `delayMs`, the delay comes from the stream's retry curve, the same one a throwing handler uses (`[2000, 10000]` ms by default, see [`events.retry`](/docs/reference/module-configuration#retry)). With `retry: false` the redelivery is immediate.
 
 ### Terminate
 
-When the message is no longer relevant and should not be retried or sent to DLQ:
+When the message is no longer relevant and must not be retried or dead-lettered:
 
 ```typescript
 @EventPattern('order.process')
@@ -196,7 +200,7 @@ flowchart TD
 :::
 
 :::note Scope
-Settlement actions only affect **JetStream event handlers** ([workqueue](/docs/patterns/events) and [broadcast](/docs/patterns/broadcast)). They have no effect on [ordered events](/docs/patterns/ordered-events) (auto-acknowledged) or [RPC handlers](/docs/patterns/rpc) (separate settlement logic).
+Settlement actions only affect **JetStream event handlers** ([workqueue](/docs/patterns/events) and [broadcast](/docs/patterns/broadcast)). [Ordered events](/docs/patterns/ordered-events) are auto-acknowledged and log a warning when either is called. [RPC handlers](/docs/patterns/rpc) settle by their own rules.
 :::
 
 ## Extracting custom headers
@@ -223,7 +227,7 @@ async handle(@Payload() data: OrderCreatedDto, @Ctx() ctx: RpcContext) {
 
 ## The `isJetStream()` type guard
 
-`RpcContext` can wrap either a JetStream message (`JsMsg`) or a Core NATS message (`Msg`). The `isJetStream()` method narrows the return type of `getMessage()`:
+`RpcContext` wraps either a JetStream message (`JsMsg`) or a Core NATS message (`Msg`, from Core RPC mode). `isJetStream()` narrows the return type of `getMessage()`:
 
 ```typescript
 if (ctx.isJetStream()) {
@@ -232,13 +236,9 @@ if (ctx.isJetStream()) {
 }
 ```
 
-:::note When is it not JetStream?
-This check is useful when writing code that works across both Core RPC mode (`Msg`) and JetStream mode (`JsMsg`). The new metadata getters (`getDeliveryCount()`, etc.) already handle this internally, returning `undefined` for Core messages.
-:::
-
 ## Accessing the raw NATS message
 
-For advanced use cases, `getMessage()` gives direct access to the underlying NATS message object. Prefer the typed accessors when possible.
+`getMessage()` returns the underlying NATS message. Prefer the typed accessors when they cover what you need.
 
 ```typescript
 if (ctx.isJetStream()) {
@@ -254,7 +254,7 @@ Calling `msg.ack()`, `msg.nak()`, or `msg.term()` directly bypasses the transpor
 
 ## See also
 
-- [Record Builder & Deduplication](./record-builder.md): set custom headers and message IDs on the publisher side
-- [Custom Codec](./custom-codec.md): control how the `@Payload()` data is serialized and deserialized
+- [Record Builder & Deduplication](./record-builder.md): set headers and message IDs on the publisher side
+- [Custom Codec](./custom-codec.md): control how the `@Payload()` data is serialized
 - [Dead Letter Queue](./dead-letter-queue.md): what happens when retries are exhausted
 - [Troubleshooting](./troubleshooting.md): common issues with message delivery

@@ -8,7 +8,7 @@ schema:
   headline: "Handler Metadata Registry: NATS KV Service Discovery for NestJS"
   description: "Publish NestJS handler metadata to a NATS KV bucket for dynamic service discovery, API gateway routing, and automatic catalog generation."
   datePublished: "2026-04-02"
-  dateModified: "2026-08-03"
+  dateModified: "2026-10-23"
 ---
 
 # Handler Metadata Registry
@@ -16,17 +16,7 @@ schema:
 > **Use when:** something outside the service needs to know which handlers exist.
 > **You get:** a NATS KV bucket published at startup, its key format, and the metadata shape.
 
-Publish handler metadata to a NATS KV bucket at startup. External services (API gateways, dashboards, CLI tools) can read or watch the bucket for automatic service discovery.
-
-**Requires:** NATS Server 2.10+ (KV support)
-
-## The problem
-
-A Go HTTP gateway needs to know which NestJS handlers exist and how to route requests. Without a metadata registry, this requires manual config files or hardcoded routing tables that fall out of sync on every deploy.
-
-## The solution
-
-Attach `meta` to handler extras → transport writes it to a shared NATS KV bucket → gateway watches the bucket and builds routing automatically. Zero config, auto-updates on deploy.
+A Go HTTP gateway needs to know which NestJS handlers exist and how to route to them. Hand-written routing tables drift out of sync on every deploy. Instead, attach `meta` to a handler: the transport writes it to a shared NATS KV bucket at startup, and the gateway (or a dashboard, or a CLI tool) watches the bucket and rebuilds its routing as services deploy.
 
 ## Quick start
 
@@ -70,7 +60,7 @@ JetstreamModule.forRoot({
 })
 ```
 
-The transport detects handlers with `meta` and writes entries to the `handler_registry` KV bucket automatically.
+The transport writes an entry per handler with `meta` to the `handler_registry` KV bucket. A failure to write is logged and does not stop the transport from starting.
 
 ### 3. Watch from an external service
 
@@ -92,23 +82,19 @@ for entry := range watcher.Updates() {
 
 ## Configuration
 
-All fields are optional. The registry auto-enables when any handler has `meta`.
+The registry turns on when any handler has `meta`, and every field is optional. Defaults and limits are in [Module Configuration](/docs/reference/module-configuration#metadata).
 
 ```typescript
 JetstreamModule.forRoot({
   name: 'orders',
   servers: ['nats://localhost:4222'],
   metadata: {
-    bucket: 'handler_registry',   // default: 'handler_registry'
-    replicas: 3,                  // default: 1
-    ttl: 30_000,                  // default: 30_000 (30 seconds)
+    bucket: 'handler_registry',
+    replicas: 3,
+    ttl: 30_000, // milliseconds, not nanoseconds
   },
 })
 ```
-
-- **`bucket`**, `'handler_registry'`. KV bucket name.
-- **`replicas`**, `1`. Bucket replicas (1, 3, or 5).
-- **`ttl`**, `30_000`. Entry TTL in milliseconds. Entries expire unless a heartbeat refreshes them, and the minimum is `5_000` ms. Note: this field is in ms, not nanoseconds.
 
 :::note Bucket configuration
 The KV bucket is created on first startup. Changing `ttl` or `replicas` after creation means deleting the existing bucket, because NATS KV does not update bucket config in place. Use the NATS CLI: `nats kv rm handler_registry`.
@@ -118,12 +104,13 @@ The KV bucket is created on first startup. Changing `ttl` or `replicas` after cr
 
 Keys follow the pattern `{service_name}.{kind}.{pattern}`:
 
-| Handler                                                      | Key                               |
-| ------------------------------------------------------------ | --------------------------------- |
-| `@EventPattern('order.created', { meta })`                   | `orders.ev.order.created`         |
-| `@MessagePattern('order.get', { meta })`                     | `orders.cmd.order.get`            |
-| `@EventPattern('config.updated', { broadcast: true, meta })` | `orders.broadcast.config.updated` |
-| `@EventPattern('audit.trail', { ordered: true, meta })`      | `orders.ordered.audit.trail`      |
+| Handler                                                       | Key                               |
+| ------------------------------------------------------------- | --------------------------------- |
+| `@EventPattern('order.created', { meta })`                    | `orders.ev.order.created`         |
+| `@MessagePattern('order.get', { meta })`                      | `orders.cmd.order.get`            |
+| `@EventPattern('config.updated', { broadcast: true, meta })`  | `orders.broadcast.config.updated` |
+| `@EventPattern('audit.trail', { ordered: true, meta })`       | `orders.ordered.audit.trail`      |
+| `@EventPattern('report.daily', { schedule: { cron }, meta })` | `orders.sched.report.daily`       |
 
 The `metadataKey()` helper is exported for programmatic key construction:
 
@@ -136,7 +123,7 @@ const key = metadataKey('orders', StreamKind.Event, 'order.created');
 
 ## Meta structure
 
-The `meta` field is `Record<string, unknown>`: the library serializes it as JSON and stores as-is with no schema enforcement. Values must be JSON-serializable. You decide the structure based on your use case.
+`meta` is a `Record<string, unknown>`, stored as JSON with no schema. Values must be JSON-serializable, and the structure is yours.
 
 :::warning Security
 The `meta` object is stored in a shared NATS KV bucket readable by any connected service. Never include secrets, API keys, passwords, or personally identifiable information (PII) in handler metadata.
@@ -158,7 +145,7 @@ The `meta` object is stored in a shared NATS KV bucket readable by any connected
 
 ## Lifecycle
 
-Entries are managed via TTL + heartbeat: no explicit delete needed.
+Entries live on TTL plus a heartbeat, so nothing deletes them explicitly.
 
 - **Startup.** The transport writes all handler meta entries to KV and starts the heartbeat.
 - **Heartbeat.** Every `ttl / 2`, all entries are re-written to reset their TTL.

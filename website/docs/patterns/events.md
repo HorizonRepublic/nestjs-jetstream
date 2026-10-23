@@ -8,7 +8,7 @@ schema:
   headline: "Workqueue Events: NestJS JetStream At-Least-Once Delivery"
   description: "NestJS NATS JetStream workqueue events with at-least-once delivery, automatic retry, publish-side deduplication, and dead letter handling."
   datePublished: "2026-03-21"
-  dateModified: "2026-08-03"
+  dateModified: "2026-10-23"
 ---
 
 # Events (Workqueue)
@@ -16,34 +16,22 @@ schema:
 > **Use when:** exactly one consumer instance should handle each message (background jobs, billing, anything that shouldn't run twice).
 > **You get:** at-least-once delivery, retries on throw, and a dead-letter queue when retries run out.
 
-Workqueue events are fire-and-forget messages where **exactly one** handler instance processes each message. This is the default event delivery model. Contrast with [broadcast](/docs/patterns/broadcast) (all instances receive every message) and [ordered events](/docs/patterns/ordered-events) (strict sequential replay).
-
-## When to use
-
-An order is created and exactly one confirmation email should go out, even with three replicas of the email service running.
-
-JetStream delivers a workqueue event to a single consumer in the group. A failed consumer means redelivery to another instance, and exhausted retries route the message to a dead letter queue.
+A workqueue event goes to **one** handler instance, even with three replicas of the service running. It is the default for `@EventPattern`. For every instance to receive every message, use [broadcast](/docs/patterns/broadcast); for a strict replayable sequence, use [ordered events](/docs/patterns/ordered-events).
 
 ## How it works
 
-The workqueue flow, step by step:
-
 1. **Publish**: a service calls `client.emit('order.created', data)`.
-2. **Route**: the transport publishes to the JetStream subject `{service}__microservice.ev.order.created`.
-3. **Stream**: the message is persisted in the service's event stream (workqueue retention).
-4. **Consume**: one durable pull consumer picks up the message from the stream.
-5. **Dispatch**: the `EventRouter` decodes the payload and invokes the matching `@EventPattern` handler.
-6. **Acknowledge**: on success, the message is `ack`'d and removed from the stream. On failure, it is `nak`'d for redelivery.
+2. **Route**: the transport publishes to `{service}__microservice.ev.order.created`.
+3. **Stream**: the message is stored in the service's event stream under workqueue retention.
+4. **Consume**: the service's durable pull consumer hands it to one replica.
+5. **Dispatch**: the router decodes the payload and calls the matching `@EventPattern` handler.
+6. **Settle**: success acks the message, which deletes it from the stream. A throw naks it for redelivery.
 
-Because the stream uses **workqueue retention**, a message is automatically deleted once acknowledged, keeping the stream compact.
+Handlers run concurrently, bounded by the consumer's `max_ack_pending` and by `concurrency` when you set one (see [Performance Tuning](/docs/guides/performance#concurrency-control)).
 
-Handlers run concurrently, bounded by the consumer's `max_ack_pending` (default: 100) and by `concurrency` when you set one. Multiple messages can be in flight at once.
+## Sending and handling
 
-## Code examples
-
-### Sending events
-
-Use the standard NestJS `ClientProxy.emit()` method. No prefix is needed for workqueue events.
+`ClientProxy.emit()` with a bare pattern publishes a workqueue event:
 
 ```typescript title="src/orders/orders.service.ts"
 import { Inject, Injectable } from '@nestjs/common';
@@ -52,20 +40,13 @@ import { lastValueFrom } from 'rxjs';
 
 @Injectable()
 export class OrdersService {
-  constructor(
-    @Inject('orders') private readonly client: ClientProxy,
-  ) {}
+  constructor(@Inject('orders') private readonly client: ClientProxy) {}
 
   async createOrder(dto: CreateOrderDto): Promise<Order> {
     const order = await this.orderRepository.save(dto);
 
-    // Fire-and-forget: at-least-once delivery via JetStream
     await lastValueFrom(
-      this.client.emit('order.created', {
-        orderId: order.id,
-        customerId: order.customerId,
-        total: order.total,
-      }),
+      this.client.emit('order.created', { orderId: order.id, total: order.total }),
     );
 
     return order;
@@ -73,326 +54,165 @@ export class OrdersService {
 }
 ```
 
-### Handling events
-
-Use `@EventPattern` with no extras. The handler return value is ignored.
+`@EventPattern` without extras handles it. The return value is ignored, and a throw triggers a retry, so the handler needs no try/catch:
 
 ```typescript title="src/notifications/notifications.controller.ts"
-import { Controller, Logger } from '@nestjs/common';
+import { Controller } from '@nestjs/common';
 import { EventPattern, Payload } from '@nestjs/microservices';
 
 @Controller()
 export class NotificationsController {
-  private readonly logger = new Logger(NotificationsController.name);
-
   @EventPattern('order.created')
-  async handleOrderCreated(
-    @Payload() data: { orderId: number; customerId: string; total: number },
-  ): Promise<void> {
-    this.logger.log(`Sending confirmation for order ${data.orderId}`);
+  async handleOrderCreated(@Payload() data: OrderCreatedEvent): Promise<void> {
     await this.emailService.sendOrderConfirmation(data);
   }
 }
 ```
 
-If `handleOrderCreated` throws, the message is automatically `nak`'d and redelivered. No try/catch needed: the transport handles retries.
+## One consumer per service
 
-## Consumer naming and `@EventPattern` extras
+You do not name consumers per handler. Each service gets one durable consumer per stream kind, derived from the `name` in `forRoot()`: `name: 'orders'` gives `orders__microservice_ev-consumer`, shared by every workqueue handler in the service. Replicas pull from that one consumer, so JetStream hands each message to a single replica. The full list of generated names is in [Naming Conventions](/docs/reference/naming-conventions).
 
-At-least-once delivery is **on by default**: every event handler registered with `@EventPattern` is automatically backed by a **durable** JetStream pull consumer with explicit ack. You don't enable it, you configure it.
+To give a subject its own consumer, move it to its own service. The second argument of `@EventPattern` is the only per-handler setting:
 
-### Where the durable consumer name comes from
+| Extra                | Effect                                                                                              |
+| -------------------- | --------------------------------------------------------------------------------------------------- |
+| `broadcast: true`    | Every service receives the message. See [Broadcast](/docs/patterns/broadcast).                      |
+| `ordered: true`      | Strict sequential delivery. See [Ordered Events](/docs/patterns/ordered-events).                    |
+| `schedule: { cron }` | Fires on a cron or interval. See [Recurring Schedules](/docs/guides/recurring-schedules).           |
+| `meta: { ... }`      | Free-form data for the [handler metadata registry](/docs/patterns/handler-metadata).                |
+| `connection: 'name'` | Binds the handler to a named connection. See [Multiple Connections](/docs/guides/multi-connection). |
 
-The library does not take a per-handler durable name. Instead, **one durable consumer per service per stream kind** serves every matching `@EventPattern` in the module. The name is derived from the `name` you pass to `JetstreamModule.forRoot()`:
-
-```typescript
-JetstreamModule.forRoot({
-  name: 'orders', // ← this is the service name
-  servers: ['nats://localhost:4222'],
-});
-```
-
-| Stream kind                              | Generated durable consumer name           |
-| ---------------------------------------- | ----------------------------------------- |
-| Workqueue events                         | `orders__microservice_ev-consumer`        |
-| [Broadcast](/docs/patterns/broadcast)    | `orders__microservice_broadcast-consumer` |
-| [Ordered](/docs/patterns/ordered-events) | `orders__microservice_ordered-consumer`   |
-
-All `@EventPattern` handlers in the same `orders` service share the workqueue consumer above. JetStream load-balances across replicas of the same service via that single durable consumer, which is exactly what at-least-once delivery requires, multiple replicas, one cursor, ack semantics enforced server-side.
-
-If you need a different consumer for a specific subject, that's done by **giving it its own service**, not by overriding the decorator.
-
-### Decorator-level options (`@EventPattern` extras)
-
-The second argument to `@EventPattern` is the only thing you set per-handler:
-
-```typescript
-@EventPattern('user.created', { broadcast: true })
-async onUserCreated(@Payload() user: User) { /* ... */ }
-
-@EventPattern('order.status', { ordered: true })
-async onOrderStatus(@Payload() data: OrderStatus) { /* ... */ }
-
-@EventPattern('settings.changed', { meta: { tier: 'critical' } })
-async onSettingsChanged(@Payload() s: Settings) { /* ... */ }
-```
-
-**`broadcast: boolean`**, routes the handler to the shared broadcast stream so every replica processes every message. See [Broadcast](/docs/patterns/broadcast).
-
-**`ordered: boolean`**, backs the handler with an [ordered consumer](/docs/patterns/ordered-events) for strict per-key delivery.
-
-**`meta: Record<string, unknown>`**, free-form metadata published to the [handler metadata registry](/docs/patterns/handler-metadata).
-
-The decorator takes no `durable`, `ackWait` or `maxDeliver`: those are stream-and-consumer-level concerns, configured once on the module under [Custom configuration](#custom-configuration) below.
+There is no `durable`, `ackWait` or `maxDeliver` extra. Those are consumer settings, set once on the module (see [Configuration](#configuration)).
 
 ## Delivery semantics
 
-The transport uses explicit acknowledgement. The outcome depends on what happens during message processing:
+Delivery is at-least-once with explicit acks:
 
-- **Handler succeeds**, `ack`. Message is removed from the stream.
-- **Handler throws an error**, `nak`. Message is redelivered after backoff.
-- **Payload cannot be decoded**, `term`. Message is terminated immediately, with no retry.
-- **No handler registered for subject**, `term`. Message is terminated, with no retry.
-- **Max deliveries exhausted**, `term`. Dead letter callback is invoked, then the message is terminated.
+| What happens                          | Result                                                                               |
+| ------------------------------------- | ------------------------------------------------------------------------------------ |
+| Handler resolves                      | `ack`, the message leaves the stream                                                 |
+| Handler throws or calls `ctx.retry()` | `nak` with a delay, redelivered to any replica                                       |
+| Handler calls `ctx.terminate()`       | `term`, no retry and no dead letter                                                  |
+| Last attempt fails                    | Dead-lettered, then `term`                                                           |
+| Payload cannot be decoded             | Dead-lettered at once (retrying cannot fix it), or `term` when dead-lettering is off |
+| No handler for the subject            | Dead-lettered at once, or `term` when dead-lettering is off                          |
 
-:::warning Decode errors are terminal
-If the codec cannot deserialize a message (e.g., corrupted data, schema mismatch), the message is immediately terminated with `term()`. Retrying would produce the same error, so the transport avoids wasting delivery attempts.
-:::
-
-## Retry flow
-
-When a handler throws an error, the following retry sequence occurs:
-
-1. The message is `nak`'d, signaling NATS to redeliver it.
-2. NATS redelivers the message to an available consumer instance.
-3. If the handler fails again, step 1-2 repeat up to `max_deliver` times (default: **3**).
-4. On the final delivery attempt, if the handler still fails, the transport detects that `deliveryCount >= max_deliver` and treats the message as a **dead letter**.
-5. The `onDeadLetter` callback is invoked (if configured), then the message is terminated with `term()`.
+By default a message gets three attempts (`max_deliver: 3`), with redeliveries 2 s and then 10 s after a failure. The delay is applied by the client through `nak(delay)`, so `ack_wait` keeps its full value and a slow handler is not redelivered while it still runs. Change the curve with `events.retry` (see [module configuration](/docs/reference/module-configuration#retry)).
 
 ```mermaid
 sequenceDiagram
-    participant Publisher
     participant Stream
-    participant Consumer
     participant Handler
-    Publisher->>Stream: emit()
-    Stream->>Consumer: deliver
-    Consumer->>Handler: attempt 1
-    Handler-->>Consumer: fails
-    Consumer->>Stream: nak
-    Stream->>Consumer: redeliver (attempt 2)
-    Consumer->>Handler: attempt 2
-    Handler-->>Consumer: fails
-    Consumer->>Stream: nak
-    Stream->>Consumer: redeliver (attempt 3)
-    Consumer->>Handler: attempt 3
-    Handler-->>Consumer: fails
-    Note over Consumer: max_deliver reached
-    Consumer->>Consumer: dead letter callback
-    Consumer->>Stream: term
+    Stream->>Handler: attempt 1
+    Handler-->>Stream: throws, nak (2 s)
+    Stream->>Handler: attempt 2
+    Handler-->>Stream: throws, nak (10 s)
+    Stream->>Handler: attempt 3
+    Handler-->>Stream: throws
+    Note over Stream,Handler: max_deliver reached: DLQ stream, onDeadLetter, term
 ```
 
-If the `onDeadLetter` callback itself fails, the message is `nak`'d one more time, giving the dead letter hook another chance on the next cycle.
+On the last failed attempt the message goes to the built-in DLQ stream (on unless you pass `dlq: false`) and to your `onDeadLetter` callback, if any. The [Dead Letter Queue](/docs/guides/dead-letter-queue) guide covers the fallback chain and what happens when a capture step fails.
 
-For full details on dead letter handling, see the [Dead Letter Queue](/docs/guides/dead-letter-queue) guide.
+## Retry or terminate
+
+A throw means "try again". When you know a retry will fail the same way (a validation error, a broken business rule), call `ctx.terminate()` instead, so the message does not burn its remaining attempts:
+
+```typescript title="src/orders/orders.controller.ts"
+import { Controller } from '@nestjs/common';
+import { Ctx, EventPattern, Payload } from '@nestjs/microservices';
+import { RpcContext } from '@horizon-republic/nestjs-jetstream';
+
+@Controller()
+export class OrdersController {
+  @EventPattern('order.process')
+  async handleOrder(@Payload() data: OrderPayload, @Ctx() ctx: RpcContext): Promise<void> {
+    try {
+      await this.ordersService.process(data);
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        ctx.terminate(`Invalid order: ${error.message}`);
+
+        return;
+      }
+
+      throw error; // DB timeout, API down: redelivered
+    }
+  }
+}
+```
+
+A terminated message skips the dead-letter queue. `ctx.retry({ delayMs })` and the rest of the settlement API are in [Handler Context](/docs/guides/handler-context#controlling-message-settlement).
 
 ## Idempotency
 
-Because the transport provides **at-least-once** delivery, a handler may receive the same message more than once, say the service crashes after processing but before acknowledging. Your handlers must be **idempotent**: processing the same message twice should produce the same result.
+At-least-once means a handler can see the same message twice, for example when the service crashes after processing but before the ack. Make handlers idempotent.
 
-### Practical patterns
-
-**Database upsert**: use a unique constraint or `ON CONFLICT` clause so re-processing the same event doesn't create duplicates:
+**Upsert** with a unique constraint, so a second run is a no-op:
 
 ```typescript
 @EventPattern('order.created')
 async handleOrderCreated(@Payload() data: OrderCreatedEvent): Promise<void> {
-  // Upsert: if this orderId already exists, the insert is a no-op
   await this.db.query(
-    `INSERT INTO processed_orders (order_id, status)
-     VALUES ($1, $2)
+    `INSERT INTO processed_orders (order_id, status) VALUES ($1, $2)
      ON CONFLICT (order_id) DO NOTHING`,
     [data.orderId, 'confirmed'],
   );
 }
 ```
 
-**Idempotency key**: track processed message IDs in a cache or database:
+**Track processed messages** by stream sequence, which is unique within a stream:
 
 ```typescript
 @EventPattern('payment.completed')
 async handlePayment(@Payload() data: PaymentEvent, @Ctx() ctx: RpcContext): Promise<void> {
-  // Stream sequence is guaranteed unique within a stream, perfect dedup key
-  const dedupKey = `payment:${ctx.getStream()}:${ctx.getSequence()}`;
+  const key = `payment:${ctx.getStream()}:${ctx.getSequence()}`;
 
-  if (await this.cache.exists(dedupKey)) {
-    return; // Already processed
-  }
+  if (await this.cache.exists(key)) return;
 
   await this.processPayment(data);
-  await this.cache.set(dedupKey, '1', { ttl: 86400 });
+  await this.cache.set(key, '1', { ttl: 86400 });
 }
 ```
 
-See [Handler Context](/docs/guides/handler-context#jetstream-message-info) for all typed accessors available on `RpcContext`.
+Duplicate _publishes_ (a publisher retrying after a timeout) are a separate problem: JetStream drops a second message with the same ID inside the stream's `duplicate_window`. The transport sets a random ID per publish, so set a deterministic one with [`setMessageId()`](/docs/guides/record-builder#message-id--jetstream-deduplication).
 
-## Message deduplication
+## Configuration
 
-NATS JetStream has built-in **publish-side deduplication**. If two messages with the same `messageId` arrive within the stream's `duplicate_window`, the second publish is silently dropped.
-
-Use [`JetstreamRecordBuilder`](/docs/guides/record-builder) to set a deterministic message ID:
+Stream and consumer settings live under `events` in `forRoot()`. These are the ones most often changed:
 
 ```typescript
-import { JetstreamRecordBuilder } from '@horizon-republic/nestjs-jetstream';
-import { lastValueFrom } from 'rxjs';
+import { toNanos } from '@horizon-republic/nestjs-jetstream';
 
-const record = new JetstreamRecordBuilder({
-  orderId: order.id,
-  total: order.total,
-})
-  .setMessageId(`order-created-${order.id}`)
-  .build();
-
-await lastValueFrom(this.client.emit('order.created', record));
-```
-
-This prevents duplicate publishes in scenarios like:
-
-- The publisher retries after a network timeout (but the first publish actually succeeded).
-- A controller endpoint is called twice with the same data.
-
-The default `duplicate_window` is **2 minutes**, and messages with the same ID published inside that window are deduplicated. To extend it, override `events.stream.duplicate_window` in `forRoot()` (e.g. `duplicate_window: toNanos(5, 'minutes')`). See [Custom configuration](#custom-configuration) for the full override pattern.
-
-When no message ID is set explicitly, the transport generates a random UUID for each publish, meaning no deduplication occurs by default. Always set a deterministic message ID when duplicate publishes are a concern.
-
-## Custom configuration
-
-### Stream overrides
-
-The event stream is created with sensible defaults. Override them in `forRoot()` under `events.stream`:
-
-```typescript
 JetstreamModule.forRoot({
   name: 'orders',
   servers: ['nats://localhost:4222'],
   events: {
     stream: {
-      max_age: toNanos(14, 'days'), // 14 days instead of 7
-      max_bytes: 10 * 1024 * 1024 * 1024,        // 10 GB instead of 5 GB
-      duplicate_window: toNanos(5, 'minutes'),     // 5 min dedup window instead of 2 min
+      max_age: toNanos(14, 'days'),            // how long unprocessed events are kept
+      duplicate_window: toNanos(5, 'minutes'), // dedup window for setMessageId()
     },
-  },
-}),
-```
-
-### Consumer overrides
-
-Override consumer settings under `events.consumer`:
-
-```typescript
-JetstreamModule.forRoot({
-  name: 'orders',
-  servers: ['nats://localhost:4222'],
-  events: {
     consumer: {
-      max_deliver: 5,              // 5 retries instead of 3
-      ack_wait: toNanos(30, 'seconds'),  // 30s ack timeout instead of 10s
-      max_ack_pending: 50,         // Limit in-flight messages to 50
+      max_deliver: 5,                   // attempts before dead-lettering
+      ack_wait: toNanos(30, 'seconds'), // time to finish before redelivery
+      max_ack_pending: 50,              // in-flight cap, the main backpressure control
     },
+    retry: [1_000, 5_000, 30_000],      // delay before each redelivery, in ms
+    concurrency: 20,                    // handlers running at once
   },
-}),
+});
 ```
 
-:::tip When to increase ack_wait
-If your handler calls a slow external API (e.g., sending emails, processing payments), increase `ack_wait` so that NATS doesn't redeliver the message before your handler finishes. The default is 10 seconds, long-running handlers may need 30s or more. For unbounded processing, consider [ack extension](/docs/guides/performance#ack-extension) instead.
-:::
+- Raise `ack_wait` when a handler calls a slow external API. For work with no upper bound, use [ack extension](/docs/guides/performance#ack-extension) instead.
+- Raise `max_deliver` when failures are transient and frequent, such as an unreliable third-party service.
 
-:::tip When to increase max_deliver
-The default of 3 delivery attempts works well for transient errors (network blips, temporary database unavailability). Increase it to 5 or higher if your handlers interact with unreliable external services where intermittent failures are common.
-:::
-
-### Default values: the ones you'll actually tune
-
-- **`max_deliver`**, `3`. How many retry attempts before the message is marked dead.
-- **`ack_wait`**, 10 seconds. How long a handler has to ack before NATS redelivers.
-- **`max_ack_pending`**, `100`. In-flight cap, and the primary backpressure control.
-- **`max_age`**, 7 days. How long events live in the stream before being purged.
-- **`duplicate_window`**, 2 minutes. Dedup window for [`setMessageId()`](/docs/guides/record-builder).
-
-See [Default Configs](/docs/reference/default-configs#stream-defaults) for the event stream and [consumer](/docs/reference/default-configs#consumer-defaults) values side by side with the other kinds.
-
-## Error handling
-
-When a handler throws, the transport automatically `nak`'s the message for redelivery. For most cases, this is all you need. Some errors are **non-recoverable**, though, and retrying them will never succeed. For these, use `ctx.terminate()` to permanently discard the message.
-
-```typescript title="src/orders/orders.controller.ts"
-import { Controller, Logger } from '@nestjs/common';
-import { Ctx, EventPattern, Payload } from '@nestjs/microservices';
-import { RpcContext } from '@horizon-republic/nestjs-jetstream';
-
-@Controller()
-export class OrdersController {
-  private readonly logger = new Logger(OrdersController.name);
-
-  @EventPattern('order.process')
-  async handleOrder(
-    @Payload() data: OrderPayload,
-    @Ctx() ctx: RpcContext,
-  ): Promise<void> {
-    try {
-      await this.ordersService.process(data);
-      // Success, ack is called automatically by the transport
-    } catch (error) {
-      if (this.isNonRecoverable(error)) {
-        // Non-recoverable: invalid payload, business rule violation, etc.
-        // ctx.terminate() prevents redelivery, the message is permanently discarded.
-        const reason = error instanceof Error ? error.message : String(error);
-        ctx.terminate('Non-recoverable: ' + reason);
-        this.logger.error(`Permanently discarding order`, error);
-        return;
-      }
-
-      // Recoverable errors (DB timeout, external API down, etc.):
-      // Re-throw, the transport calls nak automatically,
-      // triggering redelivery after ack_wait.
-      // After max_deliver attempts, onDeadLetter is invoked.
-      throw error;
-    }
-  }
-
-  private isNonRecoverable(error: unknown): boolean {
-    return error instanceof ValidationError
-      || error instanceof BusinessRuleViolation;
-  }
-}
-```
-
-### Message settlement outcomes
-
-Every message ends in one of three states:
-
-**Auto-ack** (no action needed). The handler returns successfully. The transport calls `ack()` on the underlying message automatically: the message is removed from the stream.
-
-**`ctx.retry()`**, for recoverable errors. The message is redelivered, optionally with a `{ delayMs }` delay. The transport applies the same retry semantics automatically when a handler throws, so you only need to call `ctx.retry()` manually when you want to return early without raising an exception.
-
-**`ctx.terminate(reason)`**: for non-recoverable errors. The message is permanently discarded. Must be called manually in the handler.
-
-### Relationship with dead letter handling
-
-When a message is `nak`'d repeatedly and reaches the `max_deliver` limit (default: 3), the transport treats it as a dead letter:
-
-1. The `onDeadLetter` callback is invoked (if configured) with full message context.
-2. The message is terminated with `term()`.
-
-`ctx.terminate()` is for errors you **know** will never succeed, such as a validation failure or a schema mismatch. `throw` is for errors that **might** succeed on retry, such as a timeout. For messages that exhaust all retries, the dead letter mechanism provides a safety net.
-
-See the [Dead Letter Queue](/docs/guides/dead-letter-queue) guide for how to configure and handle dead letters.
+Defaults for every field are in [Default Configs](/docs/reference/default-configs#stream-defaults), and the option reference is in [Module Configuration](/docs/reference/module-configuration).
 
 ## What's next?
 
-- [**Broadcast Events**](/docs/patterns/broadcast): fan-out delivery to all service instances
-- [**Dead Letter Queue**](/docs/guides/dead-letter-queue): handle messages that exhaust all retries
-- [**Record Builder**](/docs/guides/record-builder): attach custom headers and message IDs
-- [**Lifecycle Hooks**](/docs/guides/lifecycle-hooks): observe transport events like dead letters and message routing
-- [**Performance Tuning**](/docs/guides/performance): concurrency, ack extension, and backpressure
-- [**Troubleshooting**](/docs/guides/troubleshooting#consumer-issues): diagnosing delivery and redelivery issues
+- [Broadcast Events](/docs/patterns/broadcast): fan-out to every service
+- [Dead Letter Queue](/docs/guides/dead-letter-queue): messages that exhaust their retries
+- [Record Builder](/docs/guides/record-builder): headers and message IDs
+- [Performance Tuning](/docs/guides/performance): concurrency, ack extension, backpressure
+- [Troubleshooting](/docs/guides/troubleshooting#consumer-issues): delivery and redelivery problems
