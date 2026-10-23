@@ -31,7 +31,7 @@ Otherwise keep the default `Auto` mode.
 
 ### 1. Provision the stream and consumer externally
 
-The stream and consumer must exist before the application boots. With the `nats` CLI:
+The stream and consumer must exist before the application boots. On NATS 2.15 and later, a stream without `max_consumers` is capped at 1000 consumers ([server upgrades](/docs/getting-started/installation#server-upgrades-that-need-a-config-change)). With the `nats` CLI:
 
 ```bash
 # Stream: workqueue retention, file storage
