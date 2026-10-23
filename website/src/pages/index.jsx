@@ -127,65 +127,101 @@ const DeliveryRecord = () => (
   </figure>
 );
 
-const CodeCard = ({ file, lang, children }) => (
-  <div className="lp-code">
-    <div className="lp-code-head">
-      <span>{file}</span>
-      <span>{lang}</span>
+const DIFF = [
+  { kind: 'del', text: "import { ClientsModule, Transport } from '@nestjs/microservices';" },
+  { kind: 'add', text: "import { JetstreamModule } from '@horizon-republic/nestjs-jetstream';" },
+  { kind: 'same', text: '' },
+  { kind: 'same', text: '@Module({' },
+  { kind: 'same', text: '  imports: [' },
+  { kind: 'del', text: "    ClientsModule.register([{ name: 'ORDERS', transport: Transport.NATS }])," },
+  { kind: 'add', text: "    JetstreamModule.forRoot({ name: 'orders', servers }),", },
+  { kind: 'add', text: "    JetstreamModule.forFeature({ name: 'orders' })," },
+  { kind: 'same', text: '  ],' },
+  { kind: 'same', text: '})' },
+  { kind: 'same', text: 'export class AppModule {}' },
+];
+
+const DIFF_MARK = { add: '+', del: '-', same: ' ' };
+
+const SwapDiff = () => (
+  <figure className="lp-diff">
+    <div className="lp-diff-head">
+      <span>app.module.ts</span>
+      <span className="lp-diff-stat">
+        <span data-kind="add">+3</span> <span data-kind="del">-2</span>
+      </span>
     </div>
-    <pre className="lp-code-body">{children}</pre>
+    <pre className="lp-diff-body">
+      {DIFF.map((line, index) => (
+        <span key={index} className="lp-diff-line" data-kind={line.kind}>
+          <span className="lp-diff-mark" aria-hidden="true">
+            {DIFF_MARK[line.kind]}
+          </span>
+          {line.text}
+          {'\n'}
+        </span>
+      ))}
+    </pre>
+  </figure>
+);
+
+const FLOW = [
+  { state: 'deliver', name: 'publish', body: 'client.emit() stores the message in the stream before it returns.' },
+  { state: 'deliver', name: 'deliver', body: 'One replica pulls it. If that pod dies mid-handler, another replica gets it.' },
+  { state: 'redeliver', name: 'nak', body: 'The handler threw. It comes back in 2 s, then in 10 s.' },
+  { state: 'ack', name: 'ack', body: 'The handler resolved. The message leaves the stream.' },
+];
+
+const MessageFlow = () => (
+  <div className="lp-flow">
+    <ol className="lp-flow-steps">
+      {FLOW.map((step) => (
+        <li key={step.name} data-state={step.state}>
+          <span className="lp-flow-name">{step.name}</span>
+          <span className="lp-flow-body">{step.body}</span>
+        </li>
+      ))}
+    </ol>
+    <div className="lp-flow-branch" data-state="dlq">
+      <span className="lp-flow-name">dead letter</span>
+      <span className="lp-flow-body">
+        The third attempt failed too. The message is copied to the DLQ stream with its headers,
+        and <code>onDeadLetter</code> is called. Nothing is dropped silently.
+      </span>
+    </div>
   </div>
 );
 
-const CAPABILITIES = [
+const GROUPS = [
   {
-    name: 'At-least-once delivery',
-    tone: 'ack',
-    body: 'Every event acked after the handler resolves, retried on a paced curve, 2 s then 10 s by default.',
-    to: '/docs/patterns/events',
-    label: 'patterns/events',
-  },
-  {
-    name: 'Dead-letter queue',
-    tone: 'dlq',
-    body: 'A typed sink that keeps the original headers once retries are exhausted, with an onDeadLetter callback.',
-    to: '/docs/guides/dead-letter-queue',
-    label: 'guides/dead-letter-queue',
-  },
-  {
-    name: 'Ordered delivery',
+    name: 'Deliver',
     tone: 'deliver',
-    body: 'Every replica reads the stream in strict order and can replay it from any point.',
-    to: '/docs/patterns/ordered-events',
-    label: 'patterns/ordered-events',
+    items: [
+      { name: 'Workqueue events', body: 'One replica per message, at least once.', to: '/docs/patterns/events' },
+      { name: 'Broadcast', body: 'Every service gets every message.', to: '/docs/patterns/broadcast' },
+      { name: 'Ordered events', body: 'A strict, replayable sequence per replica.', to: '/docs/patterns/ordered-events' },
+      { name: 'RPC', body: 'Core NATS for latency, JetStream for durability.', to: '/docs/patterns/rpc' },
+    ],
   },
   {
-    name: 'Broadcast',
-    tone: 'deliver',
-    body: 'One message reaches every running pod through per-service durable consumers.',
-    to: '/docs/patterns/broadcast',
-    label: 'patterns/broadcast',
-  },
-  {
-    name: 'RPC, both speeds',
-    tone: 'deliver',
-    body: 'Core NATS for latency, JetStream for durability, under the same decorator either way.',
-    to: '/docs/patterns/rpc',
-    label: 'patterns/rpc',
-  },
-  {
-    name: 'Cron and delayed jobs',
+    name: 'Recover',
     tone: 'redeliver',
-    body: 'Cron, intervals and one-shot delays fired by NATS itself, with no scheduler process to run.',
-    to: '/docs/guides/scheduling-overview',
-    label: 'guides/scheduling',
+    items: [
+      { name: 'Paced retries', body: 'A throw retries on a delay curve, not in a hot loop.', to: '/docs/patterns/events#delivery-semantics' },
+      { name: 'Dead-letter stream', body: 'Exhausted messages kept with their headers.', to: '/docs/guides/dead-letter-queue' },
+      { name: 'Self-healing consumers', body: 'Recreated after a broker restart or a deletion.', to: '/docs/reference/edge-cases#consumer-self-healing' },
+      { name: 'Stream migration', body: 'Change a locked stream setting without losing messages.', to: '/docs/guides/stream-migration' },
+    ],
   },
   {
-    name: 'Tracing built in',
-    tone: 'trace',
-    body: 'W3C traceparent propagated through every hop, with OpenTelemetry consumer spans out of the box.',
-    to: '/docs/observability/tracing',
-    label: 'observability/tracing',
+    name: 'Run',
+    tone: 'ack',
+    items: [
+      { name: 'Cron and delayed jobs', body: 'Fired by NATS itself, no scheduler process.', to: '/docs/guides/scheduling-overview' },
+      { name: 'Tracing and metrics', body: 'OpenTelemetry spans and Prometheus metrics.', to: '/docs/observability' },
+      { name: 'Health checks', body: 'Readiness and liveness for Kubernetes probes.', to: '/docs/guides/health-checks' },
+      { name: 'Graceful shutdown', body: 'In-flight handlers drain before the pod exits.', to: '/docs/guides/graceful-shutdown' },
+    ],
   },
 ];
 
@@ -236,69 +272,68 @@ export default function Home() {
           <DeliveryRecord />
         </section>
 
-        <section className="lp-swap">
-          <div className="lp-swap-col">
-            <h2>The swap is one import.</h2>
-            <p>
-              The built-in NATS transport is fire and forget: a pod restart loses whatever was
-              in flight, and a throw is never retried. This module changes what happens
-              underneath the decorators, not the decorators.
-            </p>
-            <CodeCard file="app.module.ts" lang="ts">
-              <span className="c-deco">@Module</span>({'{'}
-              {'\n  imports: [\n    '}
-              <span className="c-accent">JetstreamModule.forRoot</span>({'{'}
-              {'\n      name: '}
-              <span className="c-str">&apos;orders&apos;</span>
-              {',\n      servers: ['}
-              <span className="c-str">&apos;nats://localhost:4222&apos;</span>
-              {'],\n    }),\n  ],\n'}
-              {'})\n'}
-              <span className="c-kw">export class</span>
-              {' AppModule {}'}
-            </CodeCard>
-          </div>
-
-          <div className="lp-swap-col">
-            <h2>The handler you already wrote.</h2>
-            <p>
-              Ack after resolve. A throw becomes a <code>nak</code> with a paced retry delay, and
-              exhausted retries land in a dead-letter stream with the original headers intact.
-            </p>
-            <CodeCard file="orders.controller.ts" lang="ts">
-              <span className="c-deco">@EventPattern</span>(
-              <span className="c-str">&apos;orders.created&apos;</span>){'\n'}
-              <span className="c-kw">async</span>
-              {' onCreated('}
-              <span className="c-deco">@Payload</span>
-              {'() order: Order) {\n  '}
-              <span className="c-kw">await</span>
-              {' this.billing.charge(order);\n  '}
-              <span className="c-comment">{'// throws → nak → redelivered after 2 s'}</span>
-              {'\n}'}
-            </CodeCard>
+        <section className="lp-band lp-swap">
+          <div className="lp-wrap lp-swap-grid">
+            <div className="lp-swap-copy">
+              <h2>The swap is one import.</h2>
+              <p>
+                Your <code>@EventPattern</code> and <code>@MessagePattern</code> handlers stay as
+                they are, and so does <code>client.emit()</code>. What changes is what happens
+                underneath them.
+              </p>
+            </div>
+            <SwapDiff />
           </div>
         </section>
 
-        <section className="lp-ledger">
-          <h2 className="lp-ledger-head">What changes underneath</h2>
-          <ul className="lp-ledger-list">
-            {CAPABILITIES.map((cap) => (
-              <li key={cap.name}>
-                <Link to={cap.to} className="lp-ledger-row" data-tone={cap.tone}>
-                  <span className="lp-ledger-name">{cap.name}</span>
-                  <span className="lp-ledger-body">{cap.body}</span>
-                  <span className="lp-ledger-path">{cap.label}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-          <p className="lp-ledger-note">
-            The integration suite executes against a real NATS server, the{' '}
-            <a href="https://codecov.io/github/HorizonRepublic/nestjs-jetstream">coverage report</a>{' '}
-            is public, the header contract stays stable across minors, and breaking changes land
-            only on majors.
-          </p>
+        <section className="lp-band lp-band--raised">
+          <div className="lp-wrap">
+            <h2 className="lp-section-title">Where a message goes when a handler fails.</h2>
+            <MessageFlow />
+          </div>
+        </section>
+
+        <section className="lp-band">
+          <div className="lp-wrap">
+            <h2 className="lp-section-title">What you get underneath the decorators.</h2>
+            <div className="lp-groups">
+              {GROUPS.map((group) => (
+                <section key={group.name} className="lp-group" data-tone={group.tone}>
+                  <h3 className="lp-group-name">{group.name}</h3>
+                  <ul>
+                    {group.items.map((item) => (
+                      <li key={item.name}>
+                        <Link to={item.to} className="lp-group-item">
+                          <span className="lp-group-item-name">{item.name}</span>
+                          <span className="lp-group-item-body">{item.body}</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="lp-band lp-band--raised lp-close">
+          <div className="lp-wrap lp-close-inner">
+            <h2>Start with one service.</h2>
+            <div className="lp-actions">
+              <CopyInstall />
+              <Link className="lp-cta lp-cta--solid" to="/docs/getting-started/quick-start">
+                Quick start
+              </Link>
+              <Link className="lp-cta lp-cta--quiet" to="/docs/guides/migration">
+                Migrate from the built-in transport
+              </Link>
+            </div>
+            <p className="lp-close-note">
+              The integration suite runs against a real NATS server, the{' '}
+              <a href="https://codecov.io/github/HorizonRepublic/nestjs-jetstream">coverage report</a>{' '}
+              is public, and breaking changes land only on majors.
+            </p>
+          </div>
         </section>
 
         <footer className="lp-foot">

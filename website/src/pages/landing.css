@@ -26,7 +26,6 @@
   gap: clamp(32px, 5vw, 72px);
   align-items: center;
   padding: clamp(44px, 6vw, 84px) var(--lp-gutter) clamp(48px, 6vw, 76px);
-  border-bottom: 1px solid var(--jt-line-1);
   overflow: hidden;
 }
 
@@ -369,195 +368,294 @@
   color: var(--jt-fg-3);
 }
 
-/* ---- the swap ----------------------------------------------------------- */
-.lp-swap {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  border-bottom: 1px solid var(--jt-line-1);
+/* ---- bands --------------------------------------------------------------
+   Sections are told apart by ground and space, not by rules. */
+.lp-band {
+  padding: clamp(48px, 7vw, 96px) var(--lp-gutter);
 }
 
-.lp-swap-col {
-  padding: clamp(32px, 4vw, 48px) var(--lp-gutter);
-}
-
-.lp-swap-col + .lp-swap-col {
-  border-inline-start: 1px solid var(--jt-line-1);
-}
-
-.lp-swap h2 {
-  margin: 0 0 10px;
-  font-size: var(--jt-step-2);
-  font-weight: 600;
-  letter-spacing: -0.008em;
-}
-
-.lp-swap p {
-  margin: 0 0 22px;
-  max-width: 52ch;
-  font-size: var(--jt-step-0);
-  line-height: 1.62;
-  color: var(--jt-fg-1);
-}
-
-.lp-code {
-  border: 1px solid var(--jt-line-1);
-  border-radius: var(--jt-radius-md);
-  overflow: hidden;
+.lp-band--raised {
   background: var(--jt-bg-1);
-  box-shadow: var(--jt-shadow-card);
 }
 
-.lp-code-head {
-  display: flex;
-  justify-content: space-between;
-  padding: 7px 14px;
-  border-bottom: 1px solid var(--jt-line-1);
-  background: var(--jt-bg-2);
-  font-variation-settings: var(--jt-vf-struct);
-  font-size: var(--jt-step--1);
-  color: var(--jt-fg-3);
+.lp-wrap {
+  max-width: 1120px;
+  margin-inline: auto;
 }
 
-.lp-code-body {
+.lp-band h2,
+.lp-section-title {
   margin: 0;
-  padding: 15px 16px;
-  overflow-x: auto;
-  font-variation-settings: var(--jt-vf-struct);
-  font-size: 0.82rem;
-  line-height: 1.62;
-  color: var(--jt-fg-0);
-  background: none;
+  font-size: var(--jt-step-3);
+  font-weight: 620;
+  line-height: 1.15;
+  letter-spacing: -0.012em;
+  font-variation-settings: var(--jt-vf-display);
+  text-wrap: balance;
 }
 
-.c-dim {
-  color: var(--jt-fg-2);
+.lp-section-title {
+  max-width: 24ch;
+  margin-bottom: clamp(28px, 4vw, 44px);
 }
 
-.c-deco {
-  color: var(--jt-accent);
-}
-
-.c-kw {
-  color: var(--jt-code-keyword);
-}
-
-.c-accent {
-  color: var(--jt-accent);
-}
-
-.c-str {
-  color: var(--jt-code-string);
-}
-
-.c-comment {
-  color: var(--jt-code-comment);
-}
-
-/* ---- capability ledger --------------------------------------------------
-   A ledger, ruled like one. The whole row is the target, not just the link. */
-.lp-ledger {
-  padding: clamp(36px, 5vw, 56px) var(--lp-gutter) clamp(48px, 6vw, 72px);
-}
-
-.lp-ledger-head {
-  margin: 0 0 16px;
-  font-variation-settings: var(--jt-vf-struct);
-  font-size: var(--jt-step--1);
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--jt-fg-3);
-}
-
-.lp-ledger-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  border-top: 1px solid var(--jt-line-2);
-}
-
-.lp-ledger-row {
+/* ---- the swap: one diff ------------------------------------------------- */
+.lp-swap-grid {
   display: grid;
-  grid-template-columns: minmax(0, 15rem) minmax(0, 1fr) minmax(0, 13rem);
-  gap: 24px;
-  align-items: baseline;
-  padding: 15px 12px 15px 0;
-  border-bottom: 1px solid var(--jt-line-1);
-  text-decoration: none;
-  color: inherit;
-  transition: background var(--jt-m-fast), padding-inline-start var(--jt-m-fast);
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: clamp(28px, 5vw, 64px);
+  align-items: center;
 }
 
-.lp-ledger-row[data-tone='deliver'] {
-  --lp-tone: var(--jt-state-deliver);
-  --lp-tone-soft: var(--jt-deliver-soft);
-}
-
-.lp-ledger-row[data-tone='redeliver'] {
-  --lp-tone: var(--jt-state-redeliver);
-  --lp-tone-soft: var(--jt-redeliver-soft);
-}
-
-.lp-ledger-row[data-tone='dlq'] {
-  --lp-tone: var(--jt-state-dlq);
-  --lp-tone-soft: var(--jt-dlq-soft);
-}
-
-.lp-ledger-row[data-tone='ack'] {
-  --lp-tone: var(--jt-state-ack);
-  --lp-tone-soft: var(--jt-ack-soft);
-}
-
-.lp-ledger-row[data-tone='trace'] {
-  --lp-tone: var(--jt-state-trace);
-  --lp-tone-soft: var(--jt-accent-soft);
-}
-
-.lp-ledger-row:hover {
-  background: var(--lp-tone-soft, var(--jt-accent-soft));
-  padding-inline-start: 12px;
-}
-
-.lp-ledger-name {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  font-weight: 600;
-  color: var(--jt-fg-0);
-}
-
-/* Which part of a message's life the capability touches. */
-.lp-ledger-name::before {
-  content: '';
-  flex: none;
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
-  background: var(--lp-tone, var(--jt-line-2));
-}
-
-.lp-ledger-body {
-  font-size: var(--jt-step-0);
+.lp-swap-copy p {
+  margin: 16px 0 0;
+  max-width: 44ch;
+  font-size: var(--jt-step-1);
   line-height: 1.55;
   color: var(--jt-fg-1);
 }
 
-.lp-ledger-path {
-  justify-self: end;
+.lp-diff {
+  margin: 0;
+  border: 1px solid var(--jt-line-1);
+  border-radius: var(--jt-radius-lg);
+  overflow: hidden;
+  background: var(--jt-bg-code);
+  box-shadow: var(--jt-shadow-raised);
+}
+
+.lp-diff-head {
+  display: flex;
+  justify-content: space-between;
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--jt-line-1);
+  background: var(--jt-bg-2);
   font-variation-settings: var(--jt-vf-struct);
   font-size: var(--jt-step--1);
-  color: var(--jt-accent);
-  white-space: nowrap;
+  color: var(--jt-fg-2);
 }
 
-.lp-ledger-path::after {
-  content: ' →';
+.lp-diff-stat [data-kind='add'] {
+  color: var(--jt-state-ack);
 }
 
-.lp-ledger-note {
-  margin: 24px 0 0;
-  max-width: 88ch;
+.lp-diff-stat [data-kind='del'] {
+  color: var(--jt-state-dlq);
+}
+
+.lp-diff-body {
+  margin: 0;
+  padding: 12px 0;
+  overflow-x: auto;
+  background: none;
   font-variation-settings: var(--jt-vf-struct);
+  font-size: 0.82rem;
+  line-height: 1.7;
+  color: var(--jt-fg-1);
+}
+
+.lp-diff-line {
+  display: block;
+  padding-inline: 12px 16px;
+  white-space: pre;
+}
+
+.lp-diff-mark {
+  display: inline-block;
+  width: 1.4em;
+  color: var(--jt-fg-3);
+}
+
+.lp-diff-line[data-kind='add'] {
+  background: var(--jt-ack-soft);
+  color: var(--jt-fg-0);
+}
+
+.lp-diff-line[data-kind='add'] .lp-diff-mark {
+  color: var(--jt-state-ack);
+}
+
+.lp-diff-line[data-kind='del'] {
+  background: var(--jt-dlq-soft);
+  color: var(--jt-fg-2);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in oklch, var(--jt-state-dlq) 45%, transparent);
+}
+
+.lp-diff-line[data-kind='del'] .lp-diff-mark {
+  color: var(--jt-state-dlq);
+  text-decoration: none;
+}
+
+/* ---- message flow ------------------------------------------------------- */
+.lp-flow [data-state='deliver'] {
+  --lp-tone: var(--jt-state-deliver);
+}
+
+.lp-flow [data-state='redeliver'] {
+  --lp-tone: var(--jt-state-redeliver);
+}
+
+.lp-flow [data-state='ack'] {
+  --lp-tone: var(--jt-state-ack);
+}
+
+.lp-flow [data-state='dlq'] {
+  --lp-tone: var(--jt-state-dlq);
+  --lp-tone-soft: var(--jt-dlq-soft);
+}
+
+.lp-flow-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Each step is a node on one line: a dot in its state colour, the rail running on. */
+.lp-flow-steps li {
+  position: relative;
+  padding: 30px 24px 0 0;
+}
+
+.lp-flow-steps li::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 6px;
+  inset-inline: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--lp-tone), color-mix(in oklch, var(--lp-tone) 30%, var(--jt-line-1)));
+}
+
+.lp-flow-steps li:last-child::before {
+  inset-inline-end: auto;
+  width: 14px;
+}
+
+.lp-flow-steps li::after {
+  content: '';
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--lp-tone);
+  box-shadow: 0 0 0 4px var(--jt-bg-1);
+}
+
+.lp-flow-name {
+  display: block;
+  font-variation-settings: var(--jt-vf-struct);
+  font-size: var(--jt-step-1);
+  font-weight: 650;
+  color: var(--lp-tone);
+}
+
+.lp-flow-body {
+  display: block;
+  margin-top: 6px;
+  max-width: 30ch;
+  font-size: var(--jt-step-0);
+  line-height: 1.5;
+  color: var(--jt-fg-1);
+}
+
+/* The other way out: below the nak and ack steps, where the retries run out. */
+.lp-flow-branch {
+  margin: 36px 0 0 25%;
+  padding: 18px 22px;
+  border-inline-start: 3px solid var(--lp-tone);
+  border-radius: 0 var(--jt-radius-md) var(--jt-radius-md) 0;
+  background: var(--lp-tone-soft);
+}
+
+.lp-flow-branch .lp-flow-body {
+  max-width: 64ch;
+}
+
+/* ---- capability groups -------------------------------------------------- */
+.lp-groups {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(28px, 4vw, 48px);
+}
+
+.lp-group[data-tone='deliver'] {
+  --lp-tone: var(--jt-state-deliver);
+  --lp-tone-soft: var(--jt-deliver-soft);
+}
+
+.lp-group[data-tone='redeliver'] {
+  --lp-tone: var(--jt-state-redeliver);
+  --lp-tone-soft: var(--jt-redeliver-soft);
+}
+
+.lp-group[data-tone='ack'] {
+  --lp-tone: var(--jt-state-ack);
+  --lp-tone-soft: var(--jt-ack-soft);
+}
+
+.lp-group-name {
+  margin: 0 0 8px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid var(--lp-tone);
+  font-size: var(--jt-step-1);
+  font-weight: 650;
+  color: var(--lp-tone);
+}
+
+.lp-group ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lp-group-item {
+  display: block;
+  margin-inline: -10px;
+  padding: 10px;
+  border-radius: var(--jt-radius-md);
+  text-decoration: none;
+  color: inherit;
+  transition: background var(--jt-m-fast);
+}
+
+.lp-group-item:hover {
+  background: var(--lp-tone-soft);
+  text-decoration: none;
+}
+
+.lp-group-item-name {
+  display: block;
+  font-weight: 600;
+  color: var(--jt-fg-0);
+}
+
+.lp-group-item-body {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--jt-step--1);
+  line-height: 1.5;
+  color: var(--jt-fg-2);
+}
+
+/* ---- closing ------------------------------------------------------------ */
+.lp-close-inner {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+}
+
+.lp-close .lp-actions {
+  justify-content: center;
+}
+
+.lp-close-note {
+  margin: 28px 0 0;
+  max-width: 64ch;
   font-size: var(--jt-step--1);
   line-height: 1.6;
   color: var(--jt-fg-3);
@@ -599,7 +697,8 @@
 
 /* ---- narrow ------------------------------------------------------------- */
 @media (max-width: 996px) {
-  .lp-hero {
+  .lp-hero,
+  .lp-swap-grid {
     grid-template-columns: minmax(0, 1fr);
     align-items: start;
   }
@@ -609,22 +708,34 @@
     width: 90%;
   }
 
-  .lp-swap {
+  .lp-groups {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .lp-swap-col + .lp-swap-col {
-    border-inline-start: none;
-    border-top: 1px solid var(--jt-line-1);
-  }
-
-  .lp-ledger-row {
+  /* The rail turns vertical: each step under the last. */
+  .lp-flow-steps {
     grid-template-columns: minmax(0, 1fr);
-    gap: 6px;
+    gap: 26px;
   }
 
-  .lp-ledger-path {
-    justify-self: start;
+  .lp-flow-steps li {
+    padding: 0 0 0 32px;
+  }
+
+  .lp-flow-steps li::before {
+    inset-block: 14px -26px;
+    inset-inline: 6px auto;
+    width: 2px;
+    height: auto;
+    background: color-mix(in oklch, var(--lp-tone) 40%, var(--jt-line-1));
+  }
+
+  .lp-flow-steps li:last-child::before {
+    display: none;
+  }
+
+  .lp-flow-branch {
+    margin-inline-start: 32px;
   }
 }
 
@@ -647,7 +758,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .lp-install,
-  .lp-ledger-row {
+  .lp-group-item {
     transition: none;
   }
 

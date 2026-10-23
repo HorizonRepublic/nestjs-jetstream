@@ -1,6 +1,7 @@
 import { themes as prismThemes } from 'prism-react-renderer';
 import type { Config } from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
+import rehypeJetstream from './src/plugins/rehype-jetstream.mjs';
 
 const config: Config = {
   title: '@horizon-republic/nestjs-jetstream',
@@ -27,6 +28,7 @@ const config: Config = {
           editUrl: 'https://github.com/HorizonRepublic/nestjs-jetstream/tree/main/website/',
           showLastUpdateTime: true,
           showLastUpdateAuthor: true,
+          rehypePlugins: [rehypeJetstream],
         },
         blog: false,
         theme: { customCss: './src/css/custom.css' },

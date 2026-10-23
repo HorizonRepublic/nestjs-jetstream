@@ -1302,3 +1302,180 @@ body.jt-mermaid-zoom-open {
   width: 16px;
   height: 16px;
 }
+
+/* ---- page lede: the "Use when / You get" opener ------------------------- */
+.jt-lede {
+  display: grid;
+  margin: 4px 0 28px;
+  max-width: 70ch;
+  border: 1px solid var(--jt-line-1);
+  border-radius: var(--jt-radius-lg);
+  background: var(--jt-bg-1);
+  overflow: hidden;
+}
+
+.markdown .jt-lede-row {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  gap: 14px;
+  margin: 0;
+  padding: 12px 16px;
+  max-width: none;
+  border-inline-start: 3px solid var(--jt-lede-tone);
+  background: var(--jt-lede-soft);
+  line-height: 1.55;
+  color: var(--jt-fg-1);
+}
+
+.jt-lede-row + .jt-lede-row {
+  border-top: 1px solid var(--jt-line-1);
+}
+
+.jt-lede-row[data-role='when'] {
+  --jt-lede-tone: var(--jt-state-deliver);
+  --jt-lede-soft: var(--jt-deliver-soft);
+}
+
+.jt-lede-row[data-role='get'] {
+  --jt-lede-tone: var(--jt-state-ack);
+  --jt-lede-soft: var(--jt-ack-soft);
+}
+
+.jt-lede-label {
+  font-family: var(--jt-font-mono);
+  font-variation-settings: var(--jt-vf-struct);
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--jt-lede-tone);
+}
+
+@media (max-width: 540px) {
+  .markdown .jt-lede-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+}
+
+/* ---- settlement names in inline code take their state colour ------------ */
+.markdown code[data-state] {
+  font-weight: 600;
+}
+
+.markdown code[data-state='ack'] {
+  color: var(--jt-state-ack);
+  background: var(--jt-ack-soft);
+}
+
+.markdown code[data-state='redeliver'] {
+  color: var(--jt-state-redeliver);
+  background: var(--jt-redeliver-soft);
+}
+
+.markdown code[data-state='dlq'] {
+  color: var(--jt-state-dlq);
+  background: var(--jt-dlq-soft);
+}
+
+/* ---- tables ------------------------------------------------------------- */
+.markdown table th {
+  color: var(--jt-fg-1);
+  background: color-mix(in oklch, var(--jt-accent) 7%, var(--jt-bg-1));
+  border-bottom: 1px solid var(--jt-accent-line);
+}
+
+.markdown table tbody tr {
+  transition: background var(--jt-m-fast);
+}
+
+.markdown table tbody tr:hover {
+  background: var(--jt-bg-2);
+}
+
+.markdown table td:first-child {
+  color: var(--jt-fg-0);
+}
+
+/* ---- code block titles: a dot in the accent, like a file tab ------------ */
+[class*="codeBlockTitle"]::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-inline-end: 9px;
+  border-radius: 50%;
+  vertical-align: 1px;
+  background: var(--jt-accent);
+}
+
+/* ---- mermaid: drawn in the site palette instead of the stock greys ------- */
+.docusaurus-mermaid-container svg .node rect,
+.docusaurus-mermaid-container svg .node polygon,
+.docusaurus-mermaid-container svg .node circle,
+.docusaurus-mermaid-container svg .node path {
+  fill: var(--jt-bg-1) !important;
+  stroke: var(--jt-accent) !important;
+  stroke-width: 1.5px !important;
+}
+
+.docusaurus-mermaid-container svg .cluster rect {
+  fill: var(--jt-accent-soft) !important;
+  stroke: var(--jt-accent-line) !important;
+}
+
+.docusaurus-mermaid-container svg .flowchart-link,
+.docusaurus-mermaid-container svg .edgePath .path {
+  stroke: var(--jt-fg-3) !important;
+}
+
+.docusaurus-mermaid-container svg .arrowheadPath,
+.docusaurus-mermaid-container svg marker path {
+  fill: var(--jt-fg-3) !important;
+  stroke: var(--jt-fg-3) !important;
+}
+
+.docusaurus-mermaid-container svg .edgeLabel,
+.docusaurus-mermaid-container svg .edgeLabel rect,
+.docusaurus-mermaid-container svg .labelBkg {
+  background: var(--jt-bg-0) !important;
+  fill: var(--jt-bg-0) !important;
+  color: var(--jt-fg-1) !important;
+}
+
+.docusaurus-mermaid-container svg .nodeLabel,
+.docusaurus-mermaid-container svg .label,
+.docusaurus-mermaid-container svg .cluster-label {
+  color: var(--jt-fg-0) !important;
+}
+
+.docusaurus-mermaid-container svg rect.actor {
+  fill: var(--jt-bg-1) !important;
+  stroke: var(--jt-accent) !important;
+}
+
+.docusaurus-mermaid-container svg text.actor > tspan,
+.docusaurus-mermaid-container svg .messageText {
+  fill: var(--jt-fg-0) !important;
+}
+
+.docusaurus-mermaid-container svg .actor-line {
+  stroke: var(--jt-line-2) !important;
+}
+
+.docusaurus-mermaid-container svg .messageLine0,
+.docusaurus-mermaid-container svg .messageLine1 {
+  stroke: var(--jt-fg-2) !important;
+}
+
+.docusaurus-mermaid-container svg #arrowhead path {
+  fill: var(--jt-fg-2) !important;
+}
+
+.docusaurus-mermaid-container svg rect.note {
+  fill: var(--jt-redeliver-soft) !important;
+  stroke: var(--jt-state-redeliver) !important;
+}
+
+.docusaurus-mermaid-container svg .noteText > tspan,
+.docusaurus-mermaid-container svg .noteText {
+  fill: var(--jt-fg-0) !important;
+}
