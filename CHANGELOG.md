@@ -1,5 +1,78 @@
 # Changelog
 
+## [3.0.0](https://github.com/HorizonRepublic/nestjs-jetstream/compare/nestjs-jetstream-v2.13.0...nestjs-jetstream-v3.0.0) (2026-10-23)
+
+
+### ⚠ BREAKING CHANGES
+
+* **provisioning:** move allowDestructiveMigration under provisioning
+* **options:** take ordered consumer options in a raw consumer block
+* **options:** drop subjects and description from stream overrides
+* **options:** take a bare management mode on dlq and ordered
+* **options:** rename the publisher-only switch to publisherOnly
+* **routing:** pace handler retries with delayed naks
+* **dlq:** provision the dead-letter stream by default
+* require Node 22
+* **streams:** right-size default stream reservations
+
+### Features
+
+* **client:** create, cancel and list schedules from a client ([74742a4](https://github.com/HorizonRepublic/nestjs-jetstream/commit/74742a4be2645a5c748b51bd858ab7264d01cdd1))
+* **client:** reach services that consume on a custom subject prefix ([52426c7](https://github.com/HorizonRepublic/nestjs-jetstream/commit/52426c71557280709bbf9fd7af21f00c3a17e068))
+* **connection:** refuse features the NATS server is too old to run ([74742a4](https://github.com/HorizonRepublic/nestjs-jetstream/commit/74742a4be2645a5c748b51bd858ab7264d01cdd1))
+* **connections:** add the connectJetstreamMicroservices bootstrap helper and startup guard ([d244e6a](https://github.com/HorizonRepublic/nestjs-jetstream/commit/d244e6a15b7ba9a5436ee06eb3ce6b533606b5a8))
+* **connections:** bind handlers to a connection with @JetstreamConnection and pattern extras ([d244e6a](https://github.com/HorizonRepublic/nestjs-jetstream/commit/d244e6a15b7ba9a5436ee06eb3ce6b533606b5a8))
+* **connections:** connect non-critical connections lazily with background retry ([d244e6a](https://github.com/HorizonRepublic/nestjs-jetstream/commit/d244e6a15b7ba9a5436ee06eb3ce6b533606b5a8))
+* **connections:** connect one service to several NATS clusters through named connections ([d244e6a](https://github.com/HorizonRepublic/nestjs-jetstream/commit/d244e6a15b7ba9a5436ee06eb3ce6b533606b5a8))
+* **connections:** let forFeature clients publish on a named connection ([d244e6a](https://github.com/HorizonRepublic/nestjs-jetstream/commit/d244e6a15b7ba9a5436ee06eb3ce6b533606b5a8))
+* **deps:** support NestJS 12 ([ecf05ab](https://github.com/HorizonRepublic/nestjs-jetstream/commit/ecf05ab3b4cb49ca91f2fcaeecb86987274d41fa))
+* **dlq:** accept dlq: true ([82d961d](https://github.com/HorizonRepublic/nestjs-jetstream/commit/82d961d341d1d1a1e5a21a764642681650d8be50))
+* **dlq:** provision the dead-letter stream by default ([7f283f4](https://github.com/HorizonRepublic/nestjs-jetstream/commit/7f283f4262c6bc8c50f9861aab1ea46f01571bb3))
+* **health:** name the result type of isHealthy ([a83842a](https://github.com/HorizonRepublic/nestjs-jetstream/commit/a83842adc57c0d964a6cf367eda573643c22803e))
+* **health:** report degraded state and a per-connection breakdown ([d244e6a](https://github.com/HorizonRepublic/nestjs-jetstream/commit/d244e6a15b7ba9a5436ee06eb3ce6b533606b5a8))
+* **hooks:** tag hook events with the originating connection ([d244e6a](https://github.com/HorizonRepublic/nestjs-jetstream/commit/d244e6a15b7ba9a5436ee06eb3ce6b533606b5a8))
+* **metrics:** accept @prometheus-io/client alongside prom-client ([768f786](https://github.com/HorizonRepublic/nestjs-jetstream/commit/768f786f97b9c61337ec61517eb76806e0f76a16))
+* **metrics:** export MetricsConfig, MetricsOption and HistogramBuckets ([4d89474](https://github.com/HorizonRepublic/nestjs-jetstream/commit/4d894741f58dfc5fd0e0e65736df547414cd4822))
+* **options:** rename the publisher-only switch to publisherOnly ([82d961d](https://github.com/HorizonRepublic/nestjs-jetstream/commit/82d961d341d1d1a1e5a21a764642681650d8be50))
+* **routing:** pace handler retries with delayed naks ([7f283f4](https://github.com/HorizonRepublic/nestjs-jetstream/commit/7f283f4262c6bc8c50f9861aab1ea46f01571bb3))
+* **schedule:** cancel schedules whose ticks no handler takes ([74742a4](https://github.com/HorizonRepublic/nestjs-jetstream/commit/74742a4be2645a5c748b51bd858ab7264d01cdd1))
+* **schedule:** declare cron and interval schedules on event handlers ([74742a4](https://github.com/HorizonRepublic/nestjs-jetstream/commit/74742a4be2645a5c748b51bd858ab7264d01cdd1))
+* **shutdown:** drain every connection in two phases ([d244e6a](https://github.com/HorizonRepublic/nestjs-jetstream/commit/d244e6a15b7ba9a5436ee06eb3ce6b533606b5a8))
+* **streams:** right-size default stream reservations ([7f283f4](https://github.com/HorizonRepublic/nestjs-jetstream/commit/7f283f4262c6bc8c50f9861aab1ea46f01571bb3))
+* **streams:** stamp stream ownership to catch two connections claiming one stream ([d244e6a](https://github.com/HorizonRepublic/nestjs-jetstream/commit/d244e6a15b7ba9a5436ee06eb3ce6b533606b5a8))
+
+
+### Bug Fixes
+
+* **ack-extension:** stop extending a message after five minutes ([7f283f4](https://github.com/HorizonRepublic/nestjs-jetstream/commit/7f283f4262c6bc8c50f9861aab1ea46f01571bb3))
+* **client:** accept msgpackr 2.x in the peer range ([41082c8](https://github.com/HorizonRepublic/nestjs-jetstream/commit/41082c81bf7b4e3a3c5709ee6badb95078435f68))
+* **client:** compile against NestJS 10 ([a83842a](https://github.com/HorizonRepublic/nestjs-jetstream/commit/a83842adc57c0d964a6cf367eda573643c22803e))
+* **client:** schedule a broadcast under the caller's custom broadcast prefix ([52426c7](https://github.com/HorizonRepublic/nestjs-jetstream/commit/52426c71557280709bbf9fd7af21f00c3a17e068))
+* **dlq:** stop claiming the stream name override is ignored ([82d961d](https://github.com/HorizonRepublic/nestjs-jetstream/commit/82d961d341d1d1a1e5a21a764642681650d8be50))
+* **docs:** keep the generated API reference out of the search index ([4a532ef](https://github.com/HorizonRepublic/nestjs-jetstream/commit/4a532efb0ce41cc832df5970836b98726e40f006))
+* **docs:** resolve the TypeDoc markdown plugin under pnpm 11.17 ([06e9a4a](https://github.com/HorizonRepublic/nestjs-jetstream/commit/06e9a4a958fe53eef907fe52377b1c0810dd10a0))
+* **errors:** preserve the original NATS error as cause ([ecf05ab](https://github.com/HorizonRepublic/nestjs-jetstream/commit/ecf05ab3b4cb49ca91f2fcaeecb86987274d41fa))
+* **health:** bound the connection probe so a stalled server cannot hang the check ([d244e6a](https://github.com/HorizonRepublic/nestjs-jetstream/commit/d244e6a15b7ba9a5436ee06eb3ce6b533606b5a8))
+* load both builds everywhere and dead-letter unsettled exhausted deliveries ([#247](https://github.com/HorizonRepublic/nestjs-jetstream/issues/247)) ([731263a](https://github.com/HorizonRepublic/nestjs-jetstream/commit/731263a30a5e2850e45840c7cf7833c540b6acad))
+* **metrics:** stop importing prom-client from the published type declarations ([768f786](https://github.com/HorizonRepublic/nestjs-jetstream/commit/768f786f97b9c61337ec61517eb76806e0f76a16))
+* **options:** fail at boot on options removed in v3 ([82d961d](https://github.com/HorizonRepublic/nestjs-jetstream/commit/82d961d341d1d1a1e5a21a764642681650d8be50))
+* **routing:** nak the concurrency backlog on shutdown ([7f283f4](https://github.com/HorizonRepublic/nestjs-jetstream/commit/7f283f4262c6bc8c50f9861aab1ea46f01571bb3))
+* **rpc:** answer with an error when a reply fails to encode ([7f283f4](https://github.com/HorizonRepublic/nestjs-jetstream/commit/7f283f4262c6bc8c50f9861aab1ea46f01571bb3))
+* **site:** read the last colours from tokens and lift muted text to AA ([5ac414d](https://github.com/HorizonRepublic/nestjs-jetstream/commit/5ac414d45254bcc57b4284423880bb6b54800d35))
+
+
+### Code Refactoring
+
+* **options:** drop subjects and description from stream overrides ([82d961d](https://github.com/HorizonRepublic/nestjs-jetstream/commit/82d961d341d1d1a1e5a21a764642681650d8be50))
+* **options:** take a bare management mode on dlq and ordered ([82d961d](https://github.com/HorizonRepublic/nestjs-jetstream/commit/82d961d341d1d1a1e5a21a764642681650d8be50))
+* **options:** take ordered consumer options in a raw consumer block ([82d961d](https://github.com/HorizonRepublic/nestjs-jetstream/commit/82d961d341d1d1a1e5a21a764642681650d8be50))
+* **provisioning:** move allowDestructiveMigration under provisioning ([82d961d](https://github.com/HorizonRepublic/nestjs-jetstream/commit/82d961d341d1d1a1e5a21a764642681650d8be50))
+
+
+### Build System
+
+* require Node 22 ([7f283f4](https://github.com/HorizonRepublic/nestjs-jetstream/commit/7f283f4262c6bc8c50f9861aab1ea46f01571bb3))
+
 ## [2.13.0](https://github.com/HorizonRepublic/nestjs-jetstream/compare/v2.12.1...v2.13.0) (2026-06-15)
 
 
