@@ -13,16 +13,15 @@ schema:
 
 # Installation
 
-> **Use when:** you are setting the package up for the first time, or lining up
-> peer dependencies. **You get:** the install command, a local NATS through
-> Docker, and the version ranges that matter.
+> **Use when:** you are setting the package up for the first time, or lining up peer dependencies.
+> **You get:** the install command, a local NATS through Docker, and the version ranges that matter.
 
-Get the package installed, NATS running locally, and the peer dependencies lined
-up. If you already have NATS, skip straight to [Quick Start](./quick-start).
+Get the package installed, NATS running locally, and the peer dependencies lined up. If you already have NATS, skip straight to [Quick Start](./quick-start).
 
 ## Install the package
 
-import Tabs from '@theme/Tabs'; import TabItem from '@theme/TabItem';
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
 
 <Tabs groupId="pkg-manager">
   <TabItem value="npm" label="npm">
@@ -31,53 +30,46 @@ import Tabs from '@theme/Tabs'; import TabItem from '@theme/TabItem';
 npm install @horizon-republic/nestjs-jetstream
 ```
 
-</TabItem>
+  </TabItem>
   <TabItem value="pnpm" label="pnpm">
 
 ```bash
 pnpm add @horizon-republic/nestjs-jetstream
 ```
 
-</TabItem>
+  </TabItem>
   <TabItem value="yarn" label="yarn">
 
 ```bash
 yarn add @horizon-republic/nestjs-jetstream
 ```
 
-</TabItem>
+  </TabItem>
 </Tabs>
 
 ## Peer dependencies
 
 Required, and already present in any standard NestJS project:
 
-- `@nestjs/common`, `@nestjs/core`, `@nestjs/microservices`:
-  `^10.2.0 || ^11.0.0 || ^12.0.0`
+- `@nestjs/common`, `@nestjs/core`, `@nestjs/microservices`: `^10.2.0 || ^11.0.0 || ^12.0.0`
 - `reflect-metadata` ^0.2.0
 - `rxjs` ^7.8.0
 
 Optional, install only for the feature that needs it:
 
-- `msgpackr` `^1.11.0 || ^2.0.0` for the
-  [MessagePack codec](/docs/guides/custom-codec#built-in-msgpackcodec)
-- `@prometheus-io/client` ^0.16.0, or `prom-client` ^15.0.0, its previous name,
-  for [Prometheus metrics](/docs/observability/metrics)
-- `@opentelemetry/api` ^1.9.0 for
-  [distributed tracing](/docs/observability/tracing)
+- `msgpackr` `^1.11.0 || ^2.0.0` for the [MessagePack codec](/docs/guides/custom-codec#built-in-msgpackcodec)
+- `@prometheus-io/client` ^0.16.0, or `prom-client` ^15.0.0, its previous name, for [Prometheus metrics](/docs/observability/metrics)
+- `@opentelemetry/api` ^1.9.0 for [distributed tracing](/docs/observability/tracing)
 
 ## Runtime requirements
 
 - **Node.js** >= 22.0.0
 - **TypeScript** >= 5.7 (required by `@nats-io/*` v3 typed array generics)
-- **NATS Server** >= 2.10 with JetStream enabled; some features need a newer
-  server, see below
+- **NATS Server** >= 2.10 with JetStream enabled; some features need a newer server, see below
 
 ## NATS server versions
 
-Measured against real servers. A feature used on an older server fails the boot,
-or the call, with a `JetstreamCapabilityError`, because those servers accept the
-settings and silently ignore them.
+Measured against real servers. A feature used on an older server fails the boot, or the call, with a `JetstreamCapabilityError`, because those servers accept the settings and silently ignore them.
 
 | Feature                                                                                                                  | Minimum NATS | JetStream API level |
 | ------------------------------------------------------------------------------------------------------------------------ | ------------ | ------------------- |
@@ -86,9 +78,7 @@ settings and silently ignore them.
 | [Scheduled messages](/docs/guides/scheduling): `scheduleAt()`, `allow_msg_schedules`, one-shot `client.schedule({ at })` | 2.12         | 2                   |
 | [Recurring schedules](/docs/guides/recurring-schedules): cron and intervals                                              | 2.14         | 4                   |
 
-In a cluster, upgrade every node before using a feature: the check reads the
-level of the server the client talks to, which says nothing about a stream
-leader still on an older node.
+In a cluster, upgrade every node before using a feature: the check reads the level of the server the client talks to, which says nothing about a stream leader still on an older node.
 
 ## Run NATS locally
 
@@ -119,13 +109,10 @@ services:
       - "8222:8222" # monitoring
 ```
 
-The monitoring port (`8222`) gives you access to the
-[NATS monitoring endpoint](https://docs.nats.io/running-a-nats-service/configuration/monitoring)
-for debugging.
+The monitoring port (`8222`) gives you access to the [NATS monitoring endpoint](https://docs.nats.io/running-a-nats-service/configuration/monitoring) for debugging.
 
 </details>
 
 ## What's next?
 
-Once you have the package installed and NATS running, head to the
-[Quick Start](/docs/getting-started/quick-start) to wire up your first handlers.
+Once you have the package installed and NATS running, head to the [Quick Start](/docs/getting-started/quick-start) to wire up your first handlers.
