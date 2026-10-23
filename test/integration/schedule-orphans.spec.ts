@@ -98,6 +98,7 @@ describe('Orphaned schedules', () => {
     // When its ticks exhaust their deliveries
     // Then the holder is gone
     await waitForCondition(async () => (await holderCount(holder)) === 0, 20_000, 250);
+    expect(await holderCount(holder)).toBe(0);
   }, 45_000);
 
   it('should leave a schedule newer than the replica to the replicas that handle it', async () => {
