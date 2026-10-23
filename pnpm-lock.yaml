@@ -10,7 +10,7 @@ overrides:
   minimatch@>=9.0.0 <9.0.7: ^9.0.7
   katex@<0.18.2: ^0.18.2
   postcss-selector-parser@<7.1.6: ^7.1.7
-  uuid@<11.1.1: ^11.1.1
+  uuid@<11.1.1: ^14.0.3
   yaml@>=2.0.0 <2.8.3: ^2.8.3
   qs@>=6.11.1 <6.15.2: 6.15.3
   ws: ^8.21.3
@@ -7863,8 +7863,8 @@ packages:
     resolution: {integrity: sha512-pMZTvIkT1d+TFGvDOqodOclx0QWkkgi6Tdoa8gC8ffGAAqz9pzPTZWAybbsHHoED/ztMtkv/VoYTYyShUn81hA==}
     engines: {node: '>= 0.4.0'}
 
-  uuid@11.1.1:
-    resolution: {integrity: sha512-vIYxrBCC/N/K+Js3qSN88go7kIfNPssr/hHCesKCQNAjmgvYS2oqr69kIufEG+O4+PfezOH4EbIeHCfFov8ZgQ==}
+  uuid@14.0.3:
+    resolution: {integrity: sha512-Sc5u1VVln93y1Xnz4R+CunOZc7R9LUcTmhj7Rc7Eg3HVcf7rVn2FOoa812fe0W8p3jD7xeoGSYbfqCGGH2B6xw==}
     hasBin: true
 
   value-equal@1.0.1:
@@ -15165,7 +15165,7 @@ snapshots:
       roughjs: 4.6.6
       stylis: 4.4.0
       ts-dedent: 2.3.0
-      uuid: 11.1.1
+      uuid: 14.0.3
 
   methods@1.1.2: {}
 
@@ -17065,7 +17065,7 @@ snapshots:
   sockjs@0.3.24:
     dependencies:
       faye-websocket: 0.11.4
-      uuid: 11.1.1
+      uuid: 14.0.3
       websocket-driver: 0.7.5
 
   sort-css-media-queries@2.2.0: {}
@@ -17605,7 +17605,7 @@ snapshots:
 
   utils-merge@1.0.1: {}
 
-  uuid@11.1.1: {}
+  uuid@14.0.3: {}
 
   value-equal@1.0.1: {}
 
