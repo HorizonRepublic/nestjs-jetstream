@@ -59,6 +59,8 @@
   --jt-state-dlq: #b3321f;
   --jt-state-ack: #1b7a4a;
   --jt-state-trace: #6a4fc0;
+  --jt-tone-teal: #0d7480;
+  --jt-tone-rose: #b0306a;
 
   --jt-deliver-soft: rgb(37 87 194 / 0.09);
   --jt-redeliver-soft: rgb(150 96 10 / 0.1);
@@ -110,6 +112,8 @@
   --jt-state-dlq: #ee8a76;
   --jt-state-ack: #5fcf95;
   --jt-state-trace: #b9a6f2;
+  --jt-tone-teal: #5cc6d2;
+  --jt-tone-rose: #f08bb4;
 
   --jt-deliver-soft: rgb(134 170 242 / 0.14);
   --jt-redeliver-soft: rgb(226 168 75 / 0.14);

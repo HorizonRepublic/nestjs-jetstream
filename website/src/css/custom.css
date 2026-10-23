@@ -360,10 +360,10 @@ body {
   font-family: var(--jt-font-mono);
   font-size: 0.86em;
   color: var(--jt-fg-0);
-  background: var(--jt-bg-1);
-  border: 1px solid var(--jt-line-1);
-  border-radius: var(--jt-radius-sm);
-  padding: 1px 6px;
+  background: var(--jt-bg-2);
+  border: none;
+  border-radius: 4px;
+  padding: 2px 6px;
 }
 
 
@@ -1303,57 +1303,85 @@ body.jt-mermaid-zoom-open {
   height: 16px;
 }
 
+/* ---- section tones ----------------------------------------------------
+   The doc layout marks each page with its sidebar section; the tone colours the
+   active sidebar link, the lede and the marks above headings. */
+:root {
+  --jt-tone: var(--jt-accent);
+}
+
+html:has(.jt-doc[data-tone='deliver']) { --jt-tone: var(--jt-state-deliver); }
+html:has(.jt-doc[data-tone='violet']) { --jt-tone: var(--jt-state-trace); }
+html:has(.jt-doc[data-tone='amber']) { --jt-tone: var(--jt-state-redeliver); }
+html:has(.jt-doc[data-tone='green']) { --jt-tone: var(--jt-state-ack); }
+html:has(.jt-doc[data-tone='teal']) { --jt-tone: var(--jt-tone-teal); }
+html:has(.jt-doc[data-tone='rose']) { --jt-tone: var(--jt-tone-rose); }
+html:has(.jt-doc[data-tone='red']) { --jt-tone: var(--jt-state-dlq); }
+html:has(.jt-doc[data-tone='neutral']) { --jt-tone: var(--jt-fg-2); }
+
+.menu__link--active:not(.menu__link--sublist)::before {
+  background: var(--jt-tone);
+}
+
+.menu__link--active:not(.menu__link--sublist) {
+  color: var(--jt-tone);
+}
+
+.breadcrumbs__item:nth-child(2) .breadcrumbs__link {
+  color: var(--jt-tone);
+}
+
+/* a short mark in the section's tone above each section heading */
+.markdown h2::before {
+  content: '';
+  display: block;
+  width: 22px;
+  height: 3px;
+  margin-bottom: 12px;
+  border-radius: 2px;
+  background: var(--jt-tone);
+  opacity: 0.85;
+}
+
 /* ---- page lede: the "Use when / You get" opener ------------------------- */
 .jt-lede {
   display: grid;
-  margin: 2px 0 22px;
+  gap: 8px;
+  margin: 6px 0 28px;
+  padding: 14px 18px;
   max-width: 70ch;
-  border: 1px solid var(--jt-line-1);
-  border-radius: var(--jt-radius-lg);
-  background: var(--jt-bg-1);
-  overflow: hidden;
+  border: 1px solid color-mix(in oklch, var(--jt-tone) 22%, var(--jt-line-1));
+  border-radius: 10px;
+  background: color-mix(in oklch, var(--jt-tone) 6%, var(--jt-bg-1));
 }
 
 .markdown .jt-lede-row {
   display: grid;
-  grid-template-columns: 5.5rem minmax(0, 1fr);
+  grid-template-columns: 5.6rem minmax(0, 1fr);
   gap: 12px;
   margin: 0;
-  padding: 8px 14px;
   max-width: none;
-  border-inline-start: 3px solid var(--jt-lede-tone);
-  background: var(--jt-lede-soft);
-  font-size: 15px;
-  line-height: 1.5;
+  font-size: 15.5px;
+  line-height: 1.55;
   color: var(--jt-fg-1);
 }
 
-.jt-lede-row + .jt-lede-row {
-  border-top: 1px solid var(--jt-line-1);
-}
-
-.jt-lede-row[data-role='when'] {
-  --jt-lede-tone: var(--jt-state-deliver);
-  --jt-lede-soft: var(--jt-deliver-soft);
-}
-
-.jt-lede-row[data-role='get'] {
-  --jt-lede-tone: var(--jt-state-ack);
-  --jt-lede-soft: var(--jt-ack-soft);
-}
-
 .jt-lede-label {
-  font-family: var(--jt-font-mono);
-  font-variation-settings: var(--jt-vf-struct);
+  font-family: var(--jt-font-sans);
   font-size: 13px;
-  font-weight: 650;
-  color: var(--jt-lede-tone);
+  font-weight: 600;
+  line-height: 1.85;
+  color: var(--jt-tone);
+}
+
+.jt-lede-row[data-role='get'] .jt-lede-label {
+  color: var(--jt-fg-2);
 }
 
 @media (max-width: 540px) {
   .markdown .jt-lede-row {
     grid-template-columns: minmax(0, 1fr);
-    gap: 2px;
+    gap: 0;
   }
 }
 
