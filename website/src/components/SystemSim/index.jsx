@@ -2,104 +2,148 @@ import React, { useEffect, useRef, useState } from 'react';
 import useBaseUrl from '@docusaurus/useBaseUrl';
 import './styles.css';
 
-/* A small JetStream system as a conveyor floor, drawn isometrically behind the
-   hero. Services feed belts into the stream, a long buffer belt where messages
-   queue; a splitter hands them to NestJS pods. An ack sends a message out, a nak
-   lifts it onto the overhead return belt and back to the stream. Pods restart,
-   on their own or when clicked; every message gets acked in the end.
+/* A small JetStream system as a conveyor floor behind the hero, drawn in 2:1
+   dimetric. The stream is a closed loop and a message stays on it until a pod
+   acks it. Services feed the loop from the left; NestJS pods along the right
+   take deliveries as messages pass. While a delivery is out, the message's slot
+   stays on the loop as an outline. An ack removes it and the delivery leaves
+   to the right; a nak, or a pod going down, turns the outline back into a
+   message that rides the loop until its retry delay is over. Every message gets
+   acked in the end.
 
-   Every message moves only along a belt, so the belts are the routes. */
+   Every belt starts and ends inside a block or the loop, and every message
+   moves only along a belt. */
+
+/* ---- layout ------------------------------------------------------------- */
 
 const MODEL = { w: 600, h: 240 };
-const FAIL_CHANCE = [0.3, 0.2, 0];
-const GAP = 12;
+const BELT_Z = 6;
+const BELT_W = 14;
+const LOOP_W = 20;
+const GAP = 13;
 const BOX = { size: 9, height: 7 };
-const BELT_Z = 5;
-const RAIL_Z = 42;
-const RAIL_Y = 78; // the return runs beside the stream, on its far side, not above it
-const POD = { size: 34, height: 30, downHeight: 9 };
+const POD = { size: 36, height: 32, downHeight: 10 };
+const DOCK = { size: 30, height: 24 };
+const LANES = [70, 120, 170];
+const LOOP = { x0: 160, x1: 420, y0: 20, y1: 220, r: 36 };
+const POD_X = 480;
+const DOCK_X = 60;
+const OUTBOX = { x: 566, y: 120, sx: 24, sy: 150, height: 14 };
+
+const FAIL_CHANCE = [0.3, 0.2, 0];
+const RETRY_MS = 2000;
 const RESTART_MS = 3400;
 const MANUAL_DOWN_MS = 20000;
 const DEPLOY_EVERY_MS = 25000;
-const EFFECT_MS = { ack: 900, nak: 700, down: 1100 };
+const DOWN_RING_MS = 1100;
 const SUBJECTS = ['orders.created', 'payments.captured', 'users.updated', 'emails.send', 'stock.reserved'];
 const HINT_KEY = 'jt-scene-clicked';
 
-const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+/* ---- paths -------------------------------------------------------------- */
 
-/* ---- belts -------------------------------------------------------------- */
+const p3 = (x, y, z = BELT_Z) => ({ x, y, z });
 
-/* A belt is a polyline in model space (x, y, z) that items ride at a fixed speed. */
-const belt = (points, speed) => {
-  const lengths = points.slice(1).map((p, i) => Math.hypot(p.x - points[i].x, p.y - points[i].y, p.z - points[i].z));
+const makePath = (points, closed = false) => {
+  const pts = closed ? [...points, points[0]] : points;
+  const lengths = pts.slice(1).map((p, i) => Math.hypot(p.x - pts[i].x, p.y - pts[i].y, p.z - pts[i].z));
 
-  return { points, lengths, length: lengths.reduce((a, b) => a + b, 0), speed, items: [] };
+  return { points, pts, lengths, length: lengths.reduce((a, b) => a + b, 0), closed };
 };
 
-const pointAt = (b, s) => {
-  let left = Math.max(0, Math.min(s, b.length));
+const pointAt = (path, s) => {
+  let left = path.closed ? ((s % path.length) + path.length) % path.length : Math.max(0, Math.min(s, path.length));
 
-  for (let i = 0; i < b.lengths.length; i += 1) {
-    if (left <= b.lengths[i] || i === b.lengths.length - 1) {
-      const t = b.lengths[i] ? Math.min(1, left / b.lengths[i]) : 0;
-      const a = b.points[i];
-      const c = b.points[i + 1];
+  for (let i = 0; i < path.lengths.length; i += 1) {
+    if (left <= path.lengths[i] || i === path.lengths.length - 1) {
+      const t = path.lengths[i] ? Math.min(1, left / path.lengths[i]) : 0;
+      const a = path.pts[i];
+      const c = path.pts[i + 1];
 
       return { x: a.x + (c.x - a.x) * t, y: a.y + (c.y - a.y) * t, z: a.z + (c.z - a.z) * t };
     }
 
-    left -= b.lengths[i];
+    left -= path.lengths[i];
   }
 
-  return b.points.at(-1);
+  return path.pts.at(-1);
 };
 
-/* Items move forward until they reach the end or close up on the item ahead. */
+/* The loop: a rounded rectangle, travelled clockwise from the top-left. */
+const loopPoints = ({ x0, x1, y0, y1, r }) => {
+  const points = [];
+  const arc = (cx, cy, from) => {
+    for (let i = 1; i <= 12; i += 1) {
+      const a = from + (i / 12) * (Math.PI / 2);
+
+      points.push(p3(cx + Math.cos(a) * r, cy + Math.sin(a) * r));
+    }
+  };
+
+  points.push(p3(x0 + r, y0));
+  points.push(p3(x1 - r, y0));
+  arc(x1 - r, y0 + r, -Math.PI / 2);
+  points.push(p3(x1, y1 - r));
+  arc(x1 - r, y1 - r, 0);
+  points.push(p3(x0 + r, y1));
+  arc(x0 + r, y1 - r, Math.PI / 2);
+  points.push(p3(x0, y0 + r));
+  arc(x0 + r, y0 + r, Math.PI);
+  points.pop();
+
+  return points;
+};
+
+/* Where on the loop a point on its centreline sits, as a distance along it. */
+const loopS = (path, x, y) => {
+  let best = 0;
+  let bestD = Infinity;
+
+  for (let s = 0; s < path.length; s += 0.5) {
+    const p = pointAt(path, s);
+    const d = Math.hypot(p.x - x, p.y - y);
+
+    if (d < bestD) {
+      bestD = d;
+      best = s;
+    }
+  }
+
+  return best;
+};
+
+/* ---- belts -------------------------------------------------------------- */
+
+const belt = (path, speed) => ({ path, speed, items: [] });
+
 const advance = (b, dt) => {
   b.items.forEach((item, index) => {
-    const limit = index === 0 ? b.length : b.items[index - 1].s - GAP;
+    const limit = index === 0 ? b.path.length : b.items[index - 1].s - GAP;
 
     if (item.s < limit) item.s = Math.min(limit, item.s + b.speed * dt);
   });
 };
 
-const atEnd = (b) => b.items.length > 0 && b.items[0].s >= b.length - 0.01;
+const atEnd = (b) => b.items.length > 0 && b.items[0].s >= b.path.length - 0.01;
 const hasRoom = (b) => !b.items.length || b.items.at(-1).s >= GAP;
-const put = (b, item) => {
-  item.s = 0;
+const put = (b, item, s = 0) => {
+  item.s = s;
   item.belt = b;
   b.items.push(item);
 };
 const take = (b) => b.items.shift();
 
-const p3 = (x, y, z = BELT_Z) => ({ x, y, z });
-
 const buildFloor = () => {
-  const ys = [44, 120, 196];
-  const docks = ys.map((y) => ({ x: 24, y }));
-  const pods = ys.map((y) => ({ x: 520, y }));
-  const stream = belt([p3(140, 120), p3(378, 120)], 0.11);
-  const splitter = { x: 392, y: 120 };
+  const loop = belt(makePath(loopPoints(LOOP), true), 0.2);
 
   return {
-    docks,
-    pods,
-    splitter,
-    inputs: [
-      belt([p3(38, 44), p3(140, 44), p3(140, 110)], 0.09),
-      belt([p3(38, 120), p3(130, 120)], 0.09),
-      belt([p3(38, 196), p3(140, 196), p3(140, 130)], 0.09),
-    ],
-    stream,
-    feeds: [
-      belt([p3(392, 106), p3(392, 44), p3(498, 44), p3(510, 44, POD.height + 2)], 0.26),
-      belt([p3(406, 120), p3(498, 120), p3(510, 120, POD.height + 2)], 0.26),
-      belt([p3(392, 134), p3(392, 196), p3(498, 196), p3(510, 196, POD.height + 2)], 0.26),
-    ],
-    outputs: ys.map((y) => belt([p3(530, y, POD.height + 2), p3(540, y), p3(596, y)], 0.1)),
-    // the overhead return: up from each pod, over to the stream's line, back above it, down at its start
-    lifts: ys.map((y) => belt([p3(520, y, POD.height + 2), p3(520, y, RAIL_Z), p3(462, y, RAIL_Z), p3(462, RAIL_Y, RAIL_Z)], 0.1)),
-    rail: belt([p3(462, RAIL_Y, RAIL_Z), p3(158, RAIL_Y, RAIL_Z), p3(140, 120, BELT_Z)], 0.13),
+    loop,
+    docks: LANES.map((y) => ({ x: DOCK_X, y })),
+    pods: LANES.map((y) => ({ x: POD_X, y })),
+    inputs: LANES.map((y) => belt(makePath([p3(DOCK_X, y), p3(LOOP.x0, y)]), 0.1)),
+    merges: LANES.map((y) => loopS(loop.path, LOOP.x0, y)),
+    ins: LANES.map((y) => belt(makePath([p3(LOOP.x1, y), p3(POD_X, y)]), 0.26)),
+    offtakes: LANES.map((y) => loopS(loop.path, LOOP.x1, y)),
+    outputs: LANES.map((y) => belt(makePath([p3(POD_X, y), p3(OUTBOX.x, y)]), 0.12)),
   };
 };
 
@@ -108,45 +152,57 @@ const buildFloor = () => {
 const createSim = () => ({
   time: 0,
   nextId: 1,
-  replicas: [0, 1, 2].map(() => ({ busy: null, flash: null, flashAt: -1e9, downUntil: 0, manual: false })),
+  replicas: LANES.map(() => ({ busy: null, flash: null, flashAt: -1e9, downUntil: 0, manual: false })),
   nextSpawn: 300,
   nextBurst: 4000,
+  burstLeft: 0,
+  burstAt: 0,
   nextRestart: 16000,
   nextDeploy: 6000,
   deploy: null,
-  effects: [],
-  done: [],
+  rings: [],
   spawnTurn: 0,
-  joinTurn: 0,
   stats: { published: 0, retried: 0, acked: 0 },
 });
 
 const isDown = (sim, replica) => sim.time < replica.downUntil;
 
-const burst = (sim, kind, at) => {
-  sim.effects.push({ kind, x: at.x, y: at.y, born: sim.time, seed: Math.random() * Math.PI * 2 });
+const circularGap = (a, b, length) => {
+  const d = Math.abs(a - b) % length;
+
+  return Math.min(d, length - d);
 };
 
-const toReturn = (sim, floor, item, index) => {
-  item.retrying = true;
+const loopFree = (floor, s) => floor.loop.items.every((item) => circularGap(item.s, s, floor.loop.path.length) >= GAP);
+
+/* No ack: the delivery is dropped and the message, still in the stream, becomes
+   available again once its retry delay is over. */
+const redeliver = (sim, floor, item) => {
+  const slot = item.slot;
+  const index = floor.loop.items.indexOf(slot);
+
   sim.stats.retried += 1;
-  put(floor.lifts[index], item);
+  item.processing = false;
+  item.belt = floor.loop;
+  item.s = slot.s;
+  item.retrying = true;
+  item.readyAt = sim.time + RETRY_MS;
+  item.slot = null;
+  floor.loop.items.splice(index, 1, item);
 };
 
-/* A pod goes away: what it was handling goes back for redelivery, never lost. */
 const takeDown = (sim, floor, index, ms, manual) => {
   const replica = sim.replicas[index];
 
   replica.downUntil = sim.time + ms;
   replica.manual = manual;
-  burst(sim, 'down', floor.pods[index]);
+  sim.rings.push({ index, born: sim.time });
 
   const item = replica.busy;
 
-  if (item && item.processing) {
-    item.processing = false;
+  if (item?.processing) {
     replica.busy = null;
-    toReturn(sim, floor, item, index);
+    redeliver(sim, floor, item);
   }
 };
 
@@ -161,14 +217,19 @@ const togglePod = (sim, floor, index) => {
   }
 };
 
+const podFree = (sim, floor, index) => {
+  const replica = sim.replicas[index];
+
+  return !replica.busy && !isDown(sim, replica) && !floor.ins[index].items.length;
+};
+
 const step = (sim, floor, dt) => {
   sim.time += dt;
   const now = sim.time;
 
-  // publishing: a new message on a dock's belt, when the belt has room
   const spawn = () => {
-    for (let tries = 0; tries < 3; tries += 1) {
-      const dock = (sim.spawnTurn + tries) % 3;
+    for (let tries = 0; tries < LANES.length; tries += 1) {
+      const dock = (sim.spawnTurn + tries) % LANES.length;
 
       if (hasRoom(floor.inputs[dock])) {
         const id = sim.nextId++;
@@ -180,7 +241,7 @@ const step = (sim, floor, dt) => {
           attempt: 0,
         });
         sim.stats.published += 1;
-        sim.spawnTurn = (dock + 1 + Math.floor(Math.random() * 2)) % 3;
+        sim.spawnTurn = (dock + 1 + Math.floor(Math.random() * 2)) % LANES.length;
 
         return;
       }
@@ -189,7 +250,7 @@ const step = (sim, floor, dt) => {
 
   if (now >= sim.nextSpawn) {
     spawn();
-    sim.nextSpawn = now + 1100 + Math.random() * 900;
+    sim.nextSpawn = now + 1000 + Math.random() * 900;
   }
 
   if (now >= sim.nextBurst) {
@@ -197,7 +258,7 @@ const step = (sim, floor, dt) => {
     sim.nextBurst = now + 11000 + Math.random() * 6000;
   }
 
-  if (sim.burstLeft && now >= (sim.burstAt ?? 0)) {
+  if (sim.burstLeft && now >= sim.burstAt) {
     spawn();
     sim.burstLeft -= 1;
     sim.burstAt = now + 160;
@@ -207,72 +268,78 @@ const step = (sim, floor, dt) => {
   if (now >= sim.nextDeploy) {
     sim.deploy = { start: now, done: -1 };
     sim.nextDeploy = now + DEPLOY_EVERY_MS;
-    sim.nextRestart = Math.max(sim.nextRestart, now + 3 * RESTART_MS + 6000);
+    sim.nextRestart = Math.max(sim.nextRestart, now + LANES.length * RESTART_MS + 6000);
   }
 
   if (sim.deploy) {
     const index = Math.floor((now - sim.deploy.start) / RESTART_MS);
 
-    if (index < 3 && index > sim.deploy.done) {
+    if (index < LANES.length && index > sim.deploy.done) {
       sim.deploy.done = index;
       if (!isDown(sim, sim.replicas[index])) takeDown(sim, floor, index, RESTART_MS, false);
-    } else if (now - sim.deploy.start > 3 * RESTART_MS + 600) {
+    } else if (now - sim.deploy.start > LANES.length * RESTART_MS + 600) {
       sim.deploy = null;
     }
   }
 
   if (now >= sim.nextRestart) {
-    const up = [0, 1, 2].filter((index) => !isDown(sim, sim.replicas[index]));
+    const up = LANES.map((_, index) => index).filter((index) => !isDown(sim, sim.replicas[index]));
 
     if (up.length > 1) takeDown(sim, floor, up[Math.floor(Math.random() * up.length)], RESTART_MS, false);
     sim.nextRestart = now + 11000 + Math.random() * 7000;
   }
 
-  for (const b of [floor.stream, floor.rail, ...floor.inputs, ...floor.feeds, ...floor.outputs, ...floor.lifts]) advance(b, dt);
+  for (const b of [...floor.inputs, ...floor.ins, ...floor.outputs]) advance(b, dt);
 
-  // onto the stream: inputs and the return rail take turns at its start
-  const joiners = [...floor.inputs, floor.rail];
+  // the loop always moves; a pod takes a ready message as it passes the pod's offtake
+  const length = floor.loop.path.length;
+  const ds = floor.loop.speed * dt;
 
-  for (let i = 0; i < joiners.length && hasRoom(floor.stream); i += 1) {
-    const b = joiners[(sim.joinTurn + i) % joiners.length];
+  for (const item of [...floor.loop.items]) {
+    const before = item.s;
 
-    if (atEnd(b)) {
-      put(floor.stream, take(b));
-      sim.joinTurn = (sim.joinTurn + i + 1) % joiners.length;
+    item.s = (item.s + ds) % length;
+
+    if (item.outline) continue;
+
+    for (let index = 0; index < LANES.length; index += 1) {
+      const ahead = (((floor.offtakes[index] - before) % length) + length) % length;
+
+      if (ahead > 0 && ahead <= ds && now >= (item.readyAt ?? 0) && podFree(sim, floor, index)) {
+        // delivered: the message keeps its place in the stream as an outline until acked
+        const slot = { id: item.id, outline: true, of: item, s: item.s, belt: floor.loop };
+
+        floor.loop.items.splice(floor.loop.items.indexOf(item), 1, slot);
+        item.slot = slot;
+        sim.replicas[index].busy = item;
+        put(floor.ins[index], item);
+        break;
+      }
     }
   }
 
-  // each pod's lift feeds the shared rail
-  floor.lifts.forEach((lift) => {
-    if (atEnd(lift) && hasRoom(floor.rail)) put(floor.rail, take(lift));
-  });
+  // acked outlines fade, then leave the stream
+  floor.loop.items = floor.loop.items.filter((item) => !(item.outline && item.goneAt && now - item.goneAt > 450));
 
-  // the splitter hands the stream's head to a running, idle pod
-  sim.replicas.forEach((replica, index) => {
-    if (replica.busy || isDown(sim, replica) || !atEnd(floor.stream) || !hasRoom(floor.feeds[index])) return;
-
-    const item = take(floor.stream);
-
-    replica.busy = item;
-    put(floor.feeds[index], item);
+  // onto the loop: services at the left, pods handing back at the right
+  floor.inputs.forEach((input, index) => {
+    if (atEnd(input) && loopFree(floor, floor.merges[index])) put(floor.loop, take(input), floor.merges[index]);
   });
 
   sim.replicas.forEach((replica, index) => {
     if (!isDown(sim, replica)) replica.manual = false;
 
-    const feed = floor.feeds[index];
-
     // arrival: a pod that went down meanwhile hands the message straight back
-    if (atEnd(feed)) {
-      const item = take(feed);
+    if (atEnd(floor.ins[index])) {
+      const item = take(floor.ins[index]);
 
       if (isDown(sim, replica)) {
         replica.busy = null;
-        toReturn(sim, floor, item, index);
+        redeliver(sim, floor, item);
       } else {
         item.processing = true;
         item.since = now;
-        item.until = now + 300 + Math.random() * 450;
+        item.until = now + 350 + Math.random() * 450;
         item.belt = null;
         item.at = floor.pods[index];
       }
@@ -288,14 +355,15 @@ const step = (sim, floor, dt) => {
         item.attempt += 1;
         replica.flash = 'redeliver';
         replica.flashAt = now;
-        burst(sim, 'nak', floor.pods[index]);
-        toReturn(sim, floor, item, index);
+        redeliver(sim, floor, item);
       } else {
+        item.slot.goneAt = now;
+        item.slot = null;
+        item.retrying = false;
+        item.acked = true;
         sim.stats.acked += 1;
         replica.flash = 'ack';
         replica.flashAt = now;
-        burst(sim, 'ack', floor.pods[index]);
-        item.acked = true;
         put(floor.outputs[index], item);
       }
     }
@@ -305,14 +373,15 @@ const step = (sim, floor, dt) => {
     if (atEnd(output)) take(output);
   });
 
-  sim.effects = sim.effects.filter((effect) => now - effect.born < EFFECT_MS[effect.kind]);
+  sim.rings = sim.rings.filter((ring) => now - ring.born < DOWN_RING_MS);
 };
 
-/* Every message currently on the floor, wherever it is. */
+const beltsOf = (floor) => [floor.loop, ...floor.inputs, ...floor.ins, ...floor.outputs];
+
 const itemsOf = (sim, floor) => {
   const all = [];
 
-  for (const b of [floor.stream, floor.rail, ...floor.inputs, ...floor.feeds, ...floor.outputs, ...floor.lifts]) all.push(...b.items);
+  for (const b of beltsOf(floor)) all.push(...b.items.filter((item) => !item.outline));
   for (const replica of sim.replicas) if (replica.busy?.processing) all.push(replica.busy);
 
   return all;
@@ -320,8 +389,9 @@ const itemsOf = (sim, floor) => {
 
 /* ---- rendering ---------------------------------------------------------- */
 
-const COS = Math.cos(Math.PI / 6);
-const SIN = Math.sin(Math.PI / 6);
+const ANGLE = Math.atan(0.5);
+const COS = Math.cos(ANGLE);
+const SIN = Math.sin(ANGLE);
 
 const readPalette = () => {
   const css = getComputedStyle(document.documentElement);
@@ -334,6 +404,7 @@ const readPalette = () => {
     ack: token('--jt-state-ack'),
     dlq: token('--jt-state-dlq'),
     line: token('--jt-line-2'),
+    rail: token('--jt-line-3'),
     faint: token('--jt-line-1'),
     raised: token('--jt-bg-2'),
     block: token('--jt-bg-3'),
@@ -344,26 +415,10 @@ const readPalette = () => {
   };
 };
 
+/* 2:1 dimetric, fitted into a region of the canvas. */
 const makeProjector = (cw, ch, region) => {
-  let cos = 1;
-  let sin = 0;
-
-  // The model turns about its centre by a few degrees, so the camera seems to sway.
-  const raw = (mx, my, z = 0) => {
-    const dx = mx - MODEL.w / 2;
-    const dy = my - MODEL.h / 2;
-    const x = MODEL.w / 2 + dx * cos - dy * sin;
-    const y = dy * cos + dx * sin;
-
-    return { x: (x - y * 1.2) * COS, y: (x + y * 1.2) * SIN - z };
-  };
-  const corners = [
-    raw(-30, -30),
-    raw(MODEL.w + 30, -30),
-    raw(-30, MODEL.h + 30),
-    raw(MODEL.w + 30, MODEL.h + 30),
-    raw(MODEL.w / 2, MODEL.h / 2, 120),
-  ];
+  const raw = (x, y, z = 0) => ({ x: (x - y) * COS, y: (x + y) * SIN - z });
+  const corners = [raw(-20, -20), raw(MODEL.w + 20, -20), raw(-20, MODEL.h + 20), raw(MODEL.w + 20, MODEL.h + 20), raw(MODEL.w, 0, 90)];
   const minX = Math.min(...corners.map((c) => c.x));
   const maxX = Math.max(...corners.map((c) => c.x));
   const minY = Math.min(...corners.map((c) => c.y));
@@ -381,73 +436,75 @@ const makeProjector = (cw, ch, region) => {
   };
 
   project.k = k;
-  project.turn = (angle) => {
-    cos = Math.cos(angle);
-    sin = Math.sin(angle);
-  };
 
   return project;
 };
 
-const path = (ctx, points) => {
-  ctx.beginPath();
+const trace = (ctx, points, close = true) => {
   points.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
-  ctx.closePath();
+  if (close) ctx.closePath();
 };
 
-const shade = (ctx, points, base, light, alpha = 1) => {
-  path(ctx, points);
+const fillShape = (ctx, points, color, alpha = 1) => {
+  ctx.beginPath();
+  trace(ctx, points);
   ctx.globalAlpha = alpha;
-  ctx.fillStyle = base;
-  ctx.fill();
-  ctx.fillStyle = light > 0 ? '#ffffff' : '#000000';
-  ctx.globalAlpha = alpha * Math.abs(light);
+  ctx.fillStyle = color;
   ctx.fill();
   ctx.globalAlpha = 1;
 };
 
-/* A lit isometric block. `lift` raises it off the floor; `shadow` adds a soft contact shadow. */
-const block = (ctx, project, { cx, cy, size, height, base, edge, alpha = 1, dashed = false, lift = 0, shadow = true, rim = true }) => {
-  const s = size / 2;
+const shade = (ctx, points, base, light, alpha = 1) => {
+  fillShape(ctx, points, base, alpha);
+  fillShape(ctx, points, light > 0 ? '#ffffff' : '#000000', alpha * Math.abs(light));
+};
+
+/* A lit dimetric block, sx by sy, `lift` above the floor. */
+const block = (ctx, project, { cx, cy, sx, sy = sx, height, base, edge, alpha = 1, dashed = false, lift = 0, shadow = true }) => {
+  const hx = sx / 2;
+  const hy = sy / 2;
   const at = (dx, dy, dz) => project(cx + dx, cy + dy, dz + lift);
-  const top = [at(-s, -s, height), at(s, -s, height), at(s, s, height), at(-s, s, height)];
-  const right = [at(s, -s, height), at(s, s, height), at(s, s, 0), at(s, -s, 0)];
-  const front = [at(-s, s, height), at(s, s, height), at(s, s, 0), at(-s, s, 0)];
+  const top = [at(-hx, -hy, height), at(hx, -hy, height), at(hx, hy, height), at(-hx, hy, height)];
+  const right = [at(hx, -hy, height), at(hx, hy, height), at(hx, hy, 0), at(hx, -hy, 0)];
+  const front = [at(-hx, hy, height), at(hx, hy, height), at(hx, hy, 0), at(-hx, hy, 0)];
 
   if (shadow) {
-    const foot = [project(cx - s, cy - s), project(cx + s + 6, cy - s), project(cx + s + 6, cy + s + 6), project(cx - s, cy + s + 6)];
+    const foot = [project(cx - hx, cy - hy), project(cx + hx + 5, cy - hy), project(cx + hx + 5, cy + hy + 5), project(cx - hx, cy + hy + 5)];
 
     ctx.save();
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
-    ctx.shadowBlur = 14 * project.k;
-    path(ctx, foot);
-    ctx.globalAlpha = 0.18 * alpha;
-    ctx.fillStyle = '#000000';
-    ctx.fill();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+    ctx.shadowBlur = 12 * project.k;
+    fillShape(ctx, foot, '#000000', 0.2 * alpha);
     ctx.restore();
   }
 
   ctx.save();
-  if (dashed) ctx.setLineDash([3, 3]);
-  shade(ctx, right, base, -0.32, alpha);
-  shade(ctx, front, base, -0.14, alpha);
-  shade(ctx, top, base, 0.1, alpha);
+  shade(ctx, right, base, -0.3, alpha);
+  shade(ctx, front, base, -0.12, alpha);
+  shade(ctx, top, base, 0.08, alpha);
 
+  if (dashed) ctx.setLineDash([3, 3]);
   ctx.lineWidth = 1;
+  ctx.lineJoin = 'round';
   ctx.strokeStyle = edge;
   ctx.globalAlpha = alpha;
-  for (const face of [right, front, top]) {
-    path(ctx, face);
-    ctx.stroke();
-  }
+  ctx.beginPath();
+  trace(ctx, top);
+  ctx.moveTo(top[1].x, top[1].y);
+  ctx.lineTo(right[3].x, right[3].y);
+  ctx.moveTo(top[2].x, top[2].y);
+  ctx.lineTo(right[2].x, right[2].y);
+  ctx.lineTo(front[3].x, front[3].y);
+  ctx.lineTo(top[3].x, top[3].y);
+  ctx.moveTo(right[2].x, right[2].y);
+  ctx.lineTo(right[3].x, right[3].y);
+  ctx.stroke();
 
-  if (rim && !dashed) {
+  if (!dashed) {
     ctx.strokeStyle = '#ffffff';
-    ctx.globalAlpha = 0.18 * alpha;
+    ctx.globalAlpha = 0.16 * alpha;
     ctx.beginPath();
-    ctx.moveTo(top[3].x, top[3].y);
-    ctx.lineTo(top[0].x, top[0].y);
-    ctx.lineTo(top[1].x, top[1].y);
+    trace(ctx, [top[3], top[0], top[1]], false);
     ctx.stroke();
   }
   ctx.restore();
@@ -457,8 +514,8 @@ const block = (ctx, project, { cx, cy, size, height, base, edge, alpha = 1, dash
 
 const led = (ctx, face, color, alpha = 1) => {
   const [a, b, , d] = face;
-  const x = a.x + (b.x - a.x) * 0.22 + (d.x - a.x) * 0.5;
-  const y = a.y + (b.y - a.y) * 0.22 + (d.y - a.y) * 0.5;
+  const x = a.x + (b.x - a.x) * 0.2 + (d.x - a.x) * 0.45;
+  const y = a.y + (b.y - a.y) * 0.2 + (d.y - a.y) * 0.45;
 
   ctx.save();
   ctx.fillStyle = color;
@@ -468,6 +525,96 @@ const led = (ctx, face, color, alpha = 1) => {
   ctx.beginPath();
   ctx.arc(x, y, 2.2, 0, Math.PI * 2);
   ctx.fill();
+  ctx.restore();
+
+  return { x, y };
+};
+
+/* Offset of a path's centreline: the left and right edges of a belt of `width`. */
+const edges = (path, width, z) => {
+  const pts = path.points;
+  const n = pts.length;
+  const left = [];
+  const right = [];
+
+  for (let i = 0; i < n; i += 1) {
+    const prev = path.closed ? pts[(i - 1 + n) % n] : pts[Math.max(0, i - 1)];
+    const next = path.closed ? pts[(i + 1) % n] : pts[Math.min(n - 1, i + 1)];
+    const dx = next.x - prev.x;
+    const dy = next.y - prev.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = (-dy / len) * (width / 2);
+    const ny = (dx / len) * (width / 2);
+
+    left.push({ x: pts[i].x + nx, y: pts[i].y + ny, z });
+    right.push({ x: pts[i].x - nx, y: pts[i].y - ny, z });
+  }
+
+  return { left, right };
+};
+
+/* A belt as one continuous body: a dark side, a top surface, two rails, and
+   cross-stripes that drift with the belt so its direction reads at a glance. */
+const drawBelt = (ctx, project, b, palette, time, { width = BELT_W, stripe = null } = {}) => {
+  const path = b.path;
+  const proj = (list) => list.map((p) => project(p.x, p.y, p.z));
+  const base = edges(path, width, 0);
+  const top = edges(path, width, BELT_Z);
+  const outline = (e) => (path.closed ? [proj(e.left), proj(e.right)] : [[...proj(e.left), ...proj(e.right).reverse()]]);
+
+  ctx.save();
+
+  // body: the base ring first, so its visible side reads as thickness
+  ctx.beginPath();
+  for (const ring of outline(base)) trace(ctx, ring);
+  ctx.fillStyle = palette.block;
+  ctx.globalAlpha = 1;
+  ctx.fill('evenodd');
+  ctx.fillStyle = '#000000';
+  ctx.globalAlpha = 0.3;
+  ctx.fill('evenodd');
+
+  ctx.beginPath();
+  for (const ring of outline(top)) trace(ctx, ring);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = palette.raised;
+  ctx.fill('evenodd');
+
+  // rails along both edges
+  ctx.lineWidth = 1;
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = palette.rail;
+  ctx.globalAlpha = 0.9;
+  for (const side of [top.left, top.right]) {
+    ctx.beginPath();
+    trace(ctx, proj(side), path.closed);
+    ctx.stroke();
+  }
+
+  // stripes
+  const spacing = 9;
+  const offset = (time * b.speed) % spacing;
+
+  ctx.strokeStyle = stripe ?? palette.line;
+  ctx.globalAlpha = stripe ? 0.45 : 0.55;
+  ctx.beginPath();
+  for (let d = offset; d < path.length - 2; d += spacing) {
+    if (d < 2) continue;
+
+    const p = pointAt(path, d);
+    const q = pointAt(path, d + 0.5);
+    const dx = q.x - p.x;
+    const dy = q.y - p.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = (-dy / len) * (width / 2 - 2.5);
+    const ny = (dx / len) * (width / 2 - 2.5);
+    const a = project(p.x + nx, p.y + ny, BELT_Z);
+    const c = project(p.x - nx, p.y - ny, BELT_Z);
+
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(c.x, c.y);
+  }
+  ctx.stroke();
   ctx.restore();
 };
 
@@ -481,7 +628,7 @@ const label = (ctx, palette, value, x, y, align, color = palette.label, weight =
   else if (align === 'right') left = x - width;
 
   ctx.save();
-  ctx.globalAlpha = 0.78;
+  ctx.globalAlpha = 0.8;
   ctx.fillStyle = palette.surface;
   ctx.beginPath();
   ctx.roundRect(left - 6, y - 12, width + 12, 17, 4);
@@ -521,34 +668,32 @@ const tooltip = (ctx, palette, lines, x, y) => {
 
 const drawGrid = (ctx, project, palette) => {
   const centre = project(MODEL.w / 2, MODEL.h / 2);
-  const spot = ctx.createRadialGradient(centre.x, centre.y, 0, centre.x, centre.y, 420 * project.k);
+  const spot = ctx.createRadialGradient(centre.x, centre.y, 0, centre.x, centre.y, 460 * project.k);
 
-  spot.addColorStop(0, palette.dark ? 'rgba(255, 255, 255, 0.045)' : 'rgba(37, 87, 194, 0.05)');
+  spot.addColorStop(0, palette.dark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(37, 87, 194, 0.045)');
   spot.addColorStop(1, 'transparent');
   ctx.fillStyle = spot;
-  ctx.fillRect(centre.x - 600 * project.k, centre.y - 400 * project.k, 1200 * project.k, 800 * project.k);
+  ctx.fillRect(centre.x - 700 * project.k, centre.y - 450 * project.k, 1400 * project.k, 900 * project.k);
 
   ctx.lineWidth = 1;
   ctx.strokeStyle = palette.faint;
 
-  for (let i = -2; i <= 17; i += 1) {
-    const x = i * 40;
-    const a = project(x, -60);
-    const b = project(x, MODEL.h + 60);
+  for (let x = -40; x <= MODEL.w + 40; x += 40) {
+    const a = project(x, -40);
+    const b = project(x, MODEL.h + 40);
 
-    ctx.globalAlpha = 0.5 * (1 - Math.min(1, Math.abs(x - MODEL.w / 2) / (MODEL.w * 0.75)));
+    ctx.globalAlpha = 0.45 * (1 - Math.min(1, Math.abs(x - MODEL.w / 2) / (MODEL.w * 0.7)));
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
     ctx.stroke();
   }
 
-  for (let j = -1; j <= 7; j += 1) {
-    const y = j * 40;
-    const a = project(-80, y);
-    const b = project(MODEL.w + 80, y);
+  for (let y = -40; y <= MODEL.h + 40; y += 40) {
+    const a = project(-40, y);
+    const b = project(MODEL.w + 40, y);
 
-    ctx.globalAlpha = 0.5 * (1 - Math.min(1, Math.abs(y - MODEL.h / 2) / (MODEL.h * 0.85)));
+    ctx.globalAlpha = 0.45 * (1 - Math.min(1, Math.abs(y - MODEL.h / 2) / (MODEL.h * 0.9)));
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
@@ -558,85 +703,6 @@ const drawGrid = (ctx, project, palette) => {
   ctx.globalAlpha = 1;
 };
 
-/* A belt as a flat ribbon with moving cross-stripes; overhead belts get posts. */
-const drawBelt = (ctx, project, b, palette, time, { width = 12, tone = null, posts = false, rails = false } = {}) => {
-  ctx.save();
-
-  if (posts) {
-    ctx.strokeStyle = tone;
-    ctx.globalAlpha = 0.25;
-    for (const p of b.points) {
-      if (p.z <= BELT_Z + 1) continue;
-
-      const a = project(p.x, p.y, 0);
-      const c = project(p.x, p.y, p.z);
-
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(c.x, c.y);
-      ctx.stroke();
-    }
-  }
-
-  for (let i = 0; i < b.lengths.length; i += 1) {
-    const a = b.points[i];
-    const c = b.points[i + 1];
-    const len = b.lengths[i];
-    const flat = Math.hypot(c.x - a.x, c.y - a.y);
-
-    if (flat < 0.5) continue;
-
-    const nx = (-(c.y - a.y) / flat) * (width / 2);
-    const ny = ((c.x - a.x) / flat) * (width / 2);
-    const quad = [project(a.x + nx, a.y + ny, a.z), project(c.x + nx, c.y + ny, c.z), project(c.x - nx, c.y - ny, c.z), project(a.x - nx, a.y - ny, a.z)];
-
-    if (rails) {
-      // an overhead track: two thin rails, nothing filled in between
-      ctx.globalAlpha = 0.55;
-      ctx.strokeStyle = tone;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(quad[0].x, quad[0].y);
-      ctx.lineTo(quad[1].x, quad[1].y);
-      ctx.moveTo(quad[3].x, quad[3].y);
-      ctx.lineTo(quad[2].x, quad[2].y);
-      ctx.stroke();
-    } else {
-      path(ctx, quad);
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = palette.raised;
-      ctx.fill();
-      ctx.globalAlpha = 0.9;
-      ctx.strokeStyle = palette.line;
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    }
-
-    // stripes drift with the belt, so its direction reads at a glance
-    const offset = ((time * b.speed) % 10) - 10;
-
-    ctx.globalAlpha = rails ? 0.4 : 0.35;
-    ctx.strokeStyle = tone ?? palette.line;
-    ctx.beginPath();
-    for (let d = offset; d < len; d += rails ? 16 : 10) {
-      if (d < 0) continue;
-
-      const t = d / len;
-      const x = a.x + (c.x - a.x) * t;
-      const y = a.y + (c.y - a.y) * t;
-      const z = a.z + (c.z - a.z) * t;
-      const p = project(x + nx * 0.7, y + ny * 0.7, z);
-      const q = project(x - nx * 0.7, y - ny * 0.7, z);
-
-      ctx.moveTo(p.x, p.y);
-      ctx.lineTo(q.x, q.y);
-    }
-    ctx.stroke();
-  }
-
-  ctx.restore();
-};
-
 const colorOf = (item, palette) => {
   if (item.acked) return palette.ack;
   if (item.retrying || item.attempt > 0) return palette.redeliver;
@@ -644,41 +710,35 @@ const colorOf = (item, palette) => {
   return palette.deliver;
 };
 
-const positionOf = (item) => {
-  if (item.processing) return { ...item.at, z: POD.height + 1 };
+const positionOf = (item) => (item.processing ? { ...item.at, z: POD.height } : pointAt(item.belt.path, item.s));
 
-  return pointAt(item.belt, item.s);
+/* A delivered message's place in the stream: an outline until the ack arrives. */
+const drawOutline = (ctx, project, palette, slot, now) => {
+  const at = pointAt(slot.belt.path, slot.s);
+  const fade = slot.goneAt ? Math.max(0, 1 - (now - slot.goneAt) / 450) : 1;
+  const h = BOX.size / 2;
+  const top = [
+    project(at.x - h, at.y - h, at.z + BOX.height),
+    project(at.x + h, at.y - h, at.z + BOX.height),
+    project(at.x + h, at.y + h, at.z + BOX.height),
+    project(at.x - h, at.y + h, at.z + BOX.height),
+  ];
+
+  ctx.save();
+  ctx.setLineDash([2, 2]);
+  ctx.strokeStyle = slot.goneAt ? palette.ack : palette.deliver;
+  ctx.globalAlpha = 0.75 * fade;
+  ctx.beginPath();
+  trace(ctx, top);
+  ctx.stroke();
+  ctx.restore();
 };
 
 const drawItem = (ctx, project, palette, item, ui) => {
   const at = positionOf(item);
   const color = colorOf(item, palette);
-  const fading = item.acked ? Math.max(0, Math.min(1, (item.belt.length - item.s) / 30)) : 1;
 
-  if (at.z > BELT_Z + 4) {
-    const floor = project(at.x, at.y);
-
-    ctx.save();
-    ctx.globalAlpha = 0.22 * fading * Math.max(0, 1 - at.z / 120);
-    ctx.fillStyle = '#000000';
-    ctx.beginPath();
-    ctx.ellipse(floor.x, floor.y, 7 * project.k, 4 * project.k, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-
-  block(ctx, project, {
-    cx: at.x,
-    cy: at.y,
-    size: BOX.size,
-    height: BOX.height,
-    base: color,
-    edge: color,
-    lift: at.z,
-    alpha: fading,
-    shadow: false,
-    rim: true,
-  });
+  block(ctx, project, { cx: at.x, cy: at.y, sx: BOX.size, height: BOX.height, base: color, edge: color, lift: at.z, shadow: false });
 
   item.screen = project(at.x, at.y, at.z + BOX.height / 2);
 
@@ -692,68 +752,6 @@ const drawItem = (ctx, project, palette, item, ui) => {
   }
 };
 
-const effectColor = (effect, palette) => ({ ack: palette.ack, nak: palette.redeliver, down: palette.dlq })[effect.kind];
-
-const drawEffects = (ctx, project, palette, sim) => {
-  const k = project.k;
-
-  for (const effect of sim.effects) {
-    if (effect.kind !== 'down') continue;
-
-    const t = (sim.time - effect.born) / EFFECT_MS[effect.kind];
-    const color = effectColor(effect, palette);
-    const base = project(effect.x, effect.y);
-    const reach = 22;
-
-    ctx.save();
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1.2 * (1 - t) + 0.4;
-    ctx.globalAlpha = 0.5 * (1 - t);
-    ctx.beginPath();
-    ctx.ellipse(base.x, base.y, (20 + reach * easeInOut(t)) * k * 1.2, (11 + reach * 0.55 * easeInOut(t)) * k * 1.2, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-  }
-};
-
-const reflectBlock = (ctx, project, cx, cy, size, height, color, light) => {
-  const s = size / 2;
-  const at = (dx, dy, dz) => project(cx + dx, cy + dy, -dz);
-  const depth = height * 0.7;
-  const right = [at(s, -s, 0), at(s, s, 0), at(s, s, depth), at(s, -s, depth)];
-  const front = [at(-s, s, 0), at(s, s, 0), at(s, s, depth), at(-s, s, depth)];
-  const top = project(cx, cy, 0);
-  const bottom = project(cx, cy, -depth);
-  const fade = ctx.createLinearGradient(0, top.y, 0, bottom.y + size * project.k);
-
-  fade.addColorStop(0, color);
-  fade.addColorStop(1, 'transparent');
-
-  ctx.save();
-  ctx.globalAlpha = 0.09;
-  ctx.fillStyle = fade;
-  path(ctx, right);
-  ctx.fill();
-  path(ctx, front);
-  ctx.fill();
-
-  if (light) {
-    const pool = project(cx + s + 10, cy + s * 0.4);
-    const g = ctx.createRadialGradient(pool.x, pool.y, 0, pool.x, pool.y, 46 * project.k);
-
-    g.addColorStop(0, light);
-    g.addColorStop(1, 'transparent');
-    ctx.globalAlpha = 0.1;
-    ctx.fillStyle = g;
-    ctx.translate(pool.x, pool.y);
-    ctx.scale(1, 0.55);
-    ctx.beginPath();
-    ctx.arc(0, 0, 46 * project.k, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.restore();
-};
-
 const podLight = (sim, replica, palette) => {
   if (isDown(sim, replica)) return palette.dlq;
   if (sim.time - replica.flashAt < 600) return palette[replica.flash];
@@ -762,35 +760,48 @@ const podLight = (sim, replica, palette) => {
   return palette.ack;
 };
 
+/* Light from the pod's status lamp, pooled on the floor in front of it. */
+const drawPodPool = (ctx, project, color, r) => {
+  const pool = project(r.x - 6, r.y + POD.size / 2 + 12);
+  const radius = 44 * project.k;
+  const g = ctx.createRadialGradient(pool.x, pool.y, 0, pool.x, pool.y, radius);
+
+  g.addColorStop(0, color);
+  g.addColorStop(1, 'transparent');
+  ctx.save();
+  ctx.globalAlpha = 0.09;
+  ctx.fillStyle = g;
+  ctx.translate(pool.x, pool.y);
+  ctx.scale(1, 0.5);
+  ctx.beginPath();
+  ctx.arc(0, 0, radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+};
+
 const drawPod = (ctx, project, palette, sim, floor, index, logo, view, ui) => {
   const replica = sim.replicas[index];
   const r = floor.pods[index];
   const down = isDown(sim, replica);
-  const flashing = !down && sim.time - replica.flashAt < 600;
+  const flashAge = sim.time - replica.flashAt;
+  const tone = !down && flashAge < 600 ? palette[replica.flash] : null;
   const hovered = ui.hoverPod === index;
   const height = down ? POD.downHeight : POD.height;
-  const tone = flashing ? palette[replica.flash] : null;
   const faces = block(ctx, project, {
     cx: r.x,
     cy: r.y,
-    size: POD.size,
+    sx: POD.size,
     height,
     base: down ? palette.raised : palette.block,
-    edge: down ? palette.dlq : (tone ?? (hovered ? palette.deliver : palette.line)),
-    alpha: down ? 0.7 : 1,
+    edge: down ? palette.dlq : (tone ?? (hovered ? palette.deliver : palette.rail)),
+    alpha: down ? 0.75 : 1,
     dashed: down,
     lift: hovered && !down ? 3 : 0,
   });
 
-  led(ctx, faces.front, podLight(sim, replica, palette), down ? 0.9 : 1);
+  if (tone) fillShape(ctx, faces.top, tone, 0.22 * (1 - flashAge / 600));
 
-  if (tone) {
-    path(ctx, faces.top);
-    ctx.fillStyle = tone;
-    ctx.globalAlpha = 0.22 * (1 - (sim.time - replica.flashAt) / 600);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-  }
+  led(ctx, faces.front, podLight(sim, replica, palette), 1);
 
   if (logo && !down) {
     const [p0, p1, , p3] = faces.top;
@@ -811,9 +822,27 @@ const drawPod = (ctx, project, palette, sim, floor, index, logo, view, ui) => {
   }
 
   if (down) {
-    const above = project(r.x, r.y, height + 18);
+    const above = project(r.x, r.y, height + 20);
 
     label(ctx, palette, replica.manual ? 'down' : 'restarting', above.x, above.y, 'center', palette.dlq, 600);
+  }
+};
+
+const drawRings = (ctx, project, palette, sim, floor) => {
+  for (const ring of sim.rings) {
+    const t = (sim.time - ring.born) / DOWN_RING_MS;
+    const r = floor.pods[ring.index];
+    const c = project(r.x, r.y);
+    const k = project.k;
+
+    ctx.save();
+    ctx.strokeStyle = palette.dlq;
+    ctx.lineWidth = 1.2;
+    ctx.globalAlpha = 0.5 * (1 - t);
+    ctx.beginPath();
+    ctx.ellipse(c.x, c.y, (30 + 18 * t) * k * COS * 1.6, (30 + 18 * t) * k * SIN * 1.6, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
   }
 };
 
@@ -826,47 +855,44 @@ const drawHint = (ctx, project, palette, sim, floor, ui) => {
 
   for (let i = 0; i < 2; i += 1) {
     const phase = ((sim.time / 1800 + i / 2) % 1 + 1) % 1;
+    const radius = (34 + phase * 22) * k;
 
     ctx.save();
     ctx.strokeStyle = palette.deliver;
     ctx.globalAlpha = 0.5 * (1 - phase);
     ctx.lineWidth = 1.3;
     ctx.beginPath();
-    ctx.ellipse(c.x, c.y + 8 * k, (30 + phase * 24) * k, (17 + phase * 14) * k, 0, 0, Math.PI * 2);
+    ctx.ellipse(c.x, c.y + 6 * k, radius * 1.15, radius * 0.6, 0, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
   }
 
-  const tag = project(r.x + 36, r.y + 62);
+  const tag = project(floor.pods[2].x + 10, floor.pods[2].y + 46);
 
-  label(ctx, palette, '↖ click a pod to take it down', tag.x, tag.y, 'left', palette.deliver, 600);
+  label(ctx, palette, 'click a pod to take it down', tag.x, tag.y, 'center', palette.deliver, 600);
 };
 
 /* Everything that gives off light, drawn sharp into the glow layer that gets blurred. */
-const drawEmissive = (ctx, project, palette, sim, floor) => {
+const drawEmissive = (ctx, palette, sim, floor) => {
   for (const item of itemsOf(sim, floor)) {
     if (!item.screen) continue;
 
-    const fading = item.acked && item.belt ? Math.max(0, Math.min(1, (item.belt.length - item.s) / 30)) : 1;
-
-    ctx.globalAlpha = 0.85 * fading;
+    ctx.globalAlpha = 0.75;
     ctx.fillStyle = colorOf(item, palette);
     ctx.beginPath();
-    ctx.arc(item.screen.x, item.screen.y, Math.max(3, 4.6 * project.k), 0, Math.PI * 2);
+    ctx.arc(item.screen.x, item.screen.y, 5, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  sim.replicas.forEach((replica, index) => {
-    const r = floor.pods[index];
-    const down = isDown(sim, replica);
-    const front = project(r.x - POD.size * 0.28, r.y + POD.size / 2, (down ? POD.downHeight : POD.height) / 2);
+  for (const replica of sim.replicas) {
+    if (!replica.lamp) continue;
 
     ctx.globalAlpha = 0.8;
     ctx.fillStyle = podLight(sim, replica, palette);
     ctx.beginPath();
-    ctx.arc(front.x, front.y, 3, 0, Math.PI * 2);
+    ctx.arc(replica.lamp.x, replica.lamp.y, 3, 0, Math.PI * 2);
     ctx.fill();
-  });
+  }
 
   ctx.globalAlpha = 1;
 };
@@ -875,7 +901,7 @@ const fadeEdges = (ctx, cw, ch) => {
   ctx.save();
   ctx.globalCompositeOperation = 'destination-out';
 
-  const edge = Math.min(cw, ch) * 0.14;
+  const edge = Math.min(cw, ch) * 0.12;
   const sides = [
     [0, 0, 0, edge, 0, 0, cw, edge],
     [0, ch, 0, ch - edge, 0, ch - edge, cw, edge],
@@ -893,85 +919,72 @@ const fadeEdges = (ctx, cw, ch) => {
   ctx.restore();
 };
 
+const depth = (item) => {
+  const at = positionOf(item);
+
+  return at.x + at.y;
+};
+
 const draw = (ctx, sim, floor, view, palette, logo, ui) => {
   const { project, cw, ch } = view;
+  const t = sim.time;
 
   ctx.clearRect(0, 0, cw, ch);
   drawGrid(ctx, project, palette);
+  sim.replicas.forEach((replica, index) => drawPodPool(ctx, project, podLight(sim, replica, palette), floor.pods[index]));
 
-  for (const d of floor.docks) reflectBlock(ctx, project, d.x, d.y, 26, 20, palette.block, null);
-  sim.replicas.forEach((replica, index) => {
-    const r = floor.pods[index];
-
-    reflectBlock(ctx, project, r.x, r.y, POD.size, isDown(sim, replica) ? POD.downHeight : POD.height, palette.block, podLight(sim, replica, palette));
-  });
-
-  // floor belts, then what rides on them
-  const t = sim.time;
-
+  // belts: the straight ones run under the loop and the blocks at both ends
   for (const b of floor.inputs) drawBelt(ctx, project, b, palette, t);
-  drawBelt(ctx, project, floor.stream, palette, t, { width: 18 });
-  for (const b of floor.feeds) drawBelt(ctx, project, b, palette, t);
-  for (const b of floor.outputs) drawBelt(ctx, project, b, palette, t, { tone: palette.ack });
+  for (const b of floor.ins) drawBelt(ctx, project, b, palette, t);
+  for (const b of floor.outputs) drawBelt(ctx, project, b, palette, t, { stripe: palette.ack });
+  drawBelt(ctx, project, floor.loop, palette, t, { width: LOOP_W, stripe: palette.deliver });
 
-  // the stream glows as it fills
-  const fill = Math.min(1, floor.stream.items.length / 14);
+  // what rides the belts, back to front
+  const riding = [];
 
-  if (fill > 0) {
-    const a = project(floor.stream.points[0].x, 120, BELT_Z);
-    const b = project(floor.stream.points[1].x, 120, BELT_Z);
-    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-    const g = ctx.createRadialGradient(mid.x, mid.y, 0, mid.x, mid.y, 170 * project.k);
-
-    g.addColorStop(0, palette.deliver);
-    g.addColorStop(1, 'transparent');
-    ctx.save();
-    ctx.globalAlpha = 0.1 + 0.18 * fill;
-    ctx.fillStyle = g;
-    ctx.translate(mid.x, mid.y);
-    ctx.scale(1, 0.5);
-    ctx.beginPath();
-    ctx.arc(0, 0, 170 * project.k, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+  for (const b of beltsOf(floor)) riding.push(...b.items);
+  riding.sort((a, b) => depth(a) - depth(b));
+  for (const item of riding) {
+    if (item.outline) drawOutline(ctx, project, palette, item, sim.time);
+    else drawItem(ctx, project, palette, item, ui);
   }
-
-  for (const b of [...floor.inputs, floor.stream, ...floor.feeds]) for (const item of b.items) drawItem(ctx, project, palette, item, ui);
 
   for (const d of floor.docks) {
-    const faces = block(ctx, project, { cx: d.x, cy: d.y, size: 26, height: 20, base: palette.block, edge: palette.line, alpha: 0.9 });
+    const faces = block(ctx, project, { cx: d.x, cy: d.y, sx: DOCK.size, height: DOCK.height, base: palette.block, edge: palette.rail });
 
-    led(ctx, faces.front, palette.deliver, 0.85);
+    led(ctx, faces.front, palette.deliver, 0.9);
   }
 
-  block(ctx, project, { cx: floor.splitter.x, cy: floor.splitter.y, size: 26, height: 14, base: palette.block, edge: palette.line });
+  block(ctx, project, { cx: OUTBOX.x, cy: OUTBOX.y, sx: OUTBOX.sx, sy: OUTBOX.sy, height: OUTBOX.height, base: palette.block, edge: palette.rail });
 
   floor.pods.forEach((_, index) => drawPod(ctx, project, palette, sim, floor, index, logo, view, ui));
+  sim.replicas.forEach((replica, index) => {
+    const r = floor.pods[index];
+    const down = isDown(sim, replica);
+
+    replica.lamp = project(r.x - POD.size * 0.3, r.y + POD.size / 2, (down ? POD.downHeight : POD.height) * 0.55);
+  });
   for (const replica of sim.replicas) if (replica.busy?.processing) drawItem(ctx, project, palette, replica.busy, ui);
-  for (const b of floor.outputs) for (const item of b.items) drawItem(ctx, project, palette, item, ui);
 
-  // overhead return, above everything on the floor
-  for (const b of floor.lifts) drawBelt(ctx, project, b, palette, t, { width: 8, tone: palette.redeliver, rails: true });
-  drawBelt(ctx, project, floor.rail, palette, t, { width: 8, tone: palette.redeliver, rails: true, posts: true });
-  for (const b of [...floor.lifts, floor.rail]) for (const item of b.items) drawItem(ctx, project, palette, item, ui);
-
+  drawRings(ctx, project, palette, sim, floor);
   drawHint(ctx, project, palette, sim, floor, ui);
-  drawEffects(ctx, project, palette, sim);
 
-  // only labels that say something is happening right now
-  const stored = floor.stream.items.length;
+  // the stream's count sits inside the loop
+  const live = floor.loop.items.filter((item) => !item.goneAt);
+  const stored = live.length;
+  const pending = live.filter((item) => item.outline).length;
+  const centre = project((LOOP.x0 + LOOP.x1) / 2, (LOOP.y0 + LOOP.y1) / 2, BELT_Z);
+  let caption = 'stream';
 
-  if (stored > 2) {
-    const sl = project(floor.stream.points[1].x - 30, 120 + 30);
+  if (stored) caption = pending ? `stream · ${stored} stored · ${pending} awaiting ack` : `stream · ${stored} stored`;
 
-    label(ctx, palette, `${stored} stored`, sl.x, sl.y, 'right', palette.deliver);
-  }
+  label(ctx, palette, caption, centre.x, centre.y + 4, 'center', palette.deliver);
 
   if (sim.deploy) {
-    const done = Math.min(3, Math.floor((sim.time - sim.deploy.start) / RESTART_MS) + 1);
-    const top = project(floor.pods[0].x, floor.pods[0].y, 76);
+    const done = Math.min(LANES.length, Math.floor((sim.time - sim.deploy.start) / RESTART_MS) + 1);
+    const top = project(POD_X, LANES[0] - 34, 64);
 
-    label(ctx, palette, `rolling deploy · ${done}/3`, top.x, top.y, 'center', palette.deliver, 600);
+    label(ctx, palette, `rolling deploy · ${done}/${LANES.length}`, top.x, top.y, 'center', palette.deliver, 600);
   }
 
   const hovered = ui.hoverItem;
@@ -981,8 +994,8 @@ const draw = (ctx, sim, floor, view, palette, logo, ui) => {
 
     if (hovered.acked) status = 'acked';
     else if (hovered.processing) status = 'handling';
-    else if (hovered.belt === floor.stream) status = 'stored';
-    else if (hovered.retrying) status = 'going back to retry';
+    else if (hovered.belt === floor.loop) status = hovered.retrying ? 'stored · redelivery after backoff' : 'stored';
+    else if (hovered.belt && floor.ins.includes(hovered.belt)) status = 'delivered · awaiting ack';
 
     tooltip(
       ctx,
@@ -1005,7 +1018,7 @@ const draw = (ctx, sim, floor, view, palette, logo, ui) => {
 };
 
 const REGION = {
-  wide: { x0: 0.5, x1: 0.98, y0: 0.04, y1: 0.9 },
+  wide: { x0: 0.47, x1: 0.99, y0: 0.08, y1: 0.9 },
   narrow: { x0: 0.02, x1: 0.98, y0: 0.04, y1: 0.96 },
 };
 
@@ -1071,19 +1084,18 @@ const HeroScene = () => {
     const addGlow = () => {
       gctx.setTransform(GLOW_SCALE, 0, 0, GLOW_SCALE, 0, 0);
       gctx.clearRect(0, 0, view.cw, view.ch);
-      drawEmissive(gctx, view.project, palette, sim, floor);
+      drawEmissive(gctx, palette, sim, floor);
 
       ctx.save();
       ctx.setTransform(view.ratio, 0, 0, view.ratio, 0, 0);
       ctx.globalCompositeOperation = palette.dark ? 'lighter' : 'source-over';
-      ctx.globalAlpha = palette.dark ? 0.5 : 0.22;
+      ctx.globalAlpha = palette.dark ? 0.45 : 0.2;
       ctx.filter = 'blur(8px)';
       ctx.drawImage(glow, 0, 0, view.cw, view.ch);
       ctx.restore();
     };
 
     const render = () => {
-      view.project.turn(0.052 * Math.sin((sim.time / 30000) * Math.PI * 2));
       ctx.setTransform(view.ratio, 0, 0, view.ratio, 0, 0);
       draw(ctx, sim, floor, view, palette, logo, ui);
 
@@ -1115,7 +1127,7 @@ const HeroScene = () => {
           floor.pods.forEach((r, index) => {
             const c = view.project(r.x, r.y, POD.height / 2);
 
-            if (Math.hypot((c.x - pointer.x) / 1.6, c.y - pointer.y) < 26 * k + 6) ui.hoverPod = index;
+            if (Math.hypot((c.x - pointer.x) / 1.8, c.y - pointer.y) < 24 * k + 6) ui.hoverPod = index;
           });
         }
       }
