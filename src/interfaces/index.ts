@@ -58,3 +58,15 @@ export type {
   RegisteredHandler,
   RpcRouterOptions,
 } from './routing.interface';
+
+export { ScheduleChange, ScheduleOrigin } from './schedule.interface';
+
+export type {
+  CronAlias,
+  CronExpression,
+  CronSchedule,
+  IntervalSchedule,
+  ScheduleHandlerOption,
+  ScheduleInfo,
+  ScheduleSpec,
+} from './schedule.interface';

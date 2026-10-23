@@ -31,6 +31,21 @@ export type {
   TransportHooks,
 } from './interfaces';
 
+// Schedules
+export { ScheduleChange, ScheduleOrigin } from './interfaces';
+
+export type {
+  CronAlias,
+  CronExpression,
+  CronSchedule,
+  IntervalSchedule,
+  ScheduleHandlerOption,
+  ScheduleInfo,
+  ScheduleSpec,
+} from './interfaces';
+
+export { JetstreamScheduleError, ScheduleErrorReason } from './schedule';
+
 // Client
 export { JetstreamClient } from './client';
 
