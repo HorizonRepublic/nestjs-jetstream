@@ -5,11 +5,9 @@ import './styles.css';
 /* A small JetStream system as a conveyor floor behind the hero, drawn in 2:1
    dimetric. The stream is a closed loop and a message stays on it until a pod
    acks it. Services feed the loop from the left; NestJS pods along the right
-   take deliveries as messages pass. While a delivery is out, the message's slot
-   stays on the loop as an outline. An ack removes it and the delivery leaves
-   to the right; a nak, or a pod going down, turns the outline back into a
-   message that rides the loop until its retry delay is over. Every message gets
-   acked in the end.
+   take messages off as they pass. An ack sends a message out to the right; a
+   nak, or a pod going down, sends it back onto the loop, where it rides until
+   its retry delay is over. Every message gets acked in the end.
 
    Every belt starts and ends inside a block or the loop, and every message
    moves only along a belt. */
@@ -142,6 +140,7 @@ const buildFloor = () => {
     inputs: LANES.map((y) => belt(makePath([p3(DOCK_X, y), p3(LOOP.x0, y)]), 0.1)),
     merges: LANES.map((y) => loopS(loop.path, LOOP.x0, y)),
     ins: LANES.map((y) => belt(makePath([p3(LOOP.x1, y), p3(POD_X, y)]), 0.26)),
+    outs: LANES.map((y) => belt(makePath([p3(POD_X, y), p3(LOOP.x1, y)]), 0.2)),
     offtakes: LANES.map((y) => loopS(loop.path, LOOP.x1, y)),
     outputs: LANES.map((y) => belt(makePath([p3(POD_X, y), p3(OUTBOX.x, y)]), 0.12)),
   };
@@ -175,20 +174,14 @@ const circularGap = (a, b, length) => {
 
 const loopFree = (floor, s) => floor.loop.items.every((item) => circularGap(item.s, s, floor.loop.path.length) >= GAP);
 
-/* No ack: the delivery is dropped and the message, still in the stream, becomes
-   available again once its retry delay is over. */
-const redeliver = (sim, floor, item) => {
-  const slot = item.slot;
-  const index = floor.loop.items.indexOf(slot);
-
+/* No ack: the message goes back onto the loop and may be taken again once its
+   retry delay is over. */
+const redeliver = (sim, floor, item, index) => {
   sim.stats.retried += 1;
   item.processing = false;
-  item.belt = floor.loop;
-  item.s = slot.s;
   item.retrying = true;
   item.readyAt = sim.time + RETRY_MS;
-  item.slot = null;
-  floor.loop.items.splice(index, 1, item);
+  put(floor.outs[index], item);
 };
 
 const takeDown = (sim, floor, index, ms, manual) => {
@@ -202,7 +195,7 @@ const takeDown = (sim, floor, index, ms, manual) => {
 
   if (item?.processing) {
     replica.busy = null;
-    redeliver(sim, floor, item);
+    redeliver(sim, floor, item, index);
   }
 };
 
@@ -220,7 +213,7 @@ const togglePod = (sim, floor, index) => {
 const podFree = (sim, floor, index) => {
   const replica = sim.replicas[index];
 
-  return !replica.busy && !isDown(sim, replica) && !floor.ins[index].items.length;
+  return !replica.busy && !isDown(sim, replica) && !floor.ins[index].items.length && !floor.outs[index].items.length;
 };
 
 const step = (sim, floor, dt) => {
@@ -289,7 +282,7 @@ const step = (sim, floor, dt) => {
     sim.nextRestart = now + 11000 + Math.random() * 7000;
   }
 
-  for (const b of [...floor.inputs, ...floor.ins, ...floor.outputs]) advance(b, dt);
+  for (const b of [...floor.inputs, ...floor.ins, ...floor.outs, ...floor.outputs]) advance(b, dt);
 
   // the loop always moves; a pod takes a ready message as it passes the pod's offtake
   const length = floor.loop.path.length;
@@ -300,17 +293,11 @@ const step = (sim, floor, dt) => {
 
     item.s = (item.s + ds) % length;
 
-    if (item.outline) continue;
-
     for (let index = 0; index < LANES.length; index += 1) {
       const ahead = (((floor.offtakes[index] - before) % length) + length) % length;
 
       if (ahead > 0 && ahead <= ds && now >= (item.readyAt ?? 0) && podFree(sim, floor, index)) {
-        // delivered: the message keeps its place in the stream as an outline until acked
-        const slot = { id: item.id, outline: true, of: item, s: item.s, belt: floor.loop };
-
-        floor.loop.items.splice(floor.loop.items.indexOf(item), 1, slot);
-        item.slot = slot;
+        floor.loop.items.splice(floor.loop.items.indexOf(item), 1);
         sim.replicas[index].busy = item;
         put(floor.ins[index], item);
         break;
@@ -318,12 +305,12 @@ const step = (sim, floor, dt) => {
     }
   }
 
-  // acked outlines fade, then leave the stream
-  floor.loop.items = floor.loop.items.filter((item) => !(item.outline && item.goneAt && now - item.goneAt > 450));
-
   // onto the loop: services at the left, pods handing back at the right
   floor.inputs.forEach((input, index) => {
     if (atEnd(input) && loopFree(floor, floor.merges[index])) put(floor.loop, take(input), floor.merges[index]);
+  });
+  floor.outs.forEach((out, index) => {
+    if (atEnd(out) && loopFree(floor, floor.offtakes[index])) put(floor.loop, take(out), floor.offtakes[index]);
   });
 
   sim.replicas.forEach((replica, index) => {
@@ -335,7 +322,7 @@ const step = (sim, floor, dt) => {
 
       if (isDown(sim, replica)) {
         replica.busy = null;
-        redeliver(sim, floor, item);
+        redeliver(sim, floor, item, index);
       } else {
         item.processing = true;
         item.since = now;
@@ -355,10 +342,8 @@ const step = (sim, floor, dt) => {
         item.attempt += 1;
         replica.flash = 'redeliver';
         replica.flashAt = now;
-        redeliver(sim, floor, item);
+        redeliver(sim, floor, item, index);
       } else {
-        item.slot.goneAt = now;
-        item.slot = null;
         item.retrying = false;
         item.acked = true;
         sim.stats.acked += 1;
@@ -376,12 +361,12 @@ const step = (sim, floor, dt) => {
   sim.rings = sim.rings.filter((ring) => now - ring.born < DOWN_RING_MS);
 };
 
-const beltsOf = (floor) => [floor.loop, ...floor.inputs, ...floor.ins, ...floor.outputs];
+const beltsOf = (floor) => [floor.loop, ...floor.inputs, ...floor.ins, ...floor.outs, ...floor.outputs];
 
 const itemsOf = (sim, floor) => {
   const all = [];
 
-  for (const b of beltsOf(floor)) all.push(...b.items.filter((item) => !item.outline));
+  for (const b of beltsOf(floor)) all.push(...b.items);
   for (const replica of sim.replicas) if (replica.busy?.processing) all.push(replica.busy);
 
   return all;
@@ -712,28 +697,6 @@ const colorOf = (item, palette) => {
 
 const positionOf = (item) => (item.processing ? { ...item.at, z: POD.height } : pointAt(item.belt.path, item.s));
 
-/* A delivered message's place in the stream: an outline until the ack arrives. */
-const drawOutline = (ctx, project, palette, slot, now) => {
-  const at = pointAt(slot.belt.path, slot.s);
-  const fade = slot.goneAt ? Math.max(0, 1 - (now - slot.goneAt) / 450) : 1;
-  const h = BOX.size / 2;
-  const top = [
-    project(at.x - h, at.y - h, at.z + BOX.height),
-    project(at.x + h, at.y - h, at.z + BOX.height),
-    project(at.x + h, at.y + h, at.z + BOX.height),
-    project(at.x - h, at.y + h, at.z + BOX.height),
-  ];
-
-  ctx.save();
-  ctx.setLineDash([2, 2]);
-  ctx.strokeStyle = slot.goneAt ? palette.ack : palette.deliver;
-  ctx.globalAlpha = 0.75 * fade;
-  ctx.beginPath();
-  trace(ctx, top);
-  ctx.stroke();
-  ctx.restore();
-};
-
 const drawItem = (ctx, project, palette, item, ui) => {
   const at = positionOf(item);
   const color = colorOf(item, palette);
@@ -944,10 +907,7 @@ const draw = (ctx, sim, floor, view, palette, logo, ui) => {
 
   for (const b of beltsOf(floor)) riding.push(...b.items);
   riding.sort((a, b) => depth(a) - depth(b));
-  for (const item of riding) {
-    if (item.outline) drawOutline(ctx, project, palette, item, sim.time);
-    else drawItem(ctx, project, palette, item, ui);
-  }
+  for (const item of riding) drawItem(ctx, project, palette, item, ui);
 
   for (const d of floor.docks) {
     const faces = block(ctx, project, { cx: d.x, cy: d.y, sx: DOCK.size, height: DOCK.height, base: palette.block, edge: palette.rail });
@@ -970,15 +930,10 @@ const draw = (ctx, sim, floor, view, palette, logo, ui) => {
   drawHint(ctx, project, palette, sim, floor, ui);
 
   // the stream's count sits inside the loop
-  const live = floor.loop.items.filter((item) => !item.goneAt);
-  const stored = live.length;
-  const pending = live.filter((item) => item.outline).length;
+  const stored = floor.loop.items.length;
   const centre = project((LOOP.x0 + LOOP.x1) / 2, (LOOP.y0 + LOOP.y1) / 2, BELT_Z);
-  let caption = 'stream';
 
-  if (stored) caption = pending ? `stream · ${stored} stored · ${pending} awaiting ack` : `stream · ${stored} stored`;
-
-  label(ctx, palette, caption, centre.x, centre.y + 4, 'center', palette.deliver);
+  label(ctx, palette, stored ? `stream · ${stored} stored` : 'stream', centre.x, centre.y + 4, 'center', palette.deliver);
 
   if (sim.deploy) {
     const done = Math.min(LANES.length, Math.floor((sim.time - sim.deploy.start) / RESTART_MS) + 1);
@@ -995,7 +950,8 @@ const draw = (ctx, sim, floor, view, palette, logo, ui) => {
     if (hovered.acked) status = 'acked';
     else if (hovered.processing) status = 'handling';
     else if (hovered.belt === floor.loop) status = hovered.retrying ? 'stored · redelivery after backoff' : 'stored';
-    else if (hovered.belt && floor.ins.includes(hovered.belt)) status = 'delivered · awaiting ack';
+    else if (hovered.belt && floor.ins.includes(hovered.belt)) status = 'delivered';
+    else if (hovered.belt && floor.outs.includes(hovered.belt)) status = 'nak · back to the stream';
 
     tooltip(
       ctx,
