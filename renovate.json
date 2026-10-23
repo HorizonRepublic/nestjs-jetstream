@@ -6,30 +6,56 @@
     ":semanticCommitTypeAll(chore)",
     "group:allNonMajor"
   ],
-  "labels": ["dependencies"],
+  "labels": [
+    "dependencies"
+  ],
   "rangeStrategy": "bump",
   "packageRules": [
     {
       "description": "Group major updates separately per package",
-      "matchUpdateTypes": ["major"],
+      "matchUpdateTypes": [
+        "major"
+      ],
       "groupName": null,
       "automerge": false
     },
     {
       "description": "Automerge minor and patch dev dependency updates",
-      "matchDepTypes": ["devDependencies"],
-      "matchUpdateTypes": ["minor", "patch"],
+      "matchDepTypes": [
+        "devDependencies"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
       "automerge": true
     },
     {
       "description": "Don't touch peer dependencies automatically",
-      "matchDepTypes": ["peerDependencies"],
+      "matchDepTypes": [
+        "peerDependencies"
+      ],
       "enabled": false
     },
     {
       "description": "Don't bump Node.js engine constraint",
-      "matchDepTypes": ["engines"],
-      "matchPackageNames": ["node"],
+      "matchDepTypes": [
+        "engines"
+      ],
+      "matchPackageNames": [
+        "node"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "Security overrides pin a patched release inside the range their dependents accept; a new major would break those dependents",
+      "matchDepTypes": [
+        "pnpm.overrides",
+        "overrides"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
       "enabled": false
     }
   ]
