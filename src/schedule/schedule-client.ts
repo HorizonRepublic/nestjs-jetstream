@@ -1,7 +1,7 @@
 import type { ConnectionProvider } from '../connection/connection.provider';
 import { NatsCapability } from '../connection/server-capabilities.types';
 import { ScheduleOrigin, StreamKind } from '../interfaces';
-import type { Codec, ScheduleChange, ScheduleInfo, ScheduleSpec } from '../interfaces';
+import type { ClientScheduleSpec, Codec, ScheduleChange, ScheduleInfo } from '../interfaces';
 import type { SubjectResolver } from '../server/infrastructure/subject-resolver';
 import { JetstreamScheduleError } from './schedule-error';
 import {
@@ -34,12 +34,13 @@ export class ScheduleClient {
     id: string,
     pattern: string,
     data: unknown,
-    spec: ScheduleSpec,
+    spec: ClientScheduleSpec,
   ): Promise<ScheduleChange> {
     assertSubjectToken(id, ScheduleErrorReason.InvalidId);
     assertLiteralSubject(pattern, ScheduleErrorReason.InvalidPattern);
 
-    if (spec.data !== undefined) {
+    // JavaScript callers can still pass it.
+    if (Reflect.get(spec, 'data') !== undefined) {
       throw new JetstreamScheduleError(
         ScheduleErrorReason.InvalidData,
         `Schedule "${id}": pass the payload as the data argument, not inside the spec.`,

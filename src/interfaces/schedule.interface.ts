@@ -64,6 +64,12 @@ export interface AtSchedule {
 /** When a schedule fires. */
 export type ScheduleSpec = CronSchedule | IntervalSchedule | AtSchedule;
 
+/** A spec passed to `JetstreamClient.schedule()`, whose payload is its own argument. */
+export type ClientScheduleSpec =
+  | Omit<CronSchedule, 'data'>
+  | Omit<IntervalSchedule, 'data'>
+  | Omit<AtSchedule, 'data'>;
+
 /** The schedules a handler may declare: recurring ones only. */
 export type RecurringScheduleSpec = CronSchedule | IntervalSchedule;
 

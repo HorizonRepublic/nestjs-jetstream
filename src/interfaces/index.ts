@@ -73,4 +73,5 @@ export type {
   ScheduleHandlerOption,
   ScheduleInfo,
   ScheduleSpec,
+  ClientScheduleSpec,
 } from './schedule.interface';

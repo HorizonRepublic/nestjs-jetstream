@@ -17,6 +17,7 @@ import { NatsCapability } from '../connection/server-capabilities.types';
 import { EventBus } from '../hooks';
 import { TransportEvent } from '../interfaces';
 import type {
+  ClientScheduleSpec,
   Codec,
   ExtractedRecordData,
   JetstreamModuleOptions,
@@ -24,7 +25,6 @@ import type {
   RpcOutcomeStatus,
   ScheduleChange,
   ScheduleInfo,
-  ScheduleSpec,
   TargetSubjectPrefixes,
   TransportHeaderOptions,
 } from '../interfaces';
@@ -237,7 +237,7 @@ export class JetstreamClient extends ClientProxy {
     id: string,
     pattern: string,
     data: unknown,
-    spec: ScheduleSpec,
+    spec: ClientScheduleSpec,
   ): Promise<ScheduleChange> {
     return this.schedules().schedule(id, pattern, data, spec);
   }

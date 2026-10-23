@@ -45,6 +45,7 @@ export type {
   ScheduleHandlerOption,
   ScheduleInfo,
   ScheduleSpec,
+  ClientScheduleSpec,
 } from './interfaces';
 
 export { JetstreamScheduleError, ScheduleErrorReason } from './schedule';

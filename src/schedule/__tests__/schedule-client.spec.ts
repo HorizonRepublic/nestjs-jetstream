@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vi
 import { JsonCodec } from '../../codec';
 import type { ConnectionProvider } from '../../connection/connection.provider';
 import { ServerCapabilities } from '../../connection/server-capabilities';
-import type { ScheduleSpec } from '../../interfaces';
 import { SubjectResolver } from '../../server/infrastructure/subject-resolver';
 import { ScheduleClient } from '../schedule-client';
 import { ScheduleErrorReason } from '../schedule.types';
@@ -43,11 +42,20 @@ describe(ScheduleClient, () => {
   });
 
   it('should refuse data inside the spec, which belongs in its own argument', async () => {
-    // Given a spec only reachable from JavaScript or a widened type
-    const spec = { everySeconds: 60, data: { a: 1 } } as ScheduleSpec;
+    // Given a spec only JavaScript can pass: the type rejects data inside it
+    const pending = sut.schedule(
+      'r-1',
+      'reminder.due',
+      {},
+      {
+        everySeconds: 60,
+        // @ts-expect-error the payload belongs in its own argument
+        data: { a: 1 },
+      },
+    );
 
     // When / Then
-    await expect(sut.schedule('r-1', 'reminder.due', {}, spec)).rejects.toThrow(
+    await expect(pending).rejects.toThrow(
       expect.objectContaining({ reason: ScheduleErrorReason.InvalidData }),
     );
   });
