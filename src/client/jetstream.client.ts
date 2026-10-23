@@ -21,12 +21,11 @@ import type {
   JetstreamModuleOptions,
   PublishStatus,
   RpcOutcomeStatus,
+  TargetSubjectPrefixes,
   TransportHeaderOptions,
 } from '../interfaces';
 import { StreamKind } from '../interfaces';
 import {
-  BROADCAST_SUBJECT_PREFIX,
-  conventionScheduleSubjectBase,
   DEFAULT_JETSTREAM_RPC_TIMEOUT,
   DEFAULT_RPC_TIMEOUT,
   isCoreRpcMode,
@@ -46,9 +45,42 @@ import {
   type ServerEndpoint,
 } from '../otel';
 import { NameResolver } from '../server/infrastructure/name-resolver';
+import { SubjectResolver } from '../server/infrastructure/subject-resolver';
 import type { PublishAckLike, RpcReplyCallback } from './client.types';
 import { JetstreamRecord } from './jetstream.record';
 import { RpcReplyInbox } from './rpc-reply-inbox';
+
+/**
+ * Subjects a client publishes to. A foreign target is resolved from the
+ * prefixes passed to `forFeature()`; the service itself already knows its own.
+ */
+const resolveTargetSubjects = (
+  target: string,
+  targetPrefixes: TargetSubjectPrefixes | undefined,
+  own: NameResolver,
+  isSelf: boolean,
+): SubjectResolver => {
+  if (!isSelf) {
+    return SubjectResolver.forTarget(
+      target,
+      {
+        [StreamKind.Event]: targetPrefixes?.events,
+        [StreamKind.Ordered]: targetPrefixes?.ordered,
+        [StreamKind.Command]: targetPrefixes?.rpc,
+      },
+      own.subjects,
+    );
+  }
+
+  if (targetPrefixes !== undefined) {
+    throw new Error(
+      `forFeature({ name: '${target}' }) targets this service itself, so it takes no subjectPrefix: ` +
+        'its prefixes come from forRoot().',
+    );
+  }
+
+  return own.subjects;
+};
 
 /** Narrow publish-kind tag emitted on the event path (no RPC request here). */
 type EventPublishKind = Exclude<PublishKind, PublishKind.RpcRequest>;
@@ -94,22 +126,11 @@ const eventStreamKind = (kind: EventPublishKind): StreamKind => {
 export class JetstreamClient extends ClientProxy {
   private readonly logger = new Logger('Jetstream:Client');
 
-  /** Target service name this client sends messages to. */
-  private readonly targetName: string;
-
   /** Pre-cached caller name derived from rootOptions.name, computed once in constructor. */
   private readonly callerName: string;
 
-  /** Convention subject prefixes for foreign targets; one per stream kind. */
-  private readonly eventSubjectPrefix: string;
-  private readonly commandSubjectPrefix: string;
-  private readonly orderedSubjectPrefix: string;
-
-  /** Broadcast subject prefix derived from the own resolver; never null. */
-  private readonly broadcastPrefix: string;
-
-  /** Resolver for self-target subjects; null when targeting a foreign service. */
-  private readonly selfNames: NameResolver | null;
+  /** Subjects of the target service: its own resolver when the target is this service. */
+  private readonly subjects: SubjectResolver;
 
   /**
    * RPC configuration snapshots. The values are derived from rootOptions at
@@ -145,24 +166,16 @@ export class JetstreamClient extends ClientProxy {
     private readonly codec: Codec,
     private readonly eventBus: EventBus,
     names?: NameResolver,
+    targetPrefixes?: TargetSubjectPrefixes,
   ) {
     super();
-    this.targetName = targetServiceName;
     this.callerName = internalName(this.rootOptions.name);
-
-    const isSelf = targetServiceName === rootOptions.name;
-    const ownNames = names ?? (isSelf ? new NameResolver(rootOptions) : null);
-
-    this.selfNames = isSelf ? ownNames : null;
-    this.broadcastPrefix = ownNames
-      ? ownNames.subject(StreamKind.Broadcast, '')
-      : BROADCAST_SUBJECT_PREFIX;
-
-    const targetInternal = internalName(targetServiceName);
-
-    this.eventSubjectPrefix = `${targetInternal}.${StreamKind.Event}.`;
-    this.commandSubjectPrefix = `${targetInternal}.${StreamKind.Command}.`;
-    this.orderedSubjectPrefix = `${targetInternal}.${StreamKind.Ordered}.`;
+    this.subjects = resolveTargetSubjects(
+      targetServiceName,
+      targetPrefixes,
+      names ?? new NameResolver(rootOptions),
+      targetServiceName === rootOptions.name,
+    );
 
     this.rpcInbox = new RpcReplyInbox(codec, this.callerName);
     this.isCoreMode = isCoreRpcMode(this.rootOptions.rpc);
@@ -322,9 +335,7 @@ export class JetstreamClient extends ClientProxy {
    * JetStream mode: publishes to stream + waits for inbox response.
    */
   protected publish(packet: ReadPacket, callback: (p: WritePacket) => void): () => void {
-    const subject = this.selfNames
-      ? this.selfNames.subject(StreamKind.Command, packet.pattern)
-      : this.commandSubjectPrefix + packet.pattern;
+    const subject = this.subjects.subject(StreamKind.Command, packet.pattern);
     const { data, hdrs, timeout, messageId, schedule, ttl } = this.extractRecordData(packet.data);
 
     if (schedule) {
@@ -620,26 +631,20 @@ export class JetstreamClient extends ClientProxy {
     this.readyForPublish = false;
   }
 
-  /**
-   * Resolve a user pattern to a fully-qualified NATS subject. Self-targets go
-   * through the resolver so custom subjectPrefix options are honoured.
-   */
+  /** Resolve a user pattern to a fully-qualified NATS subject of the target. */
   private buildEventSubject(pattern: string): string {
     if (pattern.startsWith(PatternPrefix.Broadcast)) {
-      return this.broadcastPrefix + pattern.slice(PatternPrefix.Broadcast.length);
+      return this.subjects.subject(
+        StreamKind.Broadcast,
+        pattern.slice(PatternPrefix.Broadcast.length),
+      );
     }
 
     if (pattern.startsWith(PatternPrefix.Ordered)) {
-      const bare = pattern.slice(PatternPrefix.Ordered.length);
-
-      if (this.selfNames) return this.selfNames.subject(StreamKind.Ordered, bare);
-
-      return this.orderedSubjectPrefix + bare;
+      return this.subjects.subject(StreamKind.Ordered, pattern.slice(PatternPrefix.Ordered.length));
     }
 
-    if (this.selfNames) return this.selfNames.subject(StreamKind.Event, pattern);
-
-    return this.eventSubjectPrefix + pattern;
+    return this.subjects.subject(StreamKind.Event, pattern);
   }
 
   /** Build NATS headers merging custom headers with transport headers. */
@@ -706,9 +711,7 @@ export class JetstreamClient extends ClientProxy {
    * of the same pattern would silently replace each other.
    */
   private buildScheduleSubject(eventSubject: string): string {
-    const base = this.selfNames
-      ? this.selfNames.scheduleSubjectBase(eventSubject)
-      : conventionScheduleSubjectBase(this.targetName, eventSubject);
+    const base = this.subjects.scheduleSubjectBase(eventSubject);
 
     return `${base}.${nuid.next()}`;
   }

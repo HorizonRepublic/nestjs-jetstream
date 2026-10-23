@@ -8,7 +8,7 @@ schema:
   headline: "Bring Your Own Infrastructure (bind-only mode)"
   description: "Bind NestJS JetStream to externally managed NATS streams and consumers provisioned by Terraform, ArgoCD, or a platform team."
   datePublished: "2026-06-12"
-  dateModified: "2026-08-03"
+  dateModified: "2026-10-23"
 ---
 
 # Bring Your Own Infrastructure (bind-only mode)
@@ -185,6 +185,7 @@ When a custom `subjectPrefix` is set:
 - Published subjects use `{prefix}{pattern}` instead of the default convention (e.g., `company.orders.order.created`).
 - The consumer receives exact `filter_subjects` entries for each registered handler instead of a single wildcard filter.
 - Scheduling subjects live under `{prefix}_sch.` instead of the default `{service}__microservice._sch.` prefix (see [Scheduling with a custom prefix](#scheduling-with-a-custom-prefix) below).
+- Other services reach this one only when their `forFeature()` declares the same prefixes. See [targets with a custom subject prefix](/docs/reference/module-configuration#targets-with-a-custom-subject-prefix).
 
 ## Subject contract per kind
 

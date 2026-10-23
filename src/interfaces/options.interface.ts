@@ -461,6 +461,25 @@ export interface JetstreamModuleOptions {
   provisioning?: ProvisioningOptions;
 }
 
+/**
+ * Custom subject prefixes a target service consumes on, so a `forFeature()`
+ * client publishes where that service listens.
+ *
+ * Mirror the `subjectPrefix` values from the target's own `forRoot()`. Kinds
+ * left out use the naming convention. Broadcast is absent: it is one shared
+ * stream and follows the caller's own `broadcast.subjectPrefix`.
+ */
+export interface TargetSubjectPrefixes {
+  /** The target's `events.subjectPrefix`. */
+  events?: string;
+
+  /** The target's `ordered.subjectPrefix`. */
+  ordered?: string;
+
+  /** The target's `rpc.subjectPrefix`. */
+  rpc?: string;
+}
+
 /** Options for `JetstreamModule.forFeature()`. */
 export interface JetstreamFeatureOptions {
   /** Target service name for subject construction. */
@@ -479,6 +498,14 @@ export interface JetstreamFeatureOptions {
    * Falls back to the root codec from `forRoot()` when omitted.
    */
   codec?: Codec;
+
+  /**
+   * Subject prefixes the target service consumes on, when it sets custom ones.
+   *
+   * Not allowed when the target is this service itself: its prefixes already
+   * come from `forRoot()`.
+   */
+  subjectPrefix?: TargetSubjectPrefixes;
 }
 
 /**

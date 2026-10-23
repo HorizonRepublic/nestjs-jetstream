@@ -8,7 +8,7 @@ schema:
   headline: "Module Configuration Reference"
   description: "Reference for forRoot(), forRootAsync(), and forFeature() registration methods with stream, consumer, and connection options."
   datePublished: "2026-03-21"
-  dateModified: "2026-08-03"
+  dateModified: "2026-10-23"
 ---
 
 # Module Configuration
@@ -209,6 +209,36 @@ JetstreamModule.forFeature({
 ```
 
 See [Custom Codec](/docs/guides/custom-codec) for how to implement the `Codec` interface.
+
+### Targets with a custom subject prefix
+
+A client builds the target's subjects from the naming convention. When the target sets `subjectPrefix` on `events`, `ordered` or `rpc`, repeat those values in `forFeature()`, or the client publishes where nothing listens:
+
+```typescript
+// The asset service
+JetstreamModule.forRoot({
+  name: 'asset',
+  servers,
+  rpc: { mode: 'jetstream', subjectPrefix: 'acme.rpc.asset' },
+  events: { subjectPrefix: 'acme.ev.asset' },
+});
+
+// Any service that calls it
+JetstreamModule.forFeature({
+  name: 'asset',
+  subjectPrefix: { rpc: 'acme.rpc.asset', events: 'acme.ev.asset' },
+});
+```
+
+| Key       | Mirrors the target's    |
+| --------- | ----------------------- |
+| `events`  | `events.subjectPrefix`  |
+| `ordered` | `ordered.subjectPrefix` |
+| `rpc`     | `rpc.subjectPrefix`     |
+
+Kinds you leave out keep the convention. Scheduled events follow the prefix too, so `scheduleAt()` lands in the target's `{prefix}_sch.` namespace. Broadcast has no key: it is one stream shared by every service and follows the caller's own `broadcast.subjectPrefix`.
+
+Prefixes are validated when the client is created, with the same rules as `forRoot()`. Passing `subjectPrefix` to a client that targets the service itself fails at startup, because its own prefixes already come from `forRoot()`.
 
 ## Full options reference
 

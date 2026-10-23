@@ -105,7 +105,7 @@ export default function Root({ children }) {
   "headline": "Bring Your Own Infrastructure (bind-only mode)",
   "description": "Bind NestJS JetStream to externally managed NATS streams and consumers provisioned by Terraform, ArgoCD, or a platform team.",
   "datePublished": "2026-06-12",
-  "dateModified": "2026-08-03"
+  "dateModified": "2026-10-23"
 },
       
     '/docs/guides/graceful-shutdown/': {
@@ -313,7 +313,7 @@ export default function Root({ children }) {
   "headline": "Module Configuration Reference",
   "description": "Reference for forRoot(), forRootAsync(), and forFeature() registration methods with stream, consumer, and connection options.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-08-03"
+  "dateModified": "2026-10-23"
 },
       
     '/docs/reference/naming-conventions/': {
