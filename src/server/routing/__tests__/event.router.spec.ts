@@ -2274,6 +2274,24 @@ describe(EventRouter, () => {
       expect(subscribe).not.toHaveBeenCalled();
     });
 
+    it('should skip a consumer whose config carries no delivery limit', async () => {
+      // Given
+      const subscribe = vi.fn();
+      const info = createMock<ConsumerInfo>({
+        stream_name: faker.string.alpha(10),
+        name: faker.string.alpha(10),
+        config: {},
+      });
+
+      sut = routerWithConnection(subscribe);
+
+      // When
+      await sut.watchDeadLetters(new Map([[StreamKind.Event, info]]));
+
+      // Then
+      expect(subscribe).not.toHaveBeenCalled();
+    });
+
     it('should not listen when dead-letter capture is off', async () => {
       // Given
       const subscribe = vi.fn();

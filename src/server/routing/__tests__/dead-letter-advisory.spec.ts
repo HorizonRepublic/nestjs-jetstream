@@ -177,6 +177,18 @@ describe(DeadLetterAdvisoryListener, () => {
       expect(deleteMessage).not.toHaveBeenCalled();
     });
 
+    it('should report zero deliveries when the advisory omits the count', async () => {
+      // Given
+      getMessage.mockResolvedValue(stored(3, {}));
+      await sut.watch([target]);
+
+      // When
+      await receive({ stream: target.stream, stream_seq: 3 });
+
+      // Then
+      expect(captureSource.mock.calls[0]![0]).toMatchObject({ deliveryCount: 0 });
+    });
+
     it('should do nothing when the message is already gone', async () => {
       // Given
       getMessage.mockResolvedValue(null);
@@ -240,6 +252,24 @@ describe(DeadLetterAdvisoryListener, () => {
   });
 
   describe('error paths', () => {
+    it('should log a subscription error and not touch the stream', async () => {
+      // Given
+      await sut.watch([target]);
+      const callback = callbacks.get(
+        `$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.${target.stream}.${target.consumer}`,
+      );
+
+      // When: the server rejects the subscription, e.g. for missing permissions
+      void callback?.(new Error('Permissions Violation'), advisory({}));
+
+      // Then
+      expect(error).toHaveBeenCalledWith(
+        expect.stringContaining(target.consumer),
+        expect.any(Error),
+      );
+      expect(getMessage).not.toHaveBeenCalled();
+    });
+
     it('should warn and skip an advisory it cannot parse', async () => {
       // Given
       await sut.watch([target]);

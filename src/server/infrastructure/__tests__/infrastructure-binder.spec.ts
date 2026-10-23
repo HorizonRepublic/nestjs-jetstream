@@ -713,5 +713,26 @@ describe(InfrastructureBinder.name, () => {
         );
       });
     });
+
+    describe('when ackExtension is a number that disables it', () => {
+      it('should not warn about ack_wait', async () => {
+        // Given: a non-positive interval turns extension off
+        const sut = makeSut({ ...baseOptions, dlq: false, events: { ackExtension: 0 } });
+        const warnSpy = vi.spyOn(Logger.prototype, 'warn');
+        const info = makeConsumerInfo({
+          filter_subject: names.filterSubject(StreamKind.Event),
+          ack_wait: 1_000_000,
+        });
+        const jsm = makeJsm({ consumerInfo: vi.fn().mockResolvedValue(info) });
+
+        // When
+        await sut.bindConsumer(jsm, StreamKind.Event);
+
+        // Then
+        expect(warnSpy).not.toHaveBeenCalledWith(
+          expect.stringContaining('shorter than the ackExtension interval'),
+        );
+      });
+    });
   });
 });
