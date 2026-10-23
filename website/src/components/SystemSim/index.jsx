@@ -15,7 +15,8 @@ const FAIL_CHANCE = [0.3, 0.2, 0];
 const GAP = 12;
 const BOX = { size: 9, height: 7 };
 const BELT_Z = 5;
-const RAIL_Z = 52;
+const RAIL_Z = 42;
+const RAIL_Y = 78; // the return runs beside the stream, on its far side, not above it
 const POD = { size: 34, height: 30, downHeight: 9 };
 const RESTART_MS = 3400;
 const MANUAL_DOWN_MS = 20000;
@@ -97,8 +98,8 @@ const buildFloor = () => {
     ],
     outputs: ys.map((y) => belt([p3(530, y, POD.height + 2), p3(540, y), p3(596, y)], 0.1)),
     // the overhead return: up from each pod, over to the stream's line, back above it, down at its start
-    lifts: ys.map((y) => belt([p3(520, y, POD.height + 2), p3(520, y, RAIL_Z), p3(462, y, RAIL_Z), p3(462, 120, RAIL_Z)], 0.1)),
-    rail: belt([p3(462, 120, RAIL_Z), p3(150, 120, RAIL_Z), p3(140, 120, BELT_Z)], 0.13),
+    lifts: ys.map((y) => belt([p3(520, y, POD.height + 2), p3(520, y, RAIL_Z), p3(462, y, RAIL_Z), p3(462, RAIL_Y, RAIL_Z)], 0.1)),
+    rail: belt([p3(462, RAIL_Y, RAIL_Z), p3(158, RAIL_Y, RAIL_Z), p3(140, 120, BELT_Z)], 0.13),
   };
 };
 
