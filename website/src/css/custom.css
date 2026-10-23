@@ -1009,7 +1009,7 @@ details.alert > summary:hover::before,
   padding: 32px 24px 24px;
   margin: 24px 0;
   position: relative;
-  overflow: hidden;
+  overflow-x: auto;
   cursor: zoom-in;
   transition: border-color 120ms ease, transform 120ms ease;
 }
@@ -1028,28 +1028,14 @@ details.alert > summary:hover::before,
   pointer-events: none;
 }
 
-.docusaurus-mermaid-container::after {
-  content: "mermaid";
-  position: absolute;
-  top: 14px;
-  right: 16px;
-  font-family: var(--jt-font-mono);
-  font-size: 10px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: var(--jt-fg-3);
-  padding-left: 14px;
-  background-image: radial-gradient(circle at 4px 50%, var(--jt-accent) 3px, transparent 4px);
-  pointer-events: none;
-}
+
 
 .docusaurus-mermaid-container svg {
   position: relative;
   z-index: 1;
   display: block;
   margin: 0 auto;
-  max-width: 100%;
+  max-width: none;
   height: auto;
 }
 
@@ -1095,10 +1081,6 @@ details.alert > summary:hover::before,
 .docusaurus-mermaid-container svg .label foreignObject div {
   color: var(--jt-fg-0) !important;
   fill: var(--jt-fg-0) !important;
-  font-family: var(--jt-font-mono) !important;
-  font-size: 12.5px !important;
-  font-weight: 500 !important;
-  line-height: 1.4 !important;
 }
 
 .docusaurus-mermaid-container svg .node.lib .nodeLabel,
@@ -1128,10 +1110,6 @@ details.alert > summary:hover::before,
   background: var(--jt-bg-1) !important;
   color: var(--jt-fg-2) !important;
   fill: var(--jt-fg-2) !important;
-  font-family: var(--jt-font-mono) !important;
-  font-size: 10.5px !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.06em !important;
 }
 
 .docusaurus-mermaid-container svg .edgeLabel rect {
@@ -1147,11 +1125,6 @@ details.alert > summary:hover::before,
 
 .docusaurus-mermaid-container svg text.actor {
   fill: var(--jt-fg-0) !important;
-  font-family: var(--jt-font-mono) !important;
-  font-weight: 500 !important;
-  font-size: 12px !important;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
 .docusaurus-mermaid-container svg .actor-line {
@@ -1168,10 +1141,6 @@ details.alert > summary:hover::before,
 
 .docusaurus-mermaid-container svg .messageText {
   fill: var(--jt-fg-1) !important;
-  font-size: 11.5px !important;
-  text-transform: none !important;
-  letter-spacing: 0;
-  font-weight: 500 !important;
 }
 
 .docusaurus-mermaid-container svg .labelBox {
@@ -1185,10 +1154,6 @@ details.alert > summary:hover::before,
 .docusaurus-mermaid-container svg .loopText,
 .docusaurus-mermaid-container svg .loopText * {
   fill: var(--jt-accent) !important;
-  font-family: var(--jt-font-mono) !important;
-  font-size: 10.5px !important;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
 }
 
 .docusaurus-mermaid-container svg .loopLine {
@@ -1205,8 +1170,6 @@ details.alert > summary:hover::before,
 .docusaurus-mermaid-container svg .noteText,
 .docusaurus-mermaid-container svg .noteText * {
   fill: var(--jt-fg-0) !important;
-  font-family: var(--jt-font-mono) !important;
-  font-size: 11px !important;
 }
 
 .docusaurus-mermaid-container svg .sequenceNumber {
@@ -1226,11 +1189,6 @@ details.alert > summary:hover::before,
 .docusaurus-mermaid-container svg .cluster text {
   fill: var(--jt-fg-3) !important;
   color: var(--jt-fg-3) !important;
-  font-family: var(--jt-font-mono) !important;
-  font-size: 10px !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.14em !important;
-  font-weight: 500 !important;
 }
 
 

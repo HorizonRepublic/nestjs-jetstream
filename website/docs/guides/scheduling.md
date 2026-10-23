@@ -61,7 +61,7 @@ flowchart LR
     sch -- "at scheduled time" --> ev
     ev --> handler["@EventPattern handler"]
 
-    classDef lib fill:#16201a,stroke:#52d68e,stroke-width:1.5px,color:#52d68e;
+    classDef lib stroke-width:1.5px;
     class sch,ev lib;
 ```
 
