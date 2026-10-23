@@ -57,7 +57,7 @@ export default function Root({ children }) {
   "headline": "Testing",
   "description": "Running unit and integration tests with Vitest and Testcontainers.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-08-03"
+  "dateModified": "2026-10-23"
 },
       
     '/docs/getting-started/installation/': {
@@ -65,7 +65,7 @@ export default function Root({ children }) {
   "headline": "Installation",
   "description": "Install the package, set up NATS with Docker, and configure peer dependencies.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-08-03"
+  "dateModified": "2026-10-23"
 },
       
     '/docs/getting-started/quick-start/': {
@@ -145,7 +145,7 @@ export default function Root({ children }) {
   "headline": "How to migrate from @nestjs/microservices NATS to JetStream",
   "description": "Step-by-step migration from the built-in NestJS NATS transport to durable JetStream-backed delivery.",
   "datePublished": "2026-03-26",
-  "dateModified": "2026-08-03"
+  "dateModified": "2026-10-23"
 },
       
     '/docs/guides/multi-connection/': {
@@ -209,7 +209,7 @@ export default function Root({ children }) {
   "headline": "Troubleshooting: NestJS JetStream Transport",
   "description": "Fix common NestJS JetStream issues, from connection errors and consumer lag to RPC timeouts, DLQ publish failures and stream migration recovery.",
   "datePublished": "2026-03-26",
-  "dateModified": "2026-08-03"
+  "dateModified": "2026-10-23"
 },
       
     '/docs/': {

@@ -8,7 +8,7 @@ schema:
   headline: "Installation"
   description: "Install the package, set up NATS with Docker, and configure peer dependencies."
   datePublished: "2026-03-21"
-  dateModified: "2026-08-03"
+  dateModified: "2026-10-23"
 ---
 
 # Installation
@@ -61,10 +61,6 @@ Optional, install only for the feature that needs it:
 - `prom-client` ^15.0.0 for [Prometheus metrics](/docs/observability/metrics)
 - `@opentelemetry/api` ^1.9.0 for [distributed tracing](/docs/observability/tracing)
 
-:::note NestJS 12 prereleases
-The caret ranges above skip prereleases, so installing `@nestjs/common@next` needs a package manager override until 12.0.0 has a stable release.
-:::
-
 ## Runtime requirements
 
 - **Node.js** >= 22.0.0
@@ -76,7 +72,7 @@ The caret ranges above skip prereleases, so installing `@nestjs/common@next` nee
 The fastest way to get a JetStream-enabled NATS server running is with Docker:
 
 ```bash
-docker run -d --name nats -p 4222:4222 nats:2.12 -js
+docker run -d --name nats -p 4222:4222 nats:2.15 -js
 ```
 
 This starts NATS on `localhost:4222` with JetStream enabled (`-js` flag).
@@ -93,7 +89,7 @@ docker logs nats | head -5
 ```yaml title="docker-compose.yml"
 services:
   nats:
-    image: nats:2.12
+    image: nats:2.15
     command: -js
     ports:
       - "4222:4222"
