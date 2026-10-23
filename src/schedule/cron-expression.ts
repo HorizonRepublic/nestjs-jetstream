@@ -143,6 +143,9 @@ const parseField = (text: string, bounds: CronBounds, expression: string): CronF
     if (item.length > 0 && parseRange(item, bounds, expression, values)) star = true;
   }
 
+  // Checked here: an empty set would otherwise cost the full five-year search to reject.
+  if (values.size === 0) throw invalid(expression, `field "${text}" matches no value`);
+
   return { values, star };
 };
 

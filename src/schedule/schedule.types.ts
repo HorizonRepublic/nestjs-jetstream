@@ -5,6 +5,7 @@ import type { ScheduleInfo } from '../interfaces';
 /** Why a schedule was refused. */
 export enum ScheduleErrorReason {
   InvalidCron = 'invalid-cron',
+  InvalidSpec = 'invalid-spec',
   InvalidAt = 'invalid-at',
   InvalidInterval = 'invalid-interval',
   InvalidTtl = 'invalid-ttl',
@@ -54,6 +55,8 @@ export interface StoredHolder {
   readonly subject: string;
   readonly seq: number;
   readonly hash: string;
+  /** When the server stored this version of the holder. */
+  readonly writtenAt: Date;
   readonly info: ScheduleInfo;
 }
 
@@ -62,4 +65,6 @@ export enum PutOutcome {
   Written = 'written',
   /** The holder changed since it was read; read again before retrying. */
   Conflict = 'conflict',
+  /** The stream cannot check the sequence right now, typically during a leader change. */
+  Unavailable = 'unavailable',
 }

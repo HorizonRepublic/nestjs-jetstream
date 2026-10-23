@@ -35,6 +35,7 @@ import { ConcurrencyGate } from './concurrency-gate';
 import { DeadLetterCapture } from './dead-letter-capture';
 import { createOrderedPipeline, createWorkqueuePipeline } from './event-pipeline';
 import { PatternRegistry } from './pattern-registry';
+import { OrphanOutcome } from './routing.types';
 import type {
   EventConsumeKind,
   OrphanTickPolicy,
@@ -44,6 +45,9 @@ import type {
 
 /** Delay before an unhandled tick is offered to another replica. */
 const ORPHAN_REDELIVER_DELAY_MS = 5_000;
+
+/** Server and replica clocks may disagree; a holder this close to startup is treated as newer. */
+const CLOCK_SKEW_ALLOWANCE_MS = 10_000;
 
 /** Deliveries before an orphan is cancelled when the consumer sets no limit. */
 const ORPHAN_FALLBACK_DELIVERIES = 3;
@@ -71,6 +75,7 @@ export class EventRouter {
   private readonly serverEndpoint: ServerEndpoint | null;
   private readonly capture: DeadLetterCapture | null;
   private maxDeliverByStream = new Map<string, number>();
+  private readonly startedAt = Date.now();
 
   public constructor(
     private readonly messageProvider: MessageProvider,
@@ -210,7 +215,21 @@ export class EventRouter {
         return configured > 0 ? configured : ORPHAN_FALLBACK_DELIVERIES;
       },
       redeliverDelayMs: ORPHAN_REDELIVER_DELAY_MS,
-      cancel: async (holderSubject) => scheduleStore.cancel(holderSubject),
+      cancelIfOrphaned: async (holderSubject) => {
+        const writtenAt = await scheduleStore.writtenAt(holderSubject);
+
+        if (writtenAt === null) return OrphanOutcome.Gone;
+
+        // A replica is never the authority on a schedule written after it started:
+        // during a rollout that is a newer replica's schedule, not an orphan.
+        if (writtenAt.getTime() > this.startedAt - CLOCK_SKEW_ALLOWANCE_MS) {
+          return OrphanOutcome.Newer;
+        }
+
+        await scheduleStore.cancel(holderSubject);
+
+        return OrphanOutcome.Cancelled;
+      },
     };
   }
 

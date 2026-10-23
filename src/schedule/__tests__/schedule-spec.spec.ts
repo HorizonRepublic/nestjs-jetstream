@@ -137,6 +137,39 @@ describe('schedule spec', () => {
       ).toBe(ScheduleErrorReason.InvalidTimezone);
     });
 
+    it('should accept an interval whose optional time zone is undefined', () => {
+      expect(() => {
+        validateScheduleSpec({ everySeconds: 10, timezone: undefined } as unknown as ScheduleSpec);
+      }).not.toThrow();
+    });
+
+    it('should reject a time zone on a one-shot, which the server refuses', () => {
+      // Given
+      const spec = {
+        at: new Date(Date.now() + 60_000),
+        timezone: 'Europe/Kyiv',
+      } as unknown as ScheduleSpec;
+
+      // When / Then
+      expect(
+        reasonOf(() => {
+          validateScheduleSpec(spec);
+        }),
+      ).toBe(ScheduleErrorReason.InvalidTimezone);
+    });
+
+    it.each([
+      { at: new Date(Date.now() + 60_000), cron: '@daily' },
+      { everySeconds: 10, cron: '@daily' },
+      { at: new Date(Date.now() + 60_000), everySeconds: 10 },
+    ])('should reject a spec that names more than one schedule: %j', (spec) => {
+      expect(
+        reasonOf(() => {
+          validateScheduleSpec(spec as unknown as ScheduleSpec);
+        }),
+      ).toBe(ScheduleErrorReason.InvalidSpec);
+    });
+
     it('should reject an unknown time zone', () => {
       expect(
         reasonOf(() => {

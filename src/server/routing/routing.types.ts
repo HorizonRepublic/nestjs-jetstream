@@ -66,6 +66,15 @@ export interface OrphanTickPolicy {
   /** Deliveries before a tick counts as an orphan. */
   maxDeliver(): number;
   readonly redeliverDelayMs: number;
-  /** Cancel the schedule whose holder fired the tick. */
-  cancel(holderSubject: string): Promise<void>;
+  /** Cancel the schedule whose holder fired the tick, unless a newer replica wrote it. */
+  cancelIfOrphaned(holderSubject: string): Promise<OrphanOutcome>;
+}
+
+/** What happened to a schedule whose tick no handler took. */
+export enum OrphanOutcome {
+  Cancelled = 'cancelled',
+  /** Written after this replica started, so a newer replica owns it. */
+  Newer = 'newer',
+  /** Already cancelled, by another replica or an earlier tick. */
+  Gone = 'gone',
 }

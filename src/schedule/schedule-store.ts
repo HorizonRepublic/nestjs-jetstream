@@ -1,4 +1,5 @@
 import { JetStreamApiError } from '@nats-io/jetstream';
+import type { StoredMsg } from '@nats-io/jetstream';
 
 import type { ConnectionProvider } from '../connection/connection.provider';
 import { ScheduleOrigin } from '../interfaces';
@@ -11,7 +12,6 @@ import type { HolderMessage, StoredHolder } from './schedule.types';
 const CONFLICT_CODES: ReadonlySet<number> = new Set([
   NatsErrorCode.StreamWrongLastSequence,
   NatsErrorCode.StreamWrongLastSequenceConstant,
-  NatsErrorCode.StreamExpectedLastSeqPerSubjectNotReady,
 ]);
 
 const REJECTION_CODES: ReadonlySet<number> = new Set([
@@ -65,12 +65,16 @@ export class ScheduleStore {
     return holders.filter((holder): holder is StoredHolder => holder !== null);
   }
 
-  /** The holder stored on `subject`, or `null`. */
+  /** The holder stored on `subject`, or `null` when there is none or another tool wrote it. */
   public async read(subject: string): Promise<StoredHolder | null> {
-    const jsm = await this.connection.getJetStreamManager();
-    const msg = await jsm.streams.getMessage(this.streamName, { last_by_subj: subject });
+    const msg = await this.lastOn(subject);
 
     return msg === null ? null : readHolder(msg, this.holderPrefix);
+  }
+
+  /** When the message on `subject` was stored, whoever wrote it, or `null` when there is none. */
+  public async writtenAt(subject: string): Promise<Date | null> {
+    return (await this.lastOn(subject))?.time ?? null;
   }
 
   /**
@@ -92,9 +96,18 @@ export class ScheduleStore {
       const code = errorCodeOf(err);
 
       if (code !== undefined && CONFLICT_CODES.has(code)) return PutOutcome.Conflict;
+      if (code === NatsErrorCode.StreamExpectedLastSeqPerSubjectNotReady) {
+        return PutOutcome.Unavailable;
+      }
 
       throw translatePublishError(err, holder);
     }
+  }
+
+  private async lastOn(subject: string): Promise<StoredMsg | null> {
+    const jsm = await this.connection.getJetStreamManager();
+
+    return jsm.streams.getMessage(this.streamName, { last_by_subj: subject });
   }
 
   /** Remove the holder on exactly `subject`; nothing happens when there is none. */

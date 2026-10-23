@@ -141,6 +141,23 @@ describe('ScheduleStore', () => {
     expect((await sut.list()).map((h) => h.info.id)).toEqual(['reminder-42']);
   });
 
+  it('should tell when any holder was written, ours or not, and nothing for an absent one', async () => {
+    // Given a holder written by another tool, without our headers
+    const subject = `${prefix}dyn.foreign`;
+    const before = Date.now();
+
+    await connection.getConnection();
+    await connection.getJetStreamClient().publish(subject, encode('{}'));
+
+    // When
+    const writtenAt = await sut.writtenAt(subject);
+
+    // Then
+    expect(writtenAt?.getTime()).toBeGreaterThanOrEqual(before - 1_000);
+    expect(await sut.read(subject)).toBeNull();
+    expect(await sut.writtenAt(`${prefix}dyn.absent`)).toBeNull();
+  });
+
   it('should explain a time zone the server image has no data for', async () => {
     // Given the official scratch image, which ships no tzdata
     const zoned = buildHolder(

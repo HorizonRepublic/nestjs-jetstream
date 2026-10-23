@@ -89,6 +89,15 @@ describe(parseCron, () => {
   });
 
   describe('rejections', () => {
+    it('should reject a field that matches nothing without searching five years', () => {
+      // Given
+      const started = performance.now();
+
+      // When / Then
+      expect(() => parseCron(', * * * * *')).toThrow(/matches no value/);
+      expect(performance.now() - started).toBeLessThan(50);
+    });
+
     it.each([
       ['five fields', '* * * * *'],
       ['seven fields', '* * * * * * *'],

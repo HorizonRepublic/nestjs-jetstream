@@ -27,6 +27,8 @@ class RemainingController {
   }
 }
 
+const sleep = async (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
 describe('Orphaned schedules', () => {
   let nc: NatsConnection;
   let container: StartedTestContainer;
@@ -47,8 +49,7 @@ describe('Orphaned schedules', () => {
     }
   });
 
-  beforeEach(async () => {
-    service = uniqueServiceName();
+  const boot = async (): Promise<void> => {
     ({ app } = await createTestApp(
       {
         name: service,
@@ -57,6 +58,10 @@ describe('Orphaned schedules', () => {
       },
       [RemainingController],
     ));
+  };
+
+  beforeEach(() => {
+    service = uniqueServiceName();
   });
 
   afterEach(async () => {
@@ -79,20 +84,41 @@ describe('Orphaned schedules', () => {
     });
   };
 
-  it('should cancel a schedule whose ticks no handler takes', async () => {
-    // Given a schedule left behind by a handler that no longer exists
+  it('should cancel a schedule older than the replica whose ticks no handler takes', async () => {
+    // Given a schedule left by a previous release, written before this replica started
+    await boot();
+    await app.close();
+
     const holder = `${internalName(service)}._cron.decl.removed.handler`;
 
     await schedule(holder, 'removed.handler');
-    expect(await holderCount(holder)).toBe(1);
+    await sleep(11_000);
+    await boot();
 
     // When its ticks exhaust their deliveries
     // Then the holder is gone
     await waitForCondition(async () => (await holderCount(holder)) === 0, 20_000, 250);
-  }, 30_000);
+  }, 45_000);
+
+  it('should leave a schedule newer than the replica to the replicas that handle it', async () => {
+    // Given a replica without the handler, and a schedule a newer replica just wrote
+    await boot();
+
+    const holder = `${internalName(service)}._cron.dyn.from-a-newer-release`;
+
+    await schedule(holder, 'added.in.next.release');
+
+    // When its ticks exhaust their deliveries on this replica
+    await sleep(6_000);
+
+    // Then the schedule survives
+    expect(await holderCount(holder)).toBe(1);
+  }, 20_000);
 
   it('should keep a schedule a handler takes', async () => {
     // Given
+    await boot();
+
     const holder = `${internalName(service)}._cron.dyn.kept`;
     const controller = app.get(RemainingController);
 

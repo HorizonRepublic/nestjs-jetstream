@@ -23,7 +23,7 @@ const hashField = (hash: ReturnType<typeof createHash>, value: string | Uint8Arr
   hash.update(bytes);
 };
 
-/** A stable fingerprint of everything that changes what a schedule does. */
+/** A stable fingerprint of what a schedule was declared as. */
 export const definitionHash = (
   pattern: string,
   specification: string,
@@ -57,7 +57,9 @@ export const buildHolder = (
   const specification = toNatsSpecification(spec);
   const ttlSeconds = resolveTickTtlSeconds(spec, now);
   const timezone = isCronSchedule(spec) ? spec.timezone : undefined;
-  const hash = definitionHash(pattern, specification, timezone, ttlSeconds, payload);
+  // The declared TTL, not the computed one: a cron's computed default moves with the
+  // boot date (a monthly cron gets 28 days in January, 30 in March).
+  const hash = definitionHash(pattern, specification, timezone, spec.ttlSeconds, payload);
   const hdrs = headers();
 
   hdrs.set(JetstreamHeader.ScheduleHash, hash);
@@ -108,5 +110,5 @@ export const readHolder = (msg: StoredMsg, holderPrefix: string): StoredHolder |
     ...(ttlSeconds === undefined ? {} : { ttlSeconds }),
   };
 
-  return { subject: msg.subject, seq: msg.seq, hash, info };
+  return { subject: msg.subject, seq: msg.seq, hash, writtenAt: msg.time, info };
 };

@@ -118,7 +118,10 @@ describe(EventRouter, () => {
       };
 
       beforeEach(() => {
-        store = createMock<ScheduleStore>({ cancel: vi.fn().mockResolvedValue(undefined) });
+        store = createMock<ScheduleStore>({
+          cancel: vi.fn().mockResolvedValue(undefined),
+          writtenAt: vi.fn().mockResolvedValue(null),
+        });
         sut = new EventRouter(
           messageProvider,
           patternRegistry,
@@ -152,19 +155,53 @@ describe(EventRouter, () => {
         expect(store.cancel).not.toHaveBeenCalled();
       });
 
-      it('should cancel the schedule on the last delivery', async () => {
+      it('should cancel a schedule older than this replica on the last delivery', async () => {
         // Given
+        store.writtenAt.mockResolvedValue(new Date('2020-01-01T00:00:00Z'));
+
         const msg = tick(3, 'svc__microservice._cron.decl.gone');
 
         // When
         schedules$.next(msg);
-        await new Promise(process.nextTick);
-        await new Promise(process.nextTick);
+        await vi.waitFor(() => {
+          expect(msg.term).toHaveBeenCalled();
+        });
 
         // Then
         expect(store.cancel).toHaveBeenCalledWith('svc__microservice._cron.decl.gone');
-        expect(msg.term).toHaveBeenCalled();
         expect(msg.nak).not.toHaveBeenCalled();
+      });
+
+      it('should leave a schedule newer than this replica to the replicas that handle it', async () => {
+        // Given a schedule written after this replica started, as during a rollout
+        store.writtenAt.mockResolvedValue(new Date(Date.now() + 1_000));
+
+        const msg = tick(3, 'svc__microservice._cron.decl.gone');
+
+        // When
+        schedules$.next(msg);
+        await vi.waitFor(() => {
+          expect(msg.term).toHaveBeenCalled();
+        });
+
+        // Then
+        expect(store.cancel).not.toHaveBeenCalled();
+      });
+
+      it('should do nothing more for a schedule that is already gone', async () => {
+        // Given
+        store.writtenAt.mockResolvedValue(null);
+
+        const msg = tick(3, 'svc__microservice._cron.decl.gone');
+
+        // When
+        schedules$.next(msg);
+        await vi.waitFor(() => {
+          expect(msg.term).toHaveBeenCalled();
+        });
+
+        // Then
+        expect(store.cancel).not.toHaveBeenCalled();
       });
 
       it('should terminate a tick that names no schedule without cancelling anything', async () => {

@@ -7,6 +7,14 @@ import { PutOutcome } from './schedule.types';
 /** One retry after a conflict: enough for a replica that raced us, not a fight. */
 const MAX_ATTEMPTS = 2;
 
+/** Waits while the stream cannot check sequences, as during a leader change. */
+const UNAVAILABLE_DELAYS_MS: readonly number[] = [250, 500, 1_000, 2_000];
+
+const sleep = async (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
 /**
  * Writes a schedule only when its definition changed.
  *
@@ -36,7 +44,10 @@ export class ScheduleWriter {
       now,
     );
 
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    let conflicts = 0;
+    let waits = 0;
+
+    while (conflicts < MAX_ATTEMPTS) {
       const current = await this.store.read(holderSubject);
 
       if (current?.hash === holder.hash) return ScheduleChange.Unchanged;
@@ -45,6 +56,17 @@ export class ScheduleWriter {
 
       if (outcome === PutOutcome.Written) {
         return current === null ? ScheduleChange.Created : ScheduleChange.Updated;
+      }
+
+      if (outcome === PutOutcome.Conflict) {
+        conflicts++;
+      } else if (waits < UNAVAILABLE_DELAYS_MS.length) {
+        await sleep(UNAVAILABLE_DELAYS_MS[waits++] ?? 0);
+      } else {
+        throw new Error(
+          `Schedule ${holderSubject} could not be written: the stream kept reporting its ` +
+            'sequences as unavailable, which happens briefly during a leader change.',
+        );
       }
     }
 

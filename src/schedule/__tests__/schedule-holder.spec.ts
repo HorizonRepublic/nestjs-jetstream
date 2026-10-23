@@ -14,8 +14,10 @@ const NOW = new Date('2026-10-23T12:00:00Z');
 const PREFIX = 'svc__microservice._cron.';
 const encode = (value: string): Uint8Array => new TextEncoder().encode(value);
 
+const WRITTEN_AT = new Date('2026-10-01T00:00:00Z');
+
 const stored = (subject: string, seq: number, hdrs: MsgHdrs = headers()): StoredMsg =>
-  createMock<StoredMsg>({ subject, seq, header: hdrs });
+  createMock<StoredMsg>({ subject, seq, header: hdrs, time: WRITTEN_AT });
 
 describe('schedule holder', () => {
   afterEach(vi.resetAllMocks);
@@ -57,6 +59,22 @@ describe('schedule holder', () => {
   });
 
   describe(buildHolder, () => {
+    it('should hash the same definition the same way whatever month it boots in', () => {
+      // Given a monthly cron, whose computed tick TTL differs between January and March
+      const build = (now: string): string =>
+        buildHolder(
+          `${PREFIX}decl.report`,
+          't',
+          'report',
+          { cron: '@monthly' },
+          encode(''),
+          new Date(now),
+        ).hash;
+
+      // When / Then
+      expect(build('2027-01-15T00:00:00Z')).toBe(build('2027-03-15T00:00:00Z'));
+    });
+
     it('should carry the schedule, target, ttl, zone, pattern and hash', () => {
       // Given
       const target = `svc__microservice.sched.sync.tick`;
@@ -128,6 +146,7 @@ describe('schedule holder', () => {
         subject: holder.subject,
         seq: 7,
         hash: holder.hash,
+        writtenAt: WRITTEN_AT,
         info: {
           id: 'sync.tick',
           origin: ScheduleOrigin.Declared,

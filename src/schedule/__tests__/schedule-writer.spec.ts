@@ -18,6 +18,7 @@ const SPEC: ScheduleSpec = { everySeconds: 60 };
 const storedWith = (spec: ScheduleSpec, seq: number): StoredHolder => ({
   subject: SUBJECT,
   seq,
+  writtenAt: NOW,
   hash: buildHolder(SUBJECT, TARGET, 'sync.tick', spec, new JsonCodec().encode(undefined), NOW)
     .hash,
   info: {
@@ -101,6 +102,25 @@ describe(ScheduleWriter, () => {
     // Then
     expect(change).toBe(ScheduleChange.Updated);
     expect(store.put).toHaveBeenLastCalledWith(expect.anything(), 1);
+  });
+
+  it('should wait out a stream that briefly cannot check sequences', async () => {
+    // Given a leader change right after the write was first attempted
+    vi.useFakeTimers();
+    store.put
+      .mockResolvedValueOnce(PutOutcome.Unavailable)
+      .mockResolvedValueOnce(PutOutcome.Unavailable)
+      .mockResolvedValueOnce(PutOutcome.Written);
+
+    // When
+    const pending = sut.upsert(SUBJECT, TARGET, 'sync.tick', SPEC, NOW);
+
+    await vi.runAllTimersAsync();
+
+    // Then
+    await expect(pending).resolves.toBe(ScheduleChange.Created);
+    expect(store.put).toHaveBeenCalledTimes(3);
+    vi.useRealTimers();
   });
 
   it('should give up when the holder keeps changing under it', async () => {

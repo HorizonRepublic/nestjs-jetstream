@@ -27,6 +27,23 @@ const assertTimezone = (timezone: string): void => {
   }
 };
 
+const SHAPE_KEYS = ['cron', 'everySeconds', 'at'] as const;
+
+/** A JavaScript caller can set several shape keys; the first one checked would silently win. */
+const assertSingleShape = (spec: ScheduleSpec): void => {
+  const named = SHAPE_KEYS.filter((key) => Reflect.get(spec, key) !== undefined);
+
+  if (named.length > 1) {
+    throw new JetstreamScheduleError(
+      ScheduleErrorReason.InvalidSpec,
+      `A schedule is exactly one of cron, everySeconds or at; got ${named.join(' and ')}.`,
+    );
+  }
+};
+
+/** A time zone only a JavaScript caller can put on a non-cron spec. */
+const timezoneOf = (spec: ScheduleSpec): unknown => Reflect.get(spec, 'timezone');
+
 /**
  * Check a schedule against the rules the NATS server enforces, before anything is sent.
  *
@@ -37,6 +54,15 @@ export const validateScheduleSpec = (spec: ScheduleSpec): void => {
     throw new JetstreamScheduleError(
       ScheduleErrorReason.InvalidTtl,
       `ttlSeconds must be a positive whole number of seconds; got ${String(spec.ttlSeconds)}.`,
+    );
+  }
+
+  assertSingleShape(spec);
+
+  if (!isCronSchedule(spec) && timezoneOf(spec) !== undefined) {
+    throw new JetstreamScheduleError(
+      ScheduleErrorReason.InvalidTimezone,
+      'A time zone applies to cron schedules only; NATS refuses it on an interval or a one-shot.',
     );
   }
 
@@ -60,13 +86,6 @@ export const validateScheduleSpec = (spec: ScheduleSpec): void => {
     if (spec.timezone !== undefined) assertTimezone(spec.timezone);
 
     return;
-  }
-
-  if ('timezone' in spec) {
-    throw new JetstreamScheduleError(
-      ScheduleErrorReason.InvalidTimezone,
-      'A time zone applies to cron schedules only; NATS refuses it on an interval.',
-    );
   }
 
   if (!isPositiveWholeNumber(spec.everySeconds)) {
