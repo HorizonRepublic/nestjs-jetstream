@@ -328,7 +328,7 @@ export class StreamProvider {
       return currentInfo;
     }
 
-    this.logChanges(config.name, diff, !!this.options.allowDestructiveMigration);
+    this.logChanges(config.name, diff, !!this.options.provisioning?.allowDestructiveMigration);
 
     if (diff.hasTransportControlledConflicts) {
       const conflicts = diff.changes
@@ -349,7 +349,7 @@ export class StreamProvider {
       return await this.runStreamOp(ctx, () => jsm.streams.update(config.name, config));
     }
 
-    if (!this.options.allowDestructiveMigration) {
+    if (!this.options.provisioning?.allowDestructiveMigration) {
       this.logger.warn(
         `Stream ${config.name} has immutable config conflicts. ` +
           `Enable allowDestructiveMigration to recreate the stream.`,

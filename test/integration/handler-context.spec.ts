@@ -23,7 +23,7 @@ class RetryController {
   public attempts = 0;
   public readonly received: unknown[] = [];
 
-  @EventPattern('order.retry')
+  @EventPattern<string>('order.retry')
   handle(@Payload() data: unknown, @Ctx() ctx: RpcContext): void {
     this.attempts++;
 
@@ -42,7 +42,7 @@ class DelayedRetryController {
   public attemptTimestamps: number[] = [];
   public readonly received: unknown[] = [];
 
-  @EventPattern('order.delayed-retry')
+  @EventPattern<string>('order.delayed-retry')
   handle(@Payload() data: unknown, @Ctx() ctx: RpcContext): void {
     this.attempts++;
     this.attemptTimestamps.push(Date.now());
@@ -60,7 +60,7 @@ class DelayedRetryController {
 class TerminateController {
   public attempts = 0;
 
-  @EventPattern('order.terminate')
+  @EventPattern<string>('order.terminate')
   handle(@Payload() _data: unknown, @Ctx() ctx: RpcContext): void {
     this.attempts++;
     ctx.terminate('Business reason');
@@ -75,7 +75,7 @@ class MetadataController {
   public timestamp: Date | undefined;
   public callerName: string | undefined;
 
-  @EventPattern('order.metadata')
+  @EventPattern<string>('order.metadata')
   handle(@Payload() _data: unknown, @Ctx() ctx: RpcContext): void {
     this.deliveryCount = ctx.getDeliveryCount();
     this.stream = ctx.getStream();

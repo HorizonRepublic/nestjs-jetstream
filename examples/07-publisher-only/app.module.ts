@@ -25,7 +25,7 @@ class GatewayController {
 }
 
 /**
- * Publisher-only mode: `consumer: false` skips all stream/consumer
+ * Publisher-only mode: `publisherOnly: true` skips all stream/consumer
  * infrastructure. The app publishes and nothing else, so it registers
  * neither handlers nor streams.
  *
@@ -37,7 +37,7 @@ class GatewayController {
     JetstreamModule.forRoot({
       name: 'gateway',
       servers: ['localhost:4222'],
-      consumer: false,
+      publisherOnly: true,
     }),
     JetstreamModule.forFeature({ name: 'orders' }),
   ],

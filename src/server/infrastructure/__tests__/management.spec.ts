@@ -38,9 +38,35 @@ describe('resolveManagementMode', () => {
     const options: JetstreamModuleOptions = {
       ...base,
       provisioning: { management: ManagementMode.Manual },
-      dlq: { management: { stream: ManagementMode.Auto } },
+      dlq: { management: ManagementMode.Auto },
     };
 
+    expect(resolveManagementMode(options, 'dlq', 'stream')).toBe(ManagementMode.Auto);
+  });
+
+  it('should read the ordered override as a bare mode', () => {
+    // Given a kind whose consumer is ephemeral, so only the stream has a decision
+    const options: JetstreamModuleOptions = {
+      ...base,
+      provisioning: { management: ManagementMode.Manual },
+      ordered: { management: ManagementMode.Auto },
+    };
+
+    // When the stream slot is resolved
+    // Then the bare mode answers for it
+    expect(resolveManagementMode(options, StreamKind.Ordered, 'stream')).toBe(ManagementMode.Auto);
+  });
+
+  it('should still read the pre-3.0 object form on dlq and ordered', () => {
+    // Given a JavaScript caller passing the shape 2.x accepted
+    const options = {
+      ...base,
+      provisioning: { management: ManagementMode.Manual },
+      dlq: { management: { stream: ManagementMode.Auto } },
+    } as unknown as JetstreamModuleOptions;
+
+    // When the stream slot is resolved
+    // Then the old shape keeps working, so only the types changed
     expect(resolveManagementMode(options, 'dlq', 'stream')).toBe(ManagementMode.Auto);
   });
 

@@ -38,8 +38,15 @@ export interface JetstreamConnectionOptions {
   /** Codec for this connection; falls back to the root codec. */
   codec?: Codec;
 
-  /** Set to `false` to make this connection publisher-only (no streams, no consumers). */
-  consumer?: false;
+  /**
+   * Skip consumer infrastructure on this connection.
+   *
+   * Unlike the root option this can go either way, so one connection may
+   * publish only while another consumes, or the reverse.
+   *
+   * @default inherited from the root option, which defaults to `false`
+   */
+  publisherOnly?: boolean;
 
   /** Workqueue event stream/consumer overrides for this connection. */
   events?: StreamConsumerOverrides;
@@ -54,16 +61,13 @@ export interface JetstreamConnectionOptions {
   rpc?: RpcConfig;
 
   /** Dead-letter queue configuration for this connection. */
-  dlq?: DlqOptions | false;
+  dlq?: DlqOptions | boolean;
 
   /** Handler metadata KV registry configuration for this connection. */
   metadata?: MetadataRegistryOptions;
 
   /** Provisioning behavior for this connection. */
   provisioning?: ProvisioningOptions;
-
-  /** Allow destructive stream migration for this connection. */
-  allowDestructiveMigration?: boolean;
 
   /** Graceful shutdown budget in ms for this connection. */
   shutdownTimeout?: number;

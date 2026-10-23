@@ -27,7 +27,7 @@ export interface ConnectionSharedContext {
 /**
  * Everything one named connection owns.
  *
- * Fields are `null` under `consumer: false`, matching what the provider
+ * Fields are `null` under `publisherOnly: true`, matching what the provider
  * factories already returned in publisher-only mode.
  */
 export interface ConnectionScope {
@@ -61,6 +61,6 @@ export interface ConnectionBinding {
   /** Every configured connection name. */
   readonly known: ReadonlySet<string>;
 
-  /** Configured connections that cannot host handlers (`consumer: false`). */
+  /** Configured connections that cannot host handlers (`publisherOnly: true`). */
   readonly publisherOnly: ReadonlySet<string>;
 }

@@ -10,7 +10,7 @@ import { startNatsContainerWithFileStoreLimit } from './nats-container';
 
 @Controller()
 class ProvisioningController {
-  @EventPattern('order.created')
+  @EventPattern<string>('order.created')
   handleOrder(): void {}
 }
 

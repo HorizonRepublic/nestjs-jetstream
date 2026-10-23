@@ -32,8 +32,7 @@ describe('warnIfManualWithDestructive', () => {
     const logger = createMock<Logger>();
     const options: JetstreamModuleOptions = {
       ...baseOptions(),
-      allowDestructiveMigration: true,
-      provisioning: { management: ManagementMode.Manual },
+      provisioning: { management: ManagementMode.Manual, allowDestructiveMigration: true },
     };
 
     // When
@@ -48,8 +47,7 @@ describe('warnIfManualWithDestructive', () => {
     const logger = createMock<Logger>();
     const options: JetstreamModuleOptions = {
       ...baseOptions(),
-      allowDestructiveMigration: true,
-      provisioning: { management: ManagementMode.Auto },
+      provisioning: { management: ManagementMode.Auto, allowDestructiveMigration: true },
     };
 
     // When
@@ -64,7 +62,7 @@ describe('warnIfManualWithDestructive', () => {
     const logger = createMock<Logger>();
     const options: JetstreamModuleOptions = {
       ...baseOptions(),
-      allowDestructiveMigration: true,
+      provisioning: { allowDestructiveMigration: true },
       events: { management: { stream: ManagementMode.Manual } },
     };
 
@@ -84,8 +82,7 @@ describe('connection scope wiring', () => {
     const warnSpy = vi.spyOn(Logger.prototype, 'warn');
     const options: JetstreamModuleOptions = {
       ...baseOptions(),
-      allowDestructiveMigration: true,
-      provisioning: { management: ManagementMode.Manual },
+      provisioning: { management: ManagementMode.Manual, allowDestructiveMigration: true },
     };
 
     const { providers = [] } = JetstreamModule.forRoot(options);

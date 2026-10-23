@@ -8,7 +8,7 @@ schema:
   headline: "How to migrate from @nestjs/microservices NATS to JetStream"
   description: "Step-by-step migration from the built-in NestJS NATS transport to durable JetStream-backed delivery."
   datePublished: "2026-03-26"
-  dateModified: "2026-08-03"
+  dateModified: "2026-10-23"
 ---
 
 # How to migrate from `@nestjs/microservices` NATS to JetStream
@@ -177,7 +177,48 @@ A service used to reserve up to 17 GB before processing a single message, which 
 
 Existing streams pick the stamp up through one mutable update on the first boot after upgrading. Messages already in the stream are untouched, and metadata written by anyone else is kept. Nothing is stamped under `provisioning: { management: Manual }`, and the shared broadcast stream is never stamped.
 
-A single-connection application upgrades with no source changes.
+**Some options were renamed or moved.** TypeScript flags each one at compile time. A JavaScript configuration, or a `useFactory` that returns an untyped object, fails at boot with an error that lists every removed option and its replacement, so none of them is silently ignored.
+
+| v2.13                                                                 | v3.0                                                                                      |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `consumer: false`                                                     | `publisherOnly: true`                                                                     |
+| `allowDestructiveMigration: true`                                     | `provisioning: { allowDestructiveMigration: true }`                                       |
+| `ordered: { deliverPolicy, optStartSeq, optStartTime, replayPolicy }` | `ordered: { consumer: { deliver_policy, opt_start_seq, opt_start_time, replay_policy } }` |
+| `dlq: { management: { stream: ManagementMode.Manual } }`              | `dlq: { management: ManagementMode.Manual }`                                              |
+| `ordered: { management: { stream: ManagementMode.Manual } }`          | `ordered: { management: ManagementMode.Manual }`                                          |
+| `subjects` or `description` under any `stream` override               | removed: both are derived from the service name, or from `subjectPrefix`                  |
+
+```typescript
+// v2.13
+JetstreamModule.forRoot({
+  name: 'gateway',
+  servers,
+  consumer: false,
+  allowDestructiveMigration: true,
+  ordered: { deliverPolicy: DeliverPolicy.New },
+});
+
+// v3.0
+JetstreamModule.forRoot({
+  name: 'gateway',
+  servers,
+  publisherOnly: true,
+  provisioning: { allowDestructiveMigration: true },
+  ordered: { consumer: { deliver_policy: DeliverPolicy.New } },
+});
+```
+
+`publisherOnly` inverts the old value: `consumer: false` becomes `publisherOnly: true`. On a named connection it now accepts both values, so one connection can publish only while another consumes.
+
+The `management` object form on `dlq` and `ordered` is still accepted at runtime. Only its `stream` slot was ever read: the dead-letter stream has no consumer, and ordered consumers are ephemeral.
+
+`subjects` and `description` were accepted before and then overwritten, so removing them from your config changes nothing at runtime.
+
+The `ordered.consumer` block also exposes the remaining nats.js ordered-consumer options, `inactive_threshold` and `headers_only` among them. `filter_subjects` stays derived from your handlers.
+
+`dlq: true` is now accepted and means the same as leaving `dlq` unset.
+
+A single-connection application that uses none of the options in the table upgrades with no source changes.
 
 <details>
 <summary>v2.12 → v2.13</summary>

@@ -120,7 +120,7 @@ describe('JetstreamStrategy connection binding', () => {
   });
 
   it('should throw when the target connection is publisher-only', () => {
-    // Given a connection configured with consumer: false
+    // Given a connection configured with publisherOnly: true
     const sut = createSut(binding({ publisherOnly: new Set(['analytics']) }));
 
     // When a handler targets it

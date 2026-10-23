@@ -39,14 +39,14 @@ import { JetstreamModule } from '@horizon-republic/nestjs-jetstream';
 JetstreamModule.forRoot({
   name: 'orders',
   servers: ['nats://localhost:4222'],
-  allowDestructiveMigration: true,
+  provisioning: { allowDestructiveMigration: true },
   events: {
     stream: { storage: StorageType.Memory },
   },
 });
 ```
 
-Without `allowDestructiveMigration`, the transport logs a warning and continues with the existing stream config.
+Without `provisioning.allowDestructiveMigration`, the transport logs a warning and continues with the existing stream config.
 
 ## How it works
 
@@ -121,7 +121,7 @@ Expect migration time to scale roughly linearly with message count. For small st
 
 ## Manual streams are never migrated
 
-Streams managed in `ManagementMode.Manual` (externally provisioned) are never created, updated or migrated by the library, whatever `allowDestructiveMigration` says. The library only binds to them and validates their configuration at boot.
+Streams managed in `ManagementMode.Manual` (externally provisioned) are never created, updated or migrated by the library, whatever `provisioning.allowDestructiveMigration` says. The library only binds to them and validates their configuration at boot.
 
 Setting `allowDestructiveMigration: true` together with a global `provisioning.management: ManagementMode.Manual` is a no-op for all streams. The library logs a warning at boot when this combination is detected:
 
@@ -129,7 +129,7 @@ Setting `allowDestructiveMigration: true` together with a global `provisioning.m
 allowDestructiveMigration has no effect under provisioning.management: Manual, the library never migrates externally managed streams.
 ```
 
-If you use **mixed ownership** (some streams Auto, some Manual), `allowDestructiveMigration` applies only to the Auto-managed streams.
+If you use **mixed ownership** (some streams Auto, some Manual), `provisioning.allowDestructiveMigration` applies only to the Auto-managed streams.
 
 See [Bring Your Own Infrastructure](/docs/guides/external-infrastructure) for the full bind-only mode guide.
 
@@ -137,7 +137,7 @@ See [Bring Your Own Infrastructure](/docs/guides/external-infrastructure) for th
 
 - **`retention` is not migratable.** It is controlled by the transport (`Workqueue` for events/commands, `Limits` for broadcast/ordered). A mismatch always throws an error on startup.
 - **The publisher gap is inherent.** NATS does not support atomic stream rename or swap. The millisecond window between delete and create cannot be eliminated.
-- **`allowDestructiveMigration` applies to all service-owned streams.** It's a single flag at the module level: if any of them has an immutable conflict, it will be migrated.
+- **`provisioning.allowDestructiveMigration` applies to all service-owned streams.** It's a single flag at the module level: if any of them has an immutable conflict, it will be migrated.
 - **The shared broadcast stream is never destructively migrated.** `broadcast-stream` is shared by every service in the cluster; recreating it would delete other services' durable consumers and replay retained history to them. An immutable conflict on it throws an error instead: coordinate that change manually.
 - **Manual streams are never migrated.** See the section above.
 
@@ -156,14 +156,14 @@ JetstreamModule.forRoot({
 JetstreamModule.forRoot({
   name: 'orders',
   servers: ['nats://localhost:4222'],
-  allowDestructiveMigration: true,
+  provisioning: { allowDestructiveMigration: true },
   events: { stream: { storage: StorageType.Memory } },
   broadcast: { stream: { storage: StorageType.Memory } },
   ordered: { stream: { storage: StorageType.Memory } },
 });
 ```
 
-After all pods restart with the new config, you can remove `allowDestructiveMigration`: it's only needed for the migration itself:
+After all pods restart with the new config, you can remove `provisioning.allowDestructiveMigration`: it's only needed for the migration itself:
 
 ```typescript
 // After migration, remove the flag
@@ -181,4 +181,4 @@ JetstreamModule.forRoot({
 - [Default Configs: Immutable vs mutable stream properties](/docs/reference/default-configs#immutable-vs-mutable-stream-properties): which properties require migration
 - [Self-healing consumers](/docs/reference/edge-cases#consumer-self-healing): how consumers on other pods wait out a migration
 - [Troubleshooting: Stream migration](/docs/guides/troubleshooting#stream-migration): recovery from interrupted migrations
-- [Module Configuration](/docs/reference/module-configuration): `allowDestructiveMigration` in the options reference
+- [Module Configuration](/docs/reference/module-configuration): `provisioning.allowDestructiveMigration` in the options reference

@@ -207,7 +207,7 @@ describe('Stream sourcing behavior (NATS verification)', () => {
           {
             name: serviceName,
             port,
-            allowDestructiveMigration: true,
+            provisioning: { allowDestructiveMigration: true },
             events: {
               stream: { storage: StorageType.Memory, max_bytes: MEMORY_STREAM_MAX_BYTES },
             },
@@ -264,7 +264,7 @@ describe('Stream sourcing behavior (NATS verification)', () => {
           {
             name: serviceName,
             port,
-            allowDestructiveMigration: true,
+            provisioning: { allowDestructiveMigration: true },
             events: { stream: { storage: StorageType.File } },
           },
           [MigrationTestController],
@@ -318,7 +318,7 @@ describe('Stream sourcing behavior (NATS verification)', () => {
           {
             name: serviceName,
             port,
-            allowDestructiveMigration: true,
+            provisioning: { allowDestructiveMigration: true },
             events: {
               stream: { storage: StorageType.Memory, max_bytes: MEMORY_STREAM_MAX_BYTES },
             },
@@ -363,7 +363,7 @@ describe('Stream sourcing behavior (NATS verification)', () => {
           {
             name: serviceName,
             port,
-            // allowDestructiveMigration defaults to false
+            // provisioning.allowDestructiveMigration defaults to false
             events: {
               stream: { storage: StorageType.Memory, max_bytes: MEMORY_STREAM_MAX_BYTES },
             },
@@ -420,7 +420,7 @@ describe('Stream sourcing behavior (NATS verification)', () => {
           {
             name: serviceName,
             port,
-            allowDestructiveMigration: true,
+            provisioning: { allowDestructiveMigration: true },
             events: {
               stream: { storage: StorageType.Memory, max_bytes: MEMORY_STREAM_MAX_BYTES },
             },
@@ -510,7 +510,7 @@ describe('Stream sourcing behavior (NATS verification)', () => {
           {
             name: serviceName,
             port,
-            allowDestructiveMigration: true,
+            provisioning: { allowDestructiveMigration: true },
             events: {
               stream: { storage: StorageType.Memory, max_bytes: MEMORY_STREAM_MAX_BYTES },
             },
@@ -669,7 +669,7 @@ describe('Stream sourcing behavior (NATS verification)', () => {
           {
             name: serviceName,
             port,
-            allowDestructiveMigration: true,
+            provisioning: { allowDestructiveMigration: true },
             events: {
               stream: { storage: StorageType.Memory, max_bytes: MEMORY_STREAM_MAX_BYTES },
             },

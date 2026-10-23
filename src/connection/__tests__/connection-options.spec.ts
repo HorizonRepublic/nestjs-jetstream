@@ -54,7 +54,7 @@ describe('normalizeOptions', () => {
     // Given a root block with two keys and a connection that names the block
     const options: JetstreamModuleOptions = {
       name: 'orders',
-      events: { concurrency: 4, ackExtension: { enabled: false } },
+      events: { concurrency: 4, ackExtension: true },
       connections: {
         primary: { servers: ['nats://a:4222'] },
         analytics: { servers: ['nats://b:4222'], events: { concurrency: 16 } },
@@ -180,7 +180,7 @@ describe('normalizeOptions', () => {
       name: 'orders',
       connections: {
         primary: { servers: ['nats://a:4222'] },
-        audit: { servers: ['nats://a:4222'], consumer: false },
+        audit: { servers: ['nats://a:4222'], publisherOnly: true },
       },
       defaultConnection: 'primary',
     };

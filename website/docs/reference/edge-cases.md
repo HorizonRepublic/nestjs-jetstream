@@ -34,13 +34,13 @@ If you in detail need non-durable Core NATS `publish()` (truly ephemeral pub/sub
 
 **Q: My API gateway only publishes events but never handles them. Do I need consumers?**
 
-Set `consumer: false` in your `forRoot()` options. The transport will skip creating streams and consumers on the server side, and only initialize the client for publishing:
+Set `publisherOnly: true` in your `forRoot()` options. The transport will skip creating streams and consumers on the server side, and only initialize the client for publishing:
 
 ```typescript
 JetstreamModule.forRoot({
   name: 'api-gateway',
   servers: ['nats://localhost:4222'],
-  consumer: false, // no streams, no consumers, publish-only
+  publisherOnly: true, // no streams, no consumers, publish-only
 });
 ```
 
@@ -143,14 +143,14 @@ The NATS JavaScript SDK has a known issue where explicitly passing `DeliverPolic
 
 The transport works around this by **omitting** the `deliver_policy` field when it would be `DeliverPolicy.All` (the default). Since the SDK uses `All` as its internal default anyway, the behavior is identical, but the workaround avoids the hanging bug.
 
-If you configure a custom `deliverPolicy` on the ordered consumer (e.g., `DeliverPolicy.Last` or `DeliverPolicy.New`), it will be passed through explicitly:
+A custom `deliver_policy` on the ordered consumer, say `DeliverPolicy.Last` or `DeliverPolicy.New`, is passed through explicitly:
 
 ```typescript
 JetstreamModule.forRoot({
   name: 'orders',
   servers: ['nats://localhost:4222'],
   ordered: {
-    deliverPolicy: DeliverPolicy.New, // this gets passed through
+    consumer: { deliver_policy: DeliverPolicy.New }, // this gets passed through
   },
 });
 ```

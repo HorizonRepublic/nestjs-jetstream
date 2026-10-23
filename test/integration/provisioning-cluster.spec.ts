@@ -9,7 +9,7 @@ import { startNatsCluster, type NatsClusterResult } from './nats-container';
 
 @Controller()
 class ClusterProvisioningController {
-  @EventPattern('order.created')
+  @EventPattern<string>('order.created')
   handleOrder(): void {}
 }
 

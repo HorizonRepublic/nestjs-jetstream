@@ -17,7 +17,7 @@ describe('JetstreamConnection', () => {
     // Given a controller with two handlers
     @JetstreamConnection('analytics')
     class Sut {
-      @EventPattern('a.happened')
+      @EventPattern<string>('a.happened')
       public onA(): void {}
 
       @MessagePattern('a.query')
@@ -34,7 +34,7 @@ describe('JetstreamConnection', () => {
     // Given a handler with its own extras
     @JetstreamConnection('analytics')
     class Sut {
-      @EventPattern('b.happened', { broadcast: true })
+      @EventPattern<string>('b.happened', { broadcast: true })
       public onB(): void {}
     }
 
@@ -50,7 +50,7 @@ describe('JetstreamConnection', () => {
     // Given a method-level connection that disagrees with the class
     @JetstreamConnection('analytics')
     class Sut {
-      @EventPattern('c.happened', { connection: 'primary' })
+      @EventPattern<string>('c.happened', { connection: 'primary' })
       public onC(): void {}
     }
 
@@ -63,7 +63,7 @@ describe('JetstreamConnection', () => {
     // Given a plain method next to a handler
     @JetstreamConnection('analytics')
     class Sut {
-      @EventPattern('d.happened')
+      @EventPattern<string>('d.happened')
       public onD(): void {}
 
       public helper(): void {}
@@ -77,13 +77,13 @@ describe('JetstreamConnection', () => {
   it('should tag handlers inherited from a base controller', () => {
     // Given a base class holding the pattern and a subclass carrying the decorator
     class BaseController {
-      @EventPattern('base.happened')
+      @EventPattern<string>('base.happened')
       public onBase(): void {}
     }
 
     @JetstreamConnection('analytics')
     class Sut extends BaseController {
-      @EventPattern('own.happened')
+      @EventPattern<string>('own.happened')
       public onOwn(): void {}
     }
 
@@ -108,7 +108,7 @@ describe('JetstreamConnection', () => {
         throw new Error('accessor must not run during decoration');
       }
 
-      @EventPattern('safe.happened')
+      @EventPattern<string>('safe.happened')
       public onSafe(): void {}
     }
 

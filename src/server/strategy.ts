@@ -239,8 +239,8 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
 
     if (this.binding.publisherOnly.has(requested)) {
       throw new Error(
-        `Connection "${requested}" is publisher-only (consumer: false) and cannot host handlers. ` +
-          `Remove consumer: false from that connection or bind the handler elsewhere.`,
+        `Connection "${requested}" is publisher-only (publisherOnly: true) and cannot host handlers. ` +
+          `Remove publisherOnly: true from that connection or bind the handler elsewhere.`,
       );
     }
 

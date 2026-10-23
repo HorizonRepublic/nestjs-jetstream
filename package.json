@@ -57,7 +57,7 @@
   "scripts": {
     "build": "tsdown",
     "build:watch": "tsdown --watch",
-    "typecheck": "tsc --noEmit -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.build.json && tsc --noEmit -p tsconfig.json",
     "format": "oxfmt \"{src,test,examples,tools}/**/*.{ts,mjs}\" \"website/docs/**/*.md\" \"examples/**/*.md\" README.md",
     "format:check": "oxfmt --check \"{src,test,examples,tools}/**/*.{ts,mjs}\" \"website/docs/**/*.md\" \"examples/**/*.md\" README.md",
     "start:example": "pnpm build && tsx --tsconfig examples/tsconfig.json examples/01-basic/main.ts",

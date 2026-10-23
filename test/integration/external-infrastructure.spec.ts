@@ -87,7 +87,7 @@ class OrderCreatedController {
 class AlwaysFailingExternalController {
   public attempts = 0;
 
-  @EventPattern('order.created')
+  @EventPattern<string>('order.created')
   handleOrderCreated(@Payload() _data: unknown): never {
     this.attempts++;
     throw new Error('Permanent failure; external DLQ test');
@@ -593,7 +593,7 @@ describe('External Infrastructure (bind-only mode)', () => {
           },
           dlq: {
             stream: { name: dlqStreamName },
-            management: { stream: ManagementMode.Manual },
+            management: ManagementMode.Manual,
           },
         },
         [AlwaysFailingExternalController],

@@ -1,7 +1,11 @@
 import { FactoryProvider, ModuleMetadata, Type } from '@nestjs/common';
 
-import { DeliverPolicy, ReplayPolicy } from '@nats-io/jetstream';
-import type { ConsumerConfig, ConsumeOptions, StreamConfig } from '@nats-io/jetstream';
+import type {
+  ConsumerConfig,
+  ConsumeOptions,
+  OrderedConsumerOptions,
+  StreamConfig,
+} from '@nats-io/jetstream';
 import type { ConnectionOptions } from '@nats-io/transport-node';
 
 import type { MetricsOption } from '../metrics/metrics.config';
@@ -28,11 +32,21 @@ export interface EntityManagement {
 /**
  * Stream config overrides exposed to users.
  *
- * `retention` is excluded because it is controlled by the transport layer
- * (Workqueue for events/commands, Limits for broadcast/ordered).
- * Any `retention` value provided at runtime is silently stripped.
+ * Three fields are owned by the transport and excluded here, because setting
+ * them would be accepted and then overwritten:
+ *
+ * - `retention` follows the kind (Workqueue for events and commands, Limits
+ *   for broadcast and ordered), and a mismatch is an error rather than a
+ *   preference.
+ * - `subjects` and `description` are derived from the service name and the
+ *   kind, or from `subjectPrefix` when one is set.
+ *
+ * `name` stays settable: it is how a service binds to an externally
+ * provisioned stream.
  */
-export type StreamConfigOverrides = Partial<Omit<StreamConfig, 'retention'>>;
+export type StreamConfigOverrides = Partial<
+  Omit<StreamConfig, 'retention' | 'subjects' | 'description'>
+>;
 
 /**
  * Ack-deadline auto-extension setting.
@@ -58,33 +72,11 @@ export type RpcConfig =
       /** Request timeout in ms. Default: 30_000. */
       timeout?: number;
     }
-  | {
+  | ({
       mode: 'jetstream';
       /** Handler timeout in ms. Default: 180_000 (3 min). */
       timeout?: number;
-      /** Raw NATS StreamConfig overrides for the command stream. */
-      stream?: StreamConfigOverrides;
-      /** Raw NATS ConsumerConfig overrides for the command consumer. */
-      consumer?: Partial<ConsumerConfig>;
-
-      /** Options passed to the nats.js `consumer.consume()` call for the command consumer. */
-      consume?: Partial<ConsumeOptions>;
-
-      /** Maximum number of concurrent RPC handler executions. */
-      concurrency?: number;
-
-      /**
-       * Auto-extend ack deadline via `msg.working()` during RPC handler execution.
-       * The RPC handler timeout (`setTimeout` + `msg.term()`) still acts as the hard cap.
-       */
-      ackExtension?: AckExtensionConfig;
-
-      /** Provisioning control for RPC stream/consumer. Falls back to provisioning.management. */
-      management?: EntityManagement;
-
-      /** Custom subject prefix (trailing dot normalized), e.g. 'company.orders.'. */
-      subjectPrefix?: string;
-    };
+    } & Omit<StreamConsumerOverrides, 'retry'>);
 
 /** The JetStream variant of {@link RpcConfig}. */
 export type JetStreamRpcConfig = Extract<RpcConfig, { mode: 'jetstream' }>;
@@ -100,12 +92,20 @@ export type JetStreamRpcConfig = Extract<RpcConfig, { mode: 'jetstream' }>;
  */
 export type RetryConfig = readonly number[] | false;
 
-/** Built-in dead-letter stream, or `false` to leave exhausted messages in place. */
+/** Built-in dead-letter stream. `true` takes the defaults, `false` leaves exhausted messages in place. */
 export interface DlqOptions {
-  /** Raw NATS StreamConfig overrides for the DLQ stream. `name` is ignored. */
+  /** Raw NATS StreamConfig overrides for the DLQ stream, `name` included. */
   stream?: StreamConfigOverrides;
-  /** Provisioning control for the DLQ stream. Falls back to provisioning.management. */
-  management?: EntityManagement;
+
+  /**
+   * Provisioning control for the DLQ stream. Falls back to
+   * `provisioning.management`.
+   *
+   * A scalar rather than {@link EntityManagement}: the transport creates no
+   * consumer on the dead-letter stream, so there is no consumer slot to
+   * control.
+   */
+  management?: ManagementMode;
 }
 
 /** Overrides for JetStream stream and consumer configuration. */
@@ -161,6 +161,14 @@ export interface StreamConsumerOverrides {
 }
 
 /**
+ * Ordered-consumer options a user may set.
+ *
+ * `filter_subjects` is owned by the transport, which builds it from the
+ * registered handlers.
+ */
+export type OrderedConsumerOverrides = Partial<Omit<OrderedConsumerOptions, 'filter_subjects'>>;
+
+/**
  * Configuration for ordered event consumers.
  *
  * Ordered consumers use Limits retention and deliver messages in strict
@@ -174,29 +182,24 @@ export interface OrderedEventOverrides {
   stream?: StreamConfigOverrides;
 
   /**
-   * Where to start reading when the consumer is (re)created.
-   * @default DeliverPolicy.All
+   * Raw nats.js ordered-consumer options, in the same place and the same
+   * spelling the other kinds use for their consumer block.
+   *
+   * `filter_subjects` is derived from the registered handlers and is not
+   * settable. Leaving `deliver_policy` unset reads from the beginning, which
+   * is what {@link DeliverPolicy.All} means.
    */
-  deliverPolicy?: DeliverPolicy;
+  consumer?: OrderedConsumerOverrides;
 
   /**
-   * Start sequence number. Only used when `deliverPolicy` is `StartSequence`.
+   * Provisioning control for the ordered stream. Falls back to
+   * `provisioning.management`.
+   *
+   * A scalar rather than {@link EntityManagement}: ordered consumers are
+   * ephemeral and owned by the nats.js client, so only the stream has a
+   * provisioning decision to make.
    */
-  optStartSeq?: number;
-
-  /**
-   * Start time (ISO string). Only used when `deliverPolicy` is `StartTime`.
-   */
-  optStartTime?: string;
-
-  /**
-   * Replay policy for historical messages.
-   * @default ReplayPolicy.Instant
-   */
-  replayPolicy?: ReplayPolicy;
-
-  /** Provisioning control for this kind's stream/consumer. Falls back to provisioning.management. */
-  management?: EntityManagement;
+  management?: ManagementMode;
 
   /** Custom subject prefix (trailing dot normalized), e.g. 'company.orders.'. */
   subjectPrefix?: string;
@@ -247,6 +250,24 @@ export interface ProvisioningOptions {
 
   /** Default management mode for every stream and consumer. @default ManagementMode.Auto */
   management?: ManagementMode;
+
+  /**
+   * Allow destructive stream migration when immutable config changes are detected.
+   *
+   * When `true`, the transport recreates streams via blue-green sourcing if an
+   * immutable property such as `storage` differs from the running stream.
+   * Messages are preserved during migration.
+   *
+   * `retention` is NOT migratable: it is controlled by the transport
+   * (Workqueue for events, Limits for broadcast/ordered) and a mismatch is
+   * always an error regardless of this flag.
+   *
+   * When `false` (default), immutable conflicts are logged as warnings and the
+   * stream keeps its existing configuration.
+   *
+   * @default false
+   */
+  allowDestructiveMigration?: boolean;
 }
 
 /**
@@ -294,11 +315,15 @@ export interface JetstreamModuleOptions {
   rpc?: RpcConfig;
 
   /**
-   * Enable consumer infrastructure (streams, consumers, message routing).
-   * Set to `false` for publisher-only services (e.g., API gateways).
-   * @default true
+   * Skip all consumer infrastructure: no streams, no consumers, no message
+   * routing. For services that only publish, such as an API gateway.
+   *
+   * Named apart from the `consumer` block inside `events` and friends, which
+   * carries a raw NATS ConsumerConfig and means something else entirely.
+   *
+   * @default false
    */
-  consumer?: boolean;
+  publisherOnly?: boolean;
 
   /** Workqueue event stream/consumer overrides. */
   events?: StreamConsumerOverrides;
@@ -362,7 +387,7 @@ export interface JetstreamModuleOptions {
    * })
    * ```
    */
-  dlq?: DlqOptions | false;
+  dlq?: DlqOptions | boolean;
 
   /**
    * Graceful shutdown timeout in ms.
@@ -370,24 +395,6 @@ export interface JetstreamModuleOptions {
    * @default 10_000
    */
   shutdownTimeout?: number;
-
-  /**
-   * Allow destructive stream migration when immutable config changes are detected.
-   *
-   * When `true`, the transport will recreate streams (via blue-green sourcing)
-   * if immutable properties like `storage` differ from the running stream.
-   * Messages are preserved during migration.
-   *
-   * `retention` is NOT migratable: it is controlled by the transport
-   * (Workqueue for events, Limits for broadcast/ordered) and a mismatch
-   * is always treated as an error regardless of this flag.
-   *
-   * When `false` (default), immutable conflicts are logged as warnings and
-   * the stream continues with its existing configuration.
-   *
-   * @default false
-   */
-  allowDestructiveMigration?: boolean;
 
   /**
    * Handler metadata KV registry configuration.

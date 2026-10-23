@@ -49,7 +49,7 @@ class MixedController {
 class FailingOrderedController {
   public callCount = 0;
 
-  @EventPattern('order.fail', { ordered: true })
+  @EventPattern<string>('order.fail', { ordered: true })
   handleOrder(): void {
     this.callCount++;
     throw new Error('Ordered handler failure');
@@ -83,7 +83,7 @@ class OrderedWithDlqController {
     throw new Error('Ordered handler fails');
   }
 
-  @EventPattern('order.process')
+  @EventPattern<string>('order.process')
   handleWorkqueue(): void {
     this.workqueueAttempts++;
     throw new Error('Workqueue handler fails');
@@ -204,7 +204,7 @@ describe('Ordered Event Delivery', () => {
       serviceName = uniqueServiceName();
 
       ({ app, module } = await createTestApp(
-        { name: serviceName, port, ordered: { deliverPolicy: DeliverPolicy.All } },
+        { name: serviceName, port, ordered: { consumer: { deliver_policy: DeliverPolicy.All } } },
         [OrderedController],
         [serviceName],
       ));
@@ -238,7 +238,7 @@ describe('Ordered Event Delivery', () => {
       serviceName = uniqueServiceName();
 
       ({ app, module } = await createTestApp(
-        { name: serviceName, port, ordered: { deliverPolicy: DeliverPolicy.New } },
+        { name: serviceName, port, ordered: { consumer: { deliver_policy: DeliverPolicy.New } } },
         [OrderedController],
         [serviceName],
       ));
@@ -286,7 +286,7 @@ describe('Ordered Event Delivery', () => {
 
       // Step 2: restart with DeliverPolicy.Last, expecting only the last message
       ({ app, module } = await createTestApp(
-        { name: serviceName, port, ordered: { deliverPolicy: DeliverPolicy.Last } },
+        { name: serviceName, port, ordered: { consumer: { deliver_policy: DeliverPolicy.Last } } },
         [OrderedController],
         [serviceName],
       ));
@@ -323,7 +323,11 @@ describe('Ordered Event Delivery', () => {
 
       // Step 2: restart with DeliverPolicy.LastPerSubject
       ({ app, module } = await createTestApp(
-        { name: serviceName, port, ordered: { deliverPolicy: DeliverPolicy.LastPerSubject } },
+        {
+          name: serviceName,
+          port,
+          ordered: { consumer: { deliver_policy: DeliverPolicy.LastPerSubject } },
+        },
         [MultiPatternOrderedController],
         [serviceName],
       ));
@@ -367,7 +371,7 @@ describe('Ordered Event Delivery', () => {
         {
           name: serviceName,
           port,
-          ordered: { deliverPolicy: DeliverPolicy.StartSequence, optStartSeq: 2 },
+          ordered: { consumer: { deliver_policy: DeliverPolicy.StartSequence, opt_start_seq: 2 } },
         },
         [OrderedController],
         [serviceName],
@@ -433,7 +437,9 @@ describe('Ordered Event Delivery', () => {
         {
           name: serviceName,
           port,
-          ordered: { deliverPolicy: DeliverPolicy.StartTime, optStartTime: startTime },
+          ordered: {
+            consumer: { deliver_policy: DeliverPolicy.StartTime, opt_start_time: startTime },
+          },
         },
         [OrderedController],
         [serviceName],
@@ -601,7 +607,7 @@ describe('Ordered Event Delivery', () => {
 
       // Step 2: start a publisher-only service
       const { app: publisherApp, module: publisherModule } = await createTestApp(
-        { name: serviceName, port, consumer: false },
+        { name: serviceName, port, publisherOnly: true },
         [],
         [serviceName],
       );

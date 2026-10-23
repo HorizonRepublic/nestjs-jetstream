@@ -194,7 +194,7 @@ JetstreamModule.forRoot({
 :::warning Stream config is global
 Since all services share the same `broadcast-stream`, any service can update the stream config on startup, and the last service to start wins for mutable properties. The way out is to let a single "infrastructure" service own the stream-level settings.
 
-The transport logs every applied change on startup, so drift shows up in your logs. An immutable conflict such as `storage` becomes a warning unless `allowDestructiveMigration` is on.
+The transport logs every applied change on startup, so drift shows up in your logs. An immutable conflict such as `storage` becomes a warning unless `provisioning.allowDestructiveMigration` is on.
 :::
 
 ### Consumer-level config (per-service)

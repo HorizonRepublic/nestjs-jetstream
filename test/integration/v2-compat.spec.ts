@@ -122,11 +122,11 @@ describe('v2 configuration compatibility', () => {
   });
 
   it('should resolve a null strategy in publisher-only mode', async () => {
-    // Given consumer: false, as examples/shared/bootstrap.ts guards against
+    // Given publisherOnly: true, as examples/shared/bootstrap.ts guards against
     serviceName = uniqueServiceName();
 
     const created = await createTestApp(
-      { name: serviceName, port, consumer: false },
+      { name: serviceName, port, publisherOnly: true },
       [],
       [serviceName],
     );
