@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { ACK_MS, CAPACITY, PODS, RESTART_MS, createSim, isDown, step, togglePod } from './model';
+import { ACK_MS, CAPACITY, createSim, isDown, step, togglePod } from './model';
 
 /* The hero scene: a message's whole life, drawn isometrically.
 
@@ -9,17 +9,17 @@ import { ACK_MS, CAPACITY, PODS, RESTART_MS, createSim, isDown, step, togglePod 
    pods. An ack lifts the message away; a nak sends it up the retry arc, the
    backoff, and back into the stream. Every message moves along a drawn path. */
 
-const Z = [-1.7, 0, 1.7];
+const Z = [-2.1, 0, 2.1];
 const SERVICE_X = -5.3;
 const POD_X = 4.3;
 const BELT_Y = 0.36;
 const TUBE = { x0: -2.6, x1: 1.5, radius: 0.27 };
 const SPACING = (TUBE.x1 - TUBE.x0 - 0.5) / (CAPACITY - 1);
-const POD = { w: 0.98, h: 0.38, d: 0.98 };
+const POD = { w: 1.15, h: 0.12, d: 1.15 };
 const POD_TOP = POD.h + 0.12;
-const SERVICE = { w: 0.86, h: 0.3, d: 0.6 };
+const SERVICE = { w: 1.0, h: 0.1, d: 0.72 };
 const REGION = {
-  wide: { x0: 0.48, x1: 0.99, y0: 0.05, y1: 0.95 },
+  wide: { x0: 0.47, x1: 0.95, y0: 0.04, y1: 0.96 },
   narrow: { x0: 0.02, x1: 0.98, y0: 0.04, y1: 0.96 },
 };
 const HINT_KEY = 'jt-scene-clicked';
@@ -40,25 +40,20 @@ const fanIn = Z.map(
 const fanOut = Z.map(
   (z) => new THREE.CubicBezierCurve3(exit.clone(), v3(2.6, BELT_Y, 0), v3(3.1, BELT_Y + 0.05, z), v3(POD_X, POD_TOP, z)),
 );
-const retryArcs = Z.map(
-  (z) =>
-    new THREE.CatmullRomCurve3(
-      [
-        v3(POD_X, POD_TOP, z),
-        v3(POD_X - 0.1, 1.3, z * 0.8),
-        v3(3.0, 2.15, -0.7),
-        v3(0.2, 2.45, -1.1),
-        v3(-2.3, 1.75, -0.6),
-        v3(-3.0, 0.75, 0),
-        v3(TUBE.x0 - 0.2, BELT_Y, 0),
-      ],
-      false,
-      'centripetal',
-    ),
+// nak: a short lift from the pod to one shared arc that runs back, low and behind the stream
+const COLLECT = v3(3.25, 1.0, -1.5);
+const retryLifts = Z.map(
+  (z) => new THREE.CatmullRomCurve3([v3(POD_X, POD_TOP, z), v3(POD_X - 0.15, 0.95, z * 0.6), COLLECT], false, 'centripetal'),
 );
+const retryArc = new THREE.CatmullRomCurve3(
+  [COLLECT, v3(1.8, 1.25, -1.7), v3(-0.5, 1.25, -1.7), v3(-2.4, 1.0, -1.2), v3(-3.05, 0.55, -0.25), v3(TUBE.x0 - 0.2, BELT_Y, 0)],
+  false,
+  'centripetal',
+);
+const LIFT_SHARE = 0.2;
 
 const queueSlot = (index) => v3(TUBE.x1 - 0.2 - index * SPACING, BELT_Y, 0);
-const waitSlot = (index) => v3(TUBE.x0 - 0.45 - index * 0.22, BELT_Y, 0);
+const waitSlot = (index) => v3(TUBE.x0 - 0.42 - Math.min(index, 3) * 0.17, BELT_Y, 0);
 
 /* Where a message is, from its state and how far into it the clock is. */
 const positionOf = (sim, message, queueIndex, waitIndex) => {
@@ -74,7 +69,10 @@ const positionOf = (sim, message, queueIndex, waitIndex) => {
     case 'work':
       return v3(POD_X, POD_TOP + 0.02, Z[message.pod]);
     case 'retry':
-      return waitIndex >= 0 ? waitSlot(waitIndex) : retryArcs[message.from].getPointAt(ease(t));
+      if (waitIndex >= 0) return waitSlot(waitIndex);
+      if (t < LIFT_SHARE) return retryLifts[message.from].getPointAt(ease(t / LIFT_SHARE));
+
+      return retryArc.getPointAt(ease((t - LIFT_SHARE) / (1 - LIFT_SHARE)));
     case 'ack':
       return v3(POD_X, POD_TOP + 1.3 * ease(t), Z[message.pod]);
     default:
@@ -178,7 +176,7 @@ const curveLine = (curve, material, segments = 64) => {
 
 /* ---- the scene ------------------------------------------------------------- */
 
-export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) => {
+export const createScene = ({ container, overlay, logoUrl, natsUrl, reduce }) => {
   const sim = createSim();
   let palette = readPalette();
   let clicked = readClicked() || reduce;
@@ -189,13 +187,13 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
 
   renderer.setClearColor(0x000000, 0);
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.enabled = false;
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
-  const viewDir = v3(1, 1.12, 1).normalize();
+  // classic isometric: down the diagonal, about 35 degrees above the floor
+  const viewDir = v3(1, 1.05, 1).normalize();
   const target = v3(-0.4, 0.6, 0);
 
   const hemi = new THREE.HemisphereLight(0xffffff, 0x000000, 1.5);
@@ -213,6 +211,7 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
 
   shadowCatcher.rotation.x = -Math.PI / 2;
   shadowCatcher.receiveShadow = true;
+  shadowCatcher.visible = false;
   scene.add(shadowCatcher);
 
   let grid = makeGrid(palette);
@@ -224,7 +223,8 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
   const retryMaterial = new THREE.LineDashedMaterial({ transparent: true, opacity: 0.75, dashSize: 0.09, gapSize: 0.08 });
 
   for (const curve of [...fanIn, ...fanOut]) scene.add(curveLine(curve, pathMaterial));
-  for (const curve of retryArcs) scene.add(curveLine(curve, retryMaterial, 96));
+  for (const curve of retryLifts) scene.add(curveLine(curve, retryMaterial, 32));
+  scene.add(curveLine(retryArc, retryMaterial, 96));
 
   // the stream: a glass capsule, with a glow inside that grows as it fills
   const tubeLength = TUBE.x1 - TUBE.x0;
@@ -260,11 +260,41 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
   const podGeometry = new RoundedBoxGeometry(POD.w, POD.h, POD.d, 5, 0.1);
   const ledGeometry = new THREE.SphereGeometry(0.035, 16, 12);
   const serviceMaterial = new THREE.MeshStandardMaterial({ roughness: 0.55 });
-  const logoTexture = new THREE.TextureLoader().load(logoUrl);
+  const outlineMaterial = new THREE.LineBasicMaterial({ transparent: true, opacity: 1 });
+  const slab = new THREE.Color();
+  const serviceOutline = new THREE.EdgesGeometry(blockGeometry, 40);
+  const podOutline = new THREE.EdgesGeometry(podGeometry, 40);
   const glow = glowTexture();
 
-  logoTexture.colorSpace = THREE.SRGBColorSpace;
-  logoTexture.anisotropy = 4;
+  // An SVG without intrinsic size does not upload as a texture, so draw it into a canvas first.
+  const loaded = [];
+  const rasterTexture = (url) => {
+    const canvas = document.createElement('canvas');
+    const texture = new THREE.CanvasTexture(canvas);
+    const image = new Image();
+
+    canvas.width = 256;
+    canvas.height = 256;
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = 4;
+    image.onload = () => {
+      canvas.getContext('2d').drawImage(image, 0, 0, 256, 256);
+      texture.needsUpdate = true;
+    };
+    image.src = url;
+    loaded.push(image);
+
+    return texture;
+  };
+  const logoTexture = rasterTexture(logoUrl);
+  const natsTexture = rasterTexture(natsUrl);
+
+  // the NATS mark over the stream, always facing the viewer
+  const natsBadge = new THREE.Sprite(new THREE.SpriteMaterial({ map: natsTexture, transparent: true, depthWrite: false }));
+
+  natsBadge.scale.setScalar(0.42);
+  natsBadge.position.set((TUBE.x0 + TUBE.x1) / 2, BELT_Y + 0.62, 0);
+  scene.add(natsBadge);
 
   for (const z of Z) {
     const service = new THREE.Mesh(blockGeometry, serviceMaterial);
@@ -274,7 +304,10 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
     service.castShadow = true;
     led.position.set(SERVICE_X + SERVICE.w / 2 - 0.14, SERVICE.h / 2, z + SERVICE.d / 2 + 0.004);
     led.userData.serviceLed = true;
-    scene.add(service, led);
+    const outline = new THREE.LineSegments(serviceOutline, outlineMaterial);
+
+    outline.position.copy(service.position);
+    scene.add(service, led, outline);
   }
 
   const ringPoints = Array.from({ length: 65 }, (_, i) => {
@@ -287,14 +320,14 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
     const material = new THREE.MeshStandardMaterial({ roughness: 0.5, transparent: true });
     const body = new THREE.Mesh(podGeometry, material);
     const logo = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.4, 0.4),
+      new THREE.PlaneGeometry(0.56, 0.56),
       new THREE.MeshBasicMaterial({ map: logoTexture, transparent: true, depthWrite: false }),
     );
     const ledMaterial = new THREE.MeshBasicMaterial();
     const led = new THREE.Mesh(ledGeometry, ledMaterial);
     const progress = new THREE.Line(new THREE.BufferGeometry().setFromPoints(ringPoints), new THREE.LineBasicMaterial({ transparent: true }));
     const burst = new THREE.Mesh(
-      new THREE.RingGeometry(0.62, 0.66, 64),
+      new THREE.RingGeometry(0.74, 0.77, 64),
       new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }),
     );
     const group = new THREE.Group();
@@ -306,7 +339,9 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
     logo.position.y = POD.h / 2 + 0.002;
     led.position.set(POD.w / 2 - 0.16, 0, POD.d / 2 + 0.004);
     progress.position.y = POD.h / 2 + 0.01;
-    group.add(body, logo, led, progress);
+    const outline = new THREE.LineSegments(podOutline, outlineMaterial);
+
+    group.add(body, outline, logo, led, progress);
     group.position.set(POD_X, POD.h / 2, z);
     burst.rotation.x = -Math.PI / 2;
     burst.position.set(POD_X, 0.01, z);
@@ -325,7 +360,7 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
 
     if (!visual) {
       const core = new THREE.Mesh(sphereGeometry, new THREE.MeshBasicMaterial({ transparent: true }));
-      const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, transparent: true, depthWrite: false }));
+      const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, transparent: true, depthWrite: false, depthTest: false }));
       const trailGeometry = new THREE.BufferGeometry();
 
       trailGeometry.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(TRAIL * 3), 3));
@@ -355,11 +390,14 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
   };
 
   const applyPalette = () => {
-    serviceMaterial.color.copy(palette.bg3);
+    // slabs read against the page: lifted towards the line colour in the dark theme
+    slab.copy(palette.bg3).lerp(palette.strong, palette.dark ? 0.45 : 0);
+    serviceMaterial.color.copy(slab);
+    outlineMaterial.color.copy(palette.dark ? palette.strong.clone().lerp(palette.deliver, 0.25) : palette.strong);
     shadowCatcher.material.opacity = palette.dark ? 0.36 : 0.12;
     hemi.groundColor.copy(palette.bg0);
-    hemi.intensity = palette.dark ? 1.5 : 2.4;
-    sun.intensity = palette.dark ? 1.5 : 1.3;
+    hemi.intensity = palette.dark ? 2.4 : 3;
+    sun.intensity = 0.35;
     pathMaterial.color.copy(palette.strong);
     retryMaterial.color.copy(palette.redeliver);
     tubeMaterial.color.copy(palette.deliver);
@@ -394,16 +432,6 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
     return el;
   };
 
-  const steps = [
-    { el: make('scene-step', 'publish'), at: v3(SERVICE_X, 0.5, -2.55) },
-    { el: make('scene-step', 'stream'), at: v3((TUBE.x0 + TUBE.x1) / 2, 0.85, 0) },
-    { el: make('scene-step', 'deliver'), at: v3(2.75, 0.55, -1.25) },
-    { el: make('scene-step scene-step--ack', 'ack'), at: v3(POD_X, 1.9, Z[0] - 0.2) },
-    { el: make('scene-step scene-step--retry', 'nak · retry after backoff'), at: v3(0.2, 2.75, -1.1) },
-  ];
-  const podLabels = pods.map(() => make('scene-label scene-label--down'));
-  const deployLabel = make('scene-label scene-label--deploy');
-  const hintLabel = make('scene-label scene-label--hint', 'click a pod to take it down');
   const tip = make('scene-tip');
 
   const toScreen = (vector) => {
@@ -422,7 +450,11 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
   const frame = () => {
     const cw = container.clientWidth;
     const ch = container.clientHeight;
-    const region = cw < 760 ? REGION.narrow : REGION.wide;
+    // the right half of the hero's content column, wherever the canvas edges are
+    const content = Math.min(cw, 1140);
+    const left = (cw - content) / 2;
+    const region =
+      cw < 760 ? REGION.narrow : { ...REGION.wide, x0: (left + content * 0.5) / cw, x1: (left + content - 8) / cw };
     const aspect = cw / ch;
 
     view.cw = cw;
@@ -438,12 +470,12 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
     camera.updateMatrixWorld();
 
     const bounds = [
-      v3(SERVICE_X - 0.6, 0, -2.2),
-      v3(SERVICE_X - 0.6, 0, 2.2),
-      v3(POD_X + 0.7, 0, -2.2),
-      v3(POD_X + 0.7, 0, 2.2),
-      v3(0.2, 2.9, -1.1),
-      v3(POD_X, 2.0, Z[0]),
+      v3(SERVICE_X - 0.6, 0, -2.6),
+      v3(SERVICE_X - 0.6, 0, 2.6),
+      v3(POD_X + 0.8, 0, -2.6),
+      v3(POD_X + 0.8, 0, 2.6),
+      v3(0.2, 1.6, -1.25),
+      v3(POD_X, 1.8, Z[0]),
     ].map((p) => p.applyMatrix4(camera.matrixWorldInverse));
     const minX = Math.min(...bounds.map((p) => p.x));
     const maxX = Math.max(...bounds.map((p) => p.x));
@@ -532,7 +564,7 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
       message.screen = toScreen(visual.core.position);
     }
 
-    for (const id of [...visuals.keys()]) {
+    for (const id of Array.from(visuals.keys())) {
       if (!sim.messages.some((message) => message.id === id)) dropVisual(id);
     }
 
@@ -551,9 +583,9 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
 
       pod.lift += ((down ? -0.22 : hovered ? 0.06 : 0) - pod.lift) * smooth;
       pod.group.position.y = POD.h / 2 + pod.lift;
-      pod.material.color.copy(palette.bg3);
+      pod.material.color.copy(slab);
       pod.material.opacity = down ? 0.4 : 1;
-      pod.material.emissive.copy(flash ?? palette.deliver).multiplyScalar(flash ? 0.3 * (1 - flashAge / 650) : hovered ? 0.12 : 0);
+      pod.material.emissive.copy(flash ?? palette.deliver).multiplyScalar(flash ? 0.09 * (1 - flashAge / 650) : hovered ? 0.08 : 0);
       pod.logo.material.opacity = down ? 0.15 : 0.95;
 
       let led = palette.ack;
@@ -573,42 +605,25 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
       const burstT = burstAge / 900;
 
       if (burstT >= 0 && burstT < 1) {
-        pod.burst.scale.setScalar(1 + burstT * 0.8);
+        pod.burst.scale.setScalar(1 + burstT * 0.35);
         pod.burst.material.color.copy(state.flash === 'ack' && !down ? palette.ack : palette.dlq);
         pod.burst.material.opacity = 0.5 * (1 - burstT);
       } else {
         pod.burst.material.opacity = 0;
       }
-
-      podLabels[index].textContent = state.manual ? 'down' : 'restarting';
-      place(podLabels[index], toScreen(v3(POD_X, POD.h + 0.55, Z[index])), down);
     });
 
-    for (const stepLabel of steps) place(stepLabel.el, toScreen(stepLabel.at));
-    steps[1].el.textContent = sim.queue.length ? `stream · ${sim.queue.length} stored` : 'stream';
-
+    // until the first click, ripples around the middle pod say it can be clicked
     if (!clicked) {
-      place(hintLabel, toScreen(v3(POD_X + 1.2, 0, Z[2] + 1.0)), true);
       const ring = pods[1].burst;
 
       if (ring.material.opacity === 0) {
         const phase = (now / 1700) % 1;
 
-        ring.scale.setScalar(1 + phase * 0.6);
+        ring.scale.setScalar(1 + phase * 0.3);
         ring.material.color.copy(palette.deliver);
         ring.material.opacity = 0.45 * (1 - phase);
       }
-    } else {
-      hintLabel.hidden = true;
-    }
-
-    if (sim.deploy) {
-      const done = Math.min(PODS, Math.floor((now - sim.deploy.start) / RESTART_MS) + 1);
-
-      deployLabel.textContent = `rolling deploy ${done}/${PODS}`;
-      place(deployLabel, toScreen(v3(POD_X + 0.9, 1.2, Z[0] - 1.0)), true);
-    } else {
-      deployLabel.hidden = true;
     }
 
     // tooltip
@@ -640,7 +655,7 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
       );
       place(tip, { x: hovered.screen.x + 14, y: hovered.screen.y - 12 }, true, 'translate(0, -100%)');
     } else if (ui.hoverPod !== null) {
-      tip.textContent = isDown(sim, sim.pods[ui.hoverPod]) ? 'click to start this pod' : 'click to take this pod down';
+      tip.textContent = isDown(sim, sim.pods[ui.hoverPod]) ? 'pod down · click to start it' : 'NestJS pod · click to take it down';
       place(tip, toScreen(v3(POD_X + 0.5, POD.h, Z[ui.hoverPod])), true, 'translate(8px, -100%)');
     } else {
       tip.hidden = true;
@@ -711,7 +726,6 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
   let raf = 0;
   let last = 0;
   let visible = true;
-  let statsAt = 0;
 
   const render = (dt) => {
     update(dt);
@@ -726,11 +740,6 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
     hitTest();
     render(dt);
 
-    if (ts - statsAt > 400) {
-      statsAt = ts;
-      onStats({ ...sim.stats });
-    }
-
     if (visible && !document.hidden) raf = requestAnimationFrame(tick);
   };
 
@@ -742,7 +751,6 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
 
   frame();
   render(16);
-  onStats({ ...sim.stats });
 
   const sizeObserver = new ResizeObserver(() => {
     frame();
@@ -766,7 +774,7 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
   if (reduce) {
-    logoTexture.onUpdate = () => render(16);
+    for (const image of loaded) image.addEventListener('load', () => render(16));
   } else {
     viewObserver.observe(container);
     document.addEventListener('visibilitychange', onVisibility);
@@ -791,6 +799,7 @@ export const createScene = ({ container, overlay, logoUrl, reduce, onStats }) =>
       if (object.material) object.material.dispose();
     });
     logoTexture.dispose();
+    natsTexture.dispose();
     glow.dispose();
     renderer.dispose();
     renderer.domElement.remove();

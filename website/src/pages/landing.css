@@ -96,6 +96,16 @@
   pointer-events: auto;
 }
 
+/* Long unbreakable lines (the install command) must not widen the column. */
+.lp-hero-grid,
+.lp-hero-lead {
+  min-width: 0;
+}
+
+.lp-hero > .lp-container {
+  width: 100%;
+}
+
 .lp-hero-room {
   min-height: 480px;
 }

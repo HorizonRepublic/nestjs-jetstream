@@ -13,31 +13,7 @@
   mask-image: linear-gradient(90deg, transparent 28%, #000 50%);
 }
 
-/* Labels and the tooltip sit over the canvas as plain HTML, placed per frame. */
-.scene-step {
-  position: absolute;
-  top: 0;
-  left: 0;
-  font-family: var(--jt-font-mono);
-  font-size: 11px;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-  color: var(--jt-fg-3);
-  will-change: transform;
-}
-
-.scene-step--ack {
-  color: var(--jt-state-ack);
-}
-
-.scene-step--retry {
-  color: var(--jt-state-redeliver);
-}
-
-.scene-step[hidden] {
-  display: none;
-}
-
+/* The tooltip sits over the canvas as plain HTML, placed per frame. */
 .scene-overlay {
   position: absolute;
   inset: 0;
@@ -45,7 +21,6 @@
   pointer-events: none;
 }
 
-.scene-label,
 .scene-tip {
   position: absolute;
   top: 0;
@@ -54,25 +29,6 @@
   font-size: 11px;
   white-space: nowrap;
   will-change: transform;
-}
-
-.scene-label {
-  padding: 2px 7px;
-  border-radius: 4px;
-  background: color-mix(in oklch, var(--jt-bg-1) 80%, transparent);
-  font-weight: 600;
-}
-
-.scene-label--down {
-  color: var(--jt-state-dlq);
-}
-
-.scene-label--deploy,
-.scene-label--hint {
-  color: var(--jt-state-deliver);
-}
-
-.scene-tip {
   display: grid;
   gap: 2px;
   padding: 7px 10px;
@@ -83,8 +39,7 @@
   color: var(--jt-fg-0);
 }
 
-.scene-tip[hidden],
-.scene-label[hidden] {
+.scene-tip[hidden] {
   display: none;
 }
 
@@ -109,34 +64,6 @@
   pointer-events: auto;
 }
 
-.scene-stats {
-  position: absolute;
-  inset-block-end: 22px;
-  inset-inline-end: max(var(--lp-gutter, 24px), calc((100% - var(--lp-max, 1140px)) / 2 + var(--lp-gutter, 24px)));
-  margin: 0;
-  font-family: var(--jt-font-mono);
-  font-size: 0.75rem;
-  color: var(--jt-fg-3);
-}
-
-.scene-stats b {
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--jt-fg-1);
-}
-
-.scene-stats b[data-tone='deliver'] {
-  color: var(--jt-state-deliver);
-}
-
-.scene-stats b[data-tone='redeliver'] {
-  color: var(--jt-state-redeliver);
-}
-
-.scene-stats b[data-tone='ack'] {
-  color: var(--jt-state-ack);
-}
-
 /* Narrow: the scene moves under the copy, in the flow, full width. */
 @media (max-width: 996px) {
   .scene {
@@ -147,11 +74,5 @@
 
   .scene-stage {
     mask-image: linear-gradient(180deg, transparent, #000 8%, #000 92%, transparent);
-  }
-
-  .scene-stats {
-    inset-inline: 0;
-    text-align: center;
-    inset-block-end: 4px;
   }
 }

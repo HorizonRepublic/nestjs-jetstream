@@ -79,6 +79,11 @@ export const togglePod = (sim, index) => {
 };
 
 const publish = (sim) => {
+  // backpressure: with the stream full and its entrance busy, services hold off
+  const inFlight = sim.messages.filter((message) => message.state === 'in').length;
+
+  if (sim.queue.length + sim.waiting.length + inFlight >= CAPACITY + 3) return;
+
   const id = sim.nextId++;
   const message = {
     id,

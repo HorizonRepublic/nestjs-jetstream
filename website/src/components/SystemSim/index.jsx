@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import useBaseUrl from '@docusaurus/useBaseUrl';
 import './styles.css';
 
@@ -11,7 +11,7 @@ const HeroScene = () => {
   const stageRef = useRef(null);
   const overlayRef = useRef(null);
   const logoUrl = useBaseUrl('/img/brands/nestjs.svg');
-  const [stats, setStats] = useState({ published: 0, retried: 0, acked: 0 });
+  const natsUrl = useBaseUrl('/img/brands/nats.svg');
 
   useEffect(() => {
     let dispose = null;
@@ -26,29 +26,25 @@ const HeroScene = () => {
           container: stageRef.current,
           overlay: overlayRef.current,
           logoUrl,
+          natsUrl,
           reduce,
-          onStats: setStats,
         });
       })
-      .catch(() => {
-        /* no WebGL: the hero stands on its own */
+      .catch((error) => {
+        // without WebGL the hero stands on its own; say why, for whoever looks
+        console.warn('[hero scene]', error);
       });
 
     return () => {
       cancelled = true;
       dispose?.();
     };
-  }, [logoUrl]);
+  }, [logoUrl, natsUrl]);
 
   return (
     <div className="scene">
       <div className="scene-stage" ref={stageRef} aria-hidden="true" />
       <div className="scene-overlay" ref={overlayRef} aria-hidden="true" />
-      <p className="scene-stats">
-        published <b data-tone="deliver">{stats.published}</b> · retried{' '}
-        <b data-tone="redeliver">{stats.retried}</b> · acked <b data-tone="ack">{stats.acked}</b> · lost{' '}
-        <b>0</b>
-      </p>
     </div>
   );
 };
