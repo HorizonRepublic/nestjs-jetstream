@@ -75,5 +75,5 @@ export interface DeadLetterConfig {
 export interface RpcRouterOptions {
   timeout?: number;
   concurrency?: number;
-  ackExtension?: boolean | number;
+  ackExtension?: AckExtensionConfig;
 }

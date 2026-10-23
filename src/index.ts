@@ -10,6 +10,8 @@ export type { JetstreamBootstrapOptions } from './bootstrap';
 export { ManagementMode, MessageKind, StreamKind, TransportEvent } from './interfaces';
 
 export type {
+  AckExtensionConfig,
+  AckExtensionOptions,
   Codec,
   DeadLetterInfo,
   EntityManagement,

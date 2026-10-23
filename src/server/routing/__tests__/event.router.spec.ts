@@ -1,7 +1,8 @@
 import { Logger } from '@nestjs/common';
 
-import type { DeliveryInfo, JsMsg } from '@nats-io/jetstream';
+import type { ConsumerInfo, DeliveryInfo, JsMsg } from '@nats-io/jetstream';
 import { headers as natsHeaders } from '@nats-io/transport-node';
+import type { NatsConnection } from '@nats-io/transport-node';
 
 import { faker } from '@faker-js/faker';
 import { createMock } from '@golevelup/ts-vitest';
@@ -1261,6 +1262,38 @@ describe(EventRouter, () => {
           expect(msg.nak).not.toHaveBeenCalled();
         });
 
+        it('should key the DLQ publish on the stream message so a repeat capture is deduplicated', async () => {
+          // Given: a DLQ-enabled router
+          const options: JetstreamModuleOptions = {
+            name: 'my-service',
+            servers: ['nats://localhost:4222'],
+            dlq: {},
+          };
+
+          sut = new EventRouter(
+            messageProvider,
+            patternRegistry,
+            codec,
+            eventBus,
+            deadLetterConfig,
+            undefined,
+            undefined,
+            connection,
+            options,
+          );
+          sut.start();
+          patternRegistry.getHandler.mockReturnValue(vi.fn().mockRejectedValue(new Error('boom')));
+
+          // When: a message dies on its final delivery
+          events$.next(createDeadLetterMsg());
+          await new Promise(process.nextTick);
+
+          // Then: the publish carries the stream and sequence as its message ID
+          expect(mockJs.publish.mock.calls[0]![2].msgID).toMatch(
+            new RegExp(`^${streamName}:42:\\d+$`),
+          );
+        });
+
         it('should forward original message headers to the DLQ publish', async () => {
           // Given: message with headers
           const options: JetstreamModuleOptions = {
@@ -2175,6 +2208,103 @@ describe(EventRouter, () => {
 
       // Then: no working() calls (5s interval > 50ms wait)
       expect(msg.working).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('watchDeadLetters', () => {
+    const consumer = (maxDeliver: number): ConsumerInfo =>
+      createMock<ConsumerInfo>({
+        stream_name: faker.string.alpha(10),
+        name: faker.string.alpha(10),
+        config: { max_deliver: maxDeliver },
+      });
+
+    const routerWithConnection = (subscribe: Mock, withDeadLetters = true): EventRouter =>
+      new EventRouter(
+        messageProvider,
+        patternRegistry,
+        codec,
+        eventBus,
+        withDeadLetters ? { maxDeliverByStream: new Map(), onDeadLetter: vi.fn() } : undefined,
+        undefined,
+        undefined,
+        createMock<ConnectionProvider>({
+          getConnection: vi.fn().mockResolvedValue(createMock<NatsConnection>({ subscribe })),
+        }),
+      );
+
+    it('should watch event, schedule and broadcast consumers that have a delivery limit', async () => {
+      // Given
+      const subscribe = vi.fn();
+      const event = consumer(3);
+      const schedule = consumer(5);
+      const broadcast = consumer(3);
+      const command = consumer(1);
+
+      sut = routerWithConnection(subscribe);
+
+      // When
+      await sut.watchDeadLetters(
+        new Map([
+          [StreamKind.Event, event],
+          [StreamKind.Schedule, schedule],
+          [StreamKind.Broadcast, broadcast],
+          [StreamKind.Command, command],
+        ]),
+      );
+
+      // Then: commands are not dead-lettered, so their consumer is left alone
+      const subjects = subscribe.mock.calls.map(([subject]) => subject as string);
+
+      expect(subjects).toEqual(
+        [event, schedule, broadcast].map(
+          (info) => `$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.${info.stream_name}.${info.name}`,
+        ),
+      );
+    });
+
+    it('should skip a consumer without a delivery limit', async () => {
+      // Given
+      const subscribe = vi.fn();
+
+      sut = routerWithConnection(subscribe);
+
+      // When
+      await sut.watchDeadLetters(new Map([[StreamKind.Event, consumer(-1)]]));
+
+      // Then
+      expect(subscribe).not.toHaveBeenCalled();
+    });
+
+    it('should skip a consumer whose config carries no delivery limit', async () => {
+      // Given
+      const subscribe = vi.fn();
+      const info = createMock<ConsumerInfo>({
+        stream_name: faker.string.alpha(10),
+        name: faker.string.alpha(10),
+        config: {},
+      });
+
+      sut = routerWithConnection(subscribe);
+
+      // When
+      await sut.watchDeadLetters(new Map([[StreamKind.Event, info]]));
+
+      // Then
+      expect(subscribe).not.toHaveBeenCalled();
+    });
+
+    it('should not listen when dead-letter capture is off', async () => {
+      // Given
+      const subscribe = vi.fn();
+
+      sut = routerWithConnection(subscribe, false);
+
+      // When
+      await sut.watchDeadLetters(new Map([[StreamKind.Event, consumer(3)]]));
+
+      // Then
+      expect(subscribe).not.toHaveBeenCalled();
     });
   });
 });

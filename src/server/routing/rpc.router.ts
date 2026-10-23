@@ -26,8 +26,9 @@ import {
   type ServerEndpoint,
 } from '../../otel';
 import {
+  type AckExtension,
   isPromiseLike,
-  resolveAckExtensionInterval,
+  resolveAckExtension,
   serializeError,
   settleQuietly,
   startAckExtensionTimer,
@@ -67,7 +68,7 @@ export class RpcRouter {
   private readonly logger = new Logger('Jetstream:RpcRouter');
   private readonly timeout: number;
   private readonly concurrency: number | undefined;
-  private resolvedAckExtensionInterval: number | null | undefined;
+  private resolvedAckExtension: AckExtension | null | undefined;
   private subscription: Subscription | null = null;
   private cachedNc: NatsConnection | null = null;
 
@@ -103,14 +104,14 @@ export class RpcRouter {
     }
   }
 
-  /** Lazily resolve the ack extension interval (needs ackWaitMap populated at runtime). */
-  private get ackExtensionInterval(): number | null {
-    if (this.resolvedAckExtensionInterval !== undefined) return this.resolvedAckExtensionInterval;
-    this.resolvedAckExtensionInterval = resolveAckExtensionInterval(
+  /** Lazily resolve the ack extension (needs ackWaitMap populated at runtime). */
+  private get ackExtension(): AckExtension | null {
+    if (this.resolvedAckExtension !== undefined) return this.resolvedAckExtension;
+    this.resolvedAckExtension = resolveAckExtension(
       this.rpcOptions?.ackExtension,
       this.ackWaitMap?.get(StreamKind.Command),
     );
-    return this.resolvedAckExtensionInterval;
+    return this.resolvedAckExtension;
   }
 
   /** Start routing command messages to handlers. */
@@ -123,8 +124,7 @@ export class RpcRouter {
     const eventBus = this.eventBus;
     const logger = this.logger;
     const timeout = this.timeout;
-    const ackExtensionInterval = this.ackExtensionInterval;
-    const hasAckExtension = ackExtensionInterval !== null && ackExtensionInterval > 0;
+    const ackExtension = this.ackExtension;
     const maxActive = this.concurrency ?? Number.POSITIVE_INFINITY;
     const otel = this.otel;
     const serviceName = this.serviceName;
@@ -259,9 +259,7 @@ export class RpcRouter {
       const { handler, data, replyTo, correlationId } = resolved;
       const subject = msg.subject;
       const ctx = new RpcContext([msg]);
-      const stopAckExtension = hasAckExtension
-        ? startAckExtensionTimer(msg, ackExtensionInterval)
-        : null;
+      const stopAckExtension = startAckExtensionTimer(msg, ackExtension);
       const startedAt = performance.now();
 
       const reportHandlerError = (err: unknown): void => {
@@ -362,9 +360,10 @@ export class RpcRouter {
       );
     };
 
-    const parkTimer: ParkTimerFn | null = hasAckExtension
-      ? (msg): (() => void) | null => startAckExtensionTimer(msg, ackExtensionInterval)
-      : null;
+    const parkTimer: ParkTimerFn | null =
+      ackExtension === null
+        ? null
+        : (msg): (() => void) | null => startAckExtensionTimer(msg, ackExtension);
     const gate = new ConcurrencyGate(maxActive, handleSafe, parkTimer, logger, 'RPC');
 
     this.subscription = this.messageProvider.commands$.subscribe({

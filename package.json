@@ -93,9 +93,6 @@
     "rxjs": "^7.8.0"
   },
   "peerDependenciesMeta": {
-    "@opentelemetry/api": {
-      "optional": true
-    },
     "@prometheus-io/client": {
       "optional": true
     },

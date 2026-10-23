@@ -51,7 +51,7 @@ flowchart LR
 ```
 
 :::warning Handlers are not awaited
-Stopping consumers tears down the routing pipeline, so a handler that is mid-execution is abandoned, not awaited. Its message never gets an ack, and JetStream redelivers it once the consumer's `ack_wait` expires. Delivery stays at-least-once and you lose nothing, but a handler running at SIGTERM runs again on another instance.
+Stopping consumers tears down the routing pipeline, so a handler that is mid-execution is abandoned, not awaited. Its message never gets an ack, and JetStream redelivers it once the consumer's `ack_wait` expires. Delivery stays at-least-once and you lose nothing, but a handler running at SIGTERM runs again on another instance. If that was the message's final delivery, it goes to the [dead letter queue](/docs/guides/dead-letter-queue#deliveries-no-handler-settled) instead.
 
 Keep handlers short and idempotent. If a unit of work must run only once, make it resumable or guard it with an idempotency key; do not rely on shutdown to let it finish.
 :::

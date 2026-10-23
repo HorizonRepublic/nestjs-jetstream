@@ -48,13 +48,29 @@ export type StreamConfigOverrides = Partial<
   Omit<StreamConfig, 'retention' | 'subjects' | 'description'>
 >;
 
+/** Ack extension with its interval and limit spelled out. */
+export interface AckExtensionOptions {
+  /** Extension interval in milliseconds. Omit to extend at half of the consumer's `ack_wait`. */
+  interval?: number;
+
+  /**
+   * How long one message may be kept alive, in milliseconds. Default: 5 minutes.
+   *
+   * Past it the transport stops extending and logs a warning; the handler keeps
+   * running and the server redelivers the message once `ack_wait` runs out.
+   * `Infinity` removes the limit.
+   */
+  maxDuration?: number;
+}
+
 /**
  * Ack-deadline auto-extension setting.
  *
- * `false` disables extension, `true` extends at half of `ack_wait`,
- * and a number sets an explicit extension interval in milliseconds.
+ * `false` disables extension, `true` extends at half of `ack_wait`, a number
+ * sets an explicit extension interval in milliseconds, and the object form
+ * also sets how long a single message may be extended.
  */
-export type AckExtensionConfig = boolean | number;
+export type AckExtensionConfig = boolean | number | AckExtensionOptions;
 
 /**
  * RPC transport configuration.
@@ -144,6 +160,9 @@ export interface StreamConsumerOverrides {
    * - `false` (default): disabled; NATS redelivers after `ack_wait` if not acked.
    * - `true`: auto-extend at `ack_wait / 2` interval (calculated from consumer config).
    * - `number`: explicit extension interval in milliseconds.
+   * - `{ interval?, maxDuration? }`: the same, plus how long one message may be extended.
+   *
+   * A message stops being extended after 5 minutes unless `maxDuration` says otherwise.
    */
   ackExtension?: AckExtensionConfig;
 

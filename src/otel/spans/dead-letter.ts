@@ -11,8 +11,11 @@ import { extractContext } from '../propagator';
 import { JetstreamTrace } from '../trace-kinds';
 import { getTracer } from '../tracer';
 
+/** What the dead-letter span reads from the message. */
+export type DeadLetterSpanMessage = Pick<JsMsg, 'subject' | 'headers'>;
+
 export interface DeadLetterSpanContext {
-  readonly msg: JsMsg;
+  readonly msg: DeadLetterSpanMessage;
   readonly pattern?: string;
   readonly finalDeliveryCount: number;
   readonly reason?: string;

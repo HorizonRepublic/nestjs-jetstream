@@ -17,9 +17,44 @@ import { settleQuietly } from '../../utils';
 import { dlqStreamOverrides, isDlqEnabled } from '../infrastructure/dlq-options';
 import { NameResolver } from '../infrastructure/name-resolver';
 import { PatternRegistry } from './pattern-registry';
+import type { DeadLetterSource } from './routing.types';
 
 /** How many times a dead letter is published to the DLQ stream before falling back. */
 const DLQ_PUBLISH_ATTEMPTS = 3;
+
+/** How long a captured message is remembered, so a second report of it is dropped. */
+const CAPTURED_MEMORY_MS = 10 * 60_000;
+
+/** Upper bound on remembered captures; the oldest are forgotten first. */
+const CAPTURED_MEMORY_LIMIT = 10_000;
+
+/*
+ * Identifies one stream message across both capture paths. The sequence alone
+ * repeats once a stream is recreated, so the stored time goes with it.
+ */
+const captureKey = (msg: DeadLetterSource): string =>
+  `${msg.stream}:${msg.streamSequence}:${msg.timestamp.getTime()}`;
+
+/** The live delivery a handler just failed: settled with term or nak. */
+const liveSource = (msg: JsMsg, logger: Logger): DeadLetterSource => ({
+  subject: msg.subject,
+  data: msg.data,
+  headers: msg.headers,
+  stream: msg.info.stream,
+  streamSequence: msg.info.streamSequence,
+  deliveryCount: msg.info.deliveryCount,
+  timestamp: new Date(msg.info.timestampNanos / 1_000_000),
+  release: async (reason) => {
+    settleQuietly(logger, `Failed to term ${msg.subject}:`, () => {
+      msg.term(reason);
+    });
+  },
+  retain: () => {
+    settleQuietly(logger, `Failed to nak ${msg.subject}:`, () => {
+      msg.nak();
+    });
+  },
+});
 
 /**
  * Captures messages that exhausted their delivery limits: publishes them to
@@ -28,6 +63,8 @@ const DLQ_PUBLISH_ATTEMPTS = 3;
  */
 export class DeadLetterCapture {
   private readonly logger = new Logger('Jetstream:DeadLetter');
+  /** Capture key -> when it may be forgotten. Insertion order is age order. */
+  private readonly captured = new Map<string, number>();
 
   public constructor(
     private readonly patternRegistry: PatternRegistry,
@@ -56,15 +93,51 @@ export class DeadLetterCapture {
 
   /** Emit the dead-letter event and route the message to the DLQ or the fallback callback. */
   public async capture(msg: JsMsg, data: unknown, error: unknown): Promise<void> {
+    const source = liveSource(msg, this.logger);
+
+    // A handler that outlived ack_wait on its final delivery may finish after
+    // another replica already captured the message from the server's advisory.
+    if (await this.isGone(source)) {
+      await source.release('Already dead-lettered');
+
+      return;
+    }
+
+    await this.captureSource(source, data, error);
+  }
+
+  /** Same as {@link capture}, for a message that is not a live delivery. */
+  public async captureSource(
+    source: DeadLetterSource,
+    data: unknown,
+    error: unknown,
+  ): Promise<void> {
+    const key = captureKey(source);
+
+    if (!this.claim(key)) {
+      await source.release('Already dead-lettered');
+
+      return;
+    }
+
+    // A capture that keeps the message leaves it for a later report to retry.
+    const msg: DeadLetterSource = {
+      ...source,
+      retain: () => {
+        this.captured.delete(key);
+        source.retain();
+      },
+    };
+
     const info: DeadLetterInfo = {
       subject: msg.subject,
       data,
       headers: msg.headers,
       error,
-      deliveryCount: msg.info.deliveryCount,
-      stream: msg.info.stream,
-      streamSequence: msg.info.streamSequence,
-      timestamp: new Date(msg.info.timestampNanos / 1_000_000).toISOString(),
+      deliveryCount: msg.deliveryCount,
+      stream: msg.stream,
+      streamSequence: msg.streamSequence,
+      timestamp: msg.timestamp.toISOString(),
     };
 
     await withDeadLetterSpan(
@@ -73,7 +146,7 @@ export class DeadLetterCapture {
         // Surface the registered pattern so APM can filter dead letters by
         // handler; falls back to the raw subject when no handler matches.
         pattern: this.patternRegistry.getHandler(msg.subject) ? msg.subject : undefined,
-        finalDeliveryCount: msg.info.deliveryCount,
+        finalDeliveryCount: msg.deliveryCount,
         reason: error instanceof Error ? error.message : String(error),
         serviceName: this.serviceName,
         endpoint: this.serverEndpoint,
@@ -96,7 +169,11 @@ export class DeadLetterCapture {
    * success the `onDeadLetter` callback is notified and the message termed;
    * on failure everything falls back to the callback to avoid silent loss.
    */
-  private async publishToDlq(msg: JsMsg, info: DeadLetterInfo, error: unknown): Promise<void> {
+  private async publishToDlq(
+    msg: DeadLetterSource,
+    info: DeadLetterInfo,
+    error: unknown,
+  ): Promise<void> {
     const serviceName = this.options?.name;
 
     if (!this.connection || !serviceName) {
@@ -116,12 +193,16 @@ export class DeadLetterCapture {
 
     hdrs.set(JetstreamDlqHeader.DeadLetterReason, this.extractErrorReason(error));
     hdrs.set(JetstreamDlqHeader.OriginalSubject, msg.subject);
-    hdrs.set(JetstreamDlqHeader.OriginalStream, msg.info.stream);
+    hdrs.set(JetstreamDlqHeader.OriginalStream, msg.stream);
     hdrs.set(JetstreamDlqHeader.FailedAt, new Date().toISOString());
-    hdrs.set(JetstreamDlqHeader.DeliveryCount, msg.info.deliveryCount.toString());
+    hdrs.set(JetstreamDlqHeader.DeliveryCount, msg.deliveryCount.toString());
+
+    // One DLQ entry per stream message, even when a capture is repeated: a
+    // term that never reached the server lets the message dead-letter twice.
+    const msgID = captureKey(msg);
 
     try {
-      await this.publishWithRetry(this.connection, destinationSubject, msg.data, hdrs);
+      await this.publishWithRetry(this.connection, destinationSubject, msg.data, hdrs, msgID);
       this.logger.log(`Message sent to DLQ: ${msg.subject}`);
       await this.notifyDeadLetterCallback(info, msg);
     } catch (publishErr) {
@@ -140,12 +221,13 @@ export class DeadLetterCapture {
     subject: string,
     data: Uint8Array,
     headers: MsgHdrs,
+    msgID: string,
   ): Promise<void> {
     let lastErr: unknown;
 
     for (let attempt = 1; attempt <= DLQ_PUBLISH_ATTEMPTS; attempt += 1) {
       try {
-        await connection.getJetStreamClient().publish(subject, data, { headers });
+        await connection.getJetStreamClient().publish(subject, data, { headers, msgID });
 
         return;
       } catch (err) {
@@ -166,7 +248,7 @@ export class DeadLetterCapture {
    * Copy headers for the DLQ republish, dropping NATS control headers: a
    * copied Nats-TTL would expire the DLQ entry, Nats-Msg-Id trips dedup.
    */
-  private buildDlqHeaders(msg: JsMsg): MsgHdrs {
+  private buildDlqHeaders(msg: DeadLetterSource): MsgHdrs {
     const hdrs = natsHeaders();
 
     if (!msg.headers) return hdrs;
@@ -182,7 +264,10 @@ export class DeadLetterCapture {
     return hdrs;
   }
 
-  private async notifyDeadLetterCallback(info: DeadLetterInfo, msg: JsMsg): Promise<void> {
+  private async notifyDeadLetterCallback(
+    info: DeadLetterInfo,
+    msg: DeadLetterSource,
+  ): Promise<void> {
     if (this.deadLetterConfig.onDeadLetter) {
       try {
         await this.deadLetterConfig.onDeadLetter(info);
@@ -194,16 +279,17 @@ export class DeadLetterCapture {
       }
     }
 
-    settleQuietly(this.logger, `Failed to term ${msg.subject}:`, () => {
-      msg.term('Moved to DLQ stream');
-    });
+    await msg.release('Moved to DLQ stream');
   }
 
   /**
-   * Last resort: invoke onDeadLetter, then term on success. On failure the
-   * message is nak'd: never redelivered past max_deliver, but preserved.
+   * Last resort: invoke onDeadLetter, then release on success. On failure the
+   * message stays in the stream: never redelivered past max_deliver, but preserved.
    */
-  private async fallbackToOnDeadLetterCallback(info: DeadLetterInfo, msg: JsMsg): Promise<void> {
+  private async fallbackToOnDeadLetterCallback(
+    info: DeadLetterInfo,
+    msg: DeadLetterSource,
+  ): Promise<void> {
     const onDeadLetter = this.deadLetterConfig.onDeadLetter;
 
     if (!onDeadLetter) {
@@ -211,26 +297,51 @@ export class DeadLetterCapture {
       this.logger.error(
         `Dead letter for ${msg.subject} could not be captured (DLQ publish failed, no onDeadLetter callback); leaving the message in the stream`,
       );
-      settleQuietly(this.logger, `Failed to nak ${msg.subject}:`, () => {
-        msg.nak();
-      });
+      msg.retain();
 
       return;
     }
 
     try {
       await onDeadLetter(info);
-      settleQuietly(this.logger, `Failed to term ${msg.subject}:`, () => {
-        msg.term('Dead letter processed via fallback callback');
-      });
     } catch (hookErr) {
       this.logger.error(
         `Fallback onDeadLetter callback failed for ${msg.subject}; the message stays in the stream and will not be redelivered (max_deliver exhausted); recover it manually:`,
         hookErr,
       );
-      settleQuietly(this.logger, `Failed to nak ${msg.subject}:`, () => {
-        msg.nak();
-      });
+      msg.retain();
+
+      return;
+    }
+
+    await msg.release('Dead letter processed via fallback callback');
+  }
+
+  private claim(key: string): boolean {
+    const now = Date.now();
+
+    for (const [old, forgetAt] of this.captured) {
+      if (forgetAt > now && this.captured.size < CAPTURED_MEMORY_LIMIT) break;
+      this.captured.delete(old);
+    }
+
+    if (this.captured.has(key)) return false;
+    this.captured.set(key, now + CAPTURED_MEMORY_MS);
+
+    return true;
+  }
+
+  /** True only when the stream confirms the message is no longer there. */
+  private async isGone(msg: DeadLetterSource): Promise<boolean> {
+    if (!this.connection) return false;
+
+    try {
+      const jsm = await this.connection.getJetStreamManager();
+
+      return (await jsm.streams.getMessage(msg.stream, { seq: msg.streamSequence })) === null;
+    } catch {
+      // Capturing twice is recoverable; skipping a dead letter is not.
+      return false;
     }
   }
 

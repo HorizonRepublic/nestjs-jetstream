@@ -31,17 +31,17 @@ Required, and already present in any standard NestJS project:
 - `@nestjs/common`, `@nestjs/core`, `@nestjs/microservices`: `^10.2.0 || ^11.0.0 || ^12.0.0`
 - `reflect-metadata` ^0.2.0
 - `rxjs` ^7.8.0
+- `@opentelemetry/api` ^1.9.0. The transport loads it whether or not tracing is on; without an OpenTelemetry SDK registered it does nothing. npm 7+ and pnpm install it with the package
 
 Optional, install only for the feature that needs it:
 
 - `msgpackr` `^1.11.0 || ^2.0.0` for the [MessagePack codec](/docs/guides/custom-codec#built-in-msgpackcodec)
 - `@prometheus-io/client` ^0.16.0, or `prom-client` ^15.0.0, its previous name, for [Prometheus metrics](/docs/observability/metrics)
-- `@opentelemetry/api` ^1.9.0 for [distributed tracing](/docs/observability/tracing)
 
 ## Runtime requirements
 
 - **Node.js** >= 22.0.0
-- **TypeScript** >= 5.7 (required by `@nats-io/*` v3 typed array generics)
+- **TypeScript** >= 5.7 (required by `@nats-io/*` v3 typed array generics), with `moduleResolution` set to `node16`, `nodenext` or `bundler`: the `@nats-io/*` v3 type declarations do not resolve under the legacy `node10` setting
 - **NATS Server** >= 2.10 with JetStream enabled; some features need a newer server, see below
 
 ## NATS server versions
@@ -56,6 +56,11 @@ Measured against real servers. A feature used on an older server fails the boot,
 | [Recurring schedules](/docs/guides/recurring-schedules): cron and intervals                                              | 2.14         | 4                   |
 
 In a cluster, upgrade every node before using a feature: the check reads the level of the server the client talks to, which says nothing about a stream leader still on an older node.
+
+### Server upgrades that need a config change
+
+- **NATS 2.15** caps a stream at 1000 consumers unless its config or the account sets `max_consumers` (server option `jetstream.limits.default_max_consumers`). Streams this library creates set `max_consumers` explicitly; a stream you [provision yourself](/docs/guides/external-infrastructure) falls under the cap.
+- **NATS 2.16** switches acknowledgements to a new subject format. Subject permissions or account imports and exports that name `$JS.ACK.<stream>.>` or `$JS.FC.<stream>.>` stop matching: change them to `$JS.ACK.>` and `$JS.FC.>` before upgrading. The library reads acks through the client, so its code needs no change. See the [NATS 2.15 upgrade notes](https://docs.nats.io/release-notes/upgrade-to-2.15).
 
 ## Run NATS locally
 

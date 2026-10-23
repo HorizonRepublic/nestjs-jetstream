@@ -1,6 +1,6 @@
 import { Logger } from '@nestjs/common';
 
-import type { JsMsg } from '@nats-io/jetstream';
+import type { ConsumerInfo, JsMsg } from '@nats-io/jetstream';
 
 import { Observable, Subscription } from 'rxjs';
 
@@ -24,19 +24,17 @@ import {
   type ServerEndpoint,
 } from '../../otel';
 import type { ScheduleStore } from '../../schedule/schedule-store';
-import {
-  resolveAckExtensionInterval,
-  resolveRetryDelays,
-  startAckExtensionTimer,
-} from '../../utils';
+import { resolveAckExtension, resolveRetryDelays, startAckExtensionTimer } from '../../utils';
 import { MessageProvider } from '../infrastructure';
 import { NameResolver } from '../infrastructure/name-resolver';
 import { ConcurrencyGate } from './concurrency-gate';
+import { DeadLetterAdvisoryListener } from './dead-letter-advisory';
 import { DeadLetterCapture } from './dead-letter-capture';
 import { createOrderedPipeline, createWorkqueuePipeline } from './event-pipeline';
 import { PatternRegistry } from './pattern-registry';
 import { OrphanOutcome } from './routing.types';
 import type {
+  DeadLetterWatchTarget,
   EventConsumeKind,
   OrphanTickPolicy,
   ParkTimerFn,
@@ -51,6 +49,13 @@ const CLOCK_SKEW_ALLOWANCE_MS = 10_000;
 
 /** Deliveries before an orphan is cancelled when the consumer sets no limit. */
 const ORPHAN_FALLBACK_DELIVERIES = 3;
+
+/** Kinds whose exhausted deliveries are captured from server advisories. */
+const ADVISORY_WATCHED_KINDS: ReadonlySet<StreamKind> = new Set([
+  StreamKind.Event,
+  StreamKind.Schedule,
+  StreamKind.Broadcast,
+]);
 
 const eventConsumeKindFor = (kind: StreamKind): EventConsumeKind => {
   if (kind === StreamKind.Broadcast) return ConsumeKind.Broadcast;
@@ -74,6 +79,7 @@ export class EventRouter {
   private readonly serviceName: string;
   private readonly serverEndpoint: ServerEndpoint | null;
   private readonly capture: DeadLetterCapture | null;
+  private readonly advisories: DeadLetterAdvisoryListener | null;
   private maxDeliverByStream = new Map<string, number>();
   private readonly startedAt = Date.now();
 
@@ -117,6 +123,11 @@ export class EventRouter {
           names,
         )
       : null;
+
+    this.advisories =
+      this.capture && connection
+        ? new DeadLetterAdvisoryListener(connection, this.capture, codec)
+        : null;
   }
 
   /**
@@ -143,8 +154,28 @@ export class EventRouter {
     }
   }
 
+  /**
+   * Capture messages whose deliveries ran out while no handler settled them,
+   * which the per-delivery dead-letter check cannot see.
+   */
+  public async watchDeadLetters(consumers: ReadonlyMap<StreamKind, ConsumerInfo>): Promise<void> {
+    if (!this.advisories) return;
+
+    const targets: DeadLetterWatchTarget[] = [];
+
+    for (const [kind, info] of consumers) {
+      // Without a delivery limit the server never gives up on a message.
+      if (!ADVISORY_WATCHED_KINDS.has(kind) || (info.config.max_deliver ?? 0) <= 0) continue;
+
+      targets.push({ stream: info.stream_name, consumer: info.name });
+    }
+
+    await this.advisories.watch(targets);
+  }
+
   /** Stop routing and unsubscribe from all streams. */
   public destroy(): void {
+    this.advisories?.stop();
     for (const sub of this.subscriptions) {
       sub.unsubscribe();
     }
@@ -155,9 +186,9 @@ export class EventRouter {
   /** Assemble the pipeline and concurrency gate for one stream and subscribe. */
   private subscribeToStream(stream$: Observable<JsMsg>, kind: StreamKind): void {
     const isOrdered = kind === StreamKind.Ordered;
-    const ackExtensionInterval = isOrdered
+    const ackExtension = isOrdered
       ? null
-      : resolveAckExtensionInterval(this.getAckExtensionConfig(kind), this.ackWaitMap?.get(kind));
+      : resolveAckExtension(this.getAckExtensionConfig(kind), this.ackWaitMap?.get(kind));
 
     const rctx: RoutePipelineContext = {
       kind,
@@ -169,7 +200,7 @@ export class EventRouter {
       otel: this.otel,
       serviceName: this.serviceName,
       serverEndpoint: this.serverEndpoint,
-      ackExtensionInterval,
+      ackExtension,
       retryDelays: resolveRetryDelays(this.getRetryConfig(kind)),
       capture: this.capture,
       orphans: kind === StreamKind.Schedule ? this.orphanPolicy() : null,
@@ -177,10 +208,10 @@ export class EventRouter {
 
     const route = isOrdered ? createOrderedPipeline(rctx) : createWorkqueuePipeline(rctx);
     const maxActive = isOrdered ? 1 : (this.getConcurrency(kind) ?? Number.POSITIVE_INFINITY);
-    const hasAckExtension = ackExtensionInterval !== null && ackExtensionInterval > 0;
-    const parkTimer: ParkTimerFn | null = hasAckExtension
-      ? (msg): (() => void) | null => startAckExtensionTimer(msg, ackExtensionInterval)
-      : null;
+    const parkTimer: ParkTimerFn | null =
+      ackExtension === null
+        ? null
+        : (msg): (() => void) | null => startAckExtensionTimer(msg, ackExtension);
 
     const gate = new ConcurrencyGate(maxActive, route, parkTimer, this.logger, kind);
 

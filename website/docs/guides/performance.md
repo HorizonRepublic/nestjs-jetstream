@@ -84,6 +84,17 @@ events: {
 
 The transport calls `msg.working()` every half `ack_wait`, which resets the deadline on the server.
 
+Extension stops after 5 minutes per message, so a hung handler cannot hold its message forever. The transport logs a warning naming the subject, and the server redelivers the message once `ack_wait` runs out. The first handler keeps running, and keeps its concurrency slot, until it returns. Set the limit to the slowest legitimate run, or `Infinity` to remove it:
+
+```typescript
+events: {
+  consumer: { ack_wait: toNanos(30, 'seconds') },
+  ackExtension: { maxDuration: 20 * 60_000 }, // interval still derived from ack_wait
+}
+```
+
+`interval` in the same object sets the extension period in milliseconds instead.
+
 For JetStream RPC the RPC timeout bounds how long the caller waits, and `ackExtension` keeps the command message alive independently. Size both for the expected handler duration.
 
 ## S2 compression

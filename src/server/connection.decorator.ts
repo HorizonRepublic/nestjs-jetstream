@@ -1,4 +1,6 @@
-import { PATTERN_EXTRAS_METADATA, PATTERN_METADATA } from '@nestjs/microservices/constants';
+// The extension is required: NestJS 10 and 11 publish no exports map, so a
+// native ESM import does not resolve the bare subpath.
+import { PATTERN_EXTRAS_METADATA, PATTERN_METADATA } from '@nestjs/microservices/constants.js';
 
 /**
  * Bind every `@EventPattern` / `@MessagePattern` handler on a controller to a

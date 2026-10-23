@@ -6,7 +6,7 @@ import type { ConsumerInfo, StreamInfo } from '@nats-io/jetstream';
 import { StreamKind } from '../../interfaces';
 import type { AckExtensionConfig, JetstreamModuleOptions } from '../../interfaces';
 import type { ProvisioningEntity } from '../../otel';
-import { resolveAckExtensionInterval } from '../../utils/ack-extension';
+import { resolveAckExtension as resolveAckExtensionTiming } from '../../utils/ack-extension';
 import { PatternRegistry } from '../routing';
 import { isDlqEnabled } from './dlq-options';
 import { kindOptionsBlock, type ManagedKind } from './management';
@@ -304,9 +304,9 @@ export class InfrastructureBinder {
 
     const ackWaitNanos = info.config.ack_wait;
 
-    const intervalMs = resolveAckExtensionInterval(ackExtConfig, ackWaitNanos);
+    const intervalMs = resolveAckExtensionTiming(ackExtConfig, ackWaitNanos)?.intervalMs;
 
-    if (intervalMs === null) return;
+    if (intervalMs === undefined) return;
 
     const ackWaitMs = ackWaitNanos !== undefined ? ackWaitNanos / 1_000_000 : undefined;
 

@@ -1,4 +1,7 @@
+import { Logger } from '@nestjs/common';
+
 import type { AckExtensionConfig } from '../interfaces';
+import type { AckExtension, AckExtensionTarget } from './ack-extension.types';
 
 /** Default ack extension interval fallback when ack_wait is unknown (ms). */
 const DEFAULT_ACK_EXTENSION_INTERVAL = 5_000;
@@ -7,41 +10,74 @@ const DEFAULT_ACK_EXTENSION_INTERVAL = 5_000;
 const MIN_ACK_EXTENSION_INTERVAL = 500;
 
 /**
- * How long a single message may be kept alive by extension. A handler that
- * hangs used to hold its message and its concurrency slot for the life of the
- * process; past this point the extension stops and the server redelivers.
+ * How long a single message may be kept alive by extension unless
+ * `ackExtension.maxDuration` says otherwise. A hung handler would otherwise
+ * hold its message for the life of the process.
  */
 export const DEFAULT_MAX_ACK_EXTENSION_MS = 300_000;
 
-/**
- * Resolve the ack extension interval from user config and NATS ack_wait.
- *
- * @param config  - `false`/`undefined` -> disabled, `number` -> explicit ms, `true` -> auto from ack_wait.
- * @param ackWaitNanos - Consumer `ack_wait` in nanoseconds (for auto-calculation).
- * @returns Interval in ms, or `null` if disabled.
- */
-export const resolveAckExtensionInterval = (
-  config: AckExtensionConfig | undefined,
-  ackWaitNanos: number | undefined,
-): number | null => {
-  if (config === false || config === undefined) return null;
-  if (typeof config === 'number') {
-    if (!Number.isFinite(config) || config <= 0) return null;
-    return Math.floor(config);
-  }
+const logger = new Logger('Jetstream:AckExtension');
 
+/** Half of ack_wait, so the extension fires well before the deadline. */
+const intervalFromAckWait = (ackWaitNanos: number | undefined): number => {
   if (!ackWaitNanos) return DEFAULT_ACK_EXTENSION_INTERVAL;
 
-  // ack_wait is reported in nanoseconds; convert to ms and halve so the
-  // extension fires well before the deadline.
-  const interval = Math.floor(ackWaitNanos / 1_000_000 / 2);
+  return Math.max(Math.floor(ackWaitNanos / 1_000_000 / 2), MIN_ACK_EXTENSION_INTERVAL);
+};
 
-  return Math.max(interval, MIN_ACK_EXTENSION_INTERVAL);
+const isPositive = (value: number): boolean => !Number.isNaN(value) && value > 0;
+
+/**
+ * Resolve the ack extension from user config and the consumer's ack_wait.
+ *
+ * @param config - `false`/`undefined` -> disabled, `true` -> interval from ack_wait,
+ *   `number` -> explicit interval in ms, object -> interval and limit.
+ * @param ackWaitNanos - Consumer `ack_wait` in nanoseconds.
+ * @returns The interval and limit in ms, or `null` when disabled.
+ * @throws When the object form carries an interval or limit that is not a positive number.
+ */
+export const resolveAckExtension = (
+  config: AckExtensionConfig | undefined,
+  ackWaitNanos: number | undefined,
+): AckExtension | null => {
+  if (config === false || config === undefined) return null;
+  if (config === true) {
+    return {
+      intervalMs: intervalFromAckWait(ackWaitNanos),
+      maxDurationMs: DEFAULT_MAX_ACK_EXTENSION_MS,
+    };
+  }
+
+  if (typeof config === 'number') {
+    if (!Number.isFinite(config) || config <= 0) return null;
+
+    return { intervalMs: Math.floor(config), maxDurationMs: DEFAULT_MAX_ACK_EXTENSION_MS };
+  }
+
+  const { interval, maxDuration = DEFAULT_MAX_ACK_EXTENSION_MS } = config;
+
+  if (interval !== undefined && (!Number.isFinite(interval) || interval <= 0)) {
+    throw new Error(
+      `ackExtension.interval must be a positive number of milliseconds, got ${interval}.`,
+    );
+  }
+
+  if (!isPositive(maxDuration)) {
+    throw new Error(
+      `ackExtension.maxDuration must be a positive number of milliseconds or Infinity, got ${maxDuration}.`,
+    );
+  }
+
+  return {
+    intervalMs: interval === undefined ? intervalFromAckWait(ackWaitNanos) : Math.floor(interval),
+    maxDurationMs: maxDuration,
+  };
 };
 
 interface AckEntry {
-  msg: { working(): void };
+  msg: AckExtensionTarget;
   interval: number;
+  maxDuration: number;
   nextFireAt: number;
   expiresAt: number;
   active: boolean;
@@ -65,13 +101,14 @@ class AckExtensionPool {
   private handle: ReturnType<typeof setTimeout> | null = null;
   private handleFireAt = 0;
 
-  public schedule(msg: { working(): void }, interval: number, maxTotalMs: number): AckEntry {
+  public schedule(msg: AckExtensionTarget, extension: AckExtension): AckEntry {
     const now = Date.now();
     const entry: AckEntry = {
       msg,
-      interval,
-      nextFireAt: now + interval,
-      expiresAt: now + maxTotalMs,
+      interval: extension.intervalMs,
+      maxDuration: extension.maxDurationMs,
+      nextFireAt: now + extension.intervalMs,
+      expiresAt: now + extension.maxDurationMs,
       active: true,
     };
 
@@ -124,6 +161,11 @@ class AckExtensionPool {
 
       if (entry.expiresAt <= now) {
         this.cancel(entry);
+        logger.warn(
+          `Stopped extending the ack deadline for ${entry.msg.subject} after ${entry.maxDuration}ms. ` +
+            'The handler is still running; the server will redeliver the message once ack_wait ' +
+            'runs out. Raise ackExtension.maxDuration if the handler legitimately runs this long.',
+        );
         continue;
       }
 
@@ -151,19 +193,18 @@ const pool = new AckExtensionPool();
 
 /**
  * Register a message for ack extension. The pool calls `msg.working()` at the
- * configured interval for as long as the entry lives, keeping NATS from
- * redelivering before the handler finishes.
+ * configured interval until the entry is cancelled or reaches its limit,
+ * keeping NATS from redelivering before the handler finishes.
  *
  * @returns Cleanup function that cancels the registration, or `null` when
  *          ack extension is disabled.
  */
 export const startAckExtensionTimer = (
-  msg: { working(): void },
-  interval: number | null,
-  maxTotalMs: number = DEFAULT_MAX_ACK_EXTENSION_MS,
+  msg: AckExtensionTarget,
+  extension: AckExtension | null,
 ): (() => void) | null => {
-  if (interval === null || interval <= 0) return null;
-  const entry = pool.schedule(msg, interval, maxTotalMs);
+  if (extension === null || extension.intervalMs <= 0) return null;
+  const entry = pool.schedule(msg, extension);
 
   return () => {
     pool.cancel(entry);
