@@ -933,40 +933,6 @@ const drawHint = (ctx, project, palette, sim, geo, ui) => {
   label(ctx, palette, '↖ click a pod to take it down', tag.x, tag.y, 'left', palette.deliver, 600);
 };
 
-/* Faint light running along the cables in the direction of the flow. */
-const drawPulses = (ctx, project, palette, sim, geo) => {
-  const cables = [
-    ...geo.producers.map((p, i) => ({ from: p, to: { x: geo.tube.x0 - 10, y: geo.tube.y }, phase: i * 0.37, live: true })),
-    ...geo.replicas.map((r, i) => ({
-      from: { x: geo.tube.x1 + 10, y: geo.tube.y },
-      to: r,
-      phase: 0.2 + i * 0.29,
-      live: !isDown(sim, sim.replicas[i]),
-    })),
-  ];
-
-  ctx.save();
-  ctx.strokeStyle = palette.deliver;
-  ctx.lineCap = 'round';
-  ctx.lineWidth = 1.6;
-
-  for (const cable of cables) {
-    if (!cable.live) continue;
-
-    const t = (sim.time / 2600 + cable.phase) % 1;
-    const at = (u) => project(cable.from.x + (cable.to.x - cable.from.x) * u, cable.from.y + (cable.to.y - cable.from.y) * u);
-    const a = at(Math.max(0, t - 0.12));
-    const b = at(t);
-
-    ctx.globalAlpha = 0.35 * Math.sin(t * Math.PI);
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-    ctx.stroke();
-  }
-  ctx.restore();
-};
-
 /* Atmosphere: the scene thins out towards the edges of the canvas. */
 const fadeEdges = (ctx, cw, ch) => {
   ctx.save();
@@ -1016,7 +982,6 @@ const draw = (ctx, sim, geo, view, palette, logo, ui) => {
   }
   ctx.stroke();
   ctx.globalAlpha = 1;
-  drawPulses(ctx, project, palette, sim, geo);
 
   for (const p of geo.producers) reflectBlock(ctx, project, p.x, p.y, 26, 20, palette.block, null);
   sim.replicas.forEach((replica, index) => {
