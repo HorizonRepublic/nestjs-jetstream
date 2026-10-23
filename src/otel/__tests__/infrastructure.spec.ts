@@ -1,10 +1,10 @@
 import { faker } from '@faker-js/faker';
 import { SpanStatusCode, trace } from '@opentelemetry/api';
 import {
-  BasicTracerProvider,
+  TracerProvider,
   InMemorySpanExporter,
   SimpleSpanProcessor,
-} from '@opentelemetry/sdk-trace-base';
+} from '@opentelemetry/sdk-trace';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { resolveOtelOptions } from '../config';
@@ -27,12 +27,12 @@ const baseCtx = (): {
 
 describe('infrastructure span helpers', () => {
   let exporter: InMemorySpanExporter;
-  let provider: BasicTracerProvider;
+  let provider: TracerProvider;
 
   beforeAll(() => {
     exporter = new InMemorySpanExporter();
-    provider = new BasicTracerProvider({
-      spanProcessors: [new SimpleSpanProcessor(exporter)],
+    provider = new TracerProvider({
+      spanProcessors: [new SimpleSpanProcessor({ exporter })],
     });
     trace.setGlobalTracerProvider(provider);
   });

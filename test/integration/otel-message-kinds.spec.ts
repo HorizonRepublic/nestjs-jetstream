@@ -8,10 +8,10 @@ import { context, propagation, SpanKind, trace } from '@opentelemetry/api';
 import { AsyncLocalStorageContextManager } from '@opentelemetry/context-async-hooks';
 import { W3CTraceContextPropagator } from '@opentelemetry/core';
 import {
-  BasicTracerProvider,
+  TracerProvider,
   InMemorySpanExporter,
   SimpleSpanProcessor,
-} from '@opentelemetry/sdk-trace-base';
+} from '@opentelemetry/sdk-trace';
 import { firstValueFrom } from 'rxjs';
 import type { StartedTestContainer } from 'testcontainers';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -59,15 +59,15 @@ describe('OTel message-kind attributes integration; broadcast, ordered, schedule
   let container: StartedTestContainer;
   let port: number;
   let exporter: InMemorySpanExporter;
-  let provider: BasicTracerProvider;
+  let provider: TracerProvider;
 
   beforeAll(async () => {
     ({ container, port } = await startNatsContainer());
     nc = await createNatsConnection(port);
 
     exporter = new InMemorySpanExporter();
-    provider = new BasicTracerProvider({
-      spanProcessors: [new SimpleSpanProcessor(exporter)],
+    provider = new TracerProvider({
+      spanProcessors: [new SimpleSpanProcessor({ exporter })],
     });
     trace.setGlobalTracerProvider(provider);
     propagation.setGlobalPropagator(new W3CTraceContextPropagator());

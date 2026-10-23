@@ -5,10 +5,10 @@ import { SpanStatusCode, context, propagation, trace } from '@opentelemetry/api'
 import { AsyncLocalStorageContextManager } from '@opentelemetry/context-async-hooks';
 import { W3CTraceContextPropagator } from '@opentelemetry/core';
 import {
-  BasicTracerProvider,
+  TracerProvider,
   InMemorySpanExporter,
   SimpleSpanProcessor,
-} from '@opentelemetry/sdk-trace-base';
+} from '@opentelemetry/sdk-trace';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { resolveOtelOptions } from '../config';
@@ -31,12 +31,12 @@ const baseCtx = (): RpcClientSpanContext => ({
 
 describe('beginRpcClientSpan', () => {
   let exporter: InMemorySpanExporter;
-  let provider: BasicTracerProvider;
+  let provider: TracerProvider;
 
   beforeAll(() => {
     exporter = new InMemorySpanExporter();
-    provider = new BasicTracerProvider({
-      spanProcessors: [new SimpleSpanProcessor(exporter)],
+    provider = new TracerProvider({
+      spanProcessors: [new SimpleSpanProcessor({ exporter })],
     });
     trace.setGlobalTracerProvider(provider);
     propagation.setGlobalPropagator(new W3CTraceContextPropagator());
