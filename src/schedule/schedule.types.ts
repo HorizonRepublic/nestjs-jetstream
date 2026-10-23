@@ -11,6 +11,7 @@ export enum ScheduleErrorReason {
   InvalidTimezone = 'invalid-timezone',
   InvalidId = 'invalid-id',
   InvalidPattern = 'invalid-pattern',
+  InvalidData = 'invalid-data',
   /** The server has no time zone data for a zone the client accepted. */
   ServerTimezoneData = 'server-timezone-data',
   ServerRejected = 'server-rejected',

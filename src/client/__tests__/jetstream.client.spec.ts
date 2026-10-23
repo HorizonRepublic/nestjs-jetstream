@@ -1,4 +1,4 @@
-import type { JetStreamClient as NatsJsClient, PubAck } from '@nats-io/jetstream';
+import type { JetStreamClient as NatsJsClient, JetStreamManager, PubAck } from '@nats-io/jetstream';
 import type { Msg, MsgHdrs, NatsConnection, Status, Subscription } from '@nats-io/transport-node';
 import { headers as natsHeaders } from '@nats-io/transport-node';
 
@@ -16,6 +16,7 @@ import {
   DEFAULT_RPC_TIMEOUT,
   JetstreamHeader,
 } from '../../jetstream.constants';
+import { ScheduleErrorReason } from '../../schedule';
 import { NameResolver } from '../../server/infrastructure/name-resolver';
 import { JetstreamClient } from '../jetstream.client';
 import { JetstreamRecordBuilder } from '../jetstream.record';
@@ -467,6 +468,28 @@ describe(JetstreamClient, () => {
 
         expect(publishOpts.schedule).toBeUndefined();
       });
+    });
+  });
+
+  describe('schedules', () => {
+    it('should validate a dynamic schedule on the target before any I/O', async () => {
+      await expect(
+        sut.schedule('not.a.token', 'reminder.due', {}, { everySeconds: 60 }),
+      ).rejects.toThrow(expect.objectContaining({ reason: ScheduleErrorReason.InvalidId }));
+      await expect(sut.cancelSchedule('a b')).rejects.toThrow(
+        expect.objectContaining({ reason: ScheduleErrorReason.InvalidId }),
+      );
+    });
+
+    it('should look the schedule stream up under the target tick prefix', async () => {
+      // Given a target without a schedule stream
+      const jsm = createMock<JetStreamManager>();
+
+      vi.mocked(jsm.streams.find).mockRejectedValue(new Error('no stream'));
+      connection.getJetStreamManager.mockResolvedValue(jsm);
+
+      // When / Then
+      await expect(sut.listSchedules()).rejects.toThrow(`${targetName}__microservice.sched.`);
     });
   });
 

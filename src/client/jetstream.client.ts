@@ -21,6 +21,9 @@ import type {
   JetstreamModuleOptions,
   PublishStatus,
   RpcOutcomeStatus,
+  ScheduleChange,
+  ScheduleInfo,
+  ScheduleSpec,
   TargetSubjectPrefixes,
   TransportHeaderOptions,
 } from '../interfaces';
@@ -44,6 +47,7 @@ import {
   type ResolvedOtelOptions,
   type ServerEndpoint,
 } from '../otel';
+import { ScheduleClient } from '../schedule/schedule-client';
 import { NameResolver } from '../server/infrastructure/name-resolver';
 import { SubjectResolver } from '../server/infrastructure/subject-resolver';
 import type { PublishAckLike, RpcReplyCallback } from './client.types';
@@ -133,6 +137,9 @@ export class JetstreamClient extends ClientProxy {
   /** Subjects of the target service: its own resolver when the target is this service. */
   private readonly subjects: SubjectResolver;
 
+  /** Dynamic schedules on the target, created on first use. */
+  private scheduleClient: ScheduleClient | null = null;
+
   /**
    * RPC configuration snapshots. The values are derived from rootOptions at
    * construction time so the publish hot path never has to re-run
@@ -214,6 +221,34 @@ export class JetstreamClient extends ClientProxy {
     this.readyForPublish = true;
 
     return nc;
+  }
+
+  /**
+   * Create or replace a schedule on the target service. Its ticks go to the
+   * target's handler for `pattern`, which declares `schedule` in its extras.
+   *
+   * An unchanged schedule is left alone, so an interval keeps its phase.
+   *
+   * @param id One subject token naming the schedule, unique within the target.
+   * @throws JetstreamScheduleError for an invalid id, pattern or spec, or a server too old for it.
+   */
+  public async schedule(
+    id: string,
+    pattern: string,
+    data: unknown,
+    spec: ScheduleSpec,
+  ): Promise<ScheduleChange> {
+    return this.schedules().schedule(id, pattern, data, spec);
+  }
+
+  /** Cancel a schedule created with {@link schedule}; nothing happens when it does not exist. */
+  public async cancelSchedule(id: string): Promise<void> {
+    await this.schedules().cancelSchedule(id);
+  }
+
+  /** Every schedule of the target service, declared by its handlers and created by clients. */
+  public async listSchedules(): Promise<ScheduleInfo[]> {
+    return this.schedules().listSchedules();
   }
 
   /** Clean up resources: reject pending RPCs, unsubscribe from status events. */
@@ -630,6 +665,12 @@ export class JetstreamClient extends ClientProxy {
     this.rpcInbox.rejectAll(new Error('Connection lost'));
     // Force the next publish to re-run the full connect setup.
     this.readyForPublish = false;
+  }
+
+  private schedules(): ScheduleClient {
+    this.scheduleClient ??= new ScheduleClient(this.connection, this.codec, this.subjects);
+
+    return this.scheduleClient;
   }
 
   /** Resolve a user pattern to a fully-qualified NATS subject of the target. */
