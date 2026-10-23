@@ -6,6 +6,7 @@ import type { ClientProxy } from '@nestjs/microservices';
 import { jetstreamManager } from '@nats-io/jetstream';
 import type { NatsConnection } from '@nats-io/transport-node';
 
+import { firstValueFrom } from 'rxjs';
 import type { StartedTestContainer } from 'testcontainers';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
@@ -161,9 +162,14 @@ describe('v2 configuration compatibility', () => {
     };
 
     void collect();
+    // The client publishes on another connection, so the server must have the
+    // subscription before the event goes out.
+    await nc.flush();
 
     // When an event is published through the client
-    app.get<ClientProxy>(getClientToken(serviceName)).emit('order.created', { id: 'o-2' });
+    await firstValueFrom(
+      app.get<ClientProxy>(getClientToken(serviceName)).emit('order.created', { id: 'o-2' }),
+    );
 
     // Then it went out on exactly that subject
     await waitForCondition(() => observed.length > 0, 10_000);
