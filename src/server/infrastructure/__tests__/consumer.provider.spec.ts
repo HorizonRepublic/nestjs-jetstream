@@ -286,6 +286,54 @@ describe(ConsumerProvider, () => {
   });
 
   describe('buildConfig', () => {
+    describe('when the kind is Schedule', () => {
+      it('should filter on the tick wildcard, never the holder namespace', async () => {
+        // Given
+        mockJsm.consumers.info.mockResolvedValue(createMock<ConsumerInfo>());
+        mockJsm.consumers.update.mockResolvedValue(createMock<ConsumerInfo>());
+
+        // When
+        await sut.ensureConsumers([StreamKind.Schedule]);
+
+        // Then
+        expect(mockJsm.consumers.update).toHaveBeenCalledWith(
+          'test-stream',
+          `${internalName(options.name)}_sched-consumer`,
+          expect.objectContaining({
+            filter_subject: `${internalName(options.name)}.sched.>`,
+            max_deliver: 3,
+          }),
+        );
+      });
+
+      it('should filter on exact tick subjects under a custom prefix', async () => {
+        // Given
+        options.schedule = { subjectPrefix: 'acme.cron' };
+        sut = makeSut();
+        patternRegistry.getPatternsByKind.mockReturnValue({
+          events: [],
+          commands: [],
+          broadcasts: [],
+          ordered: [],
+          schedules: ['sync.tick', 'reminder.due'],
+        });
+        mockJsm.consumers.info.mockResolvedValue(createMock<ConsumerInfo>());
+        mockJsm.consumers.update.mockResolvedValue(createMock<ConsumerInfo>());
+
+        // When
+        await sut.ensureConsumers([StreamKind.Schedule]);
+
+        // Then
+        expect(mockJsm.consumers.update).toHaveBeenCalledWith(
+          'test-stream',
+          expect.any(String),
+          expect.objectContaining({
+            filter_subjects: ['acme.cron.sync.tick', 'acme.cron.reminder.due'],
+          }),
+        );
+      });
+    });
+
     describe('when broadcast has multiple patterns', () => {
       it('should use filter_subjects instead of filter_subject', async () => {
         // Given: registry returns 2 broadcast patterns

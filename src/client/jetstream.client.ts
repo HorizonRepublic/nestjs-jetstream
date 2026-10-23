@@ -67,6 +67,7 @@ const resolveTargetSubjects = (
         [StreamKind.Event]: targetPrefixes?.events,
         [StreamKind.Ordered]: targetPrefixes?.ordered,
         [StreamKind.Command]: targetPrefixes?.rpc,
+        [StreamKind.Schedule]: targetPrefixes?.schedule,
       },
       own.subjects,
     );

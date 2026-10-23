@@ -332,6 +332,12 @@ export interface JetstreamModuleOptions {
   broadcast?: StreamConsumerOverrides;
 
   /**
+   * Schedule stream/consumer overrides. The stream exists only when a handler
+   * declares `schedule` in its `@EventPattern` extras.
+   */
+  schedule?: StreamConsumerOverrides;
+
+  /**
    * Ordered event consumer configuration.
    *
    * Ordered events use a separate stream with Limits retention and deliver
@@ -478,6 +484,9 @@ export interface TargetSubjectPrefixes {
 
   /** The target's `rpc.subjectPrefix`. */
   rpc?: string;
+
+  /** The target's `schedule.subjectPrefix`. */
+  schedule?: string;
 }
 
 /** Options for `JetstreamModule.forFeature()`. */

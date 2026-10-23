@@ -3,6 +3,7 @@ export { nextFireTimes, parseCron } from './cron-expression';
 export { JetstreamScheduleError } from './schedule-error';
 
 export {
+  assertLiteralSubject,
   assertSubjectToken,
   isCronSchedule,
   resolveTickTtlSeconds,

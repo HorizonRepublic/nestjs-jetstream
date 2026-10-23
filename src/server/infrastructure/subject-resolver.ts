@@ -2,6 +2,7 @@ import { StreamKind } from '../../interfaces';
 import {
   BROADCAST_SUBJECT_PREFIX,
   internalName,
+  SCHEDULE_HOLDER_SEGMENT,
   SCHEDULE_SEGMENT,
   subjectPrefix,
 } from '../../jetstream.constants';
@@ -30,6 +31,10 @@ const normalizePrefix = (raw: string): string => {
   return `${trimmed}.`;
 };
 
+/** One-shot holders live under `_sch.`; the schedule stream keeps its recurring holders under `_cron.`. */
+const holderSegment = (kind: StreamKind): string =>
+  kind === StreamKind.Schedule ? SCHEDULE_HOLDER_SEGMENT : SCHEDULE_SEGMENT;
+
 const conventionSubjects = (name: string, kind: StreamKind): KindSubjects => {
   if (kind === StreamKind.Broadcast) {
     return {
@@ -41,15 +46,15 @@ const conventionSubjects = (name: string, kind: StreamKind): KindSubjects => {
 
   return {
     prefix: subjectPrefix(name, kind),
-    schedulePrefix: `${internalName(name)}.${SCHEDULE_SEGMENT}`,
+    schedulePrefix: `${internalName(name)}.${holderSegment(kind)}`,
     custom: false,
   };
 };
 
-const customSubjects = (raw: string): KindSubjects => {
+const customSubjects = (raw: string, kind: StreamKind): KindSubjects => {
   const prefix = normalizePrefix(raw);
 
-  return { prefix, schedulePrefix: `${prefix}${SCHEDULE_SEGMENT}`, custom: true };
+  return { prefix, schedulePrefix: `${prefix}${holderSegment(kind)}`, custom: true };
 };
 
 /** Subject prefixes of one service, per stream kind, and the subjects built from them. */
@@ -69,7 +74,7 @@ export class SubjectResolver {
 
       kinds.set(
         kind,
-        custom === undefined ? conventionSubjects(name, kind) : customSubjects(custom),
+        custom === undefined ? conventionSubjects(name, kind) : customSubjects(custom, kind),
       );
     }
 

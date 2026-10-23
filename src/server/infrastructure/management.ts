@@ -42,6 +42,8 @@ export const kindOptionsBlock = (
       return options.broadcast;
     case StreamKind.Ordered:
       return options.ordered;
+    case StreamKind.Schedule:
+      return options.schedule;
     case StreamKind.Command:
       return isJetStreamRpcMode(options.rpc) ? options.rpc : undefined;
     /* v8 ignore next 5 -- exhaustive switch guard, unreachable */

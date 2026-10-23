@@ -34,14 +34,17 @@ describe(EventRouter, () => {
 
   let events$: Subject<JsMsg>;
   let broadcasts$: Subject<JsMsg>;
+  let schedules$: Subject<JsMsg>;
 
   beforeEach(() => {
     events$ = new Subject<JsMsg>();
     broadcasts$ = new Subject<JsMsg>();
+    schedules$ = new Subject<JsMsg>();
 
     messageProvider = createMock<MessageProvider>({
       events$: events$.asObservable(),
       broadcasts$: broadcasts$.asObservable(),
+      schedules$: schedules$.asObservable(),
     });
     patternRegistry = createMock<PatternRegistry>();
     codec = createMock<Codec>({
@@ -65,6 +68,33 @@ describe(EventRouter, () => {
           expect(events$.observed).toBe(true);
           expect(broadcasts$.observed).toBe(true);
         });
+      });
+    });
+
+    describe('when schedule handlers are registered', () => {
+      it('should route schedule ticks with the schedule retry curve', async () => {
+        // Given a router whose schedule kind retries after 7 s
+        sut = new EventRouter(messageProvider, patternRegistry, codec, eventBus, undefined, {
+          schedule: { retry: [7_000] },
+        });
+        patternRegistry.hasScheduleHandlers.mockReturnValue(true);
+        patternRegistry.getHandler.mockReturnValue(vi.fn().mockRejectedValue(new Error('boom')));
+        sut.start();
+
+        const msg = createMock<JsMsg>({
+          ack: vi.fn(),
+          subject: faker.lorem.word(),
+          data: new TextEncoder().encode('{}'),
+          info: { deliveryCount: 1 },
+        });
+
+        // When
+        schedules$.next(msg);
+        await new Promise(process.nextTick);
+
+        // Then
+        expect(schedules$.observed).toBe(true);
+        expect(msg.nak).toHaveBeenCalledWith(7_000);
       });
     });
 

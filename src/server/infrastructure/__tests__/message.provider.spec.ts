@@ -190,6 +190,26 @@ describe(MessageProvider, () => {
       });
     });
 
+    describe('when schedule ticks are observed', () => {
+      it('should complete the schedule stream and hand out a fresh one', () => {
+        // Given
+        let completed = false;
+
+        sut.schedules$.subscribe({ complete: () => (completed = true) });
+
+        // When
+        sut.destroy();
+
+        // Then
+        expect(completed).toBe(true);
+
+        let completedAfter = false;
+
+        sut.schedules$.subscribe({ complete: () => (completedAfter = true) });
+        expect(completedAfter).toBe(false);
+      });
+    });
+
     describe('when orderedReadyReject is pending', () => {
       it('should reject with "Destroyed before ordered consumer connected"', async () => {
         // Given: startOrdered() called but consumer not yet connected

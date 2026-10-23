@@ -85,7 +85,7 @@ describe(InfrastructureBinder.name, () => {
   let names: NameResolver;
   let registry: ReturnType<typeof createMock<PatternRegistry>>;
 
-  const emptyPatterns = { events: [], commands: [], broadcasts: [], ordered: [] };
+  const emptyPatterns = { events: [], commands: [], broadcasts: [], ordered: [], schedules: [] };
 
   const makeSut = (options: JetstreamModuleOptions = baseOptions): InfrastructureBinder => {
     names = new NameResolver(options);
@@ -151,6 +151,7 @@ describe(InfrastructureBinder.name, () => {
           commands: [],
           broadcasts: [],
           ordered: [],
+          schedules: [],
         });
 
         const consumerFilter = names.filterSubject(StreamKind.Event);
@@ -235,6 +236,7 @@ describe(InfrastructureBinder.name, () => {
           commands: [],
           broadcasts: [],
           ordered: [],
+          schedules: [],
         });
 
         const uncoveredSubject = names.subject(StreamKind.Event, pattern);
@@ -291,6 +293,79 @@ describe(InfrastructureBinder.name, () => {
     });
   });
 
+  describe('schedule stream', () => {
+    const scheduleConfig = (overrides: Partial<StreamConfig> = {}): Partial<StreamConfig> => ({
+      subjects: [
+        names.filterSubject(StreamKind.Schedule),
+        `${names.schedulePrefix(StreamKind.Schedule)}>`,
+      ],
+      allow_msg_schedules: true,
+      max_age: 0,
+      ...overrides,
+    });
+
+    it('should bind a schedule stream that covers ticks and holders', async () => {
+      // Given
+      const sut = makeSut();
+      const info = makeStreamInfo(scheduleConfig());
+
+      // When / Then
+      await expect(
+        sut.bindStream(
+          makeJsm({ streamInfo: vi.fn().mockResolvedValue(info) }),
+          StreamKind.Schedule,
+        ),
+      ).resolves.toBe(info);
+    });
+
+    it('should refuse a schedule stream that does not cover the holder namespace', async () => {
+      // Given
+      const sut = makeSut();
+      const info = makeStreamInfo(
+        scheduleConfig({ subjects: [names.filterSubject(StreamKind.Schedule)] }),
+      );
+
+      // When / Then
+      await expect(
+        sut.bindStream(
+          makeJsm({ streamInfo: vi.fn().mockResolvedValue(info) }),
+          StreamKind.Schedule,
+        ),
+      ).rejects.toThrow(names.schedulePrefix(StreamKind.Schedule));
+    });
+
+    it('should warn when the schedule stream ages messages out', async () => {
+      // Given
+      const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      const sut = makeSut();
+      const info = makeStreamInfo(scheduleConfig({ max_age: 1_000_000_000 }));
+
+      // When
+      await sut.bindStream(
+        makeJsm({ streamInfo: vi.fn().mockResolvedValue(info) }),
+        StreamKind.Schedule,
+      );
+
+      // Then
+      expect(warn).toHaveBeenCalledWith(expect.stringMatching(/max_age.*stops/i));
+      warn.mockRestore();
+    });
+
+    it('should refuse a schedule consumer whose filter would consume holders', async () => {
+      // Given
+      const sut = makeSut();
+      const info = makeConsumerInfo({ filter_subject: `${serviceName}__microservice.>` });
+
+      // When / Then
+      await expect(
+        sut.bindConsumer(
+          makeJsm({ consumerInfo: vi.fn().mockResolvedValue(info) }),
+          StreamKind.Schedule,
+        ),
+      ).rejects.toThrow(/removes pending schedules/);
+    });
+  });
+
   describe('bindStream(); unexpected lookup errors', () => {
     it('should rethrow non-NATS errors untouched', async () => {
       // Given: streams.info fails with an infrastructure error while the stream exists
@@ -325,6 +400,7 @@ describe(InfrastructureBinder.name, () => {
         commands: [],
         broadcasts: [],
         ordered: [],
+        schedules: [],
       });
 
       const info = makeConsumerInfo({
@@ -352,6 +428,7 @@ describe(InfrastructureBinder.name, () => {
         commands: [],
         broadcasts: [],
         ordered: [],
+        schedules: [],
       });
 
       const info = makeConsumerInfo({
@@ -389,6 +466,7 @@ describe(InfrastructureBinder.name, () => {
       commands: [],
       broadcasts: [],
       ordered: [],
+      schedules: [],
     };
 
     describe('when the consumer has no filter at all', () => {
@@ -441,6 +519,7 @@ describe(InfrastructureBinder.name, () => {
       commands: [],
       broadcasts: [],
       ordered: [],
+      schedules: [],
     };
 
     describe('when scheduling is enabled and the filter covers the schedule namespace', () => {

@@ -54,6 +54,7 @@ export type {
   DeadLetterConfig,
   EventProcessingConfig,
   KindProcessingConfig,
+  DeclaredSchedule,
   PatternsByKind,
   RegisteredHandler,
   RpcRouterOptions,

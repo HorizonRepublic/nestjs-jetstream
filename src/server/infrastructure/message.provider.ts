@@ -51,6 +51,7 @@ export class MessageProvider {
   private commandMessages$ = new Subject<JsMsg>();
   private broadcastMessages$ = new Subject<JsMsg>();
   private orderedMessages$ = new Subject<JsMsg>();
+  private scheduleMessages$ = new Subject<JsMsg>();
 
   public constructor(
     private readonly connection: ConnectionProvider,
@@ -72,6 +73,11 @@ export class MessageProvider {
   /** Observable stream of broadcast event messages. */
   public get broadcasts$(): Observable<JsMsg> {
     return this.broadcastMessages$.asObservable();
+  }
+
+  /** Observable stream of schedule ticks. */
+  public get schedules$(): Observable<JsMsg> {
+    return this.scheduleMessages$.asObservable();
   }
 
   /** Observable stream of ordered event messages (strict sequential delivery). */
@@ -164,6 +170,7 @@ export class MessageProvider {
     this.commandMessages$.complete();
     this.broadcastMessages$.complete();
     this.orderedMessages$.complete();
+    this.scheduleMessages$.complete();
 
     // Reinitialize subjects so start() can be called again after destroy()
     this.destroy$ = new Subject<void>();
@@ -171,6 +178,7 @@ export class MessageProvider {
     this.commandMessages$ = new Subject<JsMsg>();
     this.broadcastMessages$ = new Subject<JsMsg>();
     this.orderedMessages$ = new Subject<JsMsg>();
+    this.scheduleMessages$ = new Subject<JsMsg>();
   }
 
   /** Create a self-healing consumer flow for a specific kind. */
@@ -266,6 +274,8 @@ export class MessageProvider {
         return this.broadcastMessages$;
       case StreamKind.Ordered:
         return this.orderedMessages$;
+      case StreamKind.Schedule:
+        return this.scheduleMessages$;
       /* v8 ignore next 5 -- exhaustive switch guard, unreachable */
       default: {
         const _exhaustive: never = kind;

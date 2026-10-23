@@ -41,6 +41,7 @@ describe(JetstreamStrategy, () => {
     patternRegistry = createMock<PatternRegistry>({
       hasEventHandlers: vi.fn().mockReturnValue(false),
       hasOrderedHandlers: vi.fn().mockReturnValue(false),
+      hasScheduleHandlers: vi.fn().mockReturnValue(false),
       hasBroadcastHandlers: vi.fn().mockReturnValue(false),
       hasRpcHandlers: vi.fn().mockReturnValue(false),
       hasMetadata: vi.fn().mockReturnValue(false),
@@ -249,6 +250,21 @@ describe(JetstreamStrategy, () => {
       expect(rpcRouter.start).toHaveBeenCalled();
 
       expect(coreRpcServer.start).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('schedule kinds', () => {
+    it('should provision the schedule stream and consumer and start routing', async () => {
+      // Given
+      patternRegistry.hasScheduleHandlers.mockReturnValue(true);
+
+      // When
+      await sut.listen(() => {});
+
+      // Then
+      expect(streamProvider.ensureStreams).toHaveBeenCalledWith([StreamKind.Schedule]);
+      expect(consumerProvider.ensureConsumers).toHaveBeenCalledWith([StreamKind.Schedule]);
+      expect(eventRouter.start).toHaveBeenCalled();
     });
   });
 

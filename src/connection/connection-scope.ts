@@ -41,6 +41,7 @@ const buildConsumeOptions = (
 
   if (options.events?.consume) map.set(StreamKind.Event, options.events.consume);
   if (options.broadcast?.consume) map.set(StreamKind.Broadcast, options.broadcast.consume);
+  if (options.schedule?.consume) map.set(StreamKind.Schedule, options.schedule.consume);
   if (options.rpc?.mode === 'jetstream' && options.rpc.consume) {
     map.set(StreamKind.Command, options.rpc.consume);
   }
@@ -58,6 +59,11 @@ const buildProcessingConfig = (options: ResolvedConnectionOptions): EventProcess
     concurrency: options.broadcast?.concurrency,
     ackExtension: options.broadcast?.ackExtension,
     retry: options.broadcast?.retry,
+  },
+  schedule: {
+    concurrency: options.schedule?.concurrency,
+    ackExtension: options.schedule?.ackExtension,
+    retry: options.schedule?.retry,
   },
 });
 

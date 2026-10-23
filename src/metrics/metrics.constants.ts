@@ -51,11 +51,12 @@ export const UNMATCHED_SUBJECT_LABEL = '<unmatched>';
 
 /**
  * Expands the short-form {@link StreamKind} enum values (`ev`, `cmd`) into
- * full words for Prometheus labels. Cardinality stays fixed at four.
+ * full words for Prometheus labels. Cardinality stays fixed at five.
  */
 export const STREAM_KIND_LABEL: Record<StreamKind, string> = {
   [StreamKind.Event]: 'event',
   [StreamKind.Command]: 'command',
   [StreamKind.Broadcast]: 'broadcast',
   [StreamKind.Ordered]: 'ordered',
+  [StreamKind.Schedule]: 'schedule',
 };

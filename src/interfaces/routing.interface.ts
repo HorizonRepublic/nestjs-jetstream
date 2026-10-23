@@ -2,6 +2,7 @@ import type { MessageHandler } from '@nestjs/microservices';
 
 import type { DeadLetterInfo } from './hooks.interface';
 import type { AckExtensionConfig, RetryConfig } from './options.interface';
+import type { ScheduleSpec } from './schedule.interface';
 
 /** @internal Entry stored in the pattern registry after handler registration. */
 export interface RegisteredHandler {
@@ -15,6 +16,10 @@ export interface RegisteredHandler {
   isBroadcast: boolean;
   /** `true` if this handler uses ordered delivery (strict sequential processing). */
   isOrdered: boolean;
+  /** `true` if this handler receives ticks from the schedule stream. */
+  isScheduled: boolean;
+  /** The schedule the handler declares; absent for a dynamic-only handler. */
+  schedule?: ScheduleSpec;
   /** User-defined metadata from `@EventPattern`/`@MessagePattern` extras. */
   meta?: Record<string, unknown>;
 }
@@ -29,6 +34,14 @@ export interface PatternsByKind {
   broadcasts: string[];
   /** Ordered event patterns (strict sequential delivery). */
   ordered: string[];
+  /** Patterns that receive schedule ticks. */
+  schedules: string[];
+}
+
+/** A schedule a handler owns, reconciled at boot. */
+export interface DeclaredSchedule {
+  pattern: string;
+  spec: ScheduleSpec;
 }
 
 /** Options for configuring event/broadcast processing behavior. */
@@ -41,6 +54,7 @@ export interface KindProcessingConfig {
 export interface EventProcessingConfig {
   events?: KindProcessingConfig;
   broadcast?: KindProcessingConfig;
+  schedule?: KindProcessingConfig;
 }
 
 /** Options for dead letter queue handling. */

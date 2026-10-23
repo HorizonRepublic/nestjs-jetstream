@@ -336,6 +336,11 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
       streams.push(StreamKind.Ordered);
     }
 
+    if (this.patternRegistry.hasScheduleHandlers()) {
+      streams.push(StreamKind.Schedule);
+      durableConsumers.push(StreamKind.Schedule);
+    }
+
     return { streams, durableConsumers };
   }
 
@@ -344,7 +349,8 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     if (
       this.patternRegistry.hasEventHandlers() ||
       this.patternRegistry.hasBroadcastHandlers() ||
-      this.patternRegistry.hasOrderedHandlers()
+      this.patternRegistry.hasOrderedHandlers() ||
+      this.patternRegistry.hasScheduleHandlers()
     ) {
       this.eventRouter.start();
     }

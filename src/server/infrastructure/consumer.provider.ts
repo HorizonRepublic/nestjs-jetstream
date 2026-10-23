@@ -7,6 +7,7 @@ import { ManagementMode, StreamKind } from '../../interfaces';
 import type { JetstreamModuleOptions } from '../../interfaces';
 import {
   DEFAULT_BROADCAST_CONSUMER_CONFIG,
+  DEFAULT_SCHEDULE_CONSUMER_CONFIG,
   DEFAULT_COMMAND_CONSUMER_CONFIG,
   DEFAULT_EVENT_CONSUMER_CONFIG,
 } from '../../jetstream.constants';
@@ -315,7 +316,7 @@ export class ConsumerProvider {
       };
     }
 
-    if (kind !== StreamKind.Event && kind !== StreamKind.Command) {
+    if (kind !== StreamKind.Event && kind !== StreamKind.Command && kind !== StreamKind.Schedule) {
       throw new Error(`Unexpected durable consumer kind: ${kind}`);
     }
 
@@ -340,10 +341,7 @@ export class ConsumerProvider {
     defaults: Partial<ConsumerConfig>,
     overrides: Partial<ConsumerConfig>,
   ): Partial<ConsumerConfig> & { durable_name: string } {
-    const patterns =
-      kind === StreamKind.Event
-        ? this.patternRegistry.getEventPatterns()
-        : this.patternRegistry.getCommandPatterns();
+    const patterns = this.handlerPatterns(kind);
 
     const subjects = patterns.map((p) => this.names.subject(kind, p));
 
@@ -366,6 +364,13 @@ export class ConsumerProvider {
     };
   }
 
+  private handlerPatterns(kind: StreamKind): string[] {
+    if (kind === StreamKind.Event) return this.patternRegistry.getEventPatterns();
+    if (kind === StreamKind.Schedule) return this.patternRegistry.getPatternsByKind().schedules;
+
+    return this.patternRegistry.getCommandPatterns();
+  }
+
   /** Get default config for a consumer kind. */
   private getDefaults(kind: StreamKind): Partial<ConsumerConfig> {
     switch (kind) {
@@ -375,6 +380,8 @@ export class ConsumerProvider {
         return DEFAULT_COMMAND_CONSUMER_CONFIG;
       case StreamKind.Broadcast:
         return DEFAULT_BROADCAST_CONSUMER_CONFIG;
+      case StreamKind.Schedule:
+        return DEFAULT_SCHEDULE_CONSUMER_CONFIG;
       case StreamKind.Ordered:
         throw new Error('Ordered consumers are ephemeral and should not use durable config');
       /* v8 ignore next 5 -- exhaustive switch guard, unreachable */

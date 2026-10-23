@@ -22,12 +22,18 @@ interface BinderJsm {
   consumers: { info(stream: string, consumer: string): Promise<ConsumerInfo> };
 }
 
-const WORKQUEUE_KINDS = new Set<StreamKind>([StreamKind.Event, StreamKind.Command]);
+const WORKQUEUE_KINDS = new Set<StreamKind>([
+  StreamKind.Event,
+  StreamKind.Command,
+  StreamKind.Schedule,
+]);
 
 const manualRemediation = (entity: ProvisioningEntity): string =>
   `Management mode is Manual; the ${entity} must be provisioned externally before boot.`;
 
+/** The schedule stream always holds schedules; other kinds only when they opt in. */
 const isSchedulingEnabled = (options: JetstreamModuleOptions, kind: StreamKind): boolean =>
+  kind === StreamKind.Schedule ||
   kindOptionsBlock(options, kind)?.stream?.allow_msg_schedules === true;
 
 const resolveAckExtension = (
@@ -74,6 +80,10 @@ export class InfrastructureBinder {
 
     if (WORKQUEUE_KINDS.has(kind)) {
       this.warnOnRetention(info, kind);
+    }
+
+    if (kind === StreamKind.Schedule) {
+      this.warnOnScheduleExpiry(info);
     }
 
     return info;
@@ -246,6 +256,17 @@ export class InfrastructureBinder {
     );
   }
 
+  private warnOnScheduleExpiry(info: StreamInfo): void {
+    const maxAge = info.config.max_age;
+
+    if (maxAge === 0) return;
+
+    this.logger.warn(
+      `Stream "${this.names.streamName(StreamKind.Schedule)}" has max_age ${maxAge}ns. ` +
+        'A schedule holder that ages out stops its schedule without an error; set max_age to 0.',
+    );
+  }
+
   private warnOnRetention(info: StreamInfo, kind: StreamKind): void {
     if (info.config.retention !== RetentionPolicy.Workqueue) {
       this.logger.warn(
@@ -303,6 +324,8 @@ export class InfrastructureBinder {
         return this.registry.getBroadcastPatterns();
       case StreamKind.Ordered:
         return this.registry.getOrderedSubjects();
+      case StreamKind.Schedule:
+        return this.registry.getScheduleSubjects();
       /* v8 ignore next 5 -- exhaustive switch guard, unreachable */
       default: {
         const _exhaustive: never = kind;

@@ -86,6 +86,20 @@ export const resolveTickTtlSeconds = (spec: ScheduleSpec, now: Date): number => 
 };
 
 /**
+ * Require a literal NATS subject: dot-separated non-empty tokens, no wildcards or whitespace.
+ *
+ * @throws JetstreamScheduleError with the given reason.
+ */
+export const assertLiteralSubject = (value: string, reason: ScheduleErrorReason): void => {
+  if (value.split('.').some((token) => token.length === 0 || /[*>\s]/.test(token))) {
+    throw new JetstreamScheduleError(
+      reason,
+      `"${value}" must be a literal subject: dot-separated tokens without "*", ">" or whitespace.`,
+    );
+  }
+};
+
+/**
  * Require a single NATS subject token: no dots, wildcards or whitespace.
  *
  * @throws JetstreamScheduleError with the given reason.

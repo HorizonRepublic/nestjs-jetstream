@@ -14,6 +14,7 @@ import type {
   DeadLetterConfig,
   EventProcessingConfig,
   JetstreamModuleOptions,
+  KindProcessingConfig,
 } from '../../interfaces';
 import {
   ConsumeKind,
@@ -116,6 +117,10 @@ export class EventRouter {
     if (this.patternRegistry.hasOrderedHandlers()) {
       this.subscribeToStream(this.messageProvider.ordered$, StreamKind.Ordered);
     }
+
+    if (this.patternRegistry.hasScheduleHandlers()) {
+      this.subscribeToStream(this.messageProvider.schedules$, StreamKind.Schedule);
+    }
   }
 
   /** Stop routing and unsubscribe from all streams. */
@@ -175,23 +180,24 @@ export class EventRouter {
   }
 
   private getRetryConfig(kind: StreamKind): RetryConfig | undefined {
-    if (kind === StreamKind.Event) return this.processingConfig?.events?.retry;
-    if (kind === StreamKind.Broadcast) return this.processingConfig?.broadcast?.retry;
-
     // Ordered consumers never redeliver, so a curve would have nothing to pace.
-    return false;
+    if (kind === StreamKind.Ordered) return false;
+
+    return this.kindConfig(kind)?.retry;
   }
 
   private getConcurrency(kind: StreamKind): number | undefined {
-    if (kind === StreamKind.Event) return this.processingConfig?.events?.concurrency;
-    if (kind === StreamKind.Broadcast) return this.processingConfig?.broadcast?.concurrency;
-
-    return undefined;
+    return this.kindConfig(kind)?.concurrency;
   }
 
   private getAckExtensionConfig(kind: StreamKind): AckExtensionConfig | undefined {
-    if (kind === StreamKind.Event) return this.processingConfig?.events?.ackExtension;
-    if (kind === StreamKind.Broadcast) return this.processingConfig?.broadcast?.ackExtension;
+    return this.kindConfig(kind)?.ackExtension;
+  }
+
+  private kindConfig(kind: StreamKind): KindProcessingConfig | undefined {
+    if (kind === StreamKind.Event) return this.processingConfig?.events;
+    if (kind === StreamKind.Broadcast) return this.processingConfig?.broadcast;
+    if (kind === StreamKind.Schedule) return this.processingConfig?.schedule;
 
     return undefined;
   }
