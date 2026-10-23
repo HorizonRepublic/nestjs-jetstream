@@ -129,15 +129,17 @@ describe(ScheduleWriter, () => {
     store.put.mockResolvedValue(PutOutcome.Unavailable);
 
     // When
-    const pending = sut.upsert(SUBJECT, TARGET, 'sync.tick', SPEC, NOW);
-    const assertion = expect(pending).rejects.toThrow(
-      /kept reporting its sequences as unavailable/,
+    const failure = sut.upsert(SUBJECT, TARGET, 'sync.tick', SPEC, NOW).then(
+      () => null,
+      (err: unknown) => err,
     );
 
     await vi.runAllTimersAsync();
 
     // Then
-    await assertion;
+    expect(await failure).toEqual(
+      expect.objectContaining({ message: expect.stringMatching(/sequences as unavailable/) }),
+    );
     vi.useRealTimers();
   });
 
