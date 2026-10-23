@@ -314,10 +314,18 @@ const heightOf = (message) => {
 
 const makeProjector = (cw, ch, region) => {
   // Unscaled isometric projection, then the model's corners fitted into the region.
-  const raw = (x, y, z = 0) => ({
-    x: (x - (y - MODEL.h / 2) * 1.2) * COS,
-    y: (x + (y - MODEL.h / 2) * 1.2) * SIN - z,
-  });
+  let cos = 1;
+  let sin = 0;
+
+  // The model turns about its centre by a few degrees, so the camera seems to sway.
+  const raw = (mx, my, z = 0) => {
+    const dx = mx - MODEL.w / 2;
+    const dy = my - MODEL.h / 2;
+    const x = MODEL.w / 2 + dx * cos - dy * sin;
+    const y = dy * cos + dx * sin;
+
+    return { x: (x - y * 1.2) * COS, y: (x + y * 1.2) * SIN - z };
+  };
   const corners = [
     raw(-30, -30),
     raw(MODEL.w + 30, -30),
@@ -342,6 +350,10 @@ const makeProjector = (cw, ch, region) => {
   };
 
   project.k = k;
+  project.turn = (angle) => {
+    cos = Math.cos(angle);
+    sin = Math.sin(angle);
+  };
 
   return project;
 };
@@ -626,33 +638,33 @@ const drawEffects = (ctx, project, palette, sim, bright) => {
     const t = (sim.time - effect.born) / life;
     const color = effectColor(effect, palette);
     const base = project(effect.x, effect.y);
-    const reach = effect.kind === 'down' ? 70 : effect.kind === 'ack' ? 52 : 36;
+    const reach = { down: 30, ack: 22, nak: 16 }[effect.kind];
 
     ctx.save();
     ctx.strokeStyle = color;
-    ctx.lineWidth = (bright ? 3 : 1.5) * (1 - t) + 0.5;
-    ctx.globalAlpha = (bright ? 0.9 : 0.7) * (1 - t);
+    ctx.lineWidth = 1.2 * (1 - t) + 0.4;
+    ctx.globalAlpha = 0.5 * (1 - t);
     ctx.beginPath();
-    ctx.ellipse(base.x, base.y, (16 + reach * easeInOut(t)) * k * 1.4, (9 + reach * 0.55 * easeInOut(t)) * k * 1.4, 0, 0, Math.PI * 2);
+    ctx.ellipse(base.x, base.y, (20 + reach * easeInOut(t)) * k * 1.2, (11 + reach * 0.55 * easeInOut(t)) * k * 1.2, 0, 0, Math.PI * 2);
     ctx.stroke();
 
-    const sparks = effect.kind === 'ack' ? 7 : effect.kind === 'nak' ? 4 : 0;
+    const sparks = effect.kind === 'ack' ? 4 : 0;
     const seconds = (sim.time - effect.born) / 1000;
 
     ctx.fillStyle = color;
     for (let i = 0; i < sparks; i += 1) {
       const angle = effect.seed + i * 2.399;
-      const speed = 22 + ((i * 37) % 17);
-      const lift = 70 + ((i * 53) % 40);
+      const speed = 12 + ((i * 37) % 9);
+      const lift = 50 + ((i * 53) % 24);
       const z = POD.height + lift * seconds - 160 * seconds * seconds;
 
       if (z < 0) continue;
 
       const p = project(effect.x + Math.cos(angle) * speed * seconds, effect.y + Math.sin(angle) * speed * seconds, z);
 
-      ctx.globalAlpha = (1 - t) * (bright ? 1 : 0.85);
+      ctx.globalAlpha = (1 - t) * 0.8;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, (bright ? 2.4 : 1.4) * Math.max(1, k * 1.2), 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, (bright ? 1.8 : 1.2) * Math.max(1, k), 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();
@@ -674,7 +686,7 @@ const reflectBlock = (ctx, project, cx, cy, size, height, color, light) => {
   fade.addColorStop(1, 'transparent');
 
   ctx.save();
-  ctx.globalAlpha = 0.16;
+  ctx.globalAlpha = 0.09;
   ctx.fillStyle = fade;
   path(ctx, right);
   ctx.fill();
@@ -687,7 +699,7 @@ const reflectBlock = (ctx, project, cx, cy, size, height, color, light) => {
 
     g.addColorStop(0, light);
     g.addColorStop(1, 'transparent');
-    ctx.globalAlpha = 0.2;
+    ctx.globalAlpha = 0.1;
     ctx.fillStyle = g;
     ctx.translate(pool.x, pool.y);
     ctx.scale(1, 0.55);
@@ -719,14 +731,14 @@ const drawEmissive = (ctx, project, palette, sim, geo) => {
     ctx.globalAlpha = alpha;
     ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.arc(message.screen.x, message.screen.y, Math.max(3.4, 5.2 * k), 0, Math.PI * 2);
+    ctx.arc(message.screen.x, message.screen.y, Math.max(2.4, 3.6 * k), 0, Math.PI * 2);
     ctx.fill();
 
     if (message.state !== 'queued' && message.trail.length > 1) {
       ctx.strokeStyle = color;
       ctx.lineCap = 'round';
-      ctx.lineWidth = 3.5;
-      ctx.globalAlpha = alpha * 0.6;
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = alpha * 0.4;
       ctx.beginPath();
       message.trail.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
       ctx.stroke();
@@ -737,28 +749,19 @@ const drawEmissive = (ctx, project, palette, sim, geo) => {
     const r = geo.replicas[index];
     const down = isDown(sim, replica);
     const color = podLight(sim, replica, palette);
-    const c = project(r.x, r.y, down ? POD.downHeight : POD.height);
-
-    // the light of the pod's front panel, plus a wash on the top face while it flashes
+    // the light of the pod's front panel
     const front = project(r.x - POD.size * 0.28, r.y + POD.size / 2, (down ? POD.downHeight : POD.height) / 2);
 
-    ctx.globalAlpha = 0.9;
+    ctx.globalAlpha = 0.8;
     ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.arc(front.x, front.y, 4, 0, Math.PI * 2);
+    ctx.arc(front.x, front.y, 3, 0, Math.PI * 2);
     ctx.fill();
-
-    if (!down && sim.time - replica.flashAt < 600) {
-      ctx.globalAlpha = 0.6 * (1 - (sim.time - replica.flashAt) / 600);
-      ctx.beginPath();
-      ctx.ellipse(c.x, c.y, 26 * k, 14 * k, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
   });
 
-  ctx.globalAlpha = 0.25 + 0.5 * Math.min(1, sim.queue.length / 10);
+  ctx.globalAlpha = 0.12 + 0.28 * Math.min(1, sim.queue.length / 10);
   ctx.strokeStyle = palette.deliver;
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 2;
   const a = project(geo.tube.x0 - 10, geo.tube.y + 13, 12);
   const b = project(geo.tube.x1 + 10, geo.tube.y + 13, 12);
 
@@ -767,8 +770,6 @@ const drawEmissive = (ctx, project, palette, sim, geo) => {
   ctx.lineTo(b.x, b.y);
   ctx.stroke();
   ctx.globalAlpha = 1;
-
-  drawEffects(ctx, project, palette, sim, true);
 };
 
 const drawMessage = (ctx, project, palette, message, ui) => {
@@ -830,7 +831,7 @@ const drawShadow = (ctx, project, palette, message) => {
   // its mirror image in the glossy floor
   const mirror = project(message.pos.x, message.pos.y, -height);
 
-  ctx.globalAlpha = 0.14 * alpha;
+  ctx.globalAlpha = 0.08 * alpha;
   ctx.beginPath();
   ctx.arc(mirror.x, mirror.y, Math.max(2, 3.4 * k), 0, Math.PI * 2);
   ctx.fill();
@@ -932,6 +933,63 @@ const drawHint = (ctx, project, palette, sim, geo, ui) => {
   label(ctx, palette, '↖ click a pod to take it down', tag.x, tag.y, 'left', palette.deliver, 600);
 };
 
+/* Faint light running along the cables in the direction of the flow. */
+const drawPulses = (ctx, project, palette, sim, geo) => {
+  const cables = [
+    ...geo.producers.map((p, i) => ({ from: p, to: { x: geo.tube.x0 - 10, y: geo.tube.y }, phase: i * 0.37, live: true })),
+    ...geo.replicas.map((r, i) => ({
+      from: { x: geo.tube.x1 + 10, y: geo.tube.y },
+      to: r,
+      phase: 0.2 + i * 0.29,
+      live: !isDown(sim, sim.replicas[i]),
+    })),
+  ];
+
+  ctx.save();
+  ctx.strokeStyle = palette.deliver;
+  ctx.lineCap = 'round';
+  ctx.lineWidth = 1.6;
+
+  for (const cable of cables) {
+    if (!cable.live) continue;
+
+    const t = (sim.time / 2600 + cable.phase) % 1;
+    const at = (u) => project(cable.from.x + (cable.to.x - cable.from.x) * u, cable.from.y + (cable.to.y - cable.from.y) * u);
+    const a = at(Math.max(0, t - 0.12));
+    const b = at(t);
+
+    ctx.globalAlpha = 0.35 * Math.sin(t * Math.PI);
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+  ctx.restore();
+};
+
+/* Atmosphere: the scene thins out towards the edges of the canvas. */
+const fadeEdges = (ctx, cw, ch) => {
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-out';
+
+  const edge = Math.min(cw, ch) * 0.14;
+  const sides = [
+    [0, 0, 0, edge, 0, 0, cw, edge],
+    [0, ch, 0, ch - edge, 0, ch - edge, cw, edge],
+    [cw, 0, cw - edge, 0, cw - edge, 0, edge, ch],
+  ];
+
+  for (const [x0, y0, x1, y1, rx, ry, rw, rh] of sides) {
+    const g = ctx.createLinearGradient(x0, y0, x1, y1);
+
+    g.addColorStop(0, 'rgba(0, 0, 0, 1)');
+    g.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(rx, ry, rw, rh);
+  }
+  ctx.restore();
+};
+
 const draw = (ctx, sim, geo, view, palette, logo, ui) => {
   const { project, cw, ch } = view;
 
@@ -958,6 +1016,7 @@ const draw = (ctx, sim, geo, view, palette, logo, ui) => {
   }
   ctx.stroke();
   ctx.globalAlpha = 1;
+  drawPulses(ctx, project, palette, sim, geo);
 
   for (const p of geo.producers) reflectBlock(ctx, project, p.x, p.y, 26, 20, palette.block, null);
   sim.replicas.forEach((replica, index) => {
@@ -970,9 +1029,9 @@ const draw = (ctx, sim, geo, view, palette, logo, ui) => {
   for (const message of sim.messages) drawShadow(ctx, project, palette, message);
 
   for (const p of geo.producers) {
-    const faces = block(ctx, project, { cx: p.x, cy: p.y, size: 26, height: 20, base: palette.block, edge: palette.line });
+    const faces = block(ctx, project, { cx: p.x, cy: p.y, size: 26, height: 20, base: palette.block, edge: palette.line, alpha: 0.88 });
 
-    led(ctx, faces.front, palette.deliver);
+    led(ctx, faces.front, palette.deliver, 0.85);
   }
 
   const inChannel = (message) => message.state === 'queued';
@@ -1122,10 +1181,15 @@ const HeroScene = () => {
     };
 
     const render = () => {
+      view.project.turn(0.052 * Math.sin((sim.time / 30000) * Math.PI * 2));
       ctx.setTransform(view.ratio, 0, 0, view.ratio, 0, 0);
       draw(ctx, sim, geo, view, palette, logo, ui);
 
-      if (!canBlur) return;
+      if (canBlur) addGlow();
+      fadeEdges(ctx, view.cw, view.ch);
+    };
+
+    const addGlow = () => {
 
       gctx.setTransform(GLOW_SCALE, 0, 0, GLOW_SCALE, 0, 0);
       gctx.clearRect(0, 0, view.cw, view.ch);
@@ -1134,11 +1198,8 @@ const HeroScene = () => {
       ctx.save();
       ctx.setTransform(view.ratio, 0, 0, view.ratio, 0, 0);
       ctx.globalCompositeOperation = palette.dark ? 'lighter' : 'source-over';
-      ctx.globalAlpha = palette.dark ? 0.9 : 0.45;
-      ctx.filter = 'blur(10px)';
-      ctx.drawImage(glow, 0, 0, view.cw, view.ch);
-      ctx.globalAlpha = palette.dark ? 0.7 : 0.35;
-      ctx.filter = 'blur(3px)';
+      ctx.globalAlpha = palette.dark ? 0.5 : 0.22;
+      ctx.filter = 'blur(8px)';
       ctx.drawImage(glow, 0, 0, view.cw, view.ch);
       ctx.restore();
     };
