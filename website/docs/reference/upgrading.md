@@ -76,6 +76,12 @@ A service used to reserve up to 17 GB before processing a single message, which 
 
 **Node 20 is no longer supported.** The minimum is Node 22.
 
+**`@opentelemetry/api` is a required peer dependency.** The transport has always loaded it at startup, so an app without it failed with `Cannot find module '@opentelemetry/api'` even with tracing off. npm 7+ and pnpm now install it with the package; with Yarn, add it yourself.
+
+**Dead letters cover deliveries no handler settled.** A message whose final delivery ended in a crash, a stopped pod or a handler outliving `ack_wait` now reaches the DLQ and `onDeadLetter`, and is removed from a work-queue stream. Services with restricted NATS permissions need the [advisory and stream permissions](/docs/guides/dead-letter-queue#deliveries-no-handler-settled).
+
+**Ack extension stops after 5 minutes per message.** Set `ackExtension: { maxDuration }` if a handler legitimately runs longer. See [Ack extension](/docs/guides/performance#ack-extension).
+
 ### Errors where the server used to stay silent
 
 **Features the server would ignore now raise an error.** On NATS 2.10, `allow_msg_ttl` and TTL headers have no effect, and on NATS 2.11 neither do `allow_msg_schedules` and `scheduleAt()`. The boot or the call now stops with a `JetstreamCapabilityError` where messages used to never expire or never fire. A service that used them on a server too old for them was already broken without knowing it.

@@ -31,17 +31,17 @@ Required, and already present in any standard NestJS project:
 - `@nestjs/common`, `@nestjs/core`, `@nestjs/microservices`: `^10.2.0 || ^11.0.0 || ^12.0.0`
 - `reflect-metadata` ^0.2.0
 - `rxjs` ^7.8.0
+- `@opentelemetry/api` ^1.9.0. The transport loads it whether or not tracing is on; without an OpenTelemetry SDK registered it does nothing. npm 7+ and pnpm install it with the package
 
 Optional, install only for the feature that needs it:
 
 - `msgpackr` `^1.11.0 || ^2.0.0` for the [MessagePack codec](/docs/guides/custom-codec#built-in-msgpackcodec)
 - `@prometheus-io/client` ^0.16.0, or `prom-client` ^15.0.0, its previous name, for [Prometheus metrics](/docs/observability/metrics)
-- `@opentelemetry/api` ^1.9.0 for [distributed tracing](/docs/observability/tracing)
 
 ## Runtime requirements
 
 - **Node.js** >= 22.0.0
-- **TypeScript** >= 5.7 (required by `@nats-io/*` v3 typed array generics)
+- **TypeScript** >= 5.7 (required by `@nats-io/*` v3 typed array generics), with `moduleResolution` set to `node16`, `nodenext` or `bundler`: the `@nats-io/*` v3 type declarations do not resolve under the legacy `node10` setting
 - **NATS Server** >= 2.10 with JetStream enabled; some features need a newer server, see below
 
 ## NATS server versions

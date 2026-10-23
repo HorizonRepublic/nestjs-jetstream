@@ -53,7 +53,7 @@ Jaeger, Tempo and an OTel Collector take the `NodeSDK` setup above with their OT
 
 ### No SDK, no overhead
 
-Without a registered SDK, every `trace.getTracer()` call resolves to a no-op tracer and each span helper exits on its first guard. `@opentelemetry/api` is an optional peer dependency.
+Without a registered SDK, every `trace.getTracer()` call resolves to a no-op tracer and each span helper exits on its first guard. `@opentelemetry/api` is a required peer dependency, and installing it alone turns nothing on.
 
 ## What gets traced
 
