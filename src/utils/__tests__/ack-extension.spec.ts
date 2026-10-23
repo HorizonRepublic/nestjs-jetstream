@@ -1,6 +1,7 @@
-import { faker } from '@faker-js/faker';
 import { Logger } from '@nestjs/common';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { faker } from '@faker-js/faker';
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 
 import {
   _ackExtensionPoolForTest,
@@ -10,12 +11,20 @@ import {
 } from '../ack-extension';
 import type { AckExtension } from '../ack-extension.types';
 
-const extension = (intervalMs: number, maxDurationMs = DEFAULT_MAX_ACK_EXTENSION_MS): AckExtension => ({
+const extension = (
+  intervalMs: number,
+  maxDurationMs = DEFAULT_MAX_ACK_EXTENSION_MS,
+): AckExtension => ({
   intervalMs,
   maxDurationMs,
 });
 
-const target = () => ({ subject: faker.lorem.word(), working: vi.fn() });
+interface FakeTarget {
+  subject: string;
+  working: Mock<() => void>;
+}
+
+const target = (): FakeTarget => ({ subject: faker.lorem.word(), working: vi.fn() });
 
 describe('resolveAckExtension', () => {
   describe('happy path', () => {
@@ -99,7 +108,9 @@ describe('resolveAckExtension', () => {
     it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
       'should reject interval %s in the object form',
       (interval) => {
-        expect(() => resolveAckExtension({ interval }, undefined)).toThrow(/ackExtension\.interval/);
+        expect(() => resolveAckExtension({ interval }, undefined)).toThrow(
+          /ackExtension\.interval/,
+        );
       },
     );
 
@@ -315,4 +326,3 @@ describe('startAckExtensionTimer', () => {
     cancel();
   });
 });
-

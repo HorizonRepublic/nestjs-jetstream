@@ -24,11 +24,7 @@ import {
   type ServerEndpoint,
 } from '../../otel';
 import type { ScheduleStore } from '../../schedule/schedule-store';
-import {
-  resolveAckExtension,
-  resolveRetryDelays,
-  startAckExtensionTimer,
-} from '../../utils';
+import { resolveAckExtension, resolveRetryDelays, startAckExtensionTimer } from '../../utils';
 import { MessageProvider } from '../infrastructure';
 import { NameResolver } from '../infrastructure/name-resolver';
 import { ConcurrencyGate } from './concurrency-gate';

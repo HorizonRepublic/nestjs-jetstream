@@ -42,7 +42,10 @@ export const resolveAckExtension = (
 ): AckExtension | null => {
   if (config === false || config === undefined) return null;
   if (config === true) {
-    return { intervalMs: intervalFromAckWait(ackWaitNanos), maxDurationMs: DEFAULT_MAX_ACK_EXTENSION_MS };
+    return {
+      intervalMs: intervalFromAckWait(ackWaitNanos),
+      maxDurationMs: DEFAULT_MAX_ACK_EXTENSION_MS,
+    };
   }
 
   if (typeof config === 'number') {
@@ -54,7 +57,9 @@ export const resolveAckExtension = (
   const { interval, maxDuration = DEFAULT_MAX_ACK_EXTENSION_MS } = config;
 
   if (interval !== undefined && (!Number.isFinite(interval) || interval <= 0)) {
-    throw new Error(`ackExtension.interval must be a positive number of milliseconds, got ${interval}.`);
+    throw new Error(
+      `ackExtension.interval must be a positive number of milliseconds, got ${interval}.`,
+    );
   }
 
   if (!isPositive(maxDuration)) {
