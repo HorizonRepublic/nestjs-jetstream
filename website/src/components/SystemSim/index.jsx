@@ -558,7 +558,7 @@ const drawGrid = (ctx, project, palette) => {
 };
 
 /* A belt as a flat ribbon with moving cross-stripes; overhead belts get posts. */
-const drawBelt = (ctx, project, b, palette, time, { width = 12, tone = null, posts = false } = {}) => {
+const drawBelt = (ctx, project, b, palette, time, { width = 12, tone = null, posts = false, rails = false } = {}) => {
   ctx.save();
 
   if (posts) {
@@ -589,21 +589,35 @@ const drawBelt = (ctx, project, b, palette, time, { width = 12, tone = null, pos
     const ny = ((c.x - a.x) / flat) * (width / 2);
     const quad = [project(a.x + nx, a.y + ny, a.z), project(c.x + nx, c.y + ny, c.z), project(c.x - nx, c.y - ny, c.z), project(a.x - nx, a.y - ny, a.z)];
 
-    path(ctx, quad);
-    ctx.globalAlpha = tone ? 0.18 : 1;
-    ctx.fillStyle = tone ?? palette.raised;
-    ctx.fill();
-    ctx.globalAlpha = tone ? 0.6 : 0.9;
-    ctx.strokeStyle = tone ?? palette.line;
-    ctx.lineWidth = 1;
-    ctx.stroke();
+    if (rails) {
+      // an overhead track: two thin rails, nothing filled in between
+      ctx.globalAlpha = 0.55;
+      ctx.strokeStyle = tone;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(quad[0].x, quad[0].y);
+      ctx.lineTo(quad[1].x, quad[1].y);
+      ctx.moveTo(quad[3].x, quad[3].y);
+      ctx.lineTo(quad[2].x, quad[2].y);
+      ctx.stroke();
+    } else {
+      path(ctx, quad);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = palette.raised;
+      ctx.fill();
+      ctx.globalAlpha = 0.9;
+      ctx.strokeStyle = palette.line;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
 
     // stripes drift with the belt, so its direction reads at a glance
     const offset = ((time * b.speed) % 10) - 10;
 
-    ctx.globalAlpha = tone ? 0.45 : 0.35;
+    ctx.globalAlpha = rails ? 0.4 : 0.35;
+    ctx.strokeStyle = tone ?? palette.line;
     ctx.beginPath();
-    for (let d = offset; d < len; d += 10) {
+    for (let d = offset; d < len; d += rails ? 16 : 10) {
       if (d < 0) continue;
 
       const t = d / len;
@@ -683,10 +697,12 @@ const drawEffects = (ctx, project, palette, sim) => {
   const k = project.k;
 
   for (const effect of sim.effects) {
+    if (effect.kind !== 'down') continue;
+
     const t = (sim.time - effect.born) / EFFECT_MS[effect.kind];
     const color = effectColor(effect, palette);
     const base = project(effect.x, effect.y);
-    const reach = { down: 30, ack: 22, nak: 16 }[effect.kind];
+    const reach = 22;
 
     ctx.save();
     ctx.strokeStyle = color;
@@ -758,7 +774,7 @@ const drawPod = (ctx, project, palette, sim, floor, index, logo, view, ui) => {
     cy: r.y,
     size: POD.size,
     height,
-    base: down ? palette.raised : (tone ?? palette.block),
+    base: down ? palette.raised : palette.block,
     edge: down ? palette.dlq : (tone ?? (hovered ? palette.deliver : palette.line)),
     alpha: down ? 0.7 : 1,
     dashed: down,
@@ -766,6 +782,14 @@ const drawPod = (ctx, project, palette, sim, floor, index, logo, view, ui) => {
   });
 
   led(ctx, faces.front, podLight(sim, replica, palette), down ? 0.9 : 1);
+
+  if (tone) {
+    path(ctx, faces.top);
+    ctx.fillStyle = tone;
+    ctx.globalAlpha = 0.22 * (1 - (sim.time - replica.flashAt) / 600);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
 
   if (logo && !down) {
     const [p0, p1, , p3] = faces.top;
@@ -788,23 +812,7 @@ const drawPod = (ctx, project, palette, sim, floor, index, logo, view, ui) => {
   if (down) {
     const above = project(r.x, r.y, height + 18);
 
-    label(ctx, palette, replica.manual ? 'down · click to start' : 'restarting', above.x, above.y, 'center', palette.dlq, 600);
-  }
-
-  const busy = replica.busy;
-
-  if (busy?.processing) {
-    const c = project(r.x, r.y, POD.height);
-    const progress = Math.min(1, (sim.time - busy.since) / (busy.until - busy.since));
-    const k = project.k;
-
-    ctx.save();
-    ctx.strokeStyle = palette.deliver;
-    ctx.lineWidth = 1.6;
-    ctx.beginPath();
-    ctx.ellipse(c.x, c.y, 27 * k, 15 * k, 0, -Math.PI / 2, -Math.PI / 2 + progress * Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
+    label(ctx, palette, replica.manual ? 'down' : 'restarting', above.x, above.y, 'center', palette.dlq, 600);
   }
 };
 
@@ -942,24 +950,21 @@ const draw = (ctx, sim, floor, view, palette, logo, ui) => {
   for (const b of floor.outputs) for (const item of b.items) drawItem(ctx, project, palette, item, ui);
 
   // overhead return, above everything on the floor
-  for (const b of floor.lifts) drawBelt(ctx, project, b, palette, t, { width: 8, tone: palette.redeliver, posts: true });
-  drawBelt(ctx, project, floor.rail, palette, t, { width: 10, tone: palette.redeliver, posts: true });
+  for (const b of floor.lifts) drawBelt(ctx, project, b, palette, t, { width: 8, tone: palette.redeliver, rails: true });
+  drawBelt(ctx, project, floor.rail, palette, t, { width: 8, tone: palette.redeliver, rails: true, posts: true });
   for (const b of [...floor.lifts, floor.rail]) for (const item of b.items) drawItem(ctx, project, palette, item, ui);
 
   drawHint(ctx, project, palette, sim, floor, ui);
   drawEffects(ctx, project, palette, sim);
 
-  // labels beside the geometry
-  const dl = project(floor.docks[0].x, floor.docks[0].y, 20);
-  const sl = project(floor.stream.points[0].x + 40, 120 + 36);
-  const rl = project(floor.rail.points[1].x, 120 - 14, RAIL_Z);
-  const pl = project(floor.pods[2].x, floor.pods[2].y + 26);
+  // only labels that say something is happening right now
   const stored = floor.stream.items.length;
 
-  label(ctx, palette, 'services', dl.x, dl.y - 16, 'center');
-  label(ctx, palette, stored ? `stream · ${stored} stored` : 'stream', sl.x, sl.y, 'right', palette.deliver);
-  label(ctx, palette, 'retry · back to the stream', rl.x - 10, rl.y - 8, 'right', palette.redeliver);
-  label(ctx, palette, 'NestJS pods', pl.x + 4, pl.y + 22, 'center');
+  if (stored > 2) {
+    const sl = project(floor.stream.points[1].x - 30, 120 + 30);
+
+    label(ctx, palette, `${stored} stored`, sl.x, sl.y, 'right', palette.deliver);
+  }
 
   if (sim.deploy) {
     const done = Math.min(3, Math.floor((sim.time - sim.deploy.start) / RESTART_MS) + 1);
