@@ -6,7 +6,7 @@ schema:
   headline: Naming Conventions
   description: "Stream, consumer, and subject naming patterns derived from the service name."
   datePublished: "2026-03-21"
-  dateModified: "2026-08-03"
+  dateModified: "2026-10-23"
 ---
 
 # Naming Conventions
@@ -37,6 +37,7 @@ Everything below is written against `{internal}`, the internal name: `orders` be
 | Command                                                   | `{internal}.cmd.{pattern}`     | `{internal}_cmd-stream`     | `{internal}_cmd-consumer`       |
 | Ordered                                                   | `{internal}.ordered.{pattern}` | `{internal}_ordered-stream` | Ephemeral, no durable name      |
 | Broadcast                                                 | `broadcast.{pattern}`          | `broadcast-stream`, shared  | `{internal}_broadcast-consumer` |
+| [Schedule](/docs/guides/recurring-schedules)              | `{internal}.sched.{pattern}`   | `{internal}_sched-stream`   | `{internal}_sched-consumer`     |
 | [DLQ](/docs/guides/dead-letter-queue#built-in-dlq-stream) | `{internal}_dlq-stream`        | `{internal}_dlq-stream`     | Yours to create                 |
 
 A service called `orders` handling `order.created` ends up consuming `orders__microservice.ev.order.created` from `orders__microservice_ev-stream` through `orders__microservice_ev-consumer`.
@@ -139,16 +140,17 @@ metadataKey('orders', StreamKind.Event, 'order.created');
 
 Each stream subscribes to a wildcard subject that captures every message of its kind. With [message scheduling](/docs/guides/scheduling) enabled (`allow_msg_schedules: true`), event and broadcast streams take a second filter for the scheduled twins:
 
-| Kind      | Subject filter         | With scheduling enabled |
-| --------- | ---------------------- | ----------------------- |
-| Event     | `{internal}.ev.>`      | `{internal}._sch.>`     |
-| Command   | `{internal}.cmd.>`     | -                       |
-| Ordered   | `{internal}.ordered.>` | -                       |
-| Broadcast | `broadcast.>`          | `broadcast._sch.>`      |
+| Kind      | Subject filter         | With scheduling enabled      |
+| --------- | ---------------------- | ---------------------------- |
+| Event     | `{internal}.ev.>`      | `{internal}._sch.>`          |
+| Command   | `{internal}.cmd.>`     | -                            |
+| Ordered   | `{internal}.ordered.>` | -                            |
+| Broadcast | `broadcast.>`          | `broadcast._sch.>`           |
+| Schedule  | `{internal}.sched.>`   | `{internal}._cron.>`, always |
 
 The `>` wildcard matches one or more tokens, so `orders__microservice.ev.>` captures `orders__microservice.ev.order.created`, `orders__microservice.ev.payment.processed` and everything else under that prefix.
 
-`_sch` is this library's convention for keeping a scheduled message out of the filter its own consumer watches, until the server publishes it for real. NATS scheduling itself runs on headers (`Nats-Schedule`, `Nats-Schedule-Target` per [ADR-51](https://github.com/nats-io/nats-architecture-and-design/blob/main/adr/ADR-51.md)), not on subjects. You never address a `_sch` subject yourself.
+Recurring schedules live under `_cron.`, split into `decl.{pattern}` for schedules handlers declare and `dyn.{id}` for schedules clients create. `_sch` is this library's convention for keeping a scheduled message out of the filter its own consumer watches, until the server publishes it for real. NATS scheduling itself runs on headers (`Nats-Schedule`, `Nats-Schedule-Target` per [ADR-51](https://github.com/nats-io/nats-architecture-and-design/blob/main/adr/ADR-51.md)), not on subjects. You never address a `_sch` subject yourself.
 
 ## Names and multiple connections
 

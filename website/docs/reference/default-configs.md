@@ -8,7 +8,7 @@ schema:
   headline: "Default Stream & Consumer Configs for NATS JetStream"
   description: "Default stream, consumer, and connection settings for every NestJS JetStream StreamKind (event, broadcast, ordered, command, DLQ)."
   datePublished: "2026-03-21"
-  dateModified: "2026-08-03"
+  dateModified: "2026-10-23"
 ---
 
 # Default Configs
@@ -22,17 +22,17 @@ Every stream and consumer the transport creates starts from the values below, ta
 
 Every stream is created with `storage: File`, `num_replicas: 1` (see [replicas in production](#replicas-in-production)), `discard: Old`, `allow_direct: true` and `compression: S2`. What differs per kind:
 
-| Property               | Event       | Command      | Broadcast   | Ordered     | DLQ         |
-| ---------------------- | ----------- | ------------ | ----------- | ----------- | ----------- |
-| `retention`            | `Workqueue` | `Workqueue`  | `Limits`    | `Limits`    | `Limits`    |
-| `allow_rollup_hdrs`    | `true`      | `false`      | `true`      | `false`     | `false`     |
-| `max_consumers`        | `100`       | `50`         | `200`       | `100`       | `100`       |
-| `max_msg_size`         | `1 MB`      | `1 MB`       | `1 MB`      | `1 MB`      | `1 MB`      |
-| `max_msgs_per_subject` | `100,000`   | `10,000`     | `50,000`    | `500,000`   | `50,000`    |
-| `max_msgs`             | `1,000,000` | `100,000`    | `500,000`   | `5,000,000` | `500,000`   |
-| `max_bytes`            | `512 MB`    | `64 MB`      | `256 MB`    | `1 GB`      | `256 MB`    |
-| `max_age`              | `7 days`    | `3 minutes`  | `1 hour`    | `1 day`     | `30 days`   |
-| `duplicate_window`     | `2 minutes` | `30 seconds` | `2 minutes` | `2 minutes` | `2 minutes` |
+| Property               | Event       | Command      | Broadcast   | Ordered     | Schedule    | DLQ         |
+| ---------------------- | ----------- | ------------ | ----------- | ----------- | ----------- | ----------- |
+| `retention`            | `Workqueue` | `Workqueue`  | `Limits`    | `Limits`    | `Workqueue` | `Limits`    |
+| `allow_rollup_hdrs`    | `true`      | `false`      | `true`      | `false`     | `true`      | `false`     |
+| `max_consumers`        | `100`       | `50`         | `200`       | `100`       | `100`       | `100`       |
+| `max_msg_size`         | `1 MB`      | `1 MB`       | `1 MB`      | `1 MB`      | `1 MB`      | `1 MB`      |
+| `max_msgs_per_subject` | `100,000`   | `10,000`     | `50,000`    | `500,000`   | unlimited   | `50,000`    |
+| `max_msgs`             | `1,000,000` | `100,000`    | `500,000`   | `5,000,000` | unlimited   | `500,000`   |
+| `max_bytes`            | `512 MB`    | `64 MB`      | `256 MB`    | `1 GB`      | `64 MB`     | `256 MB`    |
+| `max_age`              | `7 days`    | `3 minutes`  | `1 hour`    | `1 day`     | none        | `30 days`   |
+| `duplicate_window`     | `2 minutes` | `30 seconds` | `2 minutes` | `2 minutes` | `2 minutes` | `2 minutes` |
 
 `max_bytes` is what the account is charged for, not what the stream currently holds: JetStream counts it against the account's storage budget the moment the stream is created. A service that provisions events plus a DLQ reserves **768 MB**, and one that also uses ordered delivery reserves **1.75 GB**, so a 10 GB file store carries roughly a dozen services instead of one.
 
@@ -46,6 +46,7 @@ What each kind is for:
 - **Command** carries RPC requests in [JetStream RPC mode](/docs/patterns/rpc) only. Everything about it is short-lived, because a request nobody answered within three minutes is a request nobody wants answered.
 - **Broadcast** is one stream shared by every service. An hour of `max_age` is enough catch-up for a pod that just started and short enough that config updates do not accumulate.
 - **Ordered** keeps messages for a day under `Limits` retention, because an ordered consumer replays a subject from the beginning instead of consuming it away.
+- **Schedule** holds [recurring schedules](/docs/guides/recurring-schedules) and their ticks, created only when a handler declares `schedule`. It also sets `allow_msg_schedules` and `allow_msg_ttl`. `max_age` stays off because NATS stops a schedule whose stored message ages out; ticks expire through their own TTL instead.
 - **DLQ** is created unless you pass `dlq: false`. Thirty days under `Limits` retention: reading a dead letter must not remove it. See [Dead Letter Queue](/docs/guides/dead-letter-queue#built-in-dlq-stream).
 
 :::note S2 compression
@@ -69,11 +70,11 @@ To enable [message scheduling](/docs/guides/scheduling), add `allow_msg_schedule
 
 Every durable consumer uses `ack_policy: Explicit`, `deliver_policy: All` and `replay_policy: Instant`. What differs:
 
-| Property          | Event        | Command     | Broadcast    |
-| ----------------- | ------------ | ----------- | ------------ |
-| `ack_wait`        | `10 seconds` | `5 minutes` | `10 seconds` |
-| `max_deliver`     | `3`          | `1`         | `3`          |
-| `max_ack_pending` | `100`        | `100`       | `100`        |
+| Property          | Event        | Command     | Broadcast    | Schedule     |
+| ----------------- | ------------ | ----------- | ------------ | ------------ |
+| `ack_wait`        | `10 seconds` | `5 minutes` | `10 seconds` | `10 seconds` |
+| `max_deliver`     | `3`          | `1`         | `3`          | `3`          |
+| `max_ack_pending` | `100`        | `100`       | `100`        | `100`        |
 
 An event that fails three times is [dead-lettered](/docs/guides/dead-letter-queue). Between attempts the transport naks with a delay taken from the retry curve, so the three attempts span roughly twelve seconds instead of burning out in milliseconds.
 

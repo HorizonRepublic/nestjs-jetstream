@@ -130,6 +130,12 @@ const schedules = await client.listSchedules(); // declared and dynamic
 - `{ at: Date }` fires once. It suits delays past the events stream's `max_age`,
   which bounds [`scheduleAt()`](./scheduling).
 
+## Deploy order and permissions
+
+Deploy the service with the `schedule: true` handler before a client creates schedules for it. A schedule created while no replica has the handler stays put, but every tick fired in that window is dropped.
+
+With NATS authorization, the service account needs JetStream API access to its schedule stream: `$JS.API.STREAM.INFO`, `$JS.API.STREAM.MSG.GET` and publish on the schedule subjects. A client calling `cancelSchedule()` or `listSchedules()` needs `$JS.API.STREAM.PURGE`, `$JS.API.STREAM.INFO` and `$JS.API.STREAM.MSG.GET` on the target's schedule stream, and `$JS.API.STREAM.NAMES` to find it. `ttl()`, `scheduleAt()` and `schedule()` read `$JS.API.INFO` once per connection to check the server version.
+
 ## Delivery semantics
 
 - **At least once per fire.** A tick goes through the same retry and dead-letter
@@ -154,10 +160,8 @@ The transport keeps schedules in a dedicated stream,
 - At boot, each declared schedule is compared with what is stored by a hash of
   its definition. Replicas that boot together write it once, and an unchanged
   interval keeps its rhythm.
-- A tick that finds no handler is handed back for five seconds, so a replica
-  that has the handler takes it during a rollout. When every delivery is spent,
-  the schedule is cancelled and a warning logged. So removing a handler removes
-  its schedule.
+- A tick that finds no handler is handed back for five seconds, so a replica that has the handler takes it during a rollout. When every delivery is spent, the schedule is cancelled and a warning logged, but only if it was written before that replica started. A schedule written later belongs to a newer release, and an older replica leaves it alone. So removing a handler removes its schedule.
+- Under a custom `schedule.subjectPrefix` the consumer reads registered patterns only, so the ticks of a removed handler never arrive. The boot log names those schedules and the subjects to purge instead.
 
 A changed schedule converges at the next boot of a current replica. If an old
 replica restarts mid-rollout, it writes the old definition back until then.
