@@ -22,4 +22,4 @@ overrides:
   'yaml@>=2.0.0 <2.8.3': ^2.9.1
   'qs@>=6.11.1 <6.15.2': 6.16.1
   ws: ^8.22.0
-  'serialize-javascript@>=5.0.0 <7.0.5': ^7.1.2
+  'serialize-javascript@>=5.0.0 <7.0.5': ^7.1.3
