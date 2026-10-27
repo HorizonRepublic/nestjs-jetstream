@@ -23,6 +23,7 @@ import {
   JetstreamRpcError,
   RecordErrorReason,
   RpcErrorReason,
+  toPublishError,
 } from '../errors';
 import { EventBus } from '../hooks';
 import { TransportEvent } from '../interfaces';
@@ -381,7 +382,7 @@ export class JetstreamClient extends ClientProxy {
       this.reportPublished(declaredPattern, streamKind, startedAt, 'success');
     } catch (err) {
       this.reportPublished(declaredPattern, streamKind, startedAt, 'error');
-      throw err;
+      throw toPublishError(err);
     }
 
     return undefined as T;
@@ -646,7 +647,8 @@ export class JetstreamClient extends ClientProxy {
     } catch (err) {
       if (!this.rpcInbox.discard(correlationId)) return;
 
-      const error = err instanceof Error ? err : new Error('Unknown error');
+      const published = toPublishError(err);
+      const error = published instanceof Error ? published : new Error('Unknown error');
 
       spanHandle.finish({ kind: RpcOutcomeKind.Error, error });
       this.eventBus.emit(TransportEvent.Error, error, `jetstream-rpc-publish:${subject}`);

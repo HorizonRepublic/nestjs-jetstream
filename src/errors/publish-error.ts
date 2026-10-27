@@ -1,5 +1,6 @@
 import { JetStreamApiError, type ApiError } from '@nats-io/jetstream';
 
+import { NatsErrorCode } from '../server/infrastructure/nats-error-codes';
 import { PublishErrorReason } from './errors.types';
 import { brandJetstreamError } from './jetstream-error';
 
@@ -30,7 +31,12 @@ export const toPublishError = (error: unknown): unknown => {
 
   const apiError = error.apiError();
 
-  if (!STREAM_FULL_DESCRIPTIONS.has(apiError.description)) return error;
+  if (
+    apiError.err_code !== NatsErrorCode.StreamStoreFailed ||
+    !STREAM_FULL_DESCRIPTIONS.has(apiError.description)
+  ) {
+    return error;
+  }
 
   return new JetstreamPublishError(PublishErrorReason.StreamFull, apiError, { cause: error });
 };

@@ -1,3 +1,4 @@
+import { JetStreamApiError } from '@nats-io/jetstream';
 import type { JetStreamClient as NatsJsClient, JetStreamManager, PubAck } from '@nats-io/jetstream';
 import type { Msg, MsgHdrs, NatsConnection, Status, Subscription } from '@nats-io/transport-node';
 import { headers as natsHeaders } from '@nats-io/transport-node';
@@ -12,6 +13,7 @@ import { ServerCapabilities } from '../../connection/server-capabilities';
 import {
   ConfigErrorReason,
   ConnectionErrorReason,
+  PublishErrorReason,
   RecordErrorReason,
   RpcErrorReason,
 } from '../../errors';
@@ -1292,6 +1294,33 @@ describe(JetstreamClient, () => {
 
       // Then: rejected immediately instead of hanging until the RPC timeout
       await vi.advanceTimersByTimeAsync(DEFAULT_JETSTREAM_RPC_TIMEOUT);
+      await assertion;
+    });
+
+    it('should reject with JetstreamPublishError when the command stream is full', async () => {
+      // Given
+      mockJs.publish.mockRejectedValue(
+        new JetStreamApiError({
+          err_code: 10077,
+          code: 503,
+          description: 'maximum bytes exceeded',
+        }),
+      );
+
+      // When
+      const result = firstValueFrom(sut.send('rpc.full', {}));
+      // oxlint-disable-next-line vitest/valid-expect
+      const assertion = expect(result).rejects.toThrow(
+        expect.objectContaining({
+          name: 'JetstreamPublishError',
+          reason: PublishErrorReason.StreamFull,
+          message: 'maximum bytes exceeded',
+        }),
+      );
+
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Then
       await assertion;
     });
   });
