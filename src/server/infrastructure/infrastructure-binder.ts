@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import { JetStreamApiError, RetentionPolicy } from '@nats-io/jetstream';
 import type { ConsumerInfo, StreamInfo } from '@nats-io/jetstream';
 
+import { BindingErrorReason, JetstreamBindingError } from '../../errors';
 import { StreamKind } from '../../interfaces';
 import type { AckExtensionConfig, JetstreamModuleOptions } from '../../interfaces';
 import type { ProvisioningEntity } from '../../otel';
@@ -174,7 +175,8 @@ export class InfrastructureBinder {
     );
 
     if (uncovered.length > 0) {
-      throw new Error(
+      throw new JetstreamBindingError(
+        BindingErrorReason.ConsumerFilterMismatch,
         `Consumer "${this.names.consumerName(kind)}" (kind=${String(kind)}) does not cover ` +
           `the following registered handler subjects: ${uncovered.join(', ')}. ` +
           `Update the consumer's filter_subject / filter_subjects to include them.`,
@@ -187,7 +189,8 @@ export class InfrastructureBinder {
     const covered = info.config.subjects.some((s) => coversOrEquals(s, dlqSubject));
 
     if (!covered) {
-      throw new Error(
+      throw new JetstreamBindingError(
+        BindingErrorReason.DlqSubjectMismatch,
         `DLQ stream "${dlqSubject}" subjects do not cover "${dlqSubject}" ` +
           `(dead letters publish to a subject equal to the stream name). ` +
           `Add it to the stream's subjects list.`,
@@ -200,7 +203,8 @@ export class InfrastructureBinder {
     const covered = info.config.subjects.some((s) => coversOrEquals(s, scheduleWildcard));
 
     if (!covered) {
-      throw new Error(
+      throw new JetstreamBindingError(
+        BindingErrorReason.ScheduleSubjectMismatch,
         `Stream "${this.names.streamName(kind)}" (kind=${String(kind)}) has scheduling enabled ` +
           `(allow_msg_schedules=true) but its subjects do not cover the schedule prefix ` +
           `"${this.names.schedulePrefix(kind)}". Add "${scheduleWildcard}" to the stream's subjects.`,
@@ -220,7 +224,8 @@ export class InfrastructureBinder {
         : filters.filter((f) => coversOrEquals(f, scheduleWildcard));
 
     if (swallowing.length > 0) {
-      throw new Error(
+      throw new JetstreamBindingError(
+        BindingErrorReason.ConsumerSwallowsSchedules,
         `Consumer "${this.names.consumerName(kind)}" (kind=${String(kind)}) filter ` +
           `${swallowing.join(', ')} also matches the schedule namespace "${this.names.schedulePrefix(kind)}". ` +
           `Consuming schedule holders removes pending schedules from the stream. ` +

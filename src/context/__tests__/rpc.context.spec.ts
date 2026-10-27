@@ -5,6 +5,7 @@ import { faker } from '@faker-js/faker';
 import { createMock } from '@golevelup/ts-vitest';
 import { describe, expect, it, vi } from 'vitest';
 
+import { RpcErrorReason } from '../../errors';
 import { JetstreamHeader } from '../../jetstream.constants';
 import { RpcContext } from '../rpc.context';
 
@@ -236,7 +237,13 @@ describe(RpcContext, () => {
 
         expect(() => {
           sut.retry();
-        }).toThrow('retry() is only available for JetStream messages');
+        }).toThrow(
+          expect.objectContaining({
+            name: 'JetstreamRpcError',
+            reason: RpcErrorReason.JetStreamOnly,
+            message: expect.stringContaining('retry() is only available for JetStream messages'),
+          }),
+        );
       });
 
       it('should throw on terminate()', () => {
@@ -245,7 +252,15 @@ describe(RpcContext, () => {
 
         expect(() => {
           sut.terminate();
-        }).toThrow('terminate() is only available for JetStream messages');
+        }).toThrow(
+          expect.objectContaining({
+            name: 'JetstreamRpcError',
+            reason: RpcErrorReason.JetStreamOnly,
+            message: expect.stringContaining(
+              'terminate() is only available for JetStream messages',
+            ),
+          }),
+        );
       });
     });
 
@@ -257,7 +272,13 @@ describe(RpcContext, () => {
 
         expect(() => {
           sut.terminate();
-        }).toThrow('Cannot terminate; retry() was already called');
+        }).toThrow(
+          expect.objectContaining({
+            name: 'JetstreamRpcError',
+            reason: RpcErrorReason.SettlementConflict,
+            message: expect.stringContaining('Cannot terminate; retry() was already called'),
+          }),
+        );
       });
 
       it('should throw when retry() is called after terminate()', () => {
@@ -267,7 +288,13 @@ describe(RpcContext, () => {
 
         expect(() => {
           sut.retry();
-        }).toThrow('Cannot retry; terminate() was already called');
+        }).toThrow(
+          expect.objectContaining({
+            name: 'JetstreamRpcError',
+            reason: RpcErrorReason.SettlementConflict,
+            message: expect.stringContaining('Cannot retry; terminate() was already called'),
+          }),
+        );
       });
     });
   });

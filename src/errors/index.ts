@@ -4,10 +4,13 @@ export { JetstreamConfigError } from './config-error';
 
 export { JetstreamConnectionError } from './connection-error';
 
+export { JetstreamDeliveryError } from './delivery-error';
+
 export {
   BindingErrorReason,
   ConfigErrorReason,
   ConnectionErrorReason,
+  DeliveryErrorReason,
   MigrationErrorReason,
   PublishErrorReason,
   RecordErrorReason,

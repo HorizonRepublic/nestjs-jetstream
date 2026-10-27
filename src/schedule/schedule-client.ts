@@ -98,7 +98,8 @@ export class ScheduleClient {
     try {
       stream = await jsm.streams.find(tickSubject);
     } catch (err) {
-      throw new Error(
+      throw new JetstreamScheduleError(
+        ScheduleErrorReason.NoScheduleStream,
         `No schedule stream captures ${tickSubject}. The target service creates it when one of ` +
           'its handlers declares `schedule: true` or a schedule in @EventPattern extras.',
         { cause: err },

@@ -9,7 +9,12 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vi
 
 import { ConnectionProvider } from '../../connection';
 import { ServerCapabilities } from '../../connection/server-capabilities';
-import { ConfigErrorReason, ConnectionErrorReason } from '../../errors';
+import {
+  ConfigErrorReason,
+  ConnectionErrorReason,
+  RecordErrorReason,
+  RpcErrorReason,
+} from '../../errors';
 import { EventBus } from '../../hooks';
 import type { Codec, JetstreamModuleOptions, TargetSubjectPrefixes } from '../../interfaces';
 import { TransportEvent } from '../../interfaces';
@@ -419,7 +424,11 @@ describe(JetstreamClient, () => {
 
         // When/Then: emit rejects with a descriptive error, nothing is published
         await expect(firstValueFrom(sut.emit('ordered:order.status', record))).rejects.toThrow(
-          /scheduleAt.*ordered/i,
+          expect.objectContaining({
+            name: 'JetstreamRecordError',
+            reason: RecordErrorReason.ScheduleUnsupportedForOrdered,
+            message: expect.stringMatching(/scheduleAt.*ordered/i),
+          }),
         );
 
         expect(mockJs.publish).not.toHaveBeenCalled();
@@ -1063,7 +1072,13 @@ describe(JetstreamClient, () => {
         vi.advanceTimersByTime(DEFAULT_JETSTREAM_RPC_TIMEOUT);
 
         // Then: timeout error surfaces the unified `rpc.timeout` label
-        await expect(resultPromise).rejects.toThrow('rpc.timeout');
+        await expect(resultPromise).rejects.toThrow(
+          expect.objectContaining({
+            name: 'JetstreamRpcError',
+            reason: RpcErrorReason.Timeout,
+            message: 'rpc.timeout',
+          }),
+        );
         expect(eventBus.emit).toHaveBeenCalledWith(
           TransportEvent.RpcTimeout,
           expect.stringContaining('cmd.slow.handler'),
@@ -1265,7 +1280,13 @@ describe(JetstreamClient, () => {
       const result = firstValueFrom(sut.send('rpc.dup', {}));
       // Attach the expectation before the rejection settles; awaited below
       // oxlint-disable-next-line vitest/valid-expect
-      const assertion = expect(result).rejects.toThrow(/duplicate/i);
+      const assertion = expect(result).rejects.toThrow(
+        expect.objectContaining({
+          name: 'JetstreamRpcError',
+          reason: RpcErrorReason.DuplicatePublish,
+          message: expect.stringMatching(/duplicate/i),
+        }),
+      );
 
       await vi.advanceTimersByTimeAsync(0);
 
@@ -1299,8 +1320,33 @@ describe(JetstreamClient, () => {
       statusSubject.next({ type: 'disconnect', server: '' });
 
       // Then: both reject with Error('Connection lost')
-      await expect(result1).rejects.toThrow('Connection lost');
-      await expect(result2).rejects.toThrow('Connection lost');
+      const connectionLost = expect.objectContaining({
+        name: 'JetstreamRpcError',
+        reason: RpcErrorReason.ConnectionLost,
+        message: 'Connection lost',
+      });
+
+      await expect(result1).rejects.toThrow(connectionLost);
+      await expect(result2).rejects.toThrow(connectionLost);
+    });
+
+    it('should reject pending callbacks when the client closes', async () => {
+      // Given: a pending RPC
+      const result = firstValueFrom(sut.send('rpc.one', {}));
+
+      await vi.advanceTimersByTimeAsync(0);
+
+      // When
+      await sut.close();
+
+      // Then
+      await expect(result).rejects.toThrow(
+        expect.objectContaining({
+          name: 'JetstreamRpcError',
+          reason: RpcErrorReason.ClientClosed,
+          message: 'Client closed',
+        }),
+      );
     });
 
     it('should clear pending maps on disconnect', async () => {

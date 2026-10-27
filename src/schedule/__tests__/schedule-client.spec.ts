@@ -93,7 +93,11 @@ describe(ScheduleClient, () => {
 
     // When / Then
     await expect(sut.listSchedules()).rejects.toThrow(
-      /asset__microservice\.sched\..*schedule: true/,
+      expect.objectContaining({
+        name: 'JetstreamScheduleError',
+        reason: ScheduleErrorReason.NoScheduleStream,
+        message: expect.stringMatching(/asset__microservice\.sched\..*schedule: true/),
+      }),
     );
   });
 });

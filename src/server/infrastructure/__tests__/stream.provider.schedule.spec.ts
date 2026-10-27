@@ -8,6 +8,7 @@ import { createMock } from '@golevelup/ts-vitest';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 
 import { ConnectionProvider } from '../../../connection';
+import { MigrationErrorReason } from '../../../errors';
 import { StreamKind } from '../../../interfaces';
 import type { JetstreamModuleOptions } from '../../../interfaces';
 import { DEFAULT_SCHEDULE_STREAM_CONFIG, toNanos } from '../../../jetstream.constants';
@@ -141,7 +142,11 @@ describe('StreamProvider schedule stream', () => {
 
     // When / Then
     await expect(sut.ensureStreams([StreamKind.Schedule])).rejects.toThrow(
-      /schedule stream.*cannot be migrated/i,
+      expect.objectContaining({
+        name: 'JetstreamMigrationError',
+        reason: MigrationErrorReason.ScheduleStream,
+        message: expect.stringMatching(/schedule stream.*cannot be migrated/i),
+      }),
     );
   });
 });

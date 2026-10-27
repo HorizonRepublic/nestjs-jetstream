@@ -8,7 +8,7 @@ import { createMock } from '@golevelup/ts-vitest';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 
 import { ConnectionProvider } from '../../../connection';
-import { ConfigErrorReason } from '../../../errors';
+import { ConfigErrorReason, MigrationErrorReason } from '../../../errors';
 import { ManagementMode, StreamKind } from '../../../interfaces';
 import type {
   JetstreamModuleOptions,
@@ -296,7 +296,11 @@ describe(StreamProvider, () => {
       // When/Then: recreating broadcast-stream would delete every other
       // service's durable consumers, so throw instead
       await expect(sut.ensureStreams([StreamKind.Broadcast])).rejects.toThrow(
-        /broadcast-stream.*shared|shared.*broadcast-stream/i,
+        expect.objectContaining({
+          name: 'JetstreamMigrationError',
+          reason: MigrationErrorReason.SharedStream,
+          message: expect.stringMatching(/broadcast-stream.*shared|shared.*broadcast-stream/i),
+        }),
       );
     });
   });
@@ -443,7 +447,11 @@ describe(StreamProvider, () => {
 
         // When / Then
         await expect(sut.ensureStreams([StreamKind.Event])).rejects.toThrow(
-          /transport-controlled config conflicts/,
+          expect.objectContaining({
+            name: 'JetstreamMigrationError',
+            reason: MigrationErrorReason.TransportConfigConflict,
+            message: expect.stringMatching(/transport-controlled config conflicts/),
+          }),
         );
 
         expect(mockJsm.streams.update).not.toHaveBeenCalled();

@@ -12,6 +12,7 @@ import type { Mock } from 'vitest';
 
 import { JsonCodec } from '../../../codec';
 import type { ConnectionProvider } from '../../../connection';
+import { DeliveryErrorReason } from '../../../errors';
 import { DeadLetterAdvisoryListener } from '../dead-letter-advisory';
 import type { DeadLetterCapture } from '../dead-letter-capture';
 import type { DeadLetterSource, DeadLetterWatchTarget } from '../routing.types';
@@ -147,7 +148,12 @@ describe(DeadLetterAdvisoryListener, () => {
         timestamp: message.time,
       });
       expect(data).toEqual(payload);
-      expect(reason).toBeInstanceOf(Error);
+      expect(reason).toEqual(
+        expect.objectContaining({
+          name: 'JetstreamDeliveryError',
+          reason: DeliveryErrorReason.DeliveriesExhausted,
+        }),
+      );
     });
 
     it('should delete the message from a work-queue stream once captured', async () => {

@@ -5,6 +5,7 @@ import { faker } from '@faker-js/faker';
 import { createMock } from '@golevelup/ts-vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { MigrationErrorReason } from '../../../errors';
 import { MIGRATION_BACKUP_SUFFIX, StreamMigration } from '../stream-migration';
 
 const streamNotFoundError = new JetStreamApiError({
@@ -246,7 +247,11 @@ describe(StreamMigration.name, () => {
 
       // When/Then
       await expect(sut.migrate(jsm, testStreamName, newConfig)).rejects.toThrow(
-        /sourcing timeout/i,
+        expect.objectContaining({
+          name: 'JetstreamMigrationError',
+          reason: MigrationErrorReason.SourcingTimeout,
+          message: expect.stringMatching(/sourcing timeout/i),
+        }),
       );
 
       // And: the original was not deleted; our backup was cleaned up
@@ -306,7 +311,13 @@ describe(StreamMigration.name, () => {
       });
 
       // When/Then: migrate gives up loudly instead of deleting the peer's data
-      await expect(sut.migrate(jsm, testStreamName, newConfig)).rejects.toThrow(/did not clear/);
+      await expect(sut.migrate(jsm, testStreamName, newConfig)).rejects.toThrow(
+        expect.objectContaining({
+          name: 'JetstreamMigrationError',
+          reason: MigrationErrorReason.PeerTimeout,
+          message: expect.stringMatching(/did not clear/),
+        }),
+      );
 
       expect(jsm.streams.delete).not.toHaveBeenCalled();
     });

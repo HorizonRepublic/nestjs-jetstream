@@ -3,6 +3,7 @@ import type { MessageHandler } from '@nestjs/microservices';
 import type { JsMsg } from '@nats-io/jetstream';
 
 import { RpcContext } from '../../context';
+import { DeliveryErrorReason, JetstreamDeliveryError } from '../../errors';
 import { MessageKind, TransportEvent } from '../../interfaces';
 import { withConsumeSpan } from '../../otel';
 import { isPromiseLike, startAckExtensionTimer, unwrapResult } from '../../utils';
@@ -81,7 +82,14 @@ const createEventResolver = (
         logger.error(`No handler for subject: ${subject}`);
 
         if (capture !== null) {
-          return captureUnroutable(capture, msg, new Error(`No handler for event: ${subject}`));
+          return captureUnroutable(
+            capture,
+            msg,
+            new JetstreamDeliveryError(
+              DeliveryErrorReason.NoHandler,
+              `No handler for event: ${subject}`,
+            ),
+          );
         }
 
         msg.term(`No handler for event: ${subject}`);
@@ -100,7 +108,11 @@ const createEventResolver = (
           return captureUnroutable(
             capture,
             msg,
-            new Error(`Decode error: ${err instanceof Error ? err.message : String(err)}`),
+            new JetstreamDeliveryError(
+              DeliveryErrorReason.DecodeFailed,
+              `Decode error: ${err instanceof Error ? err.message : String(err)}`,
+              { cause: err },
+            ),
           );
         }
 

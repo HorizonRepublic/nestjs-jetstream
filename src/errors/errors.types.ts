@@ -49,6 +49,12 @@ export enum RpcErrorReason {
   SettlementConflict = 'settlement-conflict',
   JetStreamOnly = 'jetstream-only',
   DuplicatePublish = 'duplicate-publish',
+  Timeout = 'timeout',
+  ConnectionLost = 'connection-lost',
+  ClientClosed = 'client-closed',
+  InboxNotReady = 'inbox-not-ready',
+  /** The publish failed in a way the transport did not anticipate; the cause is logged. */
+  InternalTransport = 'internal-transport',
 }
 
 /** Why externally managed infrastructure does not fit the registered handlers. */
@@ -70,6 +76,15 @@ export enum MigrationErrorReason {
   InProgress = 'in-progress',
 }
 
+/** Why a delivered message could not be handled and went to the dead-letter path. */
+export enum DeliveryErrorReason {
+  NoHandler = 'no-handler',
+  DecodeFailed = 'decode-failed',
+  RetryOnFinalAttempt = 'retry-on-final-attempt',
+  /** The server stopped redelivering: the handler outlived `ack_wait` or the process stopped. */
+  DeliveriesExhausted = 'deliveries-exhausted',
+}
+
 /** Why the server rejected a publish. */
 export enum PublishErrorReason {
   /** The stream reached `max_msgs`, `max_bytes` or `max_msgs_per_subject` and discards new messages. */
@@ -84,6 +99,7 @@ export type JetstreamErrorReason =
   | RpcErrorReason
   | BindingErrorReason
   | MigrationErrorReason
+  | DeliveryErrorReason
   | PublishErrorReason
   | ScheduleErrorReason
   | ProvisioningErrorReason

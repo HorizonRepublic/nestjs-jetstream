@@ -1,6 +1,7 @@
 import { faker } from '@faker-js/faker';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { RecordErrorReason } from '../../errors';
 import { JetstreamHeader, RESERVED_HEADERS } from '../../jetstream.constants';
 import { JetstreamRecord, JetstreamRecordBuilder } from '../jetstream.record';
 
@@ -217,7 +218,13 @@ describe(JetstreamRecordBuilder, () => {
           const pastDate = new Date(Date.now() - 60_000);
 
           // When/Then: throws
-          expect(() => sut.scheduleAt(pastDate)).toThrow(/future/i);
+          expect(() => sut.scheduleAt(pastDate)).toThrow(
+            expect.objectContaining({
+              name: 'JetstreamRecordError',
+              reason: RecordErrorReason.ScheduleInPast,
+              message: expect.stringMatching(/future/i),
+            }),
+          );
         });
       });
 
@@ -230,7 +237,13 @@ describe(JetstreamRecordBuilder, () => {
             const now = new Date();
 
             // When/Then: throws (now is not in the future)
-            expect(() => sut.scheduleAt(now)).toThrow(/future/i);
+            expect(() => sut.scheduleAt(now)).toThrow(
+              expect.objectContaining({
+                name: 'JetstreamRecordError',
+                reason: RecordErrorReason.ScheduleInPast,
+                message: expect.stringMatching(/future/i),
+              }),
+            );
           } finally {
             vi.useRealTimers();
           }
@@ -243,7 +256,13 @@ describe(JetstreamRecordBuilder, () => {
           const invalidDate = new Date('invalid');
 
           // When/Then: throws
-          expect(() => sut.scheduleAt(invalidDate)).toThrow(/invalid/i);
+          expect(() => sut.scheduleAt(invalidDate)).toThrow(
+            expect.objectContaining({
+              name: 'JetstreamRecordError',
+              reason: RecordErrorReason.InvalidScheduleDate,
+              message: expect.stringMatching(/invalid/i),
+            }),
+          );
         });
       });
     });
@@ -301,30 +320,66 @@ describe(JetstreamRecordBuilder, () => {
     });
 
     it('should throw for zero', () => {
-      expect(() => sut.ttl(0)).toThrow(/positive/i);
+      expect(() => sut.ttl(0)).toThrow(
+        expect.objectContaining({
+          name: 'JetstreamRecordError',
+          reason: RecordErrorReason.InvalidTtl,
+          message: expect.stringMatching(/positive/i),
+        }),
+      );
     });
 
     it('should throw for negative', () => {
-      expect(() => sut.ttl(-1)).toThrow(/positive/i);
+      expect(() => sut.ttl(-1)).toThrow(
+        expect.objectContaining({
+          name: 'JetstreamRecordError',
+          reason: RecordErrorReason.InvalidTtl,
+          message: expect.stringMatching(/positive/i),
+        }),
+      );
     });
 
     it('should throw for NaN', () => {
-      expect(() => sut.ttl(NaN)).toThrow(/finite/i);
+      expect(() => sut.ttl(NaN)).toThrow(
+        expect.objectContaining({
+          name: 'JetstreamRecordError',
+          reason: RecordErrorReason.InvalidTtl,
+          message: expect.stringMatching(/finite/i),
+        }),
+      );
     });
 
     it('should throw for Infinity', () => {
-      expect(() => sut.ttl(Infinity)).toThrow(/finite/i);
+      expect(() => sut.ttl(Infinity)).toThrow(
+        expect.objectContaining({
+          name: 'JetstreamRecordError',
+          reason: RecordErrorReason.InvalidTtl,
+          message: expect.stringMatching(/finite/i),
+        }),
+      );
     });
   });
 
   describe('error paths', () => {
     describe('when setting reserved headers via setHeader()', () => {
       it.each([...RESERVED_HEADERS])('should throw for reserved header: %s', (header) => {
-        expect(() => sut.setHeader(header, 'value')).toThrow(/reserved/i);
+        expect(() => sut.setHeader(header, 'value')).toThrow(
+          expect.objectContaining({
+            name: 'JetstreamRecordError',
+            reason: RecordErrorReason.ReservedTransportHeader,
+            message: expect.stringMatching(/reserved/i),
+          }),
+        );
       });
 
       it('should include the header name in the error message', () => {
-        expect(() => sut.setHeader(JetstreamHeader.CorrelationId, 'x')).toThrow(/x-correlation-id/);
+        expect(() => sut.setHeader(JetstreamHeader.CorrelationId, 'x')).toThrow(
+          expect.objectContaining({
+            name: 'JetstreamRecordError',
+            reason: RecordErrorReason.ReservedTransportHeader,
+            message: expect.stringMatching(/x-correlation-id/),
+          }),
+        );
       });
 
       it.each(['X-Correlation-ID', 'X-Reply-To', 'X-ERROR', 'X-Correlation-Id'])(
@@ -333,7 +388,13 @@ describe(JetstreamRecordBuilder, () => {
           // NATS treats header names case-insensitively, so the validator must
           // normalize before the Set lookup. Otherwise a publisher could bypass
           // the reserved-header guard by capitalizing the key.
-          expect(() => sut.setHeader(header, 'value')).toThrow(/reserved/i);
+          expect(() => sut.setHeader(header, 'value')).toThrow(
+            expect.objectContaining({
+              name: 'JetstreamRecordError',
+              reason: RecordErrorReason.ReservedTransportHeader,
+              message: expect.stringMatching(/reserved/i),
+            }),
+          );
         },
       );
 
@@ -344,7 +405,13 @@ describe(JetstreamRecordBuilder, () => {
           // pending message on the subject, Nats-TTL expires the message,
           // Nats-Msg-Id is owned by setMessageId(). All of them have dedicated
           // builder APIs or are not meant to be set on application messages.
-          expect(() => sut.setHeader(header, 'value')).toThrow(/reserved/i);
+          expect(() => sut.setHeader(header, 'value')).toThrow(
+            expect.objectContaining({
+              name: 'JetstreamRecordError',
+              reason: RecordErrorReason.ReservedNatsHeader,
+              message: expect.stringMatching(/reserved/i),
+            }),
+          );
         },
       );
     });
@@ -356,7 +423,13 @@ describe(JetstreamRecordBuilder, () => {
             'x-tenant': 'ok',
             [JetstreamHeader.Error]: 'true',
           }),
-        ).toThrow(/x-error.*reserved/i);
+        ).toThrow(
+          expect.objectContaining({
+            name: 'JetstreamRecordError',
+            reason: RecordErrorReason.ReservedTransportHeader,
+            message: expect.stringMatching(/x-error.*reserved/i),
+          }),
+        );
       });
     });
   });

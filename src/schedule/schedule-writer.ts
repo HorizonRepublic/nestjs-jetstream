@@ -1,8 +1,9 @@
 import { ScheduleChange } from '../interfaces';
 import type { Codec, ScheduleSpec } from '../interfaces';
+import { JetstreamScheduleError } from './schedule-error';
 import { buildHolder } from './schedule-holder';
 import type { ScheduleStore } from './schedule-store';
-import { PutOutcome } from './schedule.types';
+import { PutOutcome, ScheduleErrorReason } from './schedule.types';
 
 /** One retry after a conflict: enough for a replica that raced us, not a fight. */
 const MAX_ATTEMPTS = 2;
@@ -63,7 +64,8 @@ export class ScheduleWriter {
       } else if (waits < UNAVAILABLE_DELAYS_MS.length) {
         await sleep(UNAVAILABLE_DELAYS_MS[waits++] ?? 0);
       } else {
-        throw new Error(
+        throw new JetstreamScheduleError(
+          ScheduleErrorReason.LeaderChange,
           `Schedule ${holderSubject} could not be written: the stream kept reporting its ` +
             'sequences as unavailable, which happens briefly during a leader change.',
         );
@@ -74,7 +76,8 @@ export class ScheduleWriter {
 
     if (settled?.hash === holder.hash) return ScheduleChange.Unchanged;
 
-    throw new Error(
+    throw new JetstreamScheduleError(
+      ScheduleErrorReason.ConcurrentWriter,
       `Schedule ${holderSubject} kept changing while it was written; another writer holds a ` +
         'different definition. Check that every replica runs the same schedule.',
     );

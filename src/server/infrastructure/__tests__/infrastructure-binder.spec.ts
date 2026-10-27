@@ -14,6 +14,7 @@ import { faker } from '@faker-js/faker';
 import { createMock } from '@golevelup/ts-vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { BindingErrorReason } from '../../../errors';
 import { ManagementMode, StreamKind } from '../../../interfaces';
 import type { JetstreamModuleOptions } from '../../../interfaces';
 import { PatternRegistry } from '../../routing';
@@ -244,7 +245,13 @@ describe(InfrastructureBinder.name, () => {
         const jsm = makeJsm({ consumerInfo: vi.fn().mockResolvedValue(info) });
 
         // When / Then
-        await expect(sut.bindConsumer(jsm, StreamKind.Event)).rejects.toThrow(uncoveredSubject);
+        await expect(sut.bindConsumer(jsm, StreamKind.Event)).rejects.toThrow(
+          expect.objectContaining({
+            name: 'JetstreamBindingError',
+            reason: BindingErrorReason.ConsumerFilterMismatch,
+            message: expect.stringContaining(uncoveredSubject),
+          }),
+        );
       });
     });
   });
@@ -264,7 +271,13 @@ describe(InfrastructureBinder.name, () => {
 
         // When / Then
         await expect(sut.bindDlqStream(jsm)).rejects.toThrow(
-          `DLQ stream "${names.dlqStreamName()}" subjects do not cover`,
+          expect.objectContaining({
+            name: 'JetstreamBindingError',
+            reason: BindingErrorReason.DlqSubjectMismatch,
+            message: expect.stringContaining(
+              `DLQ stream "${names.dlqStreamName()}" subjects do not cover`,
+            ),
+          }),
         );
       });
     });
@@ -287,7 +300,11 @@ describe(InfrastructureBinder.name, () => {
 
         // When / Then
         await expect(sut.bindStream(jsm, StreamKind.Event)).rejects.toThrow(
-          names.schedulePrefix(StreamKind.Event),
+          expect.objectContaining({
+            name: 'JetstreamBindingError',
+            reason: BindingErrorReason.ScheduleSubjectMismatch,
+            message: expect.stringContaining(names.schedulePrefix(StreamKind.Event)),
+          }),
         );
       });
     });
@@ -331,7 +348,13 @@ describe(InfrastructureBinder.name, () => {
           makeJsm({ streamInfo: vi.fn().mockResolvedValue(info) }),
           StreamKind.Schedule,
         ),
-      ).rejects.toThrow(names.schedulePrefix(StreamKind.Schedule));
+      ).rejects.toThrow(
+        expect.objectContaining({
+          name: 'JetstreamBindingError',
+          reason: BindingErrorReason.ScheduleSubjectMismatch,
+          message: expect.stringContaining(names.schedulePrefix(StreamKind.Schedule)),
+        }),
+      );
     });
 
     it('should warn when the schedule stream ages messages out', async () => {
@@ -379,7 +402,13 @@ describe(InfrastructureBinder.name, () => {
           makeJsm({ consumerInfo: vi.fn().mockResolvedValue(info) }),
           StreamKind.Schedule,
         ),
-      ).rejects.toThrow(/removes pending schedules/);
+      ).rejects.toThrow(
+        expect.objectContaining({
+          name: 'JetstreamBindingError',
+          reason: BindingErrorReason.ConsumerSwallowsSchedules,
+          message: expect.stringMatching(/removes pending schedules/),
+        }),
+      );
     });
   });
 
@@ -456,7 +485,11 @@ describe(InfrastructureBinder.name, () => {
 
       // When / Then
       await expect(sut.bindConsumer(jsm, StreamKind.Event)).rejects.toThrow(
-        names.subject(StreamKind.Event, 'order.cancelled'),
+        expect.objectContaining({
+          name: 'JetstreamBindingError',
+          reason: BindingErrorReason.ConsumerFilterMismatch,
+          message: expect.stringContaining(names.subject(StreamKind.Event, 'order.cancelled')),
+        }),
       );
     });
   });
@@ -473,7 +506,13 @@ describe(InfrastructureBinder.name, () => {
       const jsm = makeJsm({ consumerInfo: vi.fn().mockResolvedValue(info) });
 
       // When / Then
-      await expect(sut.bindConsumer(jsm, StreamKind.Broadcast)).rejects.toThrow(broadcastSubject);
+      await expect(sut.bindConsumer(jsm, StreamKind.Broadcast)).rejects.toThrow(
+        expect.objectContaining({
+          name: 'JetstreamBindingError',
+          reason: BindingErrorReason.ConsumerFilterMismatch,
+          message: expect.stringContaining(broadcastSubject),
+        }),
+      );
     });
   });
 
@@ -519,7 +558,11 @@ describe(InfrastructureBinder.name, () => {
 
         // When / Then
         await expect(sut.bindConsumer(jsm, StreamKind.Event)).rejects.toThrow(
-          names.schedulePrefix(StreamKind.Event),
+          expect.objectContaining({
+            name: 'JetstreamBindingError',
+            reason: BindingErrorReason.ConsumerSwallowsSchedules,
+            message: expect.stringContaining(names.schedulePrefix(StreamKind.Event)),
+          }),
         );
       });
     });
@@ -551,7 +594,11 @@ describe(InfrastructureBinder.name, () => {
 
         // When / Then
         await expect(sut.bindConsumer(jsm, StreamKind.Event)).rejects.toThrow(
-          names.schedulePrefix(StreamKind.Event),
+          expect.objectContaining({
+            name: 'JetstreamBindingError',
+            reason: BindingErrorReason.ConsumerSwallowsSchedules,
+            message: expect.stringContaining(names.schedulePrefix(StreamKind.Event)),
+          }),
         );
       });
     });
