@@ -87,11 +87,11 @@ describe(RpcContext, () => {
     describe('when message is a core Msg', () => {
       it('should return false', () => {
         // Given: a core Msg manually crafted without an ack method
-        const msg = {
+        const msg = createMock<Msg>({
           subject: 'test',
           data: new Uint8Array(),
           headers: undefined,
-        } as unknown as Msg;
+        });
         const sut = new RpcContext([msg]);
 
         // Then: type guard is false
@@ -162,11 +162,11 @@ describe(RpcContext, () => {
 
     describe('when message is a Core Msg', () => {
       it('should return undefined for all JetStream metadata', () => {
-        const msg = {
+        const msg = createMock<Msg>({
           subject: 'test',
           data: new Uint8Array(),
           headers: undefined,
-        } as unknown as Msg;
+        });
         const sut = new RpcContext([msg]);
 
         expect(sut.getDeliveryCount()).toBeUndefined();
@@ -232,7 +232,7 @@ describe(RpcContext, () => {
 
     describe('when message is Core NATS', () => {
       it('should throw on retry()', () => {
-        const msg = { subject: 'test', data: new Uint8Array() } as unknown as Msg;
+        const msg = createMock<Msg>({ subject: 'test', data: new Uint8Array() });
         const sut = new RpcContext([msg]);
 
         expect(() => {
@@ -247,7 +247,7 @@ describe(RpcContext, () => {
       });
 
       it('should throw on terminate()', () => {
-        const msg = { subject: 'test', data: new Uint8Array() } as unknown as Msg;
+        const msg = createMock<Msg>({ subject: 'test', data: new Uint8Array() });
         const sut = new RpcContext([msg]);
 
         expect(() => {

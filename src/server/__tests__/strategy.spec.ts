@@ -21,7 +21,7 @@ import {
 import { EventRouter, PatternRegistry, RpcRouter } from '../routing';
 import { JetstreamStrategy } from '../strategy';
 
-const fakeHandler = (): MessageHandler => vi.fn() as unknown as MessageHandler;
+const fakeHandler = (): MessageHandler => vi.fn<MessageHandler>();
 
 describe(JetstreamStrategy, () => {
   let sut: JetstreamStrategy;

@@ -382,7 +382,7 @@ describe(ConnectionProvider, () => {
       const nc = createNc({
         status: vi.fn().mockReturnValue(
           (async function* (): AsyncGenerator<Status> {
-            yield { type: 'error', error: new Error('test error') } as unknown as Status;
+            yield { type: 'error', error: new Error('test error') };
           })(),
         ),
       });
@@ -469,7 +469,7 @@ describe(ConnectionProvider, () => {
       let callCount = 0;
 
       mockJetstream.mockImplementation(() => {
-        return { id: ++callCount } as unknown as JetStreamClient;
+        return createMock<JetStreamClient>({ apiPrefix: String(++callCount) });
       });
 
       let emitReconnect!: () => void;

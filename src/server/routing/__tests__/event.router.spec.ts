@@ -1085,7 +1085,7 @@ describe(EventRouter, () => {
         // Given
         const codecError = new Error('bad payload');
 
-        patternRegistry.getHandler.mockReturnValue(vi.fn());
+        patternRegistry.getHandler.mockReturnValue(vi.fn().mockResolvedValue(undefined));
         codec.decode.mockImplementation(() => {
           throw codecError;
         });
@@ -1110,7 +1110,7 @@ describe(EventRouter, () => {
       it('should report retry() on the final delivery as retry-on-final-attempt', async () => {
         // Given
         patternRegistry.getHandler.mockReturnValue(
-          vi.fn((_data: unknown, ctx: RpcContext) => {
+          vi.fn().mockImplementation(async (_data: unknown, ctx: RpcContext) => {
             ctx.retry();
           }),
         );
@@ -1396,11 +1396,13 @@ describe(EventRouter, () => {
 
           patternRegistry.getHandler.mockReturnValue(handler);
 
-          const mockHeaders = new Map([['X-Trace-Id', ['abc123']]]);
+          const mockHeaders = natsHeaders();
+
+          mockHeaders.set('X-Trace-Id', 'abc123');
           const msg = createMock<JsMsg>({
             subject: 'test.subject',
             data: new TextEncoder().encode(JSON.stringify({ key: 'value' })),
-            headers: mockHeaders as unknown as JsMsg['headers'],
+            headers: mockHeaders,
             info: {
               deliveryCount: 3,
               stream: streamName,
@@ -1465,7 +1467,7 @@ describe(EventRouter, () => {
           const msg = createMock<JsMsg>({
             subject: 'test.subject',
             data: new TextEncoder().encode(JSON.stringify({ key: 'value' })),
-            headers: mockHeaders as unknown as JsMsg['headers'],
+            headers: mockHeaders,
             info: {
               deliveryCount: 3,
               stream: streamName,
@@ -1907,7 +1909,7 @@ describe(EventRouter, () => {
         it('should fall back to onDeadLetter when service name is absent', async () => {
           // Given: options with no name (can't derive DLQ stream subject)
           const options: JetstreamModuleOptions = {
-            name: '' as unknown as string,
+            name: '',
             servers: ['nats://localhost:4222'],
             dlq: {},
           };

@@ -208,7 +208,7 @@ describe(PollRunner, () => {
       const streamsInfo = vi.fn().mockResolvedValue(streamInfo(0, 0));
 
       (jsm.consumers.info as ReturnType<typeof vi.fn>).mockResolvedValue(consumerInfo());
-      jsm.streams = { info: streamsInfo } as unknown as JetStreamManager['streams'];
+      jsm.streams = createMock<JetStreamManager['streams']>({ info: streamsInfo });
 
       const sut = new PollRunner({
         intervalMs: 1_000,

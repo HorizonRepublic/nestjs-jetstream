@@ -59,7 +59,7 @@ describe(StreamMigration.name, () => {
               config: {
                 name: backupStreamName,
                 sources: [{ name: testStreamName }],
-              } as unknown as StreamConfig,
+              },
               state: { messages: messageCount } as StreamInfo['state'],
               sources: drainedSources,
             });
@@ -268,7 +268,7 @@ describe(StreamMigration.name, () => {
         config: {
           name: backupStreamName,
           metadata: { 'nestjs-jetstream-migration-started-at': new Date().toISOString() },
-        } as unknown as StreamConfig,
+        },
         state: { messages: 5 } as StreamInfo['state'],
       });
 
@@ -438,7 +438,7 @@ describe(StreamMigration.name, () => {
               config: {
                 name: testStreamName,
                 sources: [{ name: backupStreamName }],
-              } as unknown as StreamConfig,
+              },
               state: { messages: 5 } as StreamInfo['state'],
               sources: [{ name: backupStreamName, lag: 0, active: 1_000 }],
             });
