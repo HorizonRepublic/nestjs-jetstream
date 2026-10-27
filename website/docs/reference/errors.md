@@ -36,7 +36,7 @@ try {
 
 `isJetstreamError()` recognises every typed error, `JetstreamPublishError` included. Prefer it over `instanceof` when your process may load the package twice, as the CommonJS and ES module builds of one dependency tree can: `instanceof` fails across the two copies, the guard does not.
 
-All classes except `JetstreamPublishError` extend the abstract `JetstreamError`. Match on `reason` rather than on message text.
+All classes except `JetstreamPublishError` extend the abstract `JetstreamBaseError`. Match on `reason` rather than on message text.
 
 ## At a glance
 
@@ -47,7 +47,7 @@ All classes except `JetstreamPublishError` extend the abstract `JetstreamError`.
 | `JetstreamProvisioningError` | The server refuses to create or update a stream or consumer      | `ProvisioningErrorReason` |
 | `JetstreamBindingError`      | Externally managed streams or consumers do not fit your handlers | `BindingErrorReason`      |
 | `JetstreamMigrationError`    | A destructive stream migration is refused or does not finish     | `MigrationErrorReason`    |
-| `JetstreamPublishError`      | The server rejects an `emit()` or `send()` publish               | `PublishErrorReason`      |
+| `JetstreamPublishError`      | The target stream is full and rejects an `emit()` or `send()`    | `PublishErrorReason`      |
 | `JetstreamRecordError`       | A `JetstreamRecordBuilder` value or delivery option is invalid   | `RecordErrorReason`       |
 | `JetstreamRpcError`          | An RPC call fails, or `RpcContext` settlement is misused         | `RpcErrorReason`          |
 | `JetstreamDeliveryError`     | A delivered event cannot be handled; passed to `onDeadLetter`    | `DeliveryErrorReason`     |
@@ -67,9 +67,10 @@ All classes except `JetstreamPublishError` extend the abstract `JetstreamError`.
 | Reason                | When                                                                                 |
 | --------------------- | ------------------------------------------------------------------------------------ |
 | `timeout`             | No reply arrived within the RPC timeout (JetStream RPC mode)                         |
-| `connection-lost`     | The connection dropped while the call was pending                                    |
-| `client-closed`       | The client closed while the call was pending                                         |
+| `connection-lost`     | The connection dropped while the call was pending (JetStream RPC mode)               |
+| `client-closed`       | The client closed while the call was pending (JetStream RPC mode)                    |
 | `duplicate-publish`   | The command's message ID was already used inside the stream's dedup window           |
+| `decode-failed`       | The reply could not be decoded and the codec threw a non-`Error` value               |
 | `inbox-not-ready`     | The reply inbox was not subscribed when the command went out                         |
 | `internal-transport`  | The publish failed unexpectedly; the cause is in the transport's error log           |
 | `settlement-conflict` | A handler called both `retry()` and `terminate()` on its `RpcContext`                |

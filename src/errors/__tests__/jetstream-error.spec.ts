@@ -69,6 +69,17 @@ describe('typed errors', () => {
     expect(isJetstreamError(foreign)).toBe(true);
   });
 
+  it('should recognize a branded object without a prototype', () => {
+    // Given
+    const bare = Object.assign(Object.create(null) as object, {
+      reason: ConfigErrorReason.DuplicateHandler,
+      [JETSTREAM_ERROR_BRAND]: true,
+    });
+
+    // When / Then
+    expect(isJetstreamError(bare)).toBe(true);
+  });
+
   it.each([
     ['a plain Error', new Error('m')],
     ['null', null],

@@ -53,6 +53,7 @@ export enum RpcErrorReason {
   ConnectionLost = 'connection-lost',
   ClientClosed = 'client-closed',
   InboxNotReady = 'inbox-not-ready',
+  DecodeFailed = 'decode-failed',
   /** The publish failed in a way the transport did not anticipate; the cause is logged. */
   InternalTransport = 'internal-transport',
 }

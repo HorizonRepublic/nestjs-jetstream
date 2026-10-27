@@ -133,7 +133,7 @@ export {
   JetstreamConfigError,
   JetstreamConnectionError,
   JetstreamDeliveryError,
-  JetstreamError,
+  JetstreamBaseError,
   JetstreamMigrationError,
   JetstreamPublishError,
   JetstreamRecordError,

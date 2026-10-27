@@ -1,6 +1,6 @@
 import { type JetStreamApiError } from '@nats-io/jetstream';
 
-import { JetstreamError } from '../../errors/jetstream-error';
+import { JetstreamBaseError } from '../../errors/jetstream-error';
 import { type ProvisioningEntity } from '../../otel';
 import { NatsErrorCode } from './nats-error-codes';
 import { ProvisioningErrorReason } from './provisioning-error.types';
@@ -47,7 +47,7 @@ const GENERIC_REMEDIATION =
   'Inspect the NATS server logs and JetStream account limits for the underlying cause.';
 
 /** Non-recoverable stream/consumer provisioning failure; preserves the NATS error as `cause`. */
-export class JetstreamProvisioningError extends JetstreamError<ProvisioningErrorReason> {
+export class JetstreamProvisioningError extends JetstreamBaseError<ProvisioningErrorReason> {
   public readonly entity: ProvisioningEntity;
   public readonly target: string;
   public readonly kind: string;

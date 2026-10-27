@@ -1181,6 +1181,39 @@ describe(JetstreamClient, () => {
         // Then: error propagated as Error instance
         await expect(resultPromise).rejects.toThrow('invalid payload');
       });
+
+      it('should reject with a typed decode error when the codec throws a non-Error', async () => {
+        // Given
+        const resultPromise = firstValueFrom(sut.send('test', {}));
+
+        await vi.advanceTimersByTimeAsync(0);
+
+        const publishedHeaders: MsgHdrs = mockJs.publish.mock.calls[0]![2]!.headers!;
+        const replyHeaders = natsHeaders();
+
+        replyHeaders.set(
+          JetstreamHeader.CorrelationId,
+          publishedHeaders.get(JetstreamHeader.CorrelationId),
+        );
+        codec.decode.mockImplementation(() => {
+          throw 'invalid payload';
+        });
+
+        // When
+        inboxCallback(
+          null,
+          createMock<Msg>({ data: new Uint8Array([0xff]), headers: replyHeaders }),
+        );
+
+        // Then
+        await expect(resultPromise).rejects.toThrow(
+          expect.objectContaining({
+            name: 'JetstreamRpcError',
+            reason: RpcErrorReason.DecodeFailed,
+            message: 'Decode error',
+          }),
+        );
+      });
     });
 
     describe('error paths', () => {

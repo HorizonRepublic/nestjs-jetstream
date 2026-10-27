@@ -8,7 +8,7 @@ import { ScheduleErrorReason } from '../../schedule/schedule.types';
 import { NatsErrorCode } from '../../server/infrastructure/nats-error-codes';
 import { JetstreamProvisioningError } from '../../server/infrastructure/provisioning-error';
 import { ProvisioningErrorReason } from '../../server/infrastructure/provisioning-error.types';
-import { isJetstreamError, JetstreamError } from '../jetstream-error';
+import { isJetstreamError, JetstreamBaseError } from '../jetstream-error';
 
 const provisioningError = (errCode: number): JetstreamProvisioningError =>
   new JetstreamProvisioningError({
@@ -27,7 +27,7 @@ describe('existing error classes', () => {
     const sut = new JetstreamScheduleError(ScheduleErrorReason.InvalidCron, 'm');
 
     // Then
-    expect(sut).toBeInstanceOf(JetstreamError);
+    expect(sut).toBeInstanceOf(JetstreamBaseError);
     expect(isJetstreamError(sut)).toBe(true);
     expect(sut.reason).toBe(ScheduleErrorReason.InvalidCron);
     expect(sut.name).toBe('JetstreamScheduleError');
@@ -38,7 +38,7 @@ describe('existing error classes', () => {
     const sut = new JetstreamCapabilityError(NatsCapability.MessageTtl, 1, 0, 'm');
 
     // Then
-    expect(sut).toBeInstanceOf(JetstreamError);
+    expect(sut).toBeInstanceOf(JetstreamBaseError);
     expect(isJetstreamError(sut)).toBe(true);
     expect(sut.reason).toBe(CapabilityErrorReason.ServerTooOld);
     expect(sut).toMatchObject({
@@ -59,7 +59,7 @@ describe('existing error classes', () => {
     const sut = provisioningError(errCode);
 
     // Then
-    expect(sut).toBeInstanceOf(JetstreamError);
+    expect(sut).toBeInstanceOf(JetstreamBaseError);
     expect(isJetstreamError(sut)).toBe(true);
     expect(sut.reason).toBe(reason);
     expect(sut.errCode).toBe(errCode);

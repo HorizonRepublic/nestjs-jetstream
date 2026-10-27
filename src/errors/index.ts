@@ -19,7 +19,7 @@ export {
 
 export type { JetstreamErrorLike, JetstreamErrorReason } from './errors.types';
 
-export { isJetstreamError, JetstreamError } from './jetstream-error';
+export { isJetstreamError, JetstreamBaseError } from './jetstream-error';
 
 export { JetstreamMigrationError } from './migration-error';
 
