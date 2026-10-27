@@ -120,6 +120,28 @@ export { NatsErrorCode } from './server/infrastructure/nats-error-codes';
 
 export { JetstreamProvisioningError } from './server/infrastructure/provisioning-error';
 
+// Typed errors
+export {
+  BindingErrorReason,
+  ConfigErrorReason,
+  ConnectionErrorReason,
+  isJetstreamError,
+  JetstreamBindingError,
+  JetstreamConfigError,
+  JetstreamConnectionError,
+  JetstreamError,
+  JetstreamMigrationError,
+  JetstreamPublishError,
+  JetstreamRecordError,
+  JetstreamRpcError,
+  MigrationErrorReason,
+  PublishErrorReason,
+  RecordErrorReason,
+  RpcErrorReason,
+} from './errors';
+
+export type { JetstreamErrorLike, JetstreamErrorReason } from './errors';
+
 // Server (for advanced use cases)
 export { JetstreamConnection, JetstreamStrategy } from './server';
 
