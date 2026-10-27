@@ -1,3 +1,4 @@
+import { ConfigErrorReason, JetstreamConfigError } from '../../errors';
 import { StreamKind } from '../../interfaces';
 import {
   BROADCAST_SUBJECT_PREFIX,
@@ -23,7 +24,8 @@ const normalizePrefix = (raw: string): string => {
   const tokens = trimmed.split('.');
 
   if (trimmed.length === 0 || tokens.some((t) => t.length === 0 || t === '>')) {
-    throw new Error(
+    throw new JetstreamConfigError(
+      ConfigErrorReason.InvalidSubjectPrefix,
       `Invalid subjectPrefix "${raw}": expected non-empty dot-separated tokens without ">".`,
     );
   }

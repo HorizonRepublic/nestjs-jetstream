@@ -1,3 +1,4 @@
+import { ConfigErrorReason, JetstreamConfigError } from '../errors';
 import type {
   JetstreamConnectionOptions,
   JetstreamModuleOptions,
@@ -59,7 +60,8 @@ const mergeConnection = (
 const resolveDefaultName = (names: string[], requested: string | undefined): string => {
   if (requested !== undefined) {
     if (!names.includes(requested)) {
-      throw new Error(
+      throw new JetstreamConfigError(
+        ConfigErrorReason.UnknownConnection,
         `defaultConnection "${requested}" is not among the configured connections: ${names.join(', ')}.`,
       );
     }
@@ -73,7 +75,8 @@ const resolveDefaultName = (names: string[], requested: string | undefined): str
 
   if (only !== undefined && names.length === 1) return only;
 
-  throw new Error(
+  throw new JetstreamConfigError(
+    ConfigErrorReason.DefaultConnectionRequired,
     `defaultConnection is required when no connection is named "${DEFAULT_CONNECTION_NAME}". ` +
       `Configured connections: ${names.join(', ')}.`,
   );
@@ -94,7 +97,8 @@ const assertDistinctClusters = (connections: ResolvedConnectionOptions[]): void 
     const previous = seen.get(key);
 
     if (previous !== undefined) {
-      throw new Error(
+      throw new JetstreamConfigError(
+        ConfigErrorReason.DuplicateCluster,
         `Connections "${previous}" and "${connection.connectionName}" point at the same NATS ` +
           `cluster (${connection.servers.join(', ')}). Two connections into one cluster would ` +
           `resolve identical stream names and overwrite each other's configuration.`,
@@ -121,7 +125,8 @@ export const normalizeOptions = (options: JetstreamModuleOptions): NormalizedCon
   const hasConnections = options.connections !== undefined;
 
   if (hasServers === hasConnections) {
-    throw new Error(
+    throw new JetstreamConfigError(
+      ConfigErrorReason.ServersOrConnections,
       'JetstreamModule requires exactly one of `servers` or `connections`, not both and not neither.',
     );
   }
@@ -133,7 +138,10 @@ export const normalizeOptions = (options: JetstreamModuleOptions): NormalizedCon
   const entries = Object.entries(map);
 
   if (entries.length === 0) {
-    throw new Error('`connections` must declare at least one connection.');
+    throw new JetstreamConfigError(
+      ConfigErrorReason.NoConnections,
+      '`connections` must declare at least one connection.',
+    );
   }
 
   for (const [name, connection] of entries) {
@@ -141,13 +149,17 @@ export const normalizeOptions = (options: JetstreamModuleOptions): NormalizedCon
     // `@JetstreamConnection('primary')` matches the trimmed spelling, so a
     // handler would silently bind nowhere.
     if (name.length === 0 || name !== name.trim()) {
-      throw new Error(
+      throw new JetstreamConfigError(
+        ConfigErrorReason.InvalidConnectionName,
         `Connection names must be non-empty and free of surrounding whitespace; got "${name}".`,
       );
     }
 
     if (connection.servers.length === 0) {
-      throw new Error(`Connection "${name}" must declare at least one server.`);
+      throw new JetstreamConfigError(
+        ConfigErrorReason.NoServers,
+        `Connection "${name}" must declare at least one server.`,
+      );
     }
   }
 

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ConnectionRegistry } from '../connection/connection-registry';
 import type { ConnectionScope } from '../connection/connection.types';
+import { ConfigErrorReason } from '../errors';
 import { assertAllConnectionsStarted } from '../jetstream.module';
 
 interface ScopeState {
@@ -74,7 +75,13 @@ describe('assertAllConnectionsStarted', () => {
     // When asserted, Then the message is actionable
     expect(() => {
       assertAllConnectionsStarted(sut);
-    }).toThrow(/analytics[\s\S]*connectJetstreamMicroservices/);
+    }).toThrow(
+      expect.objectContaining({
+        name: 'JetstreamConfigError',
+        reason: ConfigErrorReason.ConnectionsNotStarted,
+        message: expect.stringMatching(/analytics[\s\S]*connectJetstreamMicroservices/),
+      }),
+    );
   });
 
   it('should not fault a non-critical connection that is still starting', () => {

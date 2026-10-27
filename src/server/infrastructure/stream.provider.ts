@@ -11,6 +11,7 @@ import {
 import { ConnectionProvider } from '../../connection';
 import { NatsCapability } from '../../connection/server-capabilities.types';
 import type { CapabilityUsage } from '../../connection/server-capabilities.types';
+import { ConfigErrorReason, JetstreamConfigError } from '../../errors';
 import { ManagementMode, StreamKind } from '../../interfaces';
 import type { JetstreamModuleOptions } from '../../interfaces';
 import {
@@ -668,7 +669,8 @@ export class StreamProvider {
     const currentConnection = current.slice(this.options.name.length + 1);
     const desiredConnection = desired.slice(this.options.name.length + 1);
 
-    throw new Error(
+    throw new JetstreamConfigError(
+      ConfigErrorReason.StreamOwnershipConflict,
       `Stream ${config.name} is already owned by connection "${currentConnection}", but ` +
         `connection "${desiredConnection}" of the same service is trying to provision it. ` +
         `Both connections resolve the same stream name, which means they reach the same NATS ` +

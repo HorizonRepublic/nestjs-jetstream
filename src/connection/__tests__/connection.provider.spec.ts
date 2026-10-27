@@ -16,6 +16,7 @@ import {
   type MockedFunction,
 } from 'vitest';
 
+import { ConnectionErrorReason } from '../../errors';
 import { EventBus } from '../../hooks';
 import type { JetstreamModuleOptions } from '../../interfaces';
 import { TransportEvent } from '../../interfaces';
@@ -178,7 +179,13 @@ describe(ConnectionProvider, () => {
         mockConnect.mockRejectedValue(new Error('CONNECTION_REFUSED'));
 
         // When/Then: throws RuntimeException with server list
-        await expect(sut.getConnection()).rejects.toThrow('NATS connection refused');
+        await expect(sut.getConnection()).rejects.toThrow(
+          expect.objectContaining({
+            name: 'JetstreamConnectionError',
+            reason: ConnectionErrorReason.Refused,
+            message: expect.stringContaining('NATS connection refused'),
+          }),
+        );
       });
 
       it('should re-throw non-connection errors', async () => {
@@ -447,7 +454,13 @@ describe(ConnectionProvider, () => {
 
     it('should throw if not connected', () => {
       // When/Then: throws before connection
-      expect(() => sut.getJetStreamClient()).toThrow('Not connected');
+      expect(() => sut.getJetStreamClient()).toThrow(
+        expect.objectContaining({
+          name: 'JetstreamConnectionError',
+          reason: ConnectionErrorReason.NotConnected,
+          message: expect.stringContaining('Not connected'),
+        }),
+      );
     });
 
     it('should invalidate cached client on reconnect', async () => {

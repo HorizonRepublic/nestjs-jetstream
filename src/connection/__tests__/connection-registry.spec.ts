@@ -1,6 +1,7 @@
 import { createMock } from '@golevelup/ts-vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { ConfigErrorReason } from '../../errors';
 import { ConnectionRegistry } from '../connection-registry';
 import type { ConnectionScope } from '../connection.types';
 
@@ -58,6 +59,12 @@ describe('ConnectionRegistry', () => {
 
     // When an unknown connection is requested
     // Then the error names what is configured
-    expect(() => sut.get('analytics')).toThrow(/Unknown connection "analytics"[\s\S]*primary/);
+    expect(() => sut.get('analytics')).toThrow(
+      expect.objectContaining({
+        name: 'JetstreamConfigError',
+        reason: ConfigErrorReason.UnknownConnection,
+        message: expect.stringMatching(/Unknown connection "analytics"[\s\S]*primary/),
+      }),
+    );
   });
 });

@@ -14,6 +14,12 @@ import { Subscription as RxSubscription } from 'rxjs';
 
 import { ConnectionProvider } from '../connection';
 import { NatsCapability } from '../connection/server-capabilities.types';
+import {
+  ConfigErrorReason,
+  ConnectionErrorReason,
+  JetstreamConfigError,
+  JetstreamConnectionError,
+} from '../errors';
 import { EventBus } from '../hooks';
 import { TransportEvent } from '../interfaces';
 import type {
@@ -79,7 +85,8 @@ const resolveTargetSubjects = (
   }
 
   if (targetPrefixes !== undefined) {
-    throw new Error(
+    throw new JetstreamConfigError(
+      ConfigErrorReason.SelfTargetPrefix,
       `forFeature({ name: '${target}' }) targets this service itself, so it takes no subjectPrefix: ` +
         'its prefixes come from forRoot().',
     );
@@ -269,7 +276,10 @@ export class JetstreamClient extends ClientProxy {
     const nc = this.connection.unwrap;
 
     if (!nc) {
-      throw new Error('Not connected; call connect() before unwrap()');
+      throw new JetstreamConnectionError(
+        ConnectionErrorReason.NotConnected,
+        'Not connected; call connect() before unwrap()',
+      );
     }
 
     return nc as T;

@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import { faker } from '@faker-js/faker';
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 
+import { ConfigErrorReason } from '../../errors';
 import {
   _ackExtensionPoolForTest,
   DEFAULT_MAX_ACK_EXTENSION_MS,
@@ -109,14 +110,22 @@ describe('resolveAckExtension', () => {
       'should reject interval %s in the object form',
       (interval) => {
         expect(() => resolveAckExtension({ interval }, undefined)).toThrow(
-          /ackExtension\.interval/,
+          expect.objectContaining({
+            name: 'JetstreamConfigError',
+            reason: ConfigErrorReason.InvalidAckExtension,
+            message: expect.stringMatching(/ackExtension\.interval/),
+          }),
         );
       },
     );
 
     it.each([0, -1, Number.NaN])('should reject maxDuration %s', (maxDuration) => {
       expect(() => resolveAckExtension({ maxDuration }, undefined)).toThrow(
-        /ackExtension\.maxDuration/,
+        expect.objectContaining({
+          name: 'JetstreamConfigError',
+          reason: ConfigErrorReason.InvalidAckExtension,
+          message: expect.stringMatching(/ackExtension\.maxDuration/),
+        }),
       );
     });
   });

@@ -1,6 +1,7 @@
 import { faker } from '@faker-js/faker';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { ConfigErrorReason } from '../../errors';
 import { assertNoRemovedOptions } from '../removed-options';
 
 describe('assertNoRemovedOptions', () => {
@@ -49,7 +50,13 @@ describe('assertNoRemovedOptions', () => {
     // When / Then
     expect(() => {
       assertNoRemovedOptions(options);
-    }).toThrow(/`consumer` .*`publisherOnly`/);
+    }).toThrow(
+      expect.objectContaining({
+        name: 'JetstreamConfigError',
+        reason: ConfigErrorReason.RemovedOptions,
+        message: expect.stringMatching(/`consumer` .*`publisherOnly`/),
+      }),
+    );
   });
 
   it('should reject a root allowDestructiveMigration', () => {
@@ -59,7 +66,13 @@ describe('assertNoRemovedOptions', () => {
     // When / Then
     expect(() => {
       assertNoRemovedOptions(options);
-    }).toThrow(/provisioning\.allowDestructiveMigration/);
+    }).toThrow(
+      expect.objectContaining({
+        name: 'JetstreamConfigError',
+        reason: ConfigErrorReason.RemovedOptions,
+        message: expect.stringMatching(/provisioning\.allowDestructiveMigration/),
+      }),
+    );
   });
 
   it.each(['deliverPolicy', 'optStartSeq', 'optStartTime', 'replayPolicy'])(
@@ -71,7 +84,13 @@ describe('assertNoRemovedOptions', () => {
       // When / Then the message points into ordered.consumer
       expect(() => {
         assertNoRemovedOptions(options);
-      }).toThrow(new RegExp(`ordered\\.${key}`));
+      }).toThrow(
+        expect.objectContaining({
+          name: 'JetstreamConfigError',
+          reason: ConfigErrorReason.RemovedOptions,
+          message: expect.stringMatching(new RegExp(`ordered\\.${key}`)),
+        }),
+      );
     },
   );
 
@@ -85,7 +104,13 @@ describe('assertNoRemovedOptions', () => {
     // When / Then the connection is named in the message
     expect(() => {
       assertNoRemovedOptions(options);
-    }).toThrow(/connections\.analytics\.consumer/);
+    }).toThrow(
+      expect.objectContaining({
+        name: 'JetstreamConfigError',
+        reason: ConfigErrorReason.RemovedOptions,
+        message: expect.stringMatching(/connections\.analytics\.consumer/),
+      }),
+    );
   });
 
   it('should list every removed option at once', () => {
@@ -103,6 +128,14 @@ describe('assertNoRemovedOptions', () => {
     };
 
     // Then all three are reported together
-    expect(act).toThrow(/consumer[\s\S]*allowDestructiveMigration[\s\S]*ordered\.replayPolicy/);
+    expect(act).toThrow(
+      expect.objectContaining({
+        name: 'JetstreamConfigError',
+        reason: ConfigErrorReason.RemovedOptions,
+        message: expect.stringMatching(
+          /consumer[\s\S]*allowDestructiveMigration[\s\S]*ordered\.replayPolicy/,
+        ),
+      }),
+    );
   });
 });

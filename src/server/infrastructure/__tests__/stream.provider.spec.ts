@@ -8,6 +8,7 @@ import { createMock } from '@golevelup/ts-vitest';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 
 import { ConnectionProvider } from '../../../connection';
+import { ConfigErrorReason } from '../../../errors';
 import { ManagementMode, StreamKind } from '../../../interfaces';
 import type {
   JetstreamModuleOptions,
@@ -1048,7 +1049,11 @@ describe(StreamProvider, () => {
 
       // When the stream is ensured, Then both connection names surface
       await expect(sut.ensureStreams([StreamKind.Event])).rejects.toThrow(
-        /analytics[\s\S]*primary|primary[\s\S]*analytics/,
+        expect.objectContaining({
+          name: 'JetstreamConfigError',
+          reason: ConfigErrorReason.StreamOwnershipConflict,
+          message: expect.stringMatching(/analytics[\s\S]*primary|primary[\s\S]*analytics/),
+        }),
       );
     });
 

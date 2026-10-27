@@ -3,6 +3,7 @@ import type { MessageHandler } from '@nestjs/microservices';
 import { faker } from '@faker-js/faker';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ConfigErrorReason } from '../../../errors';
 import { StreamKind } from '../../../interfaces';
 import type { JetstreamModuleOptions } from '../../../interfaces';
 import { metadataKey } from '../../../jetstream.constants';
@@ -272,7 +273,13 @@ describe(PatternRegistry, () => {
         // When/Then: throws
         expect(() => {
           sut.registerHandlers(handlers);
-        }).toThrow(/cannot be both broadcast and ordered/i);
+        }).toThrow(
+          expect.objectContaining({
+            name: 'JetstreamConfigError',
+            reason: ConfigErrorReason.ConflictingHandlerKinds,
+            message: expect.stringMatching(/cannot be both broadcast and ordered/i),
+          }),
+        );
       });
     });
   });

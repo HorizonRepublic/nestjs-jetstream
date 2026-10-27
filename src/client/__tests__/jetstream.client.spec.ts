@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vi
 
 import { ConnectionProvider } from '../../connection';
 import { ServerCapabilities } from '../../connection/server-capabilities';
+import { ConfigErrorReason, ConnectionErrorReason } from '../../errors';
 import { EventBus } from '../../hooks';
 import type { Codec, JetstreamModuleOptions, TargetSubjectPrefixes } from '../../interfaces';
 import { TransportEvent } from '../../interfaces';
@@ -183,7 +184,13 @@ describe(JetstreamClient, () => {
       Object.defineProperty(connection, 'unwrap', { get: () => null, configurable: true });
 
       // When/Then
-      expect(() => sut.unwrap()).toThrow('Not connected');
+      expect(() => sut.unwrap()).toThrow(
+        expect.objectContaining({
+          name: 'JetstreamConnectionError',
+          reason: ConnectionErrorReason.NotConnected,
+          message: expect.stringContaining('Not connected'),
+        }),
+      );
     });
   });
 
@@ -690,7 +697,13 @@ describe(JetstreamClient, () => {
           new JetstreamClient(options, options.name, connection, codec, eventBus, undefined, {
             events: prefixes.events,
           }),
-      ).toThrow(/targets this service itself/);
+      ).toThrow(
+        expect.objectContaining({
+          name: 'JetstreamConfigError',
+          reason: ConfigErrorReason.SelfTargetPrefix,
+          message: expect.stringMatching(/targets this service itself/),
+        }),
+      );
     });
 
     it('should reject an invalid prefix when the client is created', () => {
@@ -700,7 +713,13 @@ describe(JetstreamClient, () => {
           new JetstreamClient(options, targetName, connection, codec, eventBus, undefined, {
             rpc: 'acme.>',
           }),
-      ).toThrow(/Invalid subjectPrefix "acme\.>"/);
+      ).toThrow(
+        expect.objectContaining({
+          name: 'JetstreamConfigError',
+          reason: ConfigErrorReason.InvalidSubjectPrefix,
+          message: expect.stringMatching(/Invalid subjectPrefix "acme\.>"/),
+        }),
+      );
     });
   });
 

@@ -10,6 +10,7 @@ import {
 import type { JetStreamManager } from '@nats-io/jetstream';
 
 import { ConnectionProvider } from '../connection';
+import { ConfigErrorReason, JetstreamConfigError } from '../errors';
 import { EventBus } from '../hooks';
 import type {
   DeadLetterInfo,
@@ -84,7 +85,8 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
     if (!this.options.metrics || !this.config || !this.client) return;
 
     if (!this.config.register) {
-      throw new Error(
+      throw new JetstreamConfigError(
+        ConfigErrorReason.MetricsRegistryMissing,
         'JetstreamMetricsService requires a Prometheus Registry; none was resolved by JetstreamMetricsModule.',
       );
     }

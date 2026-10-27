@@ -3,6 +3,7 @@ import type { MessageHandler } from '@nestjs/microservices';
 import { faker } from '@faker-js/faker';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ConfigErrorReason } from '../../../errors';
 import { StreamKind } from '../../../interfaces';
 import type { JetstreamModuleOptions } from '../../../interfaces';
 import { JetstreamScheduleError, ScheduleErrorReason } from '../../../schedule';
@@ -76,7 +77,13 @@ describe('PatternRegistry with scheduled handlers', () => {
     // When / Then
     expect(() => {
       sut.registerHandlers(new Map([['x', handler]]));
-    }).toThrow(/cannot be both/);
+    }).toThrow(
+      expect.objectContaining({
+        name: 'JetstreamConfigError',
+        reason: ConfigErrorReason.ConflictingHandlerKinds,
+        message: expect.stringMatching(/cannot be both/),
+      }),
+    );
   });
 
   it('should refuse a schedule on a message pattern', () => {
@@ -86,7 +93,13 @@ describe('PatternRegistry with scheduled handlers', () => {
     // When / Then
     expect(() => {
       sut.registerHandlers(new Map([['x', handler]]));
-    }).toThrow(/@EventPattern/);
+    }).toThrow(
+      expect.objectContaining({
+        name: 'JetstreamConfigError',
+        reason: ConfigErrorReason.ScheduleOnMessagePattern,
+        message: expect.stringMatching(/@EventPattern/),
+      }),
+    );
   });
 
   it('should refuse a one-shot schedule on a handler, which every boot would fire again', () => {

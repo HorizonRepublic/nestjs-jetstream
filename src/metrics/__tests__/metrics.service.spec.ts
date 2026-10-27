@@ -6,6 +6,7 @@ import { Registry } from 'prom-client';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 
 import { ConnectionProvider } from '../../connection';
+import { ConfigErrorReason } from '../../errors';
 import { EventBus } from '../../hooks';
 import type {
   DeadLetterInfo,
@@ -665,7 +666,13 @@ describe(JetstreamMetricsService, () => {
       const sut = new JetstreamMetricsService(eventBus, {}, client, options, null);
 
       // Then
-      await expect(sut.onApplicationBootstrap()).rejects.toThrow(/Registry/);
+      await expect(sut.onApplicationBootstrap()).rejects.toThrow(
+        expect.objectContaining({
+          name: 'JetstreamConfigError',
+          reason: ConfigErrorReason.MetricsRegistryMissing,
+          message: expect.stringMatching(/Registry/),
+        }),
+      );
     });
   });
 

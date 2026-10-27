@@ -1,3 +1,4 @@
+import { ConfigErrorReason, JetstreamConfigError } from '../errors';
 import type { ConnectionScope } from './connection.types';
 
 /** Lookup for every named connection the application configured. */
@@ -17,7 +18,8 @@ export class ConnectionRegistry {
     const scope = this.scopes.get(name);
 
     if (!scope) {
-      throw new Error(
+      throw new JetstreamConfigError(
+        ConfigErrorReason.UnknownConnection,
         `Unknown connection "${name}". Configured connections: ${this.names().join(', ')}.`,
       );
     }

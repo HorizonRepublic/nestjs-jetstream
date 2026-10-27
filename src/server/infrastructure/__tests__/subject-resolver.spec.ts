@@ -1,6 +1,7 @@
 import { faker } from '@faker-js/faker';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { ConfigErrorReason } from '../../../errors';
 import { StreamKind } from '../../../interfaces';
 import { buildSubject, internalName } from '../../../jetstream.constants';
 import { SubjectResolver } from '../subject-resolver';
@@ -42,7 +43,11 @@ describe(SubjectResolver, () => {
     it.each(['', '...', 'a..b', 'a.>'])('should reject the prefix "%s"', (prefix) => {
       // When / Then
       expect(() => SubjectResolver.forService('svc', { [StreamKind.Command]: prefix })).toThrow(
-        /Invalid subjectPrefix/,
+        expect.objectContaining({
+          name: 'JetstreamConfigError',
+          reason: ConfigErrorReason.InvalidSubjectPrefix,
+          message: expect.stringMatching(/Invalid subjectPrefix/),
+        }),
       );
     });
   });
