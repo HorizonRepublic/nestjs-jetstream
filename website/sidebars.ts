@@ -85,6 +85,7 @@ const sidebars: SidebarsConfig = {
         'reference/module-configuration',
         'reference/default-configs',
         'reference/header-contract',
+        'reference/errors',
         'reference/naming-conventions',
         'reference/upgrading',
         'reference/release-notes',

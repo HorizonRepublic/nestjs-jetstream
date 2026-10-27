@@ -8,7 +8,7 @@ schema:
   headline: "How to run cron and interval jobs with NestJS JetStream"
   description: "Cron and interval schedules on NATS JetStream message scheduling (NATS 2.14, ADR-51)."
   datePublished: "2026-10-23"
-  dateModified: "2026-10-23"
+  dateModified: "2026-10-27"
 ---
 
 # How to run cron and interval jobs
@@ -200,12 +200,17 @@ must capture the schedule namespace, `{prefix}_cron.>` or
 
 ## Errors
 
-| Error                                                                                                                                                                 | When                                                                   |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `JetstreamScheduleError`, reason `invalid-cron`, `invalid-interval`, `invalid-ttl`, `invalid-timezone`, `invalid-at`, `invalid-id`, `invalid-pattern`, `invalid-data` | Rejected by the transport before anything is sent                      |
-| `JetstreamScheduleError`, reason `server-timezone-data`                                                                                                               | The server has no data for the time zone; use an alpine image or `UTC` |
-| `JetstreamScheduleError`, reason `server-rejected`                                                                                                                    | The server refused the schedule                                        |
-| `JetstreamCapabilityError`                                                                                                                                            | The server is older than the feature needs                             |
+| Error                                                                                                                                                                 | When                                                                              |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `JetstreamScheduleError`, reason `invalid-cron`, `invalid-interval`, `invalid-ttl`, `invalid-timezone`, `invalid-at`, `invalid-id`, `invalid-pattern`, `invalid-data` | Rejected by the transport before anything is sent                                 |
+| `JetstreamScheduleError`, reason `server-timezone-data`                                                                                                               | The server has no data for the time zone; use an alpine image or `UTC`            |
+| `JetstreamScheduleError`, reason `server-rejected`                                                                                                                    | The server refused the schedule                                                   |
+| `JetstreamScheduleError`, reason `leader-change`                                                                                                                      | The stream could not report the holder's sequence, usually a leader change; retry |
+| `JetstreamScheduleError`, reason `concurrent-writer`                                                                                                                  | Another writer kept replacing the schedule with a different definition            |
+| `JetstreamScheduleError`, reason `no-schedule-stream`                                                                                                                 | No stream captures the target service's schedule subjects                         |
+| `JetstreamCapabilityError`                                                                                                                                            | The server is older than the feature needs                                        |
+
+Every error class and reason: [Errors](/docs/reference/errors).
 
 ## See also
 
