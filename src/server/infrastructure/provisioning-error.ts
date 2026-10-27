@@ -1,7 +1,9 @@
 import { type JetStreamApiError } from '@nats-io/jetstream';
 
+import { JetstreamError } from '../../errors/jetstream-error';
 import { type ProvisioningEntity } from '../../otel';
 import { NatsErrorCode } from './nats-error-codes';
+import { ProvisioningErrorReason } from './provisioning-error.types';
 
 /** What was being provisioned when the failure occurred. */
 export interface ProvisioningErrorContext {
@@ -36,11 +38,16 @@ const REMEDIATION: Partial<Record<NatsErrorCode, string>> = {
     'Reduce replicas or add/repair cluster nodes.',
 };
 
+const REASON: Partial<Record<NatsErrorCode, ProvisioningErrorReason>> = {
+  [NatsErrorCode.StorageResourcesExceeded]: ProvisioningErrorReason.StorageExceeded,
+  [NatsErrorCode.NoSuitablePeers]: ProvisioningErrorReason.NoSuitablePeers,
+};
+
 const GENERIC_REMEDIATION =
   'Inspect the NATS server logs and JetStream account limits for the underlying cause.';
 
 /** Non-recoverable stream/consumer provisioning failure; preserves the NATS error as `cause`. */
-export class JetstreamProvisioningError extends Error {
+export class JetstreamProvisioningError extends JetstreamError<ProvisioningErrorReason> {
   public readonly entity: ProvisioningEntity;
   public readonly target: string;
   public readonly kind: string;
@@ -58,6 +65,7 @@ export class JetstreamProvisioningError extends Error {
         : '';
 
     super(
+      REASON[fields.errCode as NatsErrorCode] ?? ProvisioningErrorReason.ServerRejected,
       `JetStream ${fields.entity} provisioning failed for "${fields.target}" (kind=${fields.kind}): ` +
         `${fields.errDescription} [err_code=${fields.errCode}].${reservationNote} ${fields.remediation}`,
       { cause: fields.cause },

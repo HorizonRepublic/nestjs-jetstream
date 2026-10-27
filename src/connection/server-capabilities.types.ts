@@ -19,3 +19,8 @@ export interface CapabilityRequirement {
   readonly apiLevel: number;
   readonly natsVersion: string;
 }
+
+/** Why a feature was refused by the connected server. */
+export enum CapabilityErrorReason {
+  ServerTooOld = 'server-too-old',
+}

@@ -55,7 +55,7 @@ export { JetstreamScheduleError, ScheduleErrorReason } from './schedule';
 // Server capabilities
 export { JetstreamCapabilityError } from './connection/server-capabilities';
 
-export { NatsCapability } from './connection/server-capabilities.types';
+export { CapabilityErrorReason, NatsCapability } from './connection/server-capabilities.types';
 
 // Client
 export { JetstreamClient } from './client';
@@ -119,6 +119,8 @@ export {
 export { NatsErrorCode } from './server/infrastructure/nats-error-codes';
 
 export { JetstreamProvisioningError } from './server/infrastructure/provisioning-error';
+
+export { ProvisioningErrorReason } from './server/infrastructure/provisioning-error.types';
 
 // Typed errors
 export {

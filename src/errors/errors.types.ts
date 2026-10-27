@@ -1,4 +1,6 @@
+import type { CapabilityErrorReason } from '../connection/server-capabilities.types';
 import type { ScheduleErrorReason } from '../schedule/schedule.types';
+import type { ProvisioningErrorReason } from '../server/infrastructure/provisioning-error.types';
 
 /** Why the module or a handler declaration was rejected at startup. */
 export enum ConfigErrorReason {
@@ -83,7 +85,9 @@ export type JetstreamErrorReason =
   | BindingErrorReason
   | MigrationErrorReason
   | PublishErrorReason
-  | ScheduleErrorReason;
+  | ScheduleErrorReason
+  | ProvisioningErrorReason
+  | CapabilityErrorReason;
 
 /** Shape shared by every typed transport error, whichever class it is. */
 export interface JetstreamErrorLike extends Error {

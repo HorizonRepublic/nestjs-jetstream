@@ -1,7 +1,8 @@
 import type { JetStreamManager } from '@nats-io/jetstream';
 import type { NatsConnection } from '@nats-io/transport-node';
 
-import { NatsCapability } from './server-capabilities.types';
+import { JetstreamError } from '../errors/jetstream-error';
+import { CapabilityErrorReason, NatsCapability } from './server-capabilities.types';
 import type { CapabilityRequirement } from './server-capabilities.types';
 
 /**
@@ -15,14 +16,14 @@ const REQUIREMENTS: Readonly<Record<NatsCapability, CapabilityRequirement>> = {
 };
 
 /** A feature was used against a NATS server too old to run it. */
-export class JetstreamCapabilityError extends Error {
+export class JetstreamCapabilityError extends JetstreamError<CapabilityErrorReason> {
   public constructor(
     public readonly capability: NatsCapability,
     public readonly requiredLevel: number,
     public readonly actualLevel: number,
     message: string,
   ) {
-    super(message);
+    super(CapabilityErrorReason.ServerTooOld, message);
     this.name = 'JetstreamCapabilityError';
   }
 }
