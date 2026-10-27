@@ -59,6 +59,18 @@
         "major"
       ],
       "enabled": false
+    },
+    {
+      "description": "Runtime nats.js packages bump together and release a patch",
+      "matchDepTypes": [
+        "dependencies"
+      ],
+      "matchPackageNames": [
+        "@nats-io/**"
+      ],
+      "groupName": "nats.js",
+      "semanticCommitType": "deps",
+      "semanticCommitScope": null
     }
   ]
 }
