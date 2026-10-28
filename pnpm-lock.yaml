@@ -43,8 +43,8 @@ importers:
         specifier: ^10.6.0
         version: 10.6.0
       '@golevelup/ts-vitest':
-        specifier: ^4.0.0
-        version: 4.0.0
+        specifier: ^4.0.1
+        version: 4.0.1(vitest@5.0.5)
       '@nestjs/common':
         specifier: ^12.2.0
         version: 12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1)
@@ -1698,8 +1698,10 @@ packages:
     resolution: {integrity: sha512-3RQHgEtvL1Frl/d1cSreo7qhJ3Gk1OdNUai/CtZ8G+wYeRQnJih3s9xJ9/kgYekPQRdwgh0HXRPqMlzWGwivIQ==}
     engines: {node: ^20.19.0 || ^22.13.0 || ^23.5.0 || >=24.0.0, npm: '>=10'}
 
-  '@golevelup/ts-vitest@4.0.0':
-    resolution: {integrity: sha512-TNIhtox9zWfxlww0ql91l/k2zDthN4owg5qDieRHtjIwIvuoUlXLiwqAb/ifkRr8K+jZLRIC9QrKN/J7TBghlQ==}
+  '@golevelup/ts-vitest@4.0.1':
+    resolution: {integrity: sha512-Goch9LEndGfd6PxRgB3XiE6M3j7xd1uKRTZjjK+PIOZ+4okSiugwl8qlqkIP7jRMKj9rO2wVBIZlcfKLhvyJhQ==}
+    peerDependencies:
+      vitest: '>=2.0.0'
 
   '@grpc/grpc-js@1.14.6':
     resolution: {integrity: sha512-SgC/B3/VZ8lTyOZ4Cwk6f1skWhmkNAaVfiX90qd5u1rRXGKk1//8FTUEN9GvOUq7rfWIqAYkA3CoyumYVpOS6g==}
@@ -10854,7 +10856,9 @@ snapshots:
 
   '@faker-js/faker@10.6.0': {}
 
-  '@golevelup/ts-vitest@4.0.0': {}
+  '@golevelup/ts-vitest@4.0.1(vitest@5.0.5)':
+    dependencies:
+      vitest: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@1.21.7)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))
 
   '@grpc/grpc-js@1.14.6':
     dependencies:
