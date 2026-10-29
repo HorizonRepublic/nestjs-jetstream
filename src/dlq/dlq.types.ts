@@ -8,17 +8,21 @@ export enum DeadLetterOrigin {
 }
 
 /** Why a matching dead letter was not handed back. */
-export enum RedriveSkipReason {
+export enum DlqRedriveSkipReason {
   /** Broadcasts are signals; replaying an old one can roll state back. */
   Broadcast = 'broadcast',
+  /** A recurring schedule fires again on its own; a late tick would run out of turn. */
+  ScheduleTick = 'schedule-tick',
+  /** No consumer of this service would deliver the subject, so the message would sit unhandled. */
+  NoConsumer = 'no-consumer',
   /** It already went back `maxRedrives` times and failed each time. */
   RedriveLimit = 'redrive-limit',
   /** Publishing it to its original subject failed; it stays in the DLQ. */
   PublishFailed = 'publish-failed',
 }
 
-/** Headers the message carried when it was published, without the DLQ's own. */
-export type DeadLetterHeaders = Readonly<Record<string, string>>;
+/** Headers the message carried when it was published, without the DLQ's own; every value of a repeated header is kept. */
+export type DeadLetterHeaders = Readonly<Record<string, readonly string[]>>;
 
 /** One message in the dead-letter stream. */
 export interface DeadLetterRecord {
@@ -29,7 +33,7 @@ export interface DeadLetterRecord {
   /** Stream the message was consumed from. */
   readonly stream: string;
   readonly origin: DeadLetterOrigin;
-  /** Pattern of the handler that failed, when this service still has one for the subject. */
+  /** Handler pattern the subject maps to under this service's naming, if it maps to one. */
   readonly pattern: string | undefined;
   /** Last error of the handler. */
   readonly reason: string;
@@ -67,7 +71,7 @@ export interface DeadLetterFilter {
 export interface DlqScopeOptions {
   /** Connection whose dead-letter stream to use. Default: the default connection. */
   readonly connection?: string;
-  /** Stop after this many matching records. */
+  /** Stop after this many matching records, skipped ones included. */
   readonly limit?: number;
 }
 
@@ -91,22 +95,22 @@ export interface DlqPurgeOptions extends DlqScopeOptions {
 }
 
 /** A matching record that was not handed back. */
-export interface RedriveSkip {
+export interface DlqRedriveSkip {
   readonly seq: number;
   readonly subject: string;
-  readonly reason: RedriveSkipReason;
+  readonly reason: DlqRedriveSkipReason;
   /** The publish error, for `publish-failed`. */
   readonly error?: string;
 }
 
 /** What a redrive did. */
-export interface RedriveReport {
+export interface DlqRedriveReport {
   readonly dryRun: boolean;
   /** Records the filter selected. */
   readonly matched: number;
   /** DLQ sequences published back (or that would be, on a dry run). */
   readonly redriven: readonly number[];
-  readonly skipped: readonly RedriveSkip[];
+  readonly skipped: readonly DlqRedriveSkip[];
   /**
    * Published back, but still in the DLQ because deleting them failed. A later
    * redrive within the target stream's `duplicate_window` is deduplicated;

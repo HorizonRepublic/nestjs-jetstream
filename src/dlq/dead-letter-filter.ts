@@ -1,8 +1,14 @@
 import { coversOrEquals } from '../server/infrastructure/subject-utils';
 import type { DeadLetterFilter, DeadLetterRecord } from './dlq.types';
 
-const reasonMatches = (reason: string, expected: string | RegExp): boolean =>
-  typeof expected === 'string' ? reason.includes(expected) : expected.test(reason);
+const reasonMatches = (reason: string, expected: string | RegExp): boolean => {
+  if (typeof expected === 'string') return reason.includes(expected);
+
+  // A global or sticky expression resumes from its last match; every record starts afresh.
+  expected.lastIndex = 0;
+
+  return expected.test(reason);
+};
 
 const withinWindow = (failedAt: Date | undefined, filter: DeadLetterFilter): boolean => {
   if (filter.failedAfter === undefined && filter.failedBefore === undefined) return true;

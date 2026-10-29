@@ -17,7 +17,8 @@ import {
   getClientToken,
   JetstreamConfigError,
   JetstreamDlq,
-  RedriveSkipReason,
+  JetstreamRecordBuilder,
+  DlqRedriveSkipReason,
   StreamKind,
 } from '../../src';
 import {
@@ -175,8 +176,74 @@ describe('DLQ redrive', () => {
     // Then
     expect(report.redriven).toEqual([]);
     expect(report.skipped).toEqual([
-      expect.objectContaining({ reason: RedriveSkipReason.RedriveLimit }),
+      expect.objectContaining({ reason: DlqRedriveSkipReason.RedriveLimit }),
     ]);
+  });
+
+  it('should keep the headers and the reason when a redriven message fails again', async () => {
+    // Given
+    const before = (await sut.inspect()).length;
+
+    await firstValueFrom(
+      client.emit(
+        'order.created',
+        new JetstreamRecordBuilder({ id: 'a' }).setHeader('x-tenant', 'acme').build(),
+      ),
+    );
+    await waitForCondition(async () => (await sut.inspect()).length > before, 10_000);
+
+    // When
+    await sut.redrive();
+    await waitForCondition(
+      async () => (await sut.inspect()).some((r) => r.redriveCount === 1),
+      10_000,
+    );
+
+    // Then
+    const [record] = await sut.inspect();
+
+    expect(record).toMatchObject({
+      headers: expect.objectContaining({ 'x-tenant': ['acme'] }),
+      reason: expect.stringContaining('payment gateway timeout'),
+      redriveCount: 1,
+    });
+  });
+
+  it('should work from an app that registers no handlers, as a one-off script does', async () => {
+    // Given
+    await deadLetter('order.created', { id: 'a' });
+    controller.failing = false;
+
+    const admin = await createTestApp({ name: serviceName, port, publisherOnly: true }, []);
+
+    try {
+      const dlq = admin.module.get(JetstreamDlq);
+
+      // When
+      const report = await dlq.redrive({ pattern: 'order.created' });
+
+      // Then
+      expect(report.redriven).toHaveLength(1);
+      await waitForCondition(() => controller.handled.length === 1, 10_000);
+    } finally {
+      await admin.app.close();
+    }
+  });
+
+  it('should answer at once when the newest entries are gone', async () => {
+    // Given: a full redrive leaves the stream's last sequence pointing at a deleted entry
+    await deadLetter('order.created', { id: 'a' });
+    controller.failing = false;
+    await sut.redrive();
+
+    const startedAt = Date.now();
+
+    // When
+    const records = await sut.inspect();
+
+    // Then
+    expect(records).toEqual([]);
+    expect(Date.now() - startedAt).toBeLessThan(1_000);
   });
 
   it('should never redrive a broadcast, but let it be purged', async () => {
@@ -190,7 +257,7 @@ describe('DLQ redrive', () => {
 
     // Then
     expect(report.skipped).toEqual([
-      expect.objectContaining({ reason: RedriveSkipReason.Broadcast }),
+      expect.objectContaining({ reason: DlqRedriveSkipReason.Broadcast }),
     ]);
     expect(purged.purged).toHaveLength(1);
     expect((await sut.inspect()).map((r) => r.origin)).toEqual([DeadLetterOrigin.Event]);

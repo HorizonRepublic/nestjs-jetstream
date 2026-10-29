@@ -4,7 +4,7 @@ export { JetstreamDlq } from './jetstream-dlq';
 
 export {
   DeadLetterOrigin,
-  RedriveSkipReason,
+  DlqRedriveSkipReason,
   type DeadLetterFilter,
   type DeadLetterHeaders,
   type DeadLetterRecord,
@@ -13,6 +13,6 @@ export {
   type DlqPurgeReport,
   type DlqRedriveOptions,
   type DlqScopeOptions,
-  type RedriveReport,
-  type RedriveSkip,
+  type DlqRedriveReport,
+  type DlqRedriveSkip,
 } from './dlq.types';

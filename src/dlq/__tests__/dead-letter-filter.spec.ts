@@ -49,6 +49,16 @@ describe(matchesDeadLetter, () => {
     expect(matchesDeadLetter(record(), { reason: 'decode' })).toBe(false);
   });
 
+  it('should match every record with a global expression, not every other one', () => {
+    const reason = /timeout/g;
+
+    expect([1, 2, 3].map(() => matchesDeadLetter(record(), { reason }))).toEqual([
+      true,
+      true,
+      true,
+    ]);
+  });
+
   it('should keep failures inside the time window, bounds included', () => {
     const at = new Date('2026-10-28T12:00:00Z');
 

@@ -2,6 +2,7 @@ import { Logger } from '@nestjs/common';
 
 import {
   DeliverPolicy,
+  type ConsumerConfig,
   type JetStreamManager,
   type JsMsg,
   type StreamInfo,
@@ -12,23 +13,23 @@ import type { ConnectionRegistry } from '../connection/connection-registry';
 import type { ConnectionScope } from '../connection/connection.types';
 import { ConfigErrorReason, JetstreamConfigError, toPublishError } from '../errors';
 import { StreamKind } from '../interfaces';
-import { JetstreamDlqHeader } from '../jetstream.constants';
+import { JetstreamDlqHeader, NATS_CONTROL_HEADER_PREFIX } from '../jetstream.constants';
 import { isDlqEnabled } from '../server/infrastructure/dlq-options';
 import { isNatsError, NatsErrorCode } from '../server/infrastructure/nats-error-codes';
+import { coversOrEquals } from '../server/infrastructure/subject-utils';
 import { errorMessage } from '../utils';
 import { matchesDeadLetter } from './dead-letter-filter';
 import {
   DeadLetterOrigin,
-  RedriveSkipReason,
+  DlqRedriveSkipReason,
   type DeadLetterFilter,
-  type DeadLetterHeaders,
   type DeadLetterRecord,
   type DlqInspectOptions,
   type DlqPurgeOptions,
   type DlqPurgeReport,
   type DlqRedriveOptions,
-  type RedriveReport,
-  type RedriveSkip,
+  type DlqRedriveReport,
+  type DlqRedriveSkip,
 } from './dlq.types';
 
 const DEFAULT_INSPECT_LIMIT = 100;
@@ -41,6 +42,17 @@ const TRACKING_HEADERS: ReadonlySet<string> = new Set(
   Object.values(JetstreamDlqHeader).map((name) => name.toLowerCase()),
 );
 
+const STREAM_KIND_OF: ReadonlyMap<DeadLetterOrigin, StreamKind> = new Map([
+  [DeadLetterOrigin.Event, StreamKind.Event],
+  [DeadLetterOrigin.Broadcast, StreamKind.Broadcast],
+  [DeadLetterOrigin.Schedule, StreamKind.Schedule],
+]);
+
+type HeaderEntry = [string, string[]];
+
+/** Filter subjects of a durable consumer, or `null` when it does not exist. */
+type ConsumerFilters = readonly string[] | null;
+
 interface DeadLetterEntry {
   readonly record: DeadLetterRecord;
   readonly msg: JsMsg;
@@ -51,13 +63,20 @@ const sleep = (ms: number): Promise<void> =>
     setTimeout(resolve, ms);
   });
 
-const ownHeaders = (headers: MsgHdrs | undefined): [string, string[]][] =>
+const ownHeaders = (headers: MsgHdrs | undefined): HeaderEntry[] =>
   [...(headers ?? [])].filter(([name]) => !TRACKING_HEADERS.has(name.toLowerCase()));
 
 const parseDate = (value: string): Date | undefined => {
   const parsed = new Date(value);
 
   return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+};
+
+const filtersOf = (config: ConsumerConfig): string[] => {
+  if (config.filter_subjects?.length) return config.filter_subjects;
+  if (config.filter_subject) return [config.filter_subject];
+
+  return ['>'];
 };
 
 /**
@@ -96,21 +115,22 @@ export class JetstreamDlq {
   public async redrive(
     filter: DeadLetterFilter = {},
     options: DlqRedriveOptions = {},
-  ): Promise<RedriveReport> {
+  ): Promise<DlqRedriveReport> {
     const scope = this.scopeOf(options.connection);
     const dlqStream = scope.names.dlqStreamName();
     const dryRun = options.dryRun ?? false;
     const maxRedrives = options.maxRedrives ?? DEFAULT_MAX_REDRIVES;
     const gapMs = options.perSecond ? 1_000 / options.perSecond : 0;
+    const consumers = new Map<StreamKind, ConsumerFilters>();
     const redriven: number[] = [];
-    const skipped: RedriveSkip[] = [];
+    const skipped: DlqRedriveSkip[] = [];
     const notRemoved: number[] = [];
     let matched = 0;
 
     for await (const { record, msg } of this.select(scope, filter, options.limit)) {
       matched += 1;
 
-      const skip = this.skipReason(record, maxRedrives);
+      const skip = await this.skipReason(scope, record, maxRedrives, consumers);
 
       if (skip !== null) {
         skipped.push({ seq: record.seq, subject: record.subject, reason: skip });
@@ -124,19 +144,18 @@ export class JetstreamDlq {
 
       try {
         await this.publishBack(scope, dlqStream, record, msg);
+        redriven.push(record.seq);
+
+        if (!(await this.remove(scope, dlqStream, record.seq))) notRemoved.push(record.seq);
       } catch (err) {
         skipped.push({
           seq: record.seq,
           subject: record.subject,
-          reason: RedriveSkipReason.PublishFailed,
+          reason: DlqRedriveSkipReason.PublishFailed,
           error: errorMessage(toPublishError(err)),
         });
-        continue;
       }
 
-      redriven.push(record.seq);
-
-      if (!(await this.remove(scope, dlqStream, record.seq))) notRemoved.push(record.seq);
       if (gapMs > 0) await sleep(gapMs);
     }
 
@@ -173,22 +192,82 @@ export class JetstreamDlq {
     return connection === undefined ? this.registry.getDefault() : this.registry.get(connection);
   }
 
-  private skipReason(record: DeadLetterRecord, maxRedrives: number): RedriveSkipReason | null {
-    if (record.origin === DeadLetterOrigin.Broadcast) return RedriveSkipReason.Broadcast;
-    if (record.redriveCount >= maxRedrives) return RedriveSkipReason.RedriveLimit;
+  private async skipReason(
+    scope: ConnectionScope,
+    record: DeadLetterRecord,
+    maxRedrives: number,
+    consumers: Map<StreamKind, ConsumerFilters>,
+  ): Promise<DlqRedriveSkipReason | null> {
+    if (record.origin === DeadLetterOrigin.Broadcast) return DlqRedriveSkipReason.Broadcast;
+    if (record.origin === DeadLetterOrigin.Schedule) return DlqRedriveSkipReason.ScheduleTick;
+    if (record.redriveCount >= maxRedrives) return DlqRedriveSkipReason.RedriveLimit;
 
-    return null;
+    const kind = STREAM_KIND_OF.get(record.origin);
+
+    if (kind === undefined) return DlqRedriveSkipReason.NoConsumer;
+
+    if (!consumers.has(kind)) consumers.set(kind, await this.consumerFilters(scope, kind));
+
+    const filters = consumers.get(kind);
+
+    return filters?.some((f) => coversOrEquals(f, record.subject))
+      ? null
+      : DlqRedriveSkipReason.NoConsumer;
   }
 
-  /**
-   * Read the stream up to the last record present when the read started, so a
-   * redriven message that dead-letters again is not met a second time.
-   */
+  /** Read from the server, so it holds even where no handler is registered in this process. */
+  private async consumerFilters(
+    scope: ConnectionScope,
+    kind: StreamKind,
+  ): Promise<ConsumerFilters> {
+    const jsm = await scope.connection.getJetStreamManager();
+
+    try {
+      const info = await jsm.consumers.info(
+        scope.names.streamName(kind),
+        scope.names.consumerName(kind),
+      );
+
+      return filtersOf(info.config);
+    } catch (err) {
+      if (
+        isNatsError(err, NatsErrorCode.ConsumerNotFound) ||
+        isNatsError(err, NatsErrorCode.StreamNotFound)
+      ) {
+        return null;
+      }
+
+      throw err;
+    }
+  }
+
   private async *select(
     scope: ConnectionScope,
     filter: DeadLetterFilter,
     limit: number | undefined,
   ): AsyncGenerator<DeadLetterEntry> {
+    if (limit !== undefined && limit <= 0) return;
+
+    let selected = 0;
+
+    for await (const msg of this.read(scope, filter)) {
+      const record = this.toRecord(scope, msg);
+
+      if (!matchesDeadLetter(record, filter)) continue;
+
+      yield { record, msg };
+      selected += 1;
+
+      if (limit !== undefined && selected >= limit) return;
+    }
+  }
+
+  /**
+   * Every entry in the filter's sequence range, up to the last one present
+   * when the read started, so a redriven message that dead-letters again is
+   * not met a second time.
+   */
+  private async *read(scope: ConnectionScope, filter: DeadLetterFilter): AsyncGenerator<JsMsg> {
     const dlqStream = scope.names.dlqStreamName();
     const { state } = await this.dlqInfo(scope, dlqStream);
     const start = Math.max(filter.fromSeq ?? state.first_seq, state.first_seq);
@@ -202,30 +281,30 @@ export class JetstreamDlq {
       deliver_policy: DeliverPolicy.StartSequence,
       opt_start_seq: start,
     });
-    let selected = 0;
 
-    for (;;) {
-      const batch = await consumer.fetch({ max_messages: FETCH_BATCH, expires: FETCH_EXPIRES_MS });
-      let received = 0;
+    try {
+      for (;;) {
+        const batch = await consumer.fetch({
+          max_messages: FETCH_BATCH,
+          expires: FETCH_EXPIRES_MS,
+        });
+        let received = 0;
 
-      for await (const msg of batch) {
-        received += 1;
+        for await (const msg of batch) {
+          received += 1;
 
-        if (msg.seq > end) return;
+          if (msg.seq > end) return;
 
-        const record = this.toRecord(scope, msg);
+          yield msg;
 
-        if (matchesDeadLetter(record, filter)) {
-          yield { record, msg };
-          selected += 1;
-
-          if (limit !== undefined && selected >= limit) return;
+          // The newest entries may be gone since the snapshot; stop once nothing is left.
+          if (msg.seq === end || msg.info.pending === 0) return;
         }
 
-        if (msg.seq === end) return;
+        if (received === 0) return;
       }
-
-      if (received === 0) return;
+    } finally {
+      await consumer.delete().catch(() => undefined);
     }
   }
 
@@ -256,33 +335,58 @@ export class JetstreamDlq {
   private toRecord(scope: ConnectionScope, msg: JsMsg): DeadLetterRecord {
     const header = (name: JetstreamDlqHeader): string => msg.headers?.get(name) ?? '';
     const subject = header(JetstreamDlqHeader.OriginalSubject);
-    const stream = header(JetstreamDlqHeader.OriginalStream);
-    const headers: Record<string, string> = {};
-
-    for (const [name, values] of ownHeaders(msg.headers)) headers[name] = values.join(', ');
+    const origin = this.originOf(scope, header(JetstreamDlqHeader.OriginalStream), subject);
 
     return {
       seq: msg.seq,
       subject,
-      stream,
-      origin: this.originOf(scope, stream),
-      pattern: scope.patterns?.resolveDeclared(subject)?.pattern,
+      stream: header(JetstreamDlqHeader.OriginalStream),
+      origin,
+      pattern: this.patternOf(scope, origin, subject),
       reason: header(JetstreamDlqHeader.DeadLetterReason),
       failedAt: parseDate(header(JetstreamDlqHeader.FailedAt)),
       deliveryCount: Number(header(JetstreamDlqHeader.DeliveryCount)) || 0,
       redriveCount: Number(header(JetstreamDlqHeader.RedriveCount)) || 0,
-      headers: headers satisfies DeadLetterHeaders,
+      headers: Object.fromEntries(ownHeaders(msg.headers)),
       data: msg.data,
       payload: this.decode(scope, msg.data),
     };
   }
 
-  private originOf(scope: ConnectionScope, stream: string): DeadLetterOrigin {
-    if (stream === scope.names.streamName(StreamKind.Broadcast)) return DeadLetterOrigin.Broadcast;
-    if (stream === scope.names.streamName(StreamKind.Schedule)) return DeadLetterOrigin.Schedule;
-    if (stream === scope.names.streamName(StreamKind.Event)) return DeadLetterOrigin.Event;
+  private originOf(scope: ConnectionScope, stream: string, subject: string): DeadLetterOrigin {
+    for (const [origin, kind] of STREAM_KIND_OF) {
+      if (stream === scope.names.streamName(kind)) return origin;
+    }
+
+    // A renamed broadcast stream still carries the global broadcast subject.
+    if (subject.startsWith(scope.names.subject(StreamKind.Broadcast, ''))) {
+      return DeadLetterOrigin.Broadcast;
+    }
 
     return DeadLetterOrigin.Unknown;
+  }
+
+  /**
+   * The declared pattern when handlers are registered in this process,
+   * otherwise derived from the subject: a script or an admin-only app
+   * registers none.
+   */
+  private patternOf(
+    scope: ConnectionScope,
+    origin: DeadLetterOrigin,
+    subject: string,
+  ): string | undefined {
+    const declared = scope.patterns?.resolveDeclared(subject)?.pattern;
+
+    if (declared !== undefined) return declared;
+
+    const kind = STREAM_KIND_OF.get(origin);
+
+    if (kind === undefined) return undefined;
+
+    const prefix = scope.names.subject(kind, '');
+
+    return subject.startsWith(prefix) ? subject.slice(prefix.length) : undefined;
   }
 
   private decode(scope: ConnectionScope, data: Uint8Array): unknown {
@@ -294,8 +398,9 @@ export class JetstreamDlq {
   }
 
   /**
-   * The message ID is the DLQ entry itself, so running a redrive again after a
-   * crash between publish and delete is deduplicated by the target stream.
+   * The message ID names the DLQ entry, its stored time included, so a rerun
+   * after a crash between publish and delete is deduplicated by the target
+   * stream, while an entry that reuses a sequence of a recreated DLQ is not.
    */
   private async publishBack(
     scope: ConnectionScope,
@@ -306,6 +411,8 @@ export class JetstreamDlq {
     const headers = natsHeaders();
 
     for (const [name, values] of ownHeaders(msg.headers)) {
+      if (name.toLowerCase().startsWith(NATS_CONTROL_HEADER_PREFIX)) continue;
+
       for (const value of values) headers.append(name, value);
     }
 
@@ -313,7 +420,7 @@ export class JetstreamDlq {
 
     await scope.connection.getJetStreamClient().publish(record.subject, msg.data, {
       headers,
-      msgID: `dlq:${dlqStream}:${record.seq}`,
+      msgID: `dlq:${dlqStream}:${record.seq}:${msg.info.timestampNanos}`,
     });
   }
 

@@ -240,9 +240,13 @@ Each dead letter is published to its original subject with its original headers 
 
 - **Loops stop.** The message carries `x-redrive-count`, raised on every redrive and kept when it fails again. One already redriven `maxRedrives` times (3 by default) is skipped with reason `redrive-limit`.
 - **Repeats are deduplicated.** The publish uses the DLQ entry as its message ID, so running a redrive again after a crash between publish and delete adds no duplicate within the target stream's `duplicate_window` (2 minutes by default). Entries that went back but could not be deleted are listed in `notRemoved`.
-- **Broadcasts never go back.** A broadcast is a signal where only the latest state matters, so replaying one that is hours old can roll a cache or a config back. They are skipped with reason `broadcast`; inspect and purge them as usual.
+- **Broadcasts and recurring schedule ticks never go back.** A broadcast is a signal where only the latest state matters, so replaying one that is hours old can roll a cache or a config back; a recurring schedule fires again on its own, so a late tick would run out of turn. They are skipped with reasons `broadcast` and `schedule-tick`; inspect and purge them as usual. A one-off `scheduleAt()` delivery is an ordinary event and goes back like one.
+- **Only to a consumer that will deliver it.** Before publishing, the redrive reads the service's durable consumer from the server and checks that its filter covers the subject. With a custom `subjectPrefix` the filter lists exact handler subjects, so a dead letter whose handler was removed or renamed would sit in the stream undelivered; it is skipped with reason `no-consumer` and stays in the DLQ.
 - **Failures are reported, not thrown.** A dead letter whose publish fails, for example because its stream is full, stays in the DLQ and is listed under `skipped` with reason `publish-failed` and the error.
 - **`perSecond`** paces publishes, so a large redrive does not flood a handler that has just recovered.
+- **Dead letters without a working handler come straight back.** One marked "no handler" or "decode failed" fails again the same way unless the code changed, and returns with its redrive count raised.
+- **Some of the original publish does not survive.** A per-message TTL was dropped when the message entered the DLQ, so the redriven copy does not expire; the `traceparent` is the original one, so its trace links back to the first attempt.
+- **`limit` counts skipped records too.** `redrive({}, { limit: 10 })` looks at ten matching records, whatever happens to them.
 
 The report lists the DLQ sequences that went back (`redriven`), those skipped and why (`skipped`), and those that went back but stayed in the DLQ (`notRemoved`). A dry run fills `redriven` with what would go back and changes nothing.
 
@@ -252,7 +256,7 @@ Call it from wherever your operators work. An admin endpoint, guarded by your ow
 
 ```typescript
 import { Body, Controller, Get, Post, Query } from '@nestjs/common';
-import { JetstreamDlq, type DeadLetterRecord, type RedriveReport } from '@horizon-republic/nestjs-jetstream';
+import { JetstreamDlq, type DeadLetterRecord, type DlqRedriveReport } from '@horizon-republic/nestjs-jetstream';
 
 interface RedriveRequest {
   pattern?: string;
@@ -269,7 +273,7 @@ export class DlqAdminController {
   }
 
   @Post('redrive')
-  redrive(@Body() body: RedriveRequest): Promise<RedriveReport> {
+  redrive(@Body() body: RedriveRequest): Promise<DlqRedriveReport> {
     // Dry run unless asked otherwise: see what would go back first
     return this.dlq.redrive({ pattern: body.pattern }, { dryRun: body.dryRun ?? true });
   }

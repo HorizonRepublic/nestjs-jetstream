@@ -340,6 +340,7 @@ export const RESERVED_HEADERS: ReadonlySet<string> = new Set<string>([
   JetstreamHeader.Error,
   JetstreamHeader.ScheduleHash,
   JetstreamHeader.SchedulePattern,
+  JetstreamDlqHeader.RedriveCount,
 ]);
 
 /**
