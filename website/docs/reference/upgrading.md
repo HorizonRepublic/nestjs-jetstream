@@ -19,7 +19,17 @@ Newest first. What each release adds is in the [release notes](/docs/reference/r
 
 ## v3.0 → v3.1
 
-No source changes: every message, class and field from v3.0 keeps working. One default changes on the first boot.
+No source changes: every message, class and field from v3.0 keeps working. Two defaults change on the first boot.
+
+### Changed defaults
+
+**Retries last about 100 seconds.** Event, broadcast and schedule consumers now allow `max_deliver: 5`, with redeliveries after `[2000, 10000, 30000, 60000]` ms instead of `max_deliver: 3` after `[2000, 10000]`. A dependency outage of up to a minute and a half no longer sends every message of that window to the DLQ. A message no retry can fix runs its handler five times instead of three and reaches the DLQ after about 100 seconds instead of 12. `max_deliver` is mutable, so existing consumers pick it up in place. To keep the previous curve:
+
+```typescript
+events: { consumer: { max_deliver: 3 }, retry: [2_000, 10_000] },
+```
+
+A message waiting out its delay keeps its `max_ack_pending` slot; see [retry](/docs/reference/module-configuration#retry) for what that means during an outage.
 
 ### Errors where the server used to stay silent
 

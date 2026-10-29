@@ -8,11 +8,16 @@ import {
   buildBroadcastSubject,
   buildSubject,
   consumerName,
+  DEFAULT_BROADCAST_CONSUMER_CONFIG,
   DEFAULT_BROADCAST_STREAM_CONFIG,
+  DEFAULT_COMMAND_CONSUMER_CONFIG,
   DEFAULT_COMMAND_STREAM_CONFIG,
   DEFAULT_DLQ_STREAM_CONFIG,
+  DEFAULT_EVENT_CONSUMER_CONFIG,
   DEFAULT_EVENT_STREAM_CONFIG,
   DEFAULT_ORDERED_STREAM_CONFIG,
+  DEFAULT_RETRY_DELAYS_MS,
+  DEFAULT_SCHEDULE_CONSUMER_CONFIG,
   DEFAULT_SCHEDULE_STREAM_CONFIG,
   getClientToken,
   internalName,
@@ -171,6 +176,24 @@ describe('jetstream.constants', () => {
     ])('should evict the oldest message when the %s stream is full', (_, config) => {
       expect(config.discard).toBe(DiscardPolicy.Old);
       expect(config).not.toHaveProperty('discard_new_per_subject');
+    });
+  });
+
+  describe('retry defaults', () => {
+    it('should spread redeliveries over about a hundred seconds', () => {
+      expect(DEFAULT_RETRY_DELAYS_MS).toEqual([2_000, 10_000, 30_000, 60_000]);
+    });
+
+    it.each([
+      ['event', DEFAULT_EVENT_CONSUMER_CONFIG],
+      ['broadcast', DEFAULT_BROADCAST_CONSUMER_CONFIG],
+      ['schedule', DEFAULT_SCHEDULE_CONSUMER_CONFIG],
+    ])('should give the %s consumer one delivery per delay plus the first', (_, config) => {
+      expect(config.max_deliver).toBe(DEFAULT_RETRY_DELAYS_MS.length + 1);
+    });
+
+    it('should never redeliver an RPC command', () => {
+      expect(DEFAULT_COMMAND_CONSUMER_CONFIG.max_deliver).toBe(1);
     });
   });
 

@@ -139,7 +139,7 @@ A message arrived on a subject with no registered handler. An event in that stat
 
 ### Dead letters are missing
 
-The DLQ stream is on by default and catches workqueue and broadcast events that exhaust `max_deliver` (default 3), plus events with no handler or an undecodable payload. Check what applies:
+The DLQ stream is on by default and catches workqueue and broadcast events that exhaust `max_deliver` (default 5), plus events with no handler or an undecodable payload. Check what applies:
 
 1. **`dlq: false`?** Then only the `onDeadLetter` callback, if any, sees dead letters.
 2. **Global `provisioning.management: Manual`?** The implicit DLQ stays off. Configure `dlq` to [bind an external stream](/docs/guides/external-infrastructure#external-dlq).

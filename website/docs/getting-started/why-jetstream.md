@@ -8,7 +8,7 @@ schema:
   headline: "Why JetStream? NestJS NATS Transport Comparison"
   description: "When the built-in NestJS NATS transport is enough, and when your system outgrows Core NATS and needs JetStream for durable messaging."
   datePublished: "2026-04-11"
-  dateModified: "2026-10-23"
+  dateModified: "2026-10-29"
 ---
 
 # Why JetStream?
@@ -33,7 +33,7 @@ Persistence costs disk I/O, stream provisioning and consumer state. If the list 
 | --------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------ |
 | Pod gets `SIGTERM` with 40 messages in flight | All 40 are gone: the publisher was already acked | Messages return to pending, the next pod takes them                                        |
 | Downstream is down for 3 minutes              | 200 events delivered into the void               | Events wait in the stream, processed in order on return                                    |
-| Handler throws on a specific payload          | Lost on the first throw                          | Retried to `max_deliver` (default 3), then written to the DLQ stream with tracking headers |
+| Handler throws on a specific payload          | Lost on the first throw                          | Retried to `max_deliver` (default 5), then written to the DLQ stream with tracking headers |
 | New service needs the last 7 days             | Custom backfill job against the database         | A consumer with `deliver_policy` by start time replays the stream                          |
 | New replica missed a broadcast during startup | No answer                                        | Per-service durable consumers catch it up                                                  |
 

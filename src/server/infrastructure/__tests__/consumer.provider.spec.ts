@@ -308,7 +308,7 @@ describe(ConsumerProvider, () => {
           `${internalName(options.name)}_sched-consumer`,
           expect.objectContaining({
             filter_subject: `${internalName(options.name)}.sched.>`,
-            max_deliver: 3,
+            max_deliver: 5,
           }),
         );
       });

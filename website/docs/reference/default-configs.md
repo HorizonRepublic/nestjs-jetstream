@@ -77,10 +77,10 @@ Every durable consumer uses `ack_policy: Explicit`, `deliver_policy: All` and `r
 | Property          | Event        | Command     | Broadcast    | Schedule     |
 | ----------------- | ------------ | ----------- | ------------ | ------------ |
 | `ack_wait`        | `10 seconds` | `5 minutes` | `10 seconds` | `10 seconds` |
-| `max_deliver`     | `3`          | `1`         | `3`          | `3`          |
+| `max_deliver`     | `5`          | `1`         | `5`          | `5`          |
 | `max_ack_pending` | `100`        | `100`       | `100`        | `100`        |
 
-An event that fails three times is [dead-lettered](/docs/guides/dead-letter-queue). Between attempts the transport naks with a delay from the retry curve (`[2000, 10000]` ms), so the three attempts span roughly twelve seconds instead of burning out in milliseconds.
+An event that fails five times is [dead-lettered](/docs/guides/dead-letter-queue). Between attempts the transport naks with a delay from the retry curve (`[2000, 10000, 30000, 60000]` ms), so the five attempts span about 100 seconds: long enough for a database failover or a restarting dependency to clear, short enough that a message no retry can fix reaches the DLQ within two minutes.
 
 The delay is applied client-side, which leaves `ack_wait` at its full value, so a slow handler is not redelivered while it still runs. Tune the curve per kind with [`retry`](/docs/reference/module-configuration#retry), or pass `false` to nak immediately.
 

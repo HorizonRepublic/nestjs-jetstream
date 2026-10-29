@@ -8,7 +8,7 @@ schema:
   headline: "Workqueue Events: NestJS JetStream At-Least-Once Delivery"
   description: "NestJS NATS JetStream workqueue events with at-least-once delivery, automatic retry, publish-side deduplication, and dead letter handling."
   datePublished: "2026-03-21"
-  dateModified: "2026-10-23"
+  dateModified: "2026-10-29"
 ---
 
 # Events (Workqueue)
@@ -98,7 +98,7 @@ Delivery is at-least-once with explicit acks:
 | Payload cannot be decoded             | Dead-lettered at once (retrying cannot fix it), or `term` when dead-lettering is off |
 | No handler for the subject            | Dead-lettered at once, or `term` when dead-lettering is off                          |
 
-By default a message gets three attempts (`max_deliver: 3`), with redeliveries 2 s and then 10 s after a failure. The delay is applied by the client through `nak(delay)`, so `ack_wait` keeps its full value and a slow handler is not redelivered while it still runs. Change the curve with `events.retry` (see [module configuration](/docs/reference/module-configuration#retry)).
+By default a message gets five attempts (`max_deliver: 5`), with redeliveries 2 s, 10 s, 30 s and 60 s after each failure, about 100 s in all. The delay is applied by the client through `nak(delay)`, so `ack_wait` keeps its full value and a slow handler is not redelivered while it still runs. Change the curve with `events.retry` (see [module configuration](/docs/reference/module-configuration#retry)).
 
 ```mermaid
 sequenceDiagram

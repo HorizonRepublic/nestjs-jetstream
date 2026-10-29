@@ -548,6 +548,7 @@ describe('Ordered Event Delivery', () => {
         {
           name: serviceName,
           port,
+          events: { consumer: { max_deliver: 3 }, retry: [200] },
           onDeadLetter: async (info) => {
             deadLetters.push(info);
           },
@@ -583,7 +584,7 @@ describe('Ordered Event Delivery', () => {
       // Given: workqueue handler that always throws (max_deliver: 3)
       await firstValueFrom(client.emit('order.process', { orderId: 1 }));
 
-      // Wait for all redeliveries + DLQ (ack_wait 10s x 3 attempts)
+      // Wait for all redeliveries + DLQ
       await waitForCondition(() => deadLetters.length > 0, 35_000);
 
       // Then: DLQ triggered for workqueue, not for ordered

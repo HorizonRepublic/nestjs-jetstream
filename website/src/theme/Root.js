@@ -73,7 +73,7 @@ export default function Root({ children }) {
   "headline": "Quick Start",
   "description": "Complete working example in four steps: register the module, connect the transport, define handlers, and send messages.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-08-03"
+  "dateModified": "2026-10-29"
 },
       
     '/docs/getting-started/why-jetstream/': {
@@ -81,7 +81,7 @@ export default function Root({ children }) {
   "headline": "Why JetStream? NestJS NATS Transport Comparison",
   "description": "When the built-in NestJS NATS transport is enough, and when your system outgrows Core NATS and needs JetStream for durable messaging.",
   "datePublished": "2026-04-11",
-  "dateModified": "2026-10-23"
+  "dateModified": "2026-10-29"
 },
       
     '/docs/guides/custom-codec/': {
@@ -97,7 +97,7 @@ export default function Root({ children }) {
   "headline": "How to configure a Dead Letter Queue",
   "description": "Capture NestJS NATS JetStream messages that exhaust all delivery attempts via a DLQ stream or onDeadLetter callback.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-10-23"
+  "dateModified": "2026-10-29"
 },
       
     '/docs/guides/external-infrastructure/': {
@@ -121,7 +121,7 @@ export default function Root({ children }) {
   "headline": "RpcContext: Handler Context & Message Settlement",
   "description": "Access JetStream metadata and control ack, retry, and terminate actions in NestJS message handlers via RpcContext.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-10-23"
+  "dateModified": "2026-10-29"
 },
       
     '/docs/guides/health-checks/': {
@@ -273,7 +273,7 @@ export default function Root({ children }) {
   "headline": "Workqueue Events: NestJS JetStream At-Least-Once Delivery",
   "description": "NestJS NATS JetStream workqueue events with at-least-once delivery, automatic retry, publish-side deduplication, and dead letter handling.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-10-23"
+  "dateModified": "2026-10-29"
 },
       
     '/docs/patterns/handler-metadata/': {
@@ -337,7 +337,7 @@ export default function Root({ children }) {
   "headline": "Module Configuration Reference",
   "description": "Reference for forRoot(), forRootAsync(), and forFeature() registration methods with stream, consumer, and connection options.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-10-23"
+  "dateModified": "2026-10-29"
 },
       
     '/docs/reference/naming-conventions/': {
