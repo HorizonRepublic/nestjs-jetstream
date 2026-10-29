@@ -86,13 +86,14 @@ Override through `dlq.stream`. Leave `name` out and it is derived from the servi
 
 Each republished message carries these headers, so you can investigate, replay or filter without decoding the payload. The exported `JetstreamDlqHeader` enum names them. `Nats-*` headers of the original (`Nats-Msg-Id`, `Nats-TTL`) are dropped, so the copy is neither deduplicated nor expired early.
 
-| Header                 | Contents                                                                     |
-| ---------------------- | ---------------------------------------------------------------------------- |
-| `x-dead-letter-reason` | Error message from the last failure, from `Error.message` or `String(error)` |
-| `x-original-subject`   | Subject the message was published to                                         |
-| `x-original-stream`    | Source stream it came from                                                   |
-| `x-failed-at`          | ISO 8601 timestamp of entry into the DLQ                                     |
-| `x-delivery-count`     | Deliveries before the message was marked dead                                |
+| Header                 | Contents                                                                       |
+| ---------------------- | ------------------------------------------------------------------------------ |
+| `x-dead-letter-reason` | Error message from the last failure, from `Error.message` or `String(error)`   |
+| `x-original-subject`   | Subject the message was published to                                           |
+| `x-original-stream`    | Source stream it came from                                                     |
+| `x-failed-at`          | ISO 8601 timestamp of entry into the DLQ                                       |
+| `x-delivery-count`     | Deliveries before the message was marked dead                                  |
+| `x-redrive-count`      | Times the message was [redriven](#redriving-dead-letters) before failing again |
 
 ### Externally managed stream
 
@@ -210,6 +211,90 @@ export class DlqService {
   }
 }
 ```
+
+## Redriving dead letters
+
+Once a fix ships, the messages that failed before it can go back to their handlers. `JetstreamDlq` is exported by `JetstreamModule.forRoot()` and works on the DLQ stream; nothing in it runs on its own, so you decide when and what goes back. It has three methods:
+
+| Method                       | What it does                                                                                                  |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `inspect(filter?, options?)` | Lists dead letters, oldest first: subject, handler pattern, reason, failure time, counts, headers and payload |
+| `redrive(filter?, options?)` | Publishes them back to the subject they failed on, then deletes them from the DLQ                             |
+| `purge(filter?, options?)`   | Deletes them for good                                                                                         |
+
+Every criterion of the filter must match, and an empty filter selects everything:
+
+| Field                          | Matches                                                      |
+| ------------------------------ | ------------------------------------------------------------ |
+| `subject`                      | The original subject; NATS wildcards `*` and `>` are allowed |
+| `pattern`                      | The failed handler's pattern, exactly as declared            |
+| `reason`                       | A substring of the failure reason, or a `RegExp`             |
+| `failedAfter` / `failedBefore` | The failure time, bounds included                            |
+| `fromSeq` / `toSeq`            | The DLQ sequence, bounds included                            |
+
+Options are `connection` (the connection whose DLQ to use; the default one when left out) and `limit` (`inspect` stops at 100 unless told otherwise), plus `dryRun` for `redrive` and `purge`, and `maxRedrives` and `perSecond` for `redrive`.
+
+### What a redrive does
+
+Each dead letter is published to its original subject with its original headers and payload, then deleted from the DLQ. The handler sees an ordinary delivery, with the usual retries and dead-lettering if it fails again.
+
+- **Loops stop.** The message carries `x-redrive-count`, raised on every redrive and kept when it fails again. One already redriven `maxRedrives` times (3 by default) is skipped with reason `redrive-limit`.
+- **Repeats are deduplicated.** The publish uses the DLQ entry as its message ID, so running a redrive again after a crash between publish and delete adds no duplicate within the target stream's `duplicate_window` (2 minutes by default). Entries that went back but could not be deleted are listed in `notRemoved`.
+- **Broadcasts never go back.** A broadcast is a signal where only the latest state matters, so replaying one that is hours old can roll a cache or a config back. They are skipped with reason `broadcast`; inspect and purge them as usual.
+- **Failures are reported, not thrown.** A dead letter whose publish fails, for example because its stream is full, stays in the DLQ and is listed under `skipped` with reason `publish-failed` and the error.
+- **`perSecond`** paces publishes, so a large redrive does not flood a handler that has just recovered.
+
+The report lists the DLQ sequences that went back (`redriven`), those skipped and why (`skipped`), and those that went back but stayed in the DLQ (`notRemoved`). A dry run fills `redriven` with what would go back and changes nothing.
+
+### Triggering a redrive
+
+Call it from wherever your operators work. An admin endpoint, guarded by your own auth:
+
+```typescript
+import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { JetstreamDlq, type DeadLetterRecord, type RedriveReport } from '@horizon-republic/nestjs-jetstream';
+
+interface RedriveRequest {
+  pattern?: string;
+  dryRun?: boolean;
+}
+
+@Controller('admin/dlq')
+export class DlqAdminController {
+  constructor(private readonly dlq: JetstreamDlq) {}
+
+  @Get()
+  list(@Query('pattern') pattern?: string): Promise<DeadLetterRecord[]> {
+    return this.dlq.inspect({ pattern });
+  }
+
+  @Post('redrive')
+  redrive(@Body() body: RedriveRequest): Promise<RedriveReport> {
+    // Dry run unless asked otherwise: see what would go back first
+    return this.dlq.redrive({ pattern: body.pattern }, { dryRun: body.dryRun ?? true });
+  }
+}
+```
+
+Or a one-off script, such as a Kubernetes job run after the fix is deployed:
+
+```typescript
+import { NestFactory } from '@nestjs/core';
+import { JetstreamDlq } from '@horizon-republic/nestjs-jetstream';
+
+import { AppModule } from './app.module';
+
+const app = await NestFactory.createApplicationContext(AppModule);
+const report = await app.get(JetstreamDlq).redrive(
+  { pattern: 'order.created', failedAfter: new Date('2026-10-28T00:00:00Z') },
+  { perSecond: 50 },
+);
+
+console.log(report);
+await app.close();
+```
+
+With `dlq: false`, or before any service with handlers has created the DLQ stream on that connection, every method throws a `JetstreamConfigError` with reason `dlq-unavailable`.
 
 ## Metrics and alerting
 

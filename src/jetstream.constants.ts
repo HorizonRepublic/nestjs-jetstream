@@ -329,6 +329,8 @@ export enum JetstreamDlqHeader {
   FailedAt = 'x-failed-at',
   /** Number of times the message has been delivered */
   DeliveryCount = 'x-delivery-count',
+  /** How many times the message was redriven from the DLQ; carried over when it fails again */
+  RedriveCount = 'x-redrive-count',
 }
 
 /** Set of header names that are reserved and cannot be set by users. */

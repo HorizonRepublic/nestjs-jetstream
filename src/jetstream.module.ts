@@ -15,6 +15,7 @@ import { JsonCodec } from './codec';
 import { ConnectionRegistry, createConnectionScope, normalizeOptions } from './connection';
 import type { ConnectionProvider } from './connection/connection.provider';
 import type { ConnectionSharedContext } from './connection/connection.types';
+import { JetstreamDlq } from './dlq';
 import { ConfigErrorReason, JetstreamConfigError } from './errors';
 import { JetstreamHealthIndicator } from './health';
 import { EventBus } from './hooks';
@@ -194,6 +195,7 @@ export class JetstreamModule implements OnApplicationBootstrap, OnApplicationShu
         ShutdownManager,
         JetstreamStrategy,
         JetstreamHealthIndicator,
+        JetstreamDlq,
         NameResolver,
       ],
     };
@@ -227,6 +229,7 @@ export class JetstreamModule implements OnApplicationBootstrap, OnApplicationShu
         ShutdownManager,
         JetstreamStrategy,
         JetstreamHealthIndicator,
+        JetstreamDlq,
         NameResolver,
       ],
     };
@@ -369,6 +372,12 @@ export class JetstreamModule implements OnApplicationBootstrap, OnApplicationShu
         inject: [JETSTREAM_CONNECTIONS],
         useFactory: (registry: ConnectionRegistry): JetstreamHealthIndicator =>
           new JetstreamHealthIndicator(registry),
+      },
+
+      {
+        provide: JetstreamDlq,
+        inject: [JETSTREAM_CONNECTIONS],
+        useFactory: (registry: ConnectionRegistry): JetstreamDlq => new JetstreamDlq(registry),
       },
 
       {

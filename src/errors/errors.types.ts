@@ -25,6 +25,8 @@ export enum ConfigErrorReason {
   ConflictingHandlerKinds = 'conflicting-handler-kinds',
   ScheduleOnMessagePattern = 'schedule-on-message-pattern',
   StreamOwnershipConflict = 'stream-ownership-conflict',
+  /** The dead-letter stream is turned off or was never created on the connection. */
+  DlqUnavailable = 'dlq-unavailable',
 }
 
 /** Why the NATS connection was unavailable. */
