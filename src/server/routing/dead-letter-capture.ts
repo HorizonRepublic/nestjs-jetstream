@@ -4,6 +4,7 @@ import type { JsMsg } from '@nats-io/jetstream';
 import { headers as natsHeaders, type MsgHdrs } from '@nats-io/transport-node';
 
 import { ConnectionProvider } from '../../connection';
+import { JetstreamPublishError, toPublishError } from '../../errors';
 import { EventBus } from '../../hooks';
 import { TransportEvent } from '../../interfaces';
 import type { DeadLetterConfig, DeadLetterInfo, JetstreamModuleOptions } from '../../interfaces';
@@ -21,6 +22,10 @@ import type { DeadLetterSource } from './routing.types';
 
 /** How many times a dead letter is published to the DLQ stream before falling back. */
 const DLQ_PUBLISH_ATTEMPTS = 3;
+
+/** A full DLQ stream rejects every attempt the same way, so retrying it only delays the fallback. */
+const isStreamFull = (err: unknown): boolean =>
+  toPublishError(err) instanceof JetstreamPublishError;
 
 /** How long a captured message is remembered, so a second report of it is dropped. */
 const CAPTURED_MEMORY_MS = 10 * 60_000;
@@ -232,6 +237,8 @@ export class DeadLetterCapture {
         return;
       } catch (err) {
         lastErr = err;
+
+        if (isStreamFull(err)) break;
 
         if (attempt < DLQ_PUBLISH_ATTEMPTS) {
           this.logger.warn(

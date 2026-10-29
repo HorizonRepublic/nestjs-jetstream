@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 
+import { JetStreamApiError } from '@nats-io/jetstream';
 import type { ConsumerInfo, DeliveryInfo, JsMsg } from '@nats-io/jetstream';
 import { headers as natsHeaders } from '@nats-io/transport-node';
 import type { NatsConnection } from '@nats-io/transport-node';
@@ -1709,6 +1710,51 @@ describe(EventRouter, () => {
           expect(mockJs.publish).toHaveBeenCalledTimes(2);
           expect(msg.term).toHaveBeenCalledWith('Moved to DLQ stream');
           expect(msg.nak).not.toHaveBeenCalled();
+        });
+
+        it('should fall back without retrying when the DLQ stream is full', async () => {
+          // Given: the DLQ stream rejects new messages
+          const options: JetstreamModuleOptions = {
+            name: 'my-service',
+            servers: ['nats://localhost:4222'],
+            dlq: {},
+          };
+
+          mockJs.publish.mockRejectedValue(
+            new JetStreamApiError({
+              err_code: 10077,
+              code: 503,
+              description: 'maximum messages exceeded',
+            }),
+          );
+
+          sut = new EventRouter(
+            messageProvider,
+            patternRegistry,
+            codec,
+            eventBus,
+            deadLetterConfig,
+            undefined,
+            undefined,
+            connection,
+            options,
+          );
+          sut.start();
+
+          patternRegistry.getHandler.mockReturnValue(
+            vi.fn().mockRejectedValue(new Error('handler error')),
+          );
+
+          const msg = createDeadLetterMsg();
+
+          // When
+          events$.next(msg);
+          await new Promise(process.nextTick);
+
+          // Then: a full stream will not take the retry either
+          expect(mockJs.publish).toHaveBeenCalledOnce();
+          expect(onDeadLetter).toHaveBeenCalled();
+          expect(msg.term).toHaveBeenCalledWith('Dead letter processed via fallback callback');
         });
 
         it('should fall back to onDeadLetter callback and nak when DLQ publish throws', async () => {

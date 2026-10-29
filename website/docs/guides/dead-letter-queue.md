@@ -102,13 +102,13 @@ To bind to a DLQ stream from Terraform or ArgoCD instead of creating it, set `dl
 
 No message terminates without passing a recovery path:
 
-| Step                                | Condition                              | Outcome                                                                           |
-| ----------------------------------- | -------------------------------------- | --------------------------------------------------------------------------------- |
-| 1. Emit `TransportEvent.DeadLetter` | Always                                 | Observability, independent of configuration                                       |
-| 2. Publish to the DLQ stream        | `dlq` configured                       | Up to 3 in-process attempts, since the server never redelivers past `max_deliver` |
-| 3. Notify `onDeadLetter`            | Publish succeeded, callback registered | Errors are logged and swallowed; the message still terminates                     |
-| 4. Fall back to `onDeadLetter`      | Every publish attempt failed           | Last chance to persist. Success terminates, failure naks                          |
-| 5. `nak()`                          | No callback, or the fallback threw     | The message stays in the stream for manual recovery                               |
+| Step                                | Condition                                               | Outcome                                                                                                       |
+| ----------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| 1. Emit `TransportEvent.DeadLetter` | Always                                                  | Observability, independent of configuration                                                                   |
+| 2. Publish to the DLQ stream        | `dlq` configured                                        | Up to 3 in-process attempts, since the server never redelivers past `max_deliver`. A full DLQ stream gets one |
+| 3. Notify `onDeadLetter`            | Publish succeeded, callback registered                  | Errors are logged and swallowed; the message still terminates                                                 |
+| 4. Fall back to `onDeadLetter`      | Every publish attempt failed, or the DLQ stream is full | Last chance to persist. Success terminates, failure naks                                                      |
+| 5. `nak()`                          | No callback, or the fallback threw                      | The message stays in the stream for manual recovery                                                           |
 
 After step 5 the server reports the exhausted message (see below), so capture runs once more. If that fails too, the message stays visible to operators until recovered by hand or expired by `max_age`, and every occurrence is logged. It is never redelivered: the delivery count already reached `max_deliver`.
 
