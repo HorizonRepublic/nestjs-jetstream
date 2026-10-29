@@ -15,7 +15,7 @@ import {
   type ResolvedOtelOptions,
   type ServerEndpoint,
 } from '../otel';
-import { isPromiseLike, serializeError, unwrapResult } from '../utils';
+import { isPromiseLike, serializeError, toError, unwrapResult } from '../utils';
 import { NameResolver } from './infrastructure/name-resolver';
 import { PatternRegistry } from './routing/pattern-registry';
 
@@ -135,11 +135,7 @@ export class CoreRpcServer {
       msg.respond(this.codec.encode(raw));
       this.reportHandlerCompleted(msg, startedAt, 'success');
     } catch (err) {
-      this.eventBus.emit(
-        TransportEvent.Error,
-        err instanceof Error ? err : new Error(String(err)),
-        `core-rpc-handler:${msg.subject}`,
-      );
+      this.eventBus.emit(TransportEvent.Error, toError(err), `core-rpc-handler:${msg.subject}`);
       this.respondWithError(msg, err);
       this.reportHandlerCompleted(msg, startedAt, 'error');
     }

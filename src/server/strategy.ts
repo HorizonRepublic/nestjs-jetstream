@@ -15,6 +15,7 @@ import { StreamKind } from '../interfaces';
 import type { JetstreamModuleOptions } from '../interfaces';
 import { isCoreRpcMode, isJetStreamRpcMode } from '../jetstream.constants';
 import type { ScheduleReconciler } from '../schedule/schedule-reconciler';
+import { errorMessage } from '../utils';
 import { CoreRpcServer } from './core-rpc.server';
 import {
   ConsumerProvider,
@@ -218,7 +219,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
       this.retryAttempt += 1;
       this.logger.warn(
         `Non-critical connection "${this.connectionName}" failed to start ` +
-          `(${err instanceof Error ? err.message : String(err)}); retrying in ${delay}ms`,
+          `(${errorMessage(err)}); retrying in ${delay}ms`,
       );
 
       this.scheduleRetry(delay);

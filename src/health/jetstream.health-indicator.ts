@@ -7,6 +7,7 @@ import type {
   JetstreamHealthIndicatorResult,
   JetstreamHealthStatus,
 } from '../interfaces';
+import { errorMessage } from '../utils';
 
 /** Upper bound on a single connection's round-trip probe. */
 const PROBE_TIMEOUT_MS = 5_000;
@@ -101,9 +102,7 @@ export class JetstreamHealthIndicator {
 
       return { connected: true, critical: scope.critical, server: nc.getServer(), latency };
     } catch (err) {
-      this.logger.warn(
-        `Health check failed for "${scope.name}": ${err instanceof Error ? err.message : String(err)}`,
-      );
+      this.logger.warn(`Health check failed for "${scope.name}": ${errorMessage(err)}`);
 
       return { connected: false, critical: scope.critical, server: nc.getServer(), latency: null };
     } finally {

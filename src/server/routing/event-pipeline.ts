@@ -6,7 +6,13 @@ import { RpcContext } from '../../context';
 import { DeliveryErrorReason, JetstreamDeliveryError } from '../../errors';
 import { MessageKind, TransportEvent } from '../../interfaces';
 import { withConsumeSpan } from '../../otel';
-import { isPromiseLike, startAckExtensionTimer, unwrapResult } from '../../utils';
+import {
+  errorMessage,
+  isPromiseLike,
+  startAckExtensionTimer,
+  toError,
+  unwrapResult,
+} from '../../utils';
 import type { DeadLetterCapture } from './dead-letter-capture';
 import { settleOrphanTick } from './orphan-ticks';
 import type { HandlerReporter, RoutePipelineContext } from './routing.types';
@@ -110,7 +116,7 @@ const createEventResolver = (
             msg,
             new JetstreamDeliveryError(
               DeliveryErrorReason.DecodeFailed,
-              `Decode error: ${err instanceof Error ? err.message : String(err)}`,
+              `Decode error: ${errorMessage(err)}`,
               { cause: err },
             ),
           );
@@ -188,11 +194,7 @@ export const createWorkqueuePipeline = (
         () => unwrapResult(handler(data, ctx)),
       );
     } catch (err) {
-      eventBus.emit(
-        TransportEvent.Error,
-        err instanceof Error ? err : new Error(String(err)),
-        `${kind}-handler:${msg.subject}`,
-      );
+      eventBus.emit(TransportEvent.Error, toError(err), `${kind}-handler:${msg.subject}`);
 
       reportHandlerCompleted(msg, startedAt, 'error');
 
@@ -233,11 +235,7 @@ export const createWorkqueuePipeline = (
         }
       },
       async (err: unknown) => {
-        eventBus.emit(
-          TransportEvent.Error,
-          err instanceof Error ? err : new Error(String(err)),
-          `${kind}-handler:${msg.subject}`,
-        );
+        eventBus.emit(TransportEvent.Error, toError(err), `${kind}-handler:${msg.subject}`);
         reportHandlerCompleted(msg, startedAt, 'error');
         try {
           await settleFailure(msg, data, err);

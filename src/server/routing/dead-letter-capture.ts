@@ -13,7 +13,7 @@ import {
   NATS_CONTROL_HEADER_PREFIX,
 } from '../../jetstream.constants';
 import { withDeadLetterSpan, type ResolvedOtelOptions, type ServerEndpoint } from '../../otel';
-import { settleQuietly } from '../../utils';
+import { errorMessage, settleQuietly } from '../../utils';
 import { dlqStreamOverrides, isDlqEnabled } from '../infrastructure/dlq-options';
 import { NameResolver } from '../infrastructure/name-resolver';
 import { PatternRegistry } from './pattern-registry';
@@ -147,7 +147,7 @@ export class DeadLetterCapture {
         // handler; falls back to the raw subject when no handler matches.
         pattern: this.patternRegistry.getHandler(msg.subject) ? msg.subject : undefined,
         finalDeliveryCount: msg.deliveryCount,
-        reason: error instanceof Error ? error.message : String(error),
+        reason: errorMessage(error),
         serviceName: this.serviceName,
         endpoint: this.serverEndpoint,
       },

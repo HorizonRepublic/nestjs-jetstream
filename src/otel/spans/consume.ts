@@ -9,6 +9,7 @@ import {
   type Span,
 } from '@opentelemetry/api';
 
+import { toError } from '../../utils';
 import { HOOK_CONSUME, HOOK_RESPONSE, SPAN_NAME_PROCESS } from '../attribute-keys';
 import { applyExpectedErrorAttributes, buildConsumeAttributes } from '../attributes';
 import { captureBodyAttribute, captureMatchingHeaders } from '../capture';
@@ -69,7 +70,7 @@ const applyExpectedError = (span: Span, err: unknown): void => {
 };
 
 const applyUnexpectedError = (span: Span, err: unknown): void => {
-  const error = err instanceof Error ? err : new Error(String(err));
+  const error = toError(err);
 
   span.recordException(error);
   span.setStatus({ code: SpanStatusCode.ERROR, message: error.message });
@@ -186,7 +187,7 @@ export const withConsumeSpan = <T>(
       applyUnexpectedError(span, err);
     }
 
-    invokeResponseHook(Date.now() - start, err instanceof Error ? err : new Error(String(err)));
+    invokeResponseHook(Date.now() - start, toError(err));
     span.end();
   };
 

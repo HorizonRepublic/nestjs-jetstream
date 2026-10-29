@@ -26,12 +26,13 @@ import {
   type ServerEndpoint,
 } from '../../otel';
 import {
-  type AckExtension,
   isPromiseLike,
   resolveAckExtension,
   serializeError,
   settleQuietly,
   startAckExtensionTimer,
+  toError,
+  type AckExtension,
   unwrapResult,
 } from '../../utils';
 import { MessageProvider } from '../infrastructure';
@@ -263,11 +264,7 @@ export class RpcRouter {
       const startedAt = performance.now();
 
       const reportHandlerError = (err: unknown): void => {
-        eventBus.emit(
-          TransportEvent.Error,
-          err instanceof Error ? err : new Error(String(err)),
-          `rpc-handler:${subject}`,
-        );
+        eventBus.emit(TransportEvent.Error, toError(err), `rpc-handler:${subject}`);
         publishErrorReply(replyTo, correlationId, subject, err);
         settleQuietly(logger, `Failed to term ${subject}:`, () => {
           msg.term(`Handler error: ${subject}`);

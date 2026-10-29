@@ -2,6 +2,7 @@ import type { JsMsg } from '@nats-io/jetstream';
 
 import { ROOT_CONTEXT, SpanKind, SpanStatusCode, context, trace } from '@opentelemetry/api';
 
+import { toError } from '../../utils';
 import { HOOK_RESPONSE, SPAN_NAME_DEAD_LETTER } from '../attribute-keys';
 import { buildDeadLetterAttributes } from '../attributes';
 import { hdrsGetter } from '../carrier';
@@ -80,7 +81,7 @@ export const withDeadLetterSpan = async <T>(
 
     return result;
   } catch (err) {
-    const error = err instanceof Error ? err : new Error(String(err));
+    const error = toError(err);
 
     span.recordException(error);
     span.setStatus({ code: SpanStatusCode.ERROR, message: error.message });

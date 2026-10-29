@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 
 import { internalName } from '../jetstream.constants';
+import { errorMessage } from '../utils';
 import {
   resolveOtelOptions,
   type OtelOptions,
@@ -24,7 +25,7 @@ export const safelyInvokeHook = <A extends readonly unknown[]>(
   if (!hook) return;
 
   const logHookFailure = (err: unknown): void => {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = errorMessage(err);
 
     logger.debug(`OTel ${hookName} threw: ${message}`);
   };

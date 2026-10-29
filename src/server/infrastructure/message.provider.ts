@@ -26,6 +26,7 @@ import { ConnectionProvider } from '../../connection';
 import { EventBus } from '../../hooks';
 import type { OrderedEventOverrides } from '../../interfaces';
 import { StreamKind, TransportEvent } from '../../interfaces';
+import { toError } from '../../utils';
 import { NatsErrorCode } from './nats-error-codes';
 
 /** Callback to recreate a consumer when it disappears. */
@@ -354,11 +355,7 @@ export class MessageProvider {
       catchError((err) => {
         consecutiveFailures++;
         this.logger.error(`Consumer ${label} error, will restart:`, err);
-        this.eventBus.emit(
-          TransportEvent.Error,
-          err instanceof Error ? err : new Error(String(err)),
-          'message-provider',
-        );
+        this.eventBus.emit(TransportEvent.Error, toError(err), 'message-provider');
         onFirstError?.(err);
         onFirstError = undefined;
         return EMPTY;
