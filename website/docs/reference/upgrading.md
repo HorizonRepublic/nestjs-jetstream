@@ -7,7 +7,7 @@ schema:
   headline: "Upgrading NestJS JetStream between major versions"
   description: "Renamed options, changed defaults and how to keep the previous behaviour, release by release."
   datePublished: "2026-10-23"
-  dateModified: "2026-10-27"
+  dateModified: "2026-10-29"
 ---
 
 # Upgrading
@@ -19,7 +19,31 @@ Newest first. What each release adds is in the [release notes](/docs/reference/r
 
 ## v3.0 → v3.1
 
-Nothing to change: every message, class and field from v3.0 keeps working.
+No source changes: every message, class and field from v3.0 keeps working. One default changes on the first boot.
+
+### Errors where the server used to stay silent
+
+**A full stream rejects the publish.** Event, command and DLQ streams now use `discard: New`, and event and command streams also set `discard_new_per_subject`. Once a stream reaches `max_msgs`, `max_bytes` or `max_msgs_per_subject`, the next publish fails with a `JetstreamPublishError` with reason `stream-full`. Before, the server accepted it and evicted the oldest message, which on a work-queue stream is one no consumer had processed yet. Broadcast, ordered and schedule streams keep `discard: Old`, and so does an event stream with `allow_msg_schedules`, because NATS refuses `discard: New` alongside message schedules. See [Default Configs](/docs/reference/default-configs#stream-defaults).
+
+`discard` is mutable, so the first boot updates existing streams in place, keeping their messages and consumers. Before you deploy:
+
+- **A stream already at a limit starts rejecting right away.** Check `nats stream info` for streams near `max_msgs` or `max_bytes`, and `nats stream subjects` for a subject near `max_msgs_per_subject` (100,000 on events, 10,000 on commands). Raise the limit in the stream override if consumers are behind.
+- **The DLQ stream drops its per-subject limit.** Every dead letter shares one subject, so the old limit of 50,000 capped the whole stream and evicted the oldest dead letters; it now holds up to `max_msgs`, 500,000.
+- **Handle errors on `emit()`.** A fire-and-forget `client.emit(...).subscribe()` without an error handler used to lose the message silently on the server; now the error surfaces in your process instead.
+- **A full DLQ stream skips the retries** and hands the dead letter to `onDeadLetter`. Without a callback, the message stays in its source stream for manual recovery.
+- **Streams under `management: Manual` are untouched.** The transport never writes their config.
+
+To keep the previous behaviour for one kind, set it in the stream override:
+
+```typescript
+events: { stream: { discard: DiscardPolicy.Old } },
+```
+
+**Rolling back to v3.0 needs one manual step.** v3.0 sets `discard: Old` on boot, and NATS refuses that while the stream still has `discard_new_per_subject`, so a v3.0 pod fails to provision. The same happens to a v3.0 pod that restarts during a rolling deploy to v3.1. Before rolling back, turn the flag off on the event and command streams:
+
+```bash
+nats stream edit <stream> --no-discard-per-subject
+```
 
 ### Additive changes
 

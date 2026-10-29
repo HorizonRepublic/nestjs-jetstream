@@ -81,6 +81,7 @@ describe('StreamProvider schedule stream', () => {
         subjects: [`${service}__microservice.sched.>`, `${service}__microservice._cron.>`],
         retention: RetentionPolicy.Workqueue,
         discard: DiscardPolicy.Old,
+        discard_new_per_subject: false,
         max_age: 0,
         max_bytes: 64 * 1024 * 1024,
         max_msg_size: 1024 * 1024,

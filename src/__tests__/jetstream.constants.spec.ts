@@ -1,4 +1,4 @@
-import { StoreCompression } from '@nats-io/jetstream';
+import { DiscardPolicy, StoreCompression } from '@nats-io/jetstream';
 
 import { faker } from '@faker-js/faker';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -10,8 +10,10 @@ import {
   consumerName,
   DEFAULT_BROADCAST_STREAM_CONFIG,
   DEFAULT_COMMAND_STREAM_CONFIG,
+  DEFAULT_DLQ_STREAM_CONFIG,
   DEFAULT_EVENT_STREAM_CONFIG,
   DEFAULT_ORDERED_STREAM_CONFIG,
+  DEFAULT_SCHEDULE_STREAM_CONFIG,
   getClientToken,
   internalName,
   toNanos,
@@ -140,6 +142,35 @@ describe('jetstream.constants', () => {
 
     it('should default to S2 compression for ordered streams', () => {
       expect(DEFAULT_ORDERED_STREAM_CONFIG.compression).toBe(StoreCompression.S2);
+    });
+  });
+
+  describe('stream discard defaults', () => {
+    it.each([
+      ['event', DEFAULT_EVENT_STREAM_CONFIG],
+      ['command', DEFAULT_COMMAND_STREAM_CONFIG],
+    ])('should reject new messages per subject when the %s stream is full', (_, config) => {
+      expect(config).toMatchObject({
+        discard: DiscardPolicy.New,
+        discard_new_per_subject: true,
+      });
+    });
+
+    it('should cap the single-subject DLQ stream by its total limits only', () => {
+      expect(DEFAULT_DLQ_STREAM_CONFIG).toMatchObject({
+        discard: DiscardPolicy.New,
+        max_msgs_per_subject: -1,
+      });
+      expect(DEFAULT_DLQ_STREAM_CONFIG).not.toHaveProperty('discard_new_per_subject');
+    });
+
+    it.each([
+      ['broadcast', DEFAULT_BROADCAST_STREAM_CONFIG],
+      ['ordered', DEFAULT_ORDERED_STREAM_CONFIG],
+      ['schedule', DEFAULT_SCHEDULE_STREAM_CONFIG],
+    ])('should evict the oldest message when the %s stream is full', (_, config) => {
+      expect(config.discard).toBe(DiscardPolicy.Old);
+      expect(config).not.toHaveProperty('discard_new_per_subject');
     });
   });
 

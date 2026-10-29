@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
 
-import type { StreamInfo } from '@nats-io/jetstream';
-import { JetStreamApiError, RetentionPolicy, StorageType } from '@nats-io/jetstream';
+import type { StreamConfig, StreamInfo } from '@nats-io/jetstream';
+import { DiscardPolicy, JetStreamApiError, RetentionPolicy, StorageType } from '@nats-io/jetstream';
 
 import { faker } from '@faker-js/faker';
 import { createMock } from '@golevelup/ts-vitest';
@@ -456,6 +456,158 @@ describe(StreamProvider, () => {
 
         expect(mockJsm.streams.update).not.toHaveBeenCalled();
         expect(mockJsm.streams.add).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('discard_new_per_subject', () => {
+      const createdConfig = async (
+        kind: StreamKind,
+        name: string,
+      ): Promise<Record<string, unknown>> => {
+        sut = makeSut();
+        mockJsm.streams.info.mockRejectedValue(streamNotFound());
+        mockJsm.streams.add.mockResolvedValue(createMock<StreamInfo>());
+
+        await sut.ensureStreams([kind]);
+
+        const config = mockJsm.streams.add.mock.calls
+          .map(([arg]) => arg as Record<string, unknown>)
+          .find((arg) => arg.name === name);
+
+        if (!config) throw new Error(`Stream ${name} was not created`);
+
+        return config;
+      };
+
+      const eventStream = (): string => `${internalName(options.name)}_ev-stream`;
+
+      it('should reject new messages per subject on a default event stream', async () => {
+        // When
+        const config = await createdConfig(StreamKind.Event, eventStream());
+
+        // Then
+        expect(config).toMatchObject({
+          discard: DiscardPolicy.New,
+          discard_new_per_subject: true,
+        });
+      });
+
+      it('should turn the per-subject flag off when the override keeps discard old', async () => {
+        // Given
+        options = { ...options, events: { stream: { discard: DiscardPolicy.Old } } };
+
+        // When
+        const config = await createdConfig(StreamKind.Event, eventStream());
+
+        // Then
+        expect(config.discard).toBe(DiscardPolicy.Old);
+        expect(config.discard_new_per_subject).toBe(false);
+      });
+
+      it.each([0, -1])(
+        'should turn the per-subject flag off when max_msgs_per_subject is %i',
+        async (limit) => {
+          // Given
+          options = { ...options, events: { stream: { max_msgs_per_subject: limit } } };
+
+          // When
+          const config = await createdConfig(StreamKind.Event, eventStream());
+
+          // Then
+          expect(config.discard).toBe(DiscardPolicy.New);
+          expect(config.discard_new_per_subject).toBe(false);
+        },
+      );
+
+      it('should turn the per-subject flag off when the override turns it off', async () => {
+        // Given
+        options = { ...options, events: { stream: { discard_new_per_subject: false } } };
+
+        // When
+        const config = await createdConfig(StreamKind.Event, eventStream());
+
+        // Then
+        expect(config.discard_new_per_subject).toBe(false);
+      });
+
+      it('should keep discard old on an event stream with message scheduling', async () => {
+        // Given: NATS refuses discard new on a stream that allows message schedules
+        options = { ...options, events: { stream: { allow_msg_schedules: true } } };
+
+        // When
+        const config = await createdConfig(StreamKind.Event, eventStream());
+
+        // Then
+        expect(config.discard).toBe(DiscardPolicy.Old);
+        expect(config.discard_new_per_subject).toBe(false);
+      });
+
+      describe('when the existing stream already allows message schedules', () => {
+        const existingWithSchedules = (): Partial<StreamConfig> => {
+          const { discard_new_per_subject: _, ...defaults } = DEFAULT_EVENT_STREAM_CONFIG;
+
+          return {
+            ...defaults,
+            name: eventStream(),
+            subjects: [`${internalName(options.name)}.ev.>`],
+            description: `JetStream ev stream for ${options.name}`,
+            discard: DiscardPolicy.Old,
+            allow_msg_schedules: true,
+            metadata: { [STREAM_OWNER_METADATA_KEY]: `${options.name}:default` },
+          };
+        };
+
+        it('should keep discard old when the override no longer mentions schedules', async () => {
+          // Given: schedules were enabled once and cannot be turned off in place
+          sut = makeSut();
+          mockStreamInfo(createMock<StreamInfo>({ config: existingWithSchedules() }));
+
+          // When
+          await sut.ensureStreams([StreamKind.Event]);
+
+          // Then: nothing to change, so no update NATS would refuse
+          expect(mockJsm.streams.update).not.toHaveBeenCalled();
+        });
+
+        it('should keep discard old in the mutable subset when schedules cannot be turned off', async () => {
+          // Given: the override turns schedules off, but destructive migration is off
+          options = {
+            ...options,
+            events: { stream: { allow_msg_schedules: false, max_age: 999 } },
+          };
+          sut = makeSut();
+          mockStreamInfo(createMock<StreamInfo>({ config: existingWithSchedules() }));
+          mockJsm.streams.update.mockResolvedValue(createMock<StreamInfo>());
+
+          // When
+          await sut.ensureStreams([StreamKind.Event]);
+
+          // Then
+          expect(mockJsm.streams.update).toHaveBeenCalledWith(
+            eventStream(),
+            expect.objectContaining({
+              allow_msg_schedules: true,
+              discard: DiscardPolicy.Old,
+              discard_new_per_subject: false,
+              max_age: 999,
+            }),
+          );
+        });
+      });
+
+      it('should turn the per-subject flag off on the DLQ stream when its override keeps discard old', async () => {
+        // Given
+        options = { ...options, dlq: { stream: { discard: DiscardPolicy.Old } } };
+
+        // When
+        const config = await createdConfig(
+          StreamKind.Event,
+          `${internalName(options.name)}_dlq-stream`,
+        );
+
+        // Then
+        expect(config.discard).toBe(DiscardPolicy.Old);
+        expect(config.discard_new_per_subject).toBe(false);
       });
     });
 

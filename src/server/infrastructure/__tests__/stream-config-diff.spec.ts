@@ -191,6 +191,39 @@ describe(compareStreamConfig.name, () => {
     });
   });
 
+  describe('properties the server omits when false', () => {
+    it('should treat an omitted discard_new_per_subject as false', () => {
+      // Given: the server leaves the flag out of stream info when it is off
+      const current: Partial<StreamConfig> = {};
+      const desired: Partial<StreamConfig> = { discard_new_per_subject: false };
+
+      // When
+      const result = compareStreamConfig(current, desired);
+
+      // Then
+      expect(result.hasChanges).toBe(false);
+    });
+
+    it('should classify turning discard_new_per_subject off as mutable', () => {
+      // Given
+      const current: Partial<StreamConfig> = { discard_new_per_subject: true };
+      const desired: Partial<StreamConfig> = { discard_new_per_subject: false };
+
+      // When
+      const result = compareStreamConfig(current, desired);
+
+      // Then
+      expect(result.changes).toEqual([
+        {
+          property: 'discard_new_per_subject',
+          current: true,
+          desired: false,
+          mutability: 'mutable',
+        },
+      ]);
+    });
+  });
+
   describe('mixed changes', () => {
     it('should detect both mutable and immutable in one diff', () => {
       // Given

@@ -96,12 +96,16 @@ const NANOS_PER: Record<TimeUnit, number> = {
  */
 export const toNanos = (value: number, unit: TimeUnit): number => value * NANOS_PER[unit];
 
-/** Base stream config shared by all stream types. */
+/**
+ * Base stream config. `discard: New` makes a full stream reject the publish
+ * instead of evicting the oldest message, which for a workqueue is one nobody
+ * consumed yet; rolling-window and schedule streams override it.
+ */
 const baseStreamConfig: Partial<StreamConfig> = {
   retention: RetentionPolicy.Workqueue,
   storage: StorageType.File,
   num_replicas: 1,
-  discard: DiscardPolicy.Old,
+  discard: DiscardPolicy.New,
   allow_direct: true,
   compression: StoreCompression.S2,
 };
@@ -113,6 +117,7 @@ export const DEFAULT_EVENT_STREAM_CONFIG: Partial<StreamConfig> = {
   max_consumers: 100,
   max_msg_size: MB,
   max_msgs_per_subject: 100_000,
+  discard_new_per_subject: true,
   max_msgs: 1_000_000,
   max_bytes: 512 * MB,
   max_age: toNanos(7, 'days'),
@@ -124,10 +129,12 @@ export const DEFAULT_EVENT_STREAM_CONFIG: Partial<StreamConfig> = {
  * and their ticks.
  *
  * `max_age: 0` because an aged-out holder silently stops its schedule. Ticks
- * expire through their own TTL instead, so the stream stays small.
+ * expire through their own TTL instead, so the stream stays small. `discard`
+ * stays `Old`: NATS refuses `discard: New` on a stream with message schedules.
  */
 export const DEFAULT_SCHEDULE_STREAM_CONFIG: Partial<StreamConfig> = {
   ...baseStreamConfig,
+  discard: DiscardPolicy.Old,
   allow_rollup_hdrs: true,
   allow_msg_schedules: true,
   allow_msg_ttl: true,
@@ -145,16 +152,18 @@ export const DEFAULT_COMMAND_STREAM_CONFIG: Partial<StreamConfig> = {
   max_consumers: 50,
   max_msg_size: MB,
   max_msgs_per_subject: 10_000,
+  discard_new_per_subject: true,
   max_msgs: 100_000,
   max_bytes: 64 * MB,
   max_age: toNanos(3, 'minutes'),
   duplicate_window: toNanos(30, 'seconds'),
 };
 
-/** Default config for broadcast event streams. */
+/** Default config for broadcast event streams: a rolling window, so the oldest message goes first. */
 export const DEFAULT_BROADCAST_STREAM_CONFIG: Partial<StreamConfig> = {
   ...baseStreamConfig,
   retention: RetentionPolicy.Limits,
+  discard: DiscardPolicy.Old,
   allow_rollup_hdrs: true,
   max_consumers: 200,
   max_msg_size: MB,
@@ -165,10 +174,11 @@ export const DEFAULT_BROADCAST_STREAM_CONFIG: Partial<StreamConfig> = {
   duplicate_window: toNanos(2, 'minutes'),
 };
 
-/** Default config for ordered event streams (Limits retention). */
+/** Default config for ordered event streams: a rolling window, so the oldest message goes first. */
 export const DEFAULT_ORDERED_STREAM_CONFIG: Partial<StreamConfig> = {
   ...baseStreamConfig,
   retention: RetentionPolicy.Limits,
+  discard: DiscardPolicy.Old,
   allow_rollup_hdrs: false,
   max_consumers: 100,
   max_msg_size: MB,
@@ -179,14 +189,17 @@ export const DEFAULT_ORDERED_STREAM_CONFIG: Partial<StreamConfig> = {
   duplicate_window: toNanos(2, 'minutes'),
 };
 
-/** Default config for dead-letter queue (DLQ) streams. */
+/**
+ * Default config for dead-letter queue (DLQ) streams. Every dead letter shares
+ * one subject, so a per-subject limit would cap the whole stream below `max_msgs`.
+ */
 export const DEFAULT_DLQ_STREAM_CONFIG: Partial<StreamConfig> = {
   ...baseStreamConfig,
   retention: RetentionPolicy.Limits,
   allow_rollup_hdrs: false,
   max_consumers: 100,
   max_msg_size: MB,
-  max_msgs_per_subject: 50_000,
+  max_msgs_per_subject: -1,
   max_msgs: 500_000,
   max_bytes: 256 * MB,
   max_age: toNanos(30, 'days'),
