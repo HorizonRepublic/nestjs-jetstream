@@ -208,8 +208,23 @@ export class StreamProvider {
     jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
     kind: StreamKind,
   ): Promise<StreamInfo> {
-    const config = this.buildConfig(kind);
+    return this.ensureStreamConfig(jsm, kind, this.buildConfig(kind));
+  }
+
+  /** Ensure a dead-letter queue stream exists, creating or updating as needed. */
+  private async ensureDlqStream(
+    jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
+  ): Promise<StreamInfo> {
+    return this.ensureStreamConfig(jsm, 'dlq', this.buildDlqConfig());
+  }
+
+  private async ensureStreamConfig(
+    jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
+    kind: ReservationKind,
+    config: Partial<StreamConfig> & { name: string; subjects: string[] },
+  ): Promise<StreamInfo> {
     const ctx = this.errorContext(kind, config);
+    const label = kind === 'dlq' ? 'DLQ stream' : 'stream';
 
     return withProvisioningSpan(
       this.otel,
@@ -227,10 +242,12 @@ export class StreamProvider {
             : undefined,
       },
       async () => {
-        this.logger.log(`Ensuring stream: ${config.name}`);
+        this.logger.log(`Ensuring ${label}: ${config.name}`);
 
         // Finish any migration a previous process left unfinished.
-        await this.migration.recoverInterrupted(jsm, config.name, config);
+        if (kind !== 'dlq') {
+          await this.migration.recoverInterrupted(jsm, config.name, config);
+        }
 
         try {
           const currentInfo = await jsm.streams.info(config.name);
@@ -238,7 +255,7 @@ export class StreamProvider {
           return await this.handleExistingStream(jsm, currentInfo, config, ctx);
         } catch (err) {
           if (isNatsError(err, NatsErrorCode.StreamNotFound)) {
-            this.logger.log(`Creating stream: ${config.name}`);
+            this.logger.log(`Creating ${label}: ${config.name}`);
 
             try {
               return await runProvisioningOp(ctx, () => jsm.streams.add(config as StreamConfig));
@@ -284,55 +301,6 @@ export class StreamProvider {
     }
 
     this.assertOwnership(current, config);
-  }
-
-  /** Ensure a dead-letter queue stream exists, creating or updating as needed. */
-  private async ensureDlqStream(
-    jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
-  ): Promise<StreamInfo> {
-    const config = this.buildDlqConfig();
-    const ctx = this.errorContext('dlq', config);
-
-    return withProvisioningSpan(
-      this.otel,
-      {
-        serviceName: this.otelServiceName,
-        endpoint: this.otelEndpoint,
-        entity: 'stream',
-        name: config.name,
-        action: 'ensure',
-        maxBytes: ctx.maxBytes,
-        numReplicas: ctx.numReplicas,
-        reservation:
-          ctx.maxBytes !== undefined && ctx.numReplicas !== undefined
-            ? ctx.maxBytes * ctx.numReplicas
-            : undefined,
-      },
-      async () => {
-        this.logger.log(`Ensuring DLQ stream: ${config.name}`);
-
-        try {
-          const currentInfo = await jsm.streams.info(config.name);
-
-          return await this.handleExistingStream(jsm, currentInfo, config, ctx);
-        } catch (err) {
-          if (isNatsError(err, NatsErrorCode.StreamNotFound)) {
-            this.logger.log(`Creating DLQ stream: ${config.name}`);
-
-            try {
-              return await runProvisioningOp(ctx, () => jsm.streams.add(config as StreamConfig));
-            } catch (createErr) {
-              // The DLQ name is service-scoped too, so sibling connections can
-              // lose the same create race as on the event stream.
-              await this.rethrowAsOwnershipConflict(jsm, config, createErr);
-              throw createErr;
-            }
-          }
-
-          throw err;
-        }
-      },
-    );
   }
 
   private async handleExistingStream(
@@ -535,26 +503,16 @@ export class StreamProvider {
     jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
     kind: StreamKind,
   ): Promise<StreamInfo> {
-    const name = this.names.streamName(kind);
-
-    return withProvisioningSpan(
-      this.otel,
-      {
-        serviceName: this.otelServiceName,
-        endpoint: this.otelEndpoint,
-        entity: 'stream',
-        name,
-        action: 'bind',
-      },
-      () => this.binder.bindStream(jsm, kind),
-    );
+    return this.withBindSpan(this.names.streamName(kind), () => this.binder.bindStream(jsm, kind));
   }
 
   private async bindDlqStream(
     jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
   ): Promise<StreamInfo> {
-    const name = this.names.dlqStreamName();
+    return this.withBindSpan(this.names.dlqStreamName(), () => this.binder.bindDlqStream(jsm));
+  }
 
+  private withBindSpan(name: string, bind: () => Promise<StreamInfo>): Promise<StreamInfo> {
     return withProvisioningSpan(
       this.otel,
       {
@@ -564,7 +522,7 @@ export class StreamProvider {
         name,
         action: 'bind',
       },
-      () => this.binder.bindDlqStream(jsm),
+      bind,
     );
   }
 
