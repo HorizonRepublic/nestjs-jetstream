@@ -381,6 +381,35 @@ describe(StreamProvider, () => {
         expect(mockJsm.streams.add).not.toHaveBeenCalled();
       });
 
+      it('should wait again when a migration starts right after the stream is read', async () => {
+        // Given: the lock appears between the wait and the read, then clears
+        const name = `${internalName(options.name)}_ev-stream`;
+        const existing = createMock<StreamInfo>({
+          config: {
+            ...DEFAULT_EVENT_STREAM_CONFIG,
+            name,
+            subjects: [`${internalName(options.name)}.ev.>`],
+            description: `JetStream ev stream for ${options.name}`,
+            metadata: { [STREAM_OWNER_METADATA_KEY]: `${options.name}:default` },
+          } as StreamInfo['config'],
+        });
+        const backupLookups = [false, true, false, false];
+        let lookup = 0;
+
+        mockJsm.streams.info.mockImplementation(async (stream: string) => {
+          if (!stream.endsWith('__migration_backup')) return existing;
+          if (backupLookups[lookup++]) return createMock<StreamInfo>();
+
+          throw streamNotFound();
+        });
+
+        // When
+        await sut.ensureStreams([StreamKind.Event]);
+
+        // Then: it looked for the lock until a read came back with none held
+        expect(lookup).toBe(4);
+      });
+
       it('should skip immutable change when allowDestructiveMigration is off', async () => {
         // Given: stream exists with different storage
         const name = `${internalName(options.name)}_ev-stream`;

@@ -187,7 +187,7 @@ nats kv rm handler_registry
 
 ### Consumer self-healing waits on "migration in progress"
 
-An interrupted migration (process killed mid-phase, NATS crash) leaves a `{stream}__migration_backup` stream behind. Consumer self-healing, which runs after a live consumer's iterator breaks, refuses to recreate the consumer while that backup exists and retries with backoff. Initial startup does not run this check.
+An interrupted migration (process killed mid-phase, NATS crash) leaves a `{stream}__migration_backup` stream behind. Consumer self-healing, which runs after a live consumer's iterator breaks, refuses to recreate the consumer while that backup exists and retries with backoff.
 
 **Diagnosis:**
 
@@ -196,6 +196,10 @@ nats stream ls | grep migration_backup
 ```
 
 **Fix:** usually none: self-healing recovers once the migrating pod finishes and removes the backup, and the next startup of any pod finishes an interrupted restore. If the backup is stranded for good, inspect it, then keep it (it may hold messages you need) or delete it with `nats stream rm <stream>__migration_backup`. See [Stream Migration, Error handling](/docs/guides/stream-migration#error-handling).
+
+### Startup waits on "another instance is migrating it"
+
+A pod that finds a `{stream}__migration_backup` waits before provisioning that stream. While the migrating pod's heartbeat keeps changing it waits for as long as the migration takes; once the heartbeat has stood still for 30 seconds, it takes the migration over and finishes it. A backup left by a release before 3.1 carries no heartbeat and is taken over 90 seconds after it was created. See [the lock](/docs/guides/stream-migration#backup-stream-as-a-distributed-lock).
 
 ### Publisher errors during rolling update
 

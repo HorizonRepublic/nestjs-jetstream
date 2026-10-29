@@ -217,7 +217,7 @@ export default function Root({ children }) {
   "headline": "How to migrate immutable stream properties",
   "description": "Safely change immutable stream properties without losing messages via blue-green sourcing.",
   "datePublished": "2026-04-02",
-  "dateModified": "2026-10-23"
+  "dateModified": "2026-10-29"
 },
       
     '/docs/guides/troubleshooting/': {
@@ -321,7 +321,7 @@ export default function Root({ children }) {
   "headline": "Errors: Typed Errors Thrown by the Transport",
   "description": "Typed error classes, their reason values, and how to catch them.",
   "datePublished": "2026-10-27",
-  "dateModified": "2026-10-27"
+  "dateModified": "2026-10-29"
 },
       
     '/docs/reference/header-contract/': {

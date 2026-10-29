@@ -73,8 +73,13 @@ export enum MigrationErrorReason {
   ScheduleStream = 'schedule-stream',
   SharedStream = 'shared-stream',
   SourcingTimeout = 'sourcing-timeout',
+  /** No longer raised: an instance now waits for a live peer migration and takes over an abandoned one. */
   PeerTimeout = 'peer-timeout',
   InProgress = 'in-progress',
+  /** The new limits cannot hold the messages the stream already has. */
+  InsufficientCapacity = 'insufficient-capacity',
+  /** The migrating instance lost its lock to another one and stopped before a destructive step. */
+  LockLost = 'lock-lost',
 }
 
 /** Why a delivered message could not be handled and went to the dead-letter path. */
