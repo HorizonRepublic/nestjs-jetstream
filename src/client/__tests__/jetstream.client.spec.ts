@@ -28,6 +28,7 @@ import {
 } from '../../jetstream.constants';
 import { ScheduleErrorReason } from '../../schedule';
 import { NameResolver } from '../../server/infrastructure/name-resolver';
+import { NatsErrorCode } from '../../server/infrastructure/nats-error-codes';
 import { JetstreamClient } from '../jetstream.client';
 import { JetstreamRecordBuilder } from '../jetstream.record';
 import { RpcReplyInbox } from '../rpc-reply-inbox';
@@ -543,7 +544,13 @@ describe(JetstreamClient, () => {
       // Given a target without a schedule stream
       const jsm = createMock<JetStreamManager>();
 
-      vi.mocked(jsm.streams.find).mockRejectedValue(new Error('no stream'));
+      vi.mocked(jsm.streams.find).mockRejectedValue(
+        new JetStreamApiError({
+          err_code: NatsErrorCode.StreamNotFound,
+          code: 404,
+          description: 'no stream matches subject',
+        }),
+      );
       connection.getJetStreamManager.mockResolvedValue(jsm);
 
       // When / Then
@@ -869,6 +876,24 @@ describe(JetstreamClient, () => {
 
         // When/Then: wrapped in Error
         await expect(firstValueFrom(sut.send('test', {}))).rejects.toThrow('Unknown error');
+      });
+
+      it('should keep the encoding failure as the cause of an internal transport error', async () => {
+        // Given: the codec cannot encode the payload
+        const encodeError = new Error(faker.lorem.sentence());
+
+        vi.mocked(codec.encode).mockImplementation(() => {
+          throw encodeError;
+        });
+
+        // When/Then
+        await expect(firstValueFrom(sut.send('test', {}))).rejects.toThrow(
+          expect.objectContaining({
+            name: 'JetstreamRpcError',
+            reason: RpcErrorReason.InternalTransport,
+            cause: encodeError,
+          }),
+        );
       });
 
       it('should emit TransportEvent.Error on request failure', async () => {

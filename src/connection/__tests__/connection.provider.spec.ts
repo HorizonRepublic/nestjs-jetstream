@@ -188,6 +188,22 @@ describe(ConnectionProvider, () => {
         );
       });
 
+      it('should type the refusal nats.js reports', async () => {
+        // Given: the error nats.js raises for ECONNREFUSED
+        const refusal = new Error('connection refused');
+
+        mockConnect.mockRejectedValue(refusal);
+
+        // When/Then
+        await expect(sut.getConnection()).rejects.toThrow(
+          expect.objectContaining({
+            name: 'JetstreamConnectionError',
+            reason: ConnectionErrorReason.Refused,
+            cause: refusal,
+          }),
+        );
+      });
+
       it('should re-throw non-connection errors', async () => {
         // Given: unexpected error
         mockConnect.mockRejectedValue(new Error('dns resolution failed'));
@@ -199,11 +215,11 @@ describe(ConnectionProvider, () => {
       it('should allow retry after connection failure', async () => {
         // Given: first connection attempt fails, second succeeds
         mockConnect
-          .mockRejectedValueOnce(new Error('Connection refused'))
+          .mockRejectedValueOnce(new Error('connection refused'))
           .mockResolvedValueOnce(mockNc);
 
         // When: first call fails
-        await expect(sut.getConnection()).rejects.toThrow('Connection refused');
+        await expect(sut.getConnection()).rejects.toThrow('NATS connection refused');
 
         // Then: second call should succeed (not return cached rejection)
         const result = await sut.getConnection();

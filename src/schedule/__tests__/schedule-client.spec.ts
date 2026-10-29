@@ -1,3 +1,4 @@
+import { JetStreamApiError } from '@nats-io/jetstream';
 import type { JetStreamManager } from '@nats-io/jetstream';
 
 import { createMock } from '@golevelup/ts-vitest';
@@ -6,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vi
 import { JsonCodec } from '../../codec';
 import type { ConnectionProvider } from '../../connection/connection.provider';
 import { ServerCapabilities } from '../../connection/server-capabilities';
+import { NatsErrorCode } from '../../server/infrastructure/nats-error-codes';
 import { SubjectResolver } from '../../server/infrastructure/subject-resolver';
 import { ScheduleClient } from '../schedule-client';
 import { ScheduleErrorReason } from '../schedule.types';
@@ -89,7 +91,13 @@ describe(ScheduleClient, () => {
 
   it('should explain a target that has no schedule stream', async () => {
     // Given
-    vi.mocked(jsm.streams.find).mockRejectedValue(new Error('no stream matches subject'));
+    vi.mocked(jsm.streams.find).mockRejectedValue(
+      new JetStreamApiError({
+        err_code: NatsErrorCode.StreamNotFound,
+        code: 404,
+        description: 'no stream matches subject',
+      }),
+    );
 
     // When / Then
     await expect(sut.listSchedules()).rejects.toThrow(
@@ -99,5 +107,15 @@ describe(ScheduleClient, () => {
         message: expect.stringMatching(/asset__microservice\.sched\..*schedule: true/),
       }),
     );
+  });
+
+  it('should pass a failed stream lookup through unchanged', async () => {
+    // Given
+    const timeout = new Error('timeout');
+
+    vi.mocked(jsm.streams.find).mockRejectedValue(timeout);
+
+    // When / Then
+    await expect(sut.listSchedules()).rejects.toBe(timeout);
   });
 });

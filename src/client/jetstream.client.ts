@@ -413,7 +413,9 @@ export class JetstreamClient extends ClientProxy {
     const onUnhandled = (err: unknown): void => {
       this.logger.error('Unhandled publish error:', err);
       callback({
-        err: new JetstreamRpcError(RpcErrorReason.InternalTransport, 'Internal transport error'),
+        err: new JetstreamRpcError(RpcErrorReason.InternalTransport, 'Internal transport error', {
+          cause: err,
+        }),
         response: null,
         isDisposed: true,
       });

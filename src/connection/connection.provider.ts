@@ -261,7 +261,7 @@ export class ConnectionProvider {
 
       return nc;
     } catch (err) {
-      if (err instanceof Error && err.message.includes('REFUSED')) {
+      if (err instanceof Error && /refused/i.test(err.message)) {
         throw new JetstreamConnectionError(
           ConnectionErrorReason.Refused,
           `NATS connection refused: ${(this.options.servers ?? []).join(', ')}`,
