@@ -289,6 +289,14 @@ export class StreamProvider {
 
     this.ownership.assertOwnership(currentInfo, config);
 
+    // Schedules cannot be turned off in place, and the update merges the server's flag back in.
+    if (
+      currentInfo.config.allow_msg_schedules === true &&
+      config.allow_msg_schedules === undefined
+    ) {
+      Object.assign(config, withAcceptedDiscard({ ...config, allow_msg_schedules: true }));
+    }
+
     // Preserve metadata the transport did not author, such as migration markers
     // or operator-set keys. An update replaces the whole config, so omitting the
     // field would drop them — merge even when the transport contributes nothing.
@@ -335,7 +343,9 @@ export class StreamProvider {
 
       // Still apply the mutable subset of the changes
       if (diff.hasMutableChanges) {
-        const mutableConfig = this.buildMutableOnlyConfig(config, currentInfo.config, diff);
+        const mutableConfig = withAcceptedDiscard(
+          this.buildMutableOnlyConfig(config, currentInfo.config, diff),
+        );
 
         return await runProvisioningOp(ctx, () => jsm.streams.update(config.name, mutableConfig));
       }

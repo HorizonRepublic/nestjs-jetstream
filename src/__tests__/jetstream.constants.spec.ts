@@ -149,12 +149,19 @@ describe('jetstream.constants', () => {
     it.each([
       ['event', DEFAULT_EVENT_STREAM_CONFIG],
       ['command', DEFAULT_COMMAND_STREAM_CONFIG],
-      ['dlq', DEFAULT_DLQ_STREAM_CONFIG],
     ])('should reject new messages per subject when the %s stream is full', (_, config) => {
       expect(config).toMatchObject({
         discard: DiscardPolicy.New,
         discard_new_per_subject: true,
       });
+    });
+
+    it('should cap the single-subject DLQ stream by its total limits only', () => {
+      expect(DEFAULT_DLQ_STREAM_CONFIG).toMatchObject({
+        discard: DiscardPolicy.New,
+        max_msgs_per_subject: -1,
+      });
+      expect(DEFAULT_DLQ_STREAM_CONFIG).not.toHaveProperty('discard_new_per_subject');
     });
 
     it.each([

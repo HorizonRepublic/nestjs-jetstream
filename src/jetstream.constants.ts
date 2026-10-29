@@ -97,10 +97,9 @@ const NANOS_PER: Record<TimeUnit, number> = {
 export const toNanos = (value: number, unit: TimeUnit): number => value * NANOS_PER[unit];
 
 /**
- * Base stream config shared by all stream types.
- *
- * `discard: New` makes a full stream reject the publish instead of evicting
- * the oldest message, which for a workqueue is a message nobody consumed yet.
+ * Base stream config. `discard: New` makes a full stream reject the publish
+ * instead of evicting the oldest message, which for a workqueue is one nobody
+ * consumed yet; rolling-window and schedule streams override it.
  */
 const baseStreamConfig: Partial<StreamConfig> = {
   retention: RetentionPolicy.Workqueue,
@@ -190,15 +189,17 @@ export const DEFAULT_ORDERED_STREAM_CONFIG: Partial<StreamConfig> = {
   duplicate_window: toNanos(2, 'minutes'),
 };
 
-/** Default config for dead-letter queue (DLQ) streams. */
+/**
+ * Default config for dead-letter queue (DLQ) streams. Every dead letter shares
+ * one subject, so a per-subject limit would cap the whole stream below `max_msgs`.
+ */
 export const DEFAULT_DLQ_STREAM_CONFIG: Partial<StreamConfig> = {
   ...baseStreamConfig,
   retention: RetentionPolicy.Limits,
   allow_rollup_hdrs: false,
   max_consumers: 100,
   max_msg_size: MB,
-  max_msgs_per_subject: 50_000,
-  discard_new_per_subject: true,
+  max_msgs_per_subject: -1,
   max_msgs: 500_000,
   max_bytes: 256 * MB,
   max_age: toNanos(30, 'days'),

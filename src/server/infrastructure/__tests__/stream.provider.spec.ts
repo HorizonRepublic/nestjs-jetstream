@@ -542,6 +542,57 @@ describe(StreamProvider, () => {
         expect(config.discard_new_per_subject).toBe(false);
       });
 
+      describe('when the existing stream already allows message schedules', () => {
+        const existingWithSchedules = (): StreamInfo['config'] =>
+          ({
+            ...DEFAULT_EVENT_STREAM_CONFIG,
+            name: eventStream(),
+            subjects: [`${internalName(options.name)}.ev.>`],
+            description: `JetStream ev stream for ${options.name}`,
+            discard: DiscardPolicy.Old,
+            discard_new_per_subject: undefined,
+            allow_msg_schedules: true,
+            metadata: { [STREAM_OWNER_METADATA_KEY]: `${options.name}:default` },
+          }) as StreamInfo['config'];
+
+        it('should keep discard old when the override no longer mentions schedules', async () => {
+          // Given: schedules were enabled once and cannot be turned off in place
+          sut = makeSut();
+          mockStreamInfo(createMock<StreamInfo>({ config: existingWithSchedules() }));
+
+          // When
+          await sut.ensureStreams([StreamKind.Event]);
+
+          // Then: nothing to change, so no update NATS would refuse
+          expect(mockJsm.streams.update).not.toHaveBeenCalled();
+        });
+
+        it('should keep discard old in the mutable subset when schedules cannot be turned off', async () => {
+          // Given: the override turns schedules off, but destructive migration is off
+          options = {
+            ...options,
+            events: { stream: { allow_msg_schedules: false, max_age: 999 } },
+          };
+          sut = makeSut();
+          mockStreamInfo(createMock<StreamInfo>({ config: existingWithSchedules() }));
+          mockJsm.streams.update.mockResolvedValue(createMock<StreamInfo>());
+
+          // When
+          await sut.ensureStreams([StreamKind.Event]);
+
+          // Then
+          expect(mockJsm.streams.update).toHaveBeenCalledWith(
+            eventStream(),
+            expect.objectContaining({
+              allow_msg_schedules: true,
+              discard: DiscardPolicy.Old,
+              discard_new_per_subject: false,
+              max_age: 999,
+            }),
+          );
+        });
+      });
+
       it('should turn the per-subject flag off on the DLQ stream when its override keeps discard old', async () => {
         // Given
         options = { ...options, dlq: { stream: { discard: DiscardPolicy.Old } } };

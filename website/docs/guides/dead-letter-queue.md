@@ -78,7 +78,7 @@ JetstreamModule.forRoot({
 
 ### Defaults
 
-The stream is `{service}__microservice_dlq-stream`, reserves **256 MB** and keeps messages for **30 days** under `Limits` retention, so reading a dead letter does not consume it. Everything else matches the other streams; the [full table](/docs/reference/default-configs#stream-defaults) has the exact values, and `DEFAULT_DLQ_STREAM_CONFIG` is exported if you want to compose overrides on top of it.
+The stream is `{service}__microservice_dlq-stream`, reserves **256 MB** and keeps messages for **30 days** under `Limits` retention, so reading a dead letter does not consume it. It holds up to 500,000 dead letters; once full it rejects new ones, and each goes to `onDeadLetter` instead. Everything else matches the other streams; the [full table](/docs/reference/default-configs#stream-defaults) has the exact values, and `DEFAULT_DLQ_STREAM_CONFIG` is exported if you want to compose overrides on top of it.
 
 Override through `dlq.stream`. Leave `name` out and it is derived from the service name, which keeps DLQ streams predictable across a fleet. Set it to bind to an externally provisioned stream, as [External DLQ](/docs/guides/external-infrastructure#external-dlq) does. Use the exported `dlqStreamName(serviceName)` helper instead of hardcoding the derived pattern.
 

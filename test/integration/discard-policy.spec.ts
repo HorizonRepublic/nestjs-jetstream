@@ -13,6 +13,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import {
   buildSubject,
+  dlqStreamName,
   getClientToken,
   JetstreamPublishError,
   PublishErrorReason,
@@ -181,6 +182,44 @@ describe('Stream discard policy', () => {
     const { config } = await eventStreamInfo();
 
     expect(config.discard).toBe(DiscardPolicy.Old);
+    expect(config.discard_new_per_subject).toBeUndefined();
+  });
+
+  it('should boot against a stream whose message schedules were turned on earlier', async () => {
+    // Given: schedules were enabled by an earlier override and cannot be turned off
+    serviceName = uniqueServiceName();
+
+    const jsm = await jetstreamManager(nc);
+
+    await jsm.streams.add({
+      name: streamName(serviceName, StreamKind.Event),
+      subjects: [buildSubject(serviceName, StreamKind.Event, '>')],
+      retention: RetentionPolicy.Workqueue,
+      discard: DiscardPolicy.Old,
+      allow_msg_schedules: true,
+    });
+
+    // When
+    await provisionIdleStream();
+
+    // Then
+    expect((await eventStreamInfo()).config).toMatchObject({
+      allow_msg_schedules: true,
+      discard: DiscardPolicy.Old,
+    });
+  });
+
+  it('should cap the DLQ stream by its total limits only', async () => {
+    // Given
+    serviceName = uniqueServiceName();
+
+    // When
+    await provisionIdleStream();
+
+    // Then
+    const { config } = await (await jetstreamManager(nc)).streams.info(dlqStreamName(serviceName));
+
+    expect(config).toMatchObject({ discard: DiscardPolicy.New, max_msgs_per_subject: -1 });
     expect(config.discard_new_per_subject).toBeUndefined();
   });
 

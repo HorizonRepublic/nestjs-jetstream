@@ -26,11 +26,11 @@ Every stream is created with `storage: File`, `num_replicas: 1` (see [replicas i
 | ------------------------- | ----------- | ------------ | ----------- | ----------- | ----------- | ----------- |
 | `retention`               | `Workqueue` | `Workqueue`  | `Limits`    | `Limits`    | `Workqueue` | `Limits`    |
 | `discard`                 | `New`       | `New`        | `Old`       | `Old`       | `Old`       | `New`       |
-| `discard_new_per_subject` | `true`      | `true`       | `false`     | `false`     | `false`     | `true`      |
+| `discard_new_per_subject` | `true`      | `true`       | `false`     | `false`     | `false`     | `false`     |
 | `allow_rollup_hdrs`       | `true`      | `false`      | `true`      | `false`     | `true`      | `false`     |
 | `max_consumers`           | `100`       | `50`         | `200`       | `100`       | `100`       | `100`       |
 | `max_msg_size`            | `1 MB`      | `1 MB`       | `1 MB`      | `1 MB`      | `1 MB`      | `1 MB`      |
-| `max_msgs_per_subject`    | `100,000`   | `10,000`     | `50,000`    | `500,000`   | unlimited   | `50,000`    |
+| `max_msgs_per_subject`    | `100,000`   | `10,000`     | `50,000`    | `500,000`   | unlimited   | unlimited   |
 | `max_msgs`                | `1,000,000` | `100,000`    | `500,000`   | `5,000,000` | unlimited   | `500,000`   |
 | `max_bytes`               | `512 MB`    | `64 MB`      | `256 MB`    | `1 GB`      | `64 MB`     | `256 MB`    |
 | `max_age`                 | `7 days`    | `3 minutes`  | `1 hour`    | `1 day`     | none        | `30 days`   |
@@ -38,7 +38,7 @@ Every stream is created with `storage: File`, `num_replicas: 1` (see [replicas i
 
 `max_bytes` is what the account is charged for, not what the stream currently holds: JetStream counts it against the account's storage budget the moment the stream is created. A service that provisions events plus a DLQ reserves **768 MB**, and one that also uses ordered delivery reserves **1.75 GB**, so a 10 GB file store carries roughly a dozen services instead of one.
 
-`discard` decides what a full stream does. Under `New` it rejects the publish and the producer gets a [`JetstreamPublishError`](/docs/reference/errors) with reason `stream-full`; under `Old` it accepts the publish and evicts the oldest message without telling anyone. Event, command and DLQ streams hold messages nobody has processed yet, so evicting one loses it: they use `New`. Broadcast and ordered streams are rolling windows that consumers read rather than consume away, so they keep `Old`. NATS refuses `New` on a stream with `allow_msg_schedules`, so the schedule stream, and an event stream with scheduling turned on, keep `Old` whatever the override says. `discard_new_per_subject` applies the same rule to `max_msgs_per_subject`; without it, a subject at its own limit still evicts its oldest message. The transport turns it off by itself wherever NATS would refuse it: under `discard: Old` or without a positive `max_msgs_per_subject`.
+`discard` decides what a full stream does. Under `New` it rejects the publish and the producer gets a [`JetstreamPublishError`](/docs/reference/errors) with reason `stream-full`; under `Old` it accepts the publish and evicts the oldest message without telling anyone. Event, command and DLQ streams hold messages nobody has processed yet, so evicting one loses it: they use `New`. The DLQ has no per-subject limit, because every dead letter shares one subject and such a limit would cap the whole stream. Broadcast and ordered streams are rolling windows that consumers read rather than consume away, so they keep `Old`. NATS refuses `New` on a stream with `allow_msg_schedules`, so the schedule stream, and an event stream with scheduling turned on, keep `Old` whatever the override says. `discard_new_per_subject` applies the same rule to `max_msgs_per_subject`; without it, a subject at its own limit still evicts its oldest message. The transport turns it off by itself wherever NATS would refuse it: under `discard: Old` or without a positive `max_msgs_per_subject`.
 
 `max_msg_size` matches the NATS server's own `max_payload` default of 1 MB. A larger value here has no effect until the server is reconfigured to accept larger payloads.
 
