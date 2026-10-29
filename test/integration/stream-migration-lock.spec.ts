@@ -2,6 +2,7 @@ import { Controller } from '@nestjs/common';
 import { EventPattern } from '@nestjs/microservices';
 
 import {
+  AckPolicy,
   jetstream,
   jetstreamManager,
   RetentionPolicy,
@@ -24,7 +25,7 @@ import {
   MigrationPhase,
   StreamMigration,
 } from '../../src/server/infrastructure';
-import { cleanupStreams, createTestApp, uniqueServiceName } from './helpers';
+import { cleanupStreams, createTestApp, uniqueServiceName, waitForCondition } from './helpers';
 import { startNatsContainer } from './nats-container';
 
 /** Fast enough for a test, the same ratios as production. */
@@ -92,12 +93,8 @@ describe('Stream migration lock', () => {
 
   const backupOf = (name: string): string => `${name}${MIGRATION_BACKUP_SUFFIX}`;
 
-  /** A backup as a migrating instance leaves it, holding `count` messages. */
-  const createBackup = async (
-    phase: MigrationPhase,
-    count: number,
-    heartbeat: string | null = '0',
-  ): Promise<void> => {
+  /** A backup as a migrating instance leaves it, holding `count` messages of its own. */
+  const createBackup = async (count: number, metadata: Record<string, string>): Promise<void> => {
     const backup = backupOf(stream);
     const staging = `${backup}.staging`;
 
@@ -106,10 +103,7 @@ describe('Stream migration lock', () => {
       subjects: [staging],
       retention: RetentionPolicy.Workqueue,
       storage: StorageType.File,
-      metadata: {
-        [MIGRATION_PHASE_KEY]: phase,
-        ...(heartbeat === null ? {} : { [MIGRATION_HEARTBEAT_KEY]: heartbeat }),
-      },
+      metadata,
     });
 
     for (let i = 0; i < count; i++) await js.publish(staging, String(i));
@@ -118,6 +112,11 @@ describe('Stream migration lock', () => {
 
     await jsm.streams.update(backup, { ...info.config, subjects: [] });
   };
+
+  const live = (phase: MigrationPhase): Record<string, string> => ({
+    [MIGRATION_PHASE_KEY]: phase,
+    [MIGRATION_HEARTBEAT_KEY]: '0',
+  });
 
   it('should keep every message when two instances migrate the same stream at once', async () => {
     // Given: two pods of a rolling deploy start with the same immutable change
@@ -144,7 +143,7 @@ describe('Stream migration lock', () => {
   it('should wait for a live migration without touching its backup', async () => {
     // Given: a peer is mid-migration and keeps its heartbeat going for a while
     await seedStream(10);
-    await createBackup(MigrationPhase.Backup, 10);
+    await createBackup(10, live(MigrationPhase.Backup));
 
     let beats = 0;
     const heartbeat = setInterval(() => {
@@ -179,7 +178,7 @@ describe('Stream migration lock', () => {
   it('should finish an abandoned migration once its heartbeat stops', async () => {
     // Given: the migrating instance died after deleting the original
     stream = `mig-${faker.string.alphanumeric(8).toLowerCase()}`;
-    await createBackup(MigrationPhase.Restore, 25);
+    await createBackup(25, live(MigrationPhase.Restore));
 
     // When
     const recovered = await new StreamMigration(FAST).settle(jsm, stream, {
@@ -199,19 +198,47 @@ describe('Stream migration lock', () => {
     await expect(jsm.streams.info(backupOf(stream))).rejects.toThrow(/not found/);
   });
 
-  it('should drop the backup of a migration that died before deleting the original', async () => {
-    // Given: the original still holds everything, the backup only part of it
-    await seedStream(30);
-    await createBackup(MigrationPhase.Backup, 12);
+  it('should give back every message, once, when a migration died before deleting the original', async () => {
+    // Given: a consumer covers only half the subjects, so sourcing copies those
+    // and moves the rest out of the original
+    const desired = await seedStream(0);
 
-    // When
-    await new StreamMigration(FAST).settle(jsm, stream, {
-      name: stream,
-      subjects: [`${stream}.>`],
+    await jsm.consumers.add(stream, {
+      durable_name: 'orders-a',
+      ack_policy: AckPolicy.Explicit,
+      filter_subject: `${stream}.a`,
     });
 
-    // Then: nothing is copied back, so nothing is duplicated
-    expect((await jsm.streams.info(stream)).state.messages).toBe(30);
+    for (let i = 0; i < 5; i++) {
+      await js.publish(`${stream}.a`, String(i));
+      await js.publish(`${stream}.b`, String(i));
+    }
+
+    const info = await jsm.streams.info(stream);
+
+    await jsm.streams.update(stream, { ...info.config, subjects: [] });
+    await jsm.streams.add({
+      ...info.config,
+      name: backupOf(stream),
+      subjects: [],
+      sources: [{ name: stream }],
+      metadata: live(MigrationPhase.Backup),
+    });
+    await waitForCondition(
+      async () => (await jsm.streams.info(backupOf(stream))).state.messages === 10,
+      5_000,
+    );
+    // The server removes what sourcing moved out shortly after the copy
+    await waitForCondition(
+      async () => (await jsm.streams.info(stream)).state.messages === 5,
+      5_000,
+    );
+
+    // When
+    await new StreamMigration(FAST).settle(jsm, stream, desired);
+
+    // Then: the moved half is back and the copied half is not doubled
+    expect((await jsm.streams.info(stream)).state.messages).toBe(10);
     await expect(jsm.streams.info(backupOf(stream))).rejects.toThrow(/not found/);
   });
 
@@ -237,12 +264,14 @@ describe('Stream migration lock', () => {
   });
 
   it('should resume an interrupted migration of the DLQ stream on boot', async () => {
-    // Given: a DLQ migration died between deleting and recreating the stream,
-    // leaving a backup without a heartbeat, as an older release would
+    // Given: a DLQ migration by an older release died between deleting and
+    // recreating the stream, long enough ago to count as abandoned
     const serviceName = uniqueServiceName();
 
     stream = dlqStreamName(serviceName);
-    await createBackup(MigrationPhase.Restore, 3, null);
+    await createBackup(3, {
+      'nestjs-jetstream-migration-started-at': new Date(Date.now() - 10 * 60_000).toISOString(),
+    });
 
     // When
     const { app } = await createTestApp({ name: serviceName, port, dlq: {} }, [OrdersController]);

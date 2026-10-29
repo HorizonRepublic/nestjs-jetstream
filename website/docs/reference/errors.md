@@ -170,6 +170,7 @@ Under `provisioning: { management: Manual }` the transport checks the streams an
 | `sourcing-timeout`          | Sourcing made no progress for 30 seconds; after the delete, the backup is kept and restored later   |
 | `peer-timeout`              | No longer raised since v3.1: an instance waits for a live migration and takes over an abandoned one |
 | `insufficient-capacity`     | The new `max_msgs` or `max_bytes` cannot hold what the stream already has; nothing was deleted      |
+| `lock-lost`                 | Another instance took the migration over; this one stopped before a destructive step                |
 | `in-progress`               | Consumer recovery waits for a running migration to finish                                           |
 
 See [stream migration](/docs/guides/stream-migration).

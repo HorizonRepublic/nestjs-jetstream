@@ -78,6 +78,8 @@ export enum MigrationErrorReason {
   InProgress = 'in-progress',
   /** The new limits cannot hold the messages the stream already has. */
   InsufficientCapacity = 'insufficient-capacity',
+  /** The migrating instance lost its lock to another one and stopped before a destructive step. */
+  LockLost = 'lock-lost',
 }
 
 /** Why a delivered message could not be handled and went to the dead-letter path. */

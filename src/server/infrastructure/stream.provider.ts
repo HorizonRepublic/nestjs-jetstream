@@ -282,11 +282,8 @@ export class StreamProvider {
       async () => {
         this.logger.log(`Ensuring ${label}: ${config.name}`);
 
-        // Wait out a migration another instance is running, or finish one it abandoned.
-        await this.migration.settle(jsm, config.name, config);
-
         try {
-          const currentInfo = await jsm.streams.info(config.name);
+          const currentInfo = await this.readSettled(jsm, config);
 
           return await this.handleExistingStream(jsm, currentInfo, config, ctx);
         } catch (err) {
@@ -309,6 +306,25 @@ export class StreamProvider {
         }
       },
     );
+  }
+
+  /**
+   * Read the stream once no migration of it is in flight. A migration that
+   * starts between the wait and the read would leave the stream quiesced, and
+   * updating it from that read would reopen it mid-migration.
+   */
+  private async readSettled(
+    jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
+    config: Partial<StreamConfig> & { name: string; subjects: string[] },
+  ): Promise<StreamInfo> {
+    for (;;) {
+      // Wait out a migration another instance is running, or finish one it abandoned.
+      await this.migration.settle(jsm, config.name, config);
+
+      const info = await jsm.streams.info(config.name);
+
+      if (!(await this.migration.isLocked(jsm, config.name))) return info;
+    }
   }
 
   private async handleExistingStream(

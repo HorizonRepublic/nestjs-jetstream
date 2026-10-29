@@ -1,5 +1,6 @@
 import type {
   JetStreamManager,
+  PurgeResponse,
   StreamConfig,
   StreamInfo,
   StreamSourceInfo,
@@ -42,8 +43,9 @@ interface FakeStream {
 type SourceLag = (streamName: string, sourceName: string) => number;
 
 /**
- * A JetStream manager over an in-memory set of streams. Sourcing copies a
- * source's message count once `sourceLag` reports 0, and `update` merges into
+ * A JetStream manager over an in-memory set of streams. Once `sourceLag`
+ * reports 0, sourcing copies out of a `Limits` stream and moves out of any
+ * other, as NATS does for messages no consumer covers. `update` merges into
  * the current config the way nats.js does.
  */
 const createFakeJsm = (
@@ -59,7 +61,14 @@ const createFakeJsm = (
       const lag = sourceLag(name, source.name);
       const origin = streams.get(source.name);
 
-      if (lag === 0 && origin) stream.messages = Math.max(stream.messages, origin.messages);
+      if (lag === 0 && origin) {
+        if (origin.config.retention === RetentionPolicy.Limits) {
+          stream.messages = Math.max(stream.messages, origin.messages);
+        } else {
+          stream.messages += origin.messages;
+          origin.messages = 0;
+        }
+      }
 
       return createMock<StreamSourceInfo>({ name: source.name, lag, active: 1_000 });
     });
@@ -94,6 +103,17 @@ const createFakeJsm = (
         if (!streams.delete(name)) throw notFound();
 
         return true;
+      }),
+      purge: vi.fn(async (name: string): Promise<PurgeResponse> => {
+        const stream = streams.get(name);
+
+        if (!stream) throw notFound();
+
+        const purged = stream.messages;
+
+        stream.messages = 0;
+
+        return createMock<PurgeResponse>({ success: true, purged });
       }),
     },
   });
@@ -301,6 +321,125 @@ describe(StreamMigration, () => {
       });
     });
 
+    it('should give back what sourcing moved out when the migration fails before the delete', async () => {
+      // Given: Phase 2 moves every message into the backup, then deleting the original fails
+      const streams = new Map([[streamName, original(10)]]);
+      const jsm = createFakeJsm(streams);
+      const fakeDelete = vi.mocked(jsm.streams.delete).getMockImplementation()!;
+
+      vi.mocked(jsm.streams.delete).mockImplementation(async (name) => {
+        if (name === streamName) throw new Error('permission denied');
+
+        return fakeDelete(name);
+      });
+
+      // When
+      await expect(new StreamMigration(FAST).migrate(jsm, streamName, desired)).rejects.toThrow(
+        'permission denied',
+      );
+
+      // Then: every message is back in the reopened original
+      expect(streams.get(streamName)).toMatchObject({ messages: 10, config: { subjects } });
+      expect(streams.has(backupName)).toBe(false);
+    });
+
+    it('should reopen a stream left quiesced by an earlier attempt with its subjects when it rolls back', async () => {
+      // Given: the stream is still quiesced, and the new limits are too small
+      const streams = new Map([
+        [streamName, { ...original(5), config: { ...original(5).config, subjects: [] } }],
+      ]);
+      const jsm = createFakeJsm(streams);
+
+      // When
+      await expect(
+        new StreamMigration(FAST).migrate(jsm, streamName, { ...desired, max_msgs: 1 }),
+      ).rejects.toMatchObject({ reason: MigrationErrorReason.InsufficientCapacity });
+
+      // Then
+      expect(streams.get(streamName)).toMatchObject({ messages: 5, config: { subjects } });
+    });
+
+    it('should stop its heartbeat when it fails right after taking the lock', async () => {
+      // Given: reading the stream fails once the lock is held
+      const streams = new Map([[streamName, original(3)]]);
+      const jsm = createFakeJsm(streams);
+      const fakeInfo = vi.mocked(jsm.streams.info).getMockImplementation()!;
+      let streamReads = 0;
+
+      vi.mocked(jsm.streams.info).mockImplementation(async (name) => {
+        if (name === streamName && ++streamReads === 2) throw new Error('request timeout');
+
+        return fakeInfo(name);
+      });
+
+      // When
+      await expect(new StreamMigration(FAST).migrate(jsm, streamName, desired)).rejects.toThrow(
+        'request timeout',
+      );
+
+      // Then: no heartbeat keeps the lock alive afterwards
+      const beatsAtFailure = vi.mocked(jsm.streams.update).mock.calls.length;
+
+      await new Promise((resolve) => setTimeout(resolve, 5 * FAST.heartbeatIntervalMs));
+      expect(vi.mocked(jsm.streams.update).mock.calls.length).toBe(beatsAtFailure);
+    });
+
+    it('should not count live publishes as restore progress', async () => {
+      // Given: the restore source never catches up while publishes keep arriving
+      const streams = new Map([[streamName, original(10)]]);
+      const jsm = createFakeJsm(streams, (name, source) =>
+        name === streamName && source === backupName ? 3 : 0,
+      );
+      const publishes = setInterval(() => {
+        const live = streams.get(streamName);
+
+        if (live?.config.subjects?.length) live.messages += 1;
+      }, 10);
+
+      // When
+      const failure = await new StreamMigration(FAST)
+        .migrate(jsm, streamName, desired)
+        .catch((err: unknown) => err);
+
+      clearInterval(publishes);
+
+      // Then: it stalls out instead of waiting forever, and the backup survives
+      expect(failure).toMatchObject({ reason: MigrationErrorReason.SourcingTimeout });
+      expect(streams.get(backupName)?.messages).toBe(10);
+    });
+
+    it('should stop before deleting the original once another instance has taken the lock', async () => {
+      // Given: another instance claims the backup while this one copies into it
+      const streams = new Map([[streamName, original(6)]]);
+      const jsm = createFakeJsm(streams);
+      const fakeUpdate = vi.mocked(jsm.streams.update).getMockImplementation()!;
+
+      vi.mocked(jsm.streams.update).mockImplementation(async (name, config) => {
+        const result = await fakeUpdate(name, config);
+        const lock = streams.get(backupName);
+
+        if (name === backupName && config.sources?.length && lock) {
+          lock.config.metadata = {
+            ...lock.config.metadata,
+            'nestjs-jetstream-migration-owner': 'rival',
+          };
+        }
+
+        return result;
+      });
+
+      // When
+      await expect(
+        new StreamMigration(FAST).migrate(jsm, streamName, desired),
+      ).rejects.toMatchObject({
+        reason: MigrationErrorReason.LockLost,
+      });
+
+      // Then: the original and the rival's backup are left alone
+      expect(jsm.streams.delete).not.toHaveBeenCalled();
+      expect(streams.get(backupName)?.messages).toBe(6);
+    });
+
     it('should keep migrating when a single heartbeat fails', async () => {
       // Given: slow sourcing, and the first heartbeat after it starts is rejected
       const streams = new Map([[streamName, original(10)]]);
@@ -385,6 +524,111 @@ describe(StreamMigration, () => {
       expect(recovered).toBe(true);
       expect(streams.get(streamName)).toMatchObject({ messages: 8, config: { sources: [] } });
       expect(streams.has(backupName)).toBe(false);
+    });
+
+    it('should give back moved messages when a migration died before deleting the original', async () => {
+      // Given: sourcing moved everything out of the quiesced work-queue original
+      const streams = new Map([
+        [streamName, { ...original(0), config: { ...original(0).config, subjects: [] } }],
+        [
+          backupName,
+          {
+            ...backup(10, { [MIGRATION_HEARTBEAT_KEY]: '3', [MIGRATION_PHASE_KEY]: 'backup' }),
+            config: {
+              ...backup(0, { [MIGRATION_HEARTBEAT_KEY]: '3', [MIGRATION_PHASE_KEY]: 'backup' })
+                .config,
+              sources: [{ name: streamName }],
+            },
+          },
+        ],
+      ]);
+      const jsm = createFakeJsm(streams);
+
+      // When
+      const recovered = await new StreamMigration(FAST).settle(jsm, streamName, desired);
+
+      // Then
+      expect(recovered).toBe(true);
+      expect(streams.get(streamName)?.messages).toBe(10);
+      expect(streams.has(backupName)).toBe(false);
+    });
+
+    it('should simply drop the backup of a Limits stream, which sourcing only copied', async () => {
+      // Given
+      const limits = {
+        ...original(5),
+        config: { ...original(5).config, retention: RetentionPolicy.Limits },
+      };
+      const streams = new Map([
+        [streamName, limits],
+        [
+          backupName,
+          backup(5, { [MIGRATION_HEARTBEAT_KEY]: '1', [MIGRATION_PHASE_KEY]: 'backup' }),
+        ],
+      ]);
+      const jsm = createFakeJsm(streams);
+
+      // When
+      await new StreamMigration(FAST).settle(jsm, streamName, desired);
+
+      // Then
+      expect(jsm.streams.purge).not.toHaveBeenCalled();
+      expect(streams.get(streamName)?.messages).toBe(5);
+      expect(streams.has(backupName)).toBe(false);
+    });
+
+    it('should mark the backup as the only copy before recreating a deleted stream', async () => {
+      // Given: the owner died right after deleting the original, before marking the backup
+      const streams = new Map([
+        [
+          backupName,
+          {
+            ...backup(4, { [MIGRATION_HEARTBEAT_KEY]: '2', [MIGRATION_PHASE_KEY]: 'backup' }),
+            config: {
+              ...backup(0, { [MIGRATION_HEARTBEAT_KEY]: '2', [MIGRATION_PHASE_KEY]: 'backup' })
+                .config,
+              sources: [{ name: streamName }],
+            },
+          },
+        ],
+      ]);
+      const jsm = createFakeJsm(streams);
+      const fakeAdd = vi.mocked(jsm.streams.add).getMockImplementation()!;
+      let backupWhenRecreated: StreamAddConfig | undefined;
+
+      vi.mocked(jsm.streams.add).mockImplementation(async (config) => {
+        if (config.name === streamName)
+          backupWhenRecreated = structuredClone(streams.get(backupName)?.config);
+
+        return fakeAdd(config);
+      });
+
+      // When
+      await new StreamMigration(FAST).settle(jsm, streamName, desired);
+
+      // Then
+      expect(backupWhenRecreated).toMatchObject({
+        sources: [],
+        metadata: { [MIGRATION_PHASE_KEY]: MigrationPhase.Restore },
+      });
+      expect(streams.get(streamName)?.messages).toBe(4);
+    });
+
+    it('should detach a source left behind by a crash after the backup was dropped', async () => {
+      // Given
+      const streams = new Map([
+        [
+          streamName,
+          { ...original(2), config: { ...original(2).config, sources: [{ name: backupName }] } },
+        ],
+      ]);
+      const jsm = createFakeJsm(streams);
+
+      // When
+      await new StreamMigration(FAST).settle(jsm, streamName, desired);
+
+      // Then
+      expect(streams.get(streamName)?.config.sources).toEqual([]);
     });
 
     it('should wait for a legacy backup younger than the old grace period', async () => {
@@ -475,7 +719,7 @@ describe(StreamMigration, () => {
       const streams = new Map([
         [
           backupName,
-          backup(6, { [MIGRATION_HEARTBEAT_KEY]: '4', [MIGRATION_PHASE_KEY]: 'restore' }),
+          backup(4, { [MIGRATION_HEARTBEAT_KEY]: '4', [MIGRATION_PHASE_KEY]: 'restore' }),
         ],
         [
           streamName,
@@ -520,7 +764,7 @@ describe(StreamMigration, () => {
             ...rival.config.metadata,
             'nestjs-jetstream-migration-owner': 'rival',
           };
-          setTimeout(() => streams.delete(backupName), 150);
+          setTimeout(() => streams.delete(backupName), 50);
         }
 
         return result;

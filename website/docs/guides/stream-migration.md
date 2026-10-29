@@ -53,13 +53,11 @@ Lock       Create the backup stream; only one pod can, the others wait
 
 Phase 1/4  Quiesce: remove the original's subjects
            (new publishes are rejected loudly instead of being acked
-            into a stream that is about to be deleted)
+            into a stream that is about to be deleted; aborts here if
+            the new max_msgs or max_bytes cannot hold what it has)
 
-Phase 2/4  Create backup stream ← sourcing ← original
+Phase 2/4  Backup ← sourcing ← original
            (server-side copy; completion is tracked via source lag)
-
-           (aborts here if the new max_msgs or max_bytes cannot hold
-            what the stream already has)
 
 Phase 3/4  Delete original, create it again with the new config
 
@@ -69,13 +67,19 @@ Phase 4/4  Original ← sourcing ← backup
 
 The stream keeps its name. Each pod's startup or self-healing recreates the consumers afterwards.
 
+Sourcing out of a work-queue stream, such as the event or command stream, acknowledges what it copies. Messages a consumer's filter covers stay in the original as well; any others, for example on a subject whose handler was removed, move into the backup. From Phase 2 on, the backup is therefore the copy that counts, and every failure path below gives it back rather than throwing it away.
+
 A producer either gets an ack (the message survives the migration) or a rejection it can retry, never an ack for a message that later disappears.
 
 ### Backup stream as a distributed lock
 
 The backup stream (`{stream}__migration_backup`) holds the messages between delete and recreate, and is also the lock. NATS creates a stream atomically, so of several pods that start a migration at once, exactly one creates the backup and migrates; the rest wait for it to finish and then find nothing left to change.
 
-The pod holding the lock writes a heartbeat into the backup's metadata every 5 seconds. Every other pod waits while that heartbeat keeps changing, and takes the migration over only after watching it stand still for 30 seconds, so a migration of any length is never interrupted and clock skew between hosts plays no part. A takeover finishes the migration from where it stopped. Backups left by releases before 3.1 carry no heartbeat; they keep the old rule and count as abandoned 90 seconds after they were created.
+The pod holding the lock writes a heartbeat into the backup's metadata every 5 seconds. Every other pod waits while that heartbeat keeps changing, and takes the migration over only after watching it stand still for 30 seconds, so a migration of any length is not interrupted while its pod is alive, and clock skew between hosts plays no part. A takeover finishes the migration from where it stopped. The pod that held the lock checks it still does before each destructive step, and stops with a `lock-lost` error if its heartbeat stopped landing or another pod took over. Backups left by releases before 3.1 carry no heartbeat; they keep the old rule and count as abandoned 90 seconds after they were created.
+
+:::warning Finish the rollout before a destructive migration
+Releases before 3.1 know none of this: they take over any backup older than 90 seconds, and reopen a quiesced stream when they start. Run a destructive migration only once no pod of an older release can start against the cluster.
+:::
 
 ## What happens during migration
 
@@ -97,7 +101,7 @@ Its startup blocks until all phases complete, then it creates consumers and star
 
 ### To other pods starting up
 
-A pod that starts while another one is migrating a stream it uses waits for that migration before it provisions anything, so it cannot reopen a quiesced stream or recreate consumers halfway through.
+A pod that starts while another one is migrating a stream it uses waits for that migration before it provisions anything, so it cannot reopen a quiesced stream or recreate consumers halfway through. The wait lasts as long as the migration, plus at least 35 seconds when the migrating pod has died, so give startup probes room for it.
 
 ## Duration
 
@@ -105,11 +109,11 @@ Sourcing runs on the server, so no message crosses the network to the applicatio
 
 ## Error handling
 
-- **Failure before the original is deleted.** The quiesce is rolled back (subjects restored), the backup is removed, and an error is thrown: the original stream is intact and serving traffic.
+- **Failure before the original is deleted.** Whatever sourcing moved into the backup goes back into the original, the quiesce is rolled back (subjects restored), the backup is removed, and an error is thrown: the original stream has every message and serves traffic. If even that fails, the stream stays quiesced with its backup, and the next pod to take the lock over finishes the job.
 - **Failure after the original is deleted.** The backup is the only copy of the data and is always preserved. Restoration resumes automatically on the next application startup.
 - **New limits too small.** If the new `max_msgs` or `max_bytes` cannot hold the messages already in the stream, the migration stops before deleting anything and throws a `JetstreamMigrationError` with reason `insufficient-capacity`. Raise the limits, or let consumers drain the stream, and restart. `max_msgs_per_subject` is not checked.
 - **Sourcing stalls.** The copy may take as long as it needs; it fails with reason `sourcing-timeout` only after 30 seconds without progress. Before the delete, that rolls back as above; after it, the backup is preserved.
-- **Process killed mid-migration.** Its heartbeat stops, and the next pod to start, or one already waiting, takes the migration over 30 seconds later. If the original was never deleted, the backup is simply dropped; otherwise it is restored into the stream (recreating it first if the crash happened between delete and create), then cleaned up. The DLQ stream is recovered the same way.
+- **Process killed mid-migration.** Its heartbeat stops, and the next pod to start, or one already waiting, takes the migration over 30 seconds later. If the original was never deleted, the backup is given back to it without duplicating what both hold; otherwise it is restored into the stream (recreating it first if the crash happened between delete and create), then cleaned up. The DLQ stream is recovered the same way.
 - **Instances migrating concurrently (rolling deploy).** Only the pod that created the backup migrates; see [the lock](#backup-stream-as-a-distributed-lock).
 
 ## Manual streams are never migrated
