@@ -8,7 +8,7 @@ schema:
   headline: "Broadcast Events: NestJS JetStream Fan-Out Delivery"
   description: "Fan-out NATS JetStream events to every NestJS service instance via per-service durable consumers on a shared broadcast stream."
   datePublished: "2026-03-21"
-  dateModified: "2026-10-23"
+  dateModified: "2026-10-29"
 ---
 
 # Broadcast Events
@@ -107,6 +107,14 @@ sequenceDiagram
     OC-->>OC: SUCCESS (ack)
 ```
 
+## Retention window
+
+A broadcast stays in the shared stream for 1 hour by default, or until the stream holds 256 MB, 500,000 messages or 50,000 on one subject; the oldest goes first. A service that is down or still deploying when a message ages out never receives it, and nothing reports the gap: its consumer carries on from the oldest message still in the stream.
+
+That suits signals where only the latest state matters and a missed one does no harm: cache invalidation, feature flags, config reload. An event that every receiving service must process, such as an order that billing and shipping both act on, belongs in a [workqueue event](/docs/patterns/events) sent to each of those services. It stays in the receiver's own stream until a consumer handles it, and once that stream is full the publish fails instead of evicting an unprocessed message.
+
+To widen the window, raise `broadcast.stream.max_age` on every service, as the next section explains.
+
 ## Configuration: shared stream, per-service consumers
 
 Broadcast settings live under `broadcast` in `forRoot()`, at two scopes:
@@ -125,11 +133,11 @@ JetstreamModule.forRoot({
 });
 ```
 
-- **`broadcast.stream`** changes the one stream everybody shares. `max_age` (1 hour by default) is the catch-up window for a new instance.
+- **`broadcast.stream`** changes the one stream everybody shares. `max_age` (1 hour by default) is the [retention window](#retention-window).
 - **`broadcast.consumer`**, **`broadcast.retry`** and **`broadcast.concurrency`** apply only to this service's consumer, `{service}__microservice_broadcast-consumer`. Payments can retry ten times while orders retries five.
 
 :::warning Stream config is global
-Any service can change the shared stream on startup, and the last one to start wins for mutable properties. Let one service own the stream settings and leave `broadcast.stream` unset everywhere else.
+Every service writes its `broadcast.stream` settings to the shared stream on startup, defaults included, and the last one to start wins for mutable properties. A service that leaves `broadcast.stream` unset resets `max_age` to 1 hour when it starts, and lowering `max_age` deletes every message older than the new value at once. Give every service that uses broadcast the same `broadcast.stream` settings, ideally from one shared constant.
 
 The transport logs each change it applies, so drift shows up in the logs. A conflict on an immutable property such as `storage` only logs a warning unless `provisioning.allowDestructiveMigration` is on.
 :::
