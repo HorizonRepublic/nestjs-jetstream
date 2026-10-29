@@ -8,7 +8,7 @@ schema:
   headline: "Quick Start"
   description: "Complete working example in four steps: register the module, connect the transport, define handlers, and send messages."
   datePublished: "2026-03-21"
-  dateModified: "2026-08-03"
+  dateModified: "2026-10-29"
 ---
 
 # Quick Start
@@ -114,7 +114,7 @@ export class OrdersController {
   @EventPattern('order.created')
   handleOrderCreated(@Payload() data: { orderId: number; total: number }): void {
     this.logger.log(`Processing order ${data.orderId}, total: $${data.total}`);
-    // If this throws, the message is nak'd and redelivered (up to max_deliver, default 3)
+    // If this throws, the message is nak'd and redelivered (up to max_deliver, default 5)
   }
 
   /**

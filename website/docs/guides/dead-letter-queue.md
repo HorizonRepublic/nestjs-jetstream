@@ -8,7 +8,7 @@ schema:
   headline: "How to configure a Dead Letter Queue"
   description: "Capture NestJS NATS JetStream messages that exhaust all delivery attempts via a DLQ stream or onDeadLetter callback."
   datePublished: "2026-03-21"
-  dateModified: "2026-10-23"
+  dateModified: "2026-10-29"
 ---
 
 # How to configure a Dead Letter Queue
@@ -16,7 +16,7 @@ schema:
 > **Use when:** a message has failed every delivery attempt and you need it kept instead of dropped.
 > **You get:** the built-in DLQ stream, the `onDeadLetter` callback, and the fallback chain between them.
 
-A message that fails every delivery attempt and reaches `max_deliver` (default **3**) becomes a dead letter. These two mechanisms capture it, and they compose:
+A message that fails every delivery attempt and reaches `max_deliver` (default **5**) becomes a dead letter. These two mechanisms capture it, and they compose:
 
 | Mechanism               | Added  | Role                                                                           |
 | ----------------------- | ------ | ------------------------------------------------------------------------------ |

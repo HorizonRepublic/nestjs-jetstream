@@ -8,7 +8,7 @@ schema:
   headline: "Module Configuration Reference"
   description: "Reference for forRoot(), forRootAsync(), and forFeature() registration methods with stream, consumer, and connection options."
   datePublished: "2026-03-21"
-  dateModified: "2026-10-23"
+  dateModified: "2026-10-29"
 ---
 
 # Module Configuration
@@ -295,16 +295,26 @@ Under `provisioning: { management: Manual }` the implicit default stands down, s
 
 ### retry
 
-`readonly number[] | false`, default `[2000, 10000]`, set per kind on `events`, `broadcast` and `schedule`. Delay in milliseconds before each redelivery after a handler throws or calls `ctx.retry()`. Index 0 is the first retry, and the last entry repeats once the curve runs out. `false` naks immediately, which burns every attempt as fast as the handler can fail.
+`readonly number[] | false`, default `[2000, 10000, 30000, 60000]`, set per kind on `events`, `broadcast` and `schedule`. Delay in milliseconds before each redelivery after a handler throws or calls `ctx.retry()`. Index 0 is the first retry, and the last entry repeats once the curve runs out. `false` naks immediately, which burns every attempt as fast as the handler can fail.
 
 The delays are applied client-side when the message is naked, not through the consumer's `backoff`, so `ack_wait` keeps its configured value.
 
+Keep `max_deliver` at one more than the number of delays, so every delay is used once before the message is dead-lettered. Size the curve to the longest outage you want to ride out without touching the DLQ:
+
+| Outage to ride out | `max_deliver` | `retry`                                                                                           |
+| ------------------ | ------------- | ------------------------------------------------------------------------------------------------- |
+| ~100 s (default)   | `5`           | `[2_000, 10_000, 30_000, 60_000]`                                                                 |
+| ~10 minutes        | `8`           | `[2_000, 10_000, 30_000, 60_000, 120_000, 180_000, 240_000]`                                      |
+| ~1 hour            | `12`          | `[5_000, 30_000, 60_000, 120_000, 300_000, 300_000, 600_000, 600_000, 600_000, 600_000, 600_000]` |
+
 ```typescript
 events: {
-  consumer: { max_deliver: 5 },
-  retry: [1_000, 5_000, 30_000, 60_000],
+  consumer: { max_deliver: 8 },
+  retry: [2_000, 10_000, 30_000, 60_000, 120_000, 180_000, 240_000],
 }
 ```
+
+A message waiting out its delay keeps its slot in `max_ack_pending` (100 by default), so a long curve has a cost: when a dependency is down and every message fails, the consumer holds 100 delayed messages and takes nothing new until their delays run out. That is harmless during a full outage, since nothing would succeed anyway, but with many messages no retry can fix, they crowd out healthy ones for as long as the curve lasts. Raise `max_ack_pending` alongside a long curve.
 
 ### metadata
 
@@ -367,7 +377,7 @@ Accepted by `events`, `broadcast`, `schedule` and the `'jetstream'` variant of `
 | `consume`               | `Partial<ConsumeOptions>`    | nats.js defaults                                     | Options for nats.js `consume()`: prefetch, `idle_heartbeat`, refill thresholds. Do not mix the message-based and byte-based thresholds.                                                                                                     |
 | `concurrency`           | `number`                     | unlimited, bounded by `max_ack_pending`              | Handler executions in flight at once; the rest queue FIFO. Below `max_ack_pending`, raise `ack_wait` too, since queued messages' ack timers keep running.                                                                                   |
 | `ackExtension`          | `AckExtensionConfig`         | `false`                                              | Extends the ack deadline with `msg.working()` while a handler runs: `true` every `ack_wait / 2`, a number every that many milliseconds, `{ interval?, maxDuration? }` with a per-message limit. Extension stops after 5 minutes by default. |
-| `retry`                 | `readonly number[] \| false` | `[2000, 10000]`                                      | Redelivery curve. See [retry](#retry). Not on `rpc`.                                                                                                                                                                                        |
+| `retry`                 | `readonly number[] \| false` | `[2000, 10000, 30000, 60000]`                        | Redelivery curve. See [retry](#retry). Not on `rpc`.                                                                                                                                                                                        |
 | `stream.name`           | `string`                     | `{service}__microservice_ev-stream` and friends      | Bind to an externally provisioned stream with a custom name.                                                                                                                                                                                |
 | `consumer.durable_name` | `string`                     | `{service}__microservice_ev-consumer` and friends    | Bind to an externally provisioned consumer.                                                                                                                                                                                                 |
 | `management`            | `EntityManagement`           | falls back to `provisioning.management`, then `Auto` | Per-kind control, with separate `stream` and `consumer` entries.                                                                                                                                                                            |

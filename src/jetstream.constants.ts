@@ -208,19 +208,20 @@ export const DEFAULT_DLQ_STREAM_CONFIG: Partial<StreamConfig> = {
 
 /**
  * Delay before each redelivery, in milliseconds. Index 0 is the first retry.
- * A failing handler used to nak without a delay, which burned every attempt
- * within milliseconds and dead-lettered before a transient fault could clear.
+ * Together they span about 100s, enough for a database failover or a restarting
+ * dependency to clear before the message is dead-lettered. A delayed message
+ * keeps its `max_ack_pending` slot until it is redelivered.
  *
  * Applied client-side through `nak(delay)`. Never mirror this into a consumer's
  * `backoff`: JetStream overwrites `ack_wait` with the first backoff entry, which
  * would cut the ack deadline to 2s and redeliver while the handler still runs.
  */
-export const DEFAULT_RETRY_DELAYS_MS: readonly number[] = [2_000, 10_000];
+export const DEFAULT_RETRY_DELAYS_MS: readonly number[] = [2_000, 10_000, 30_000, 60_000];
 
 /** Default config for workqueue event consumers. */
 export const DEFAULT_EVENT_CONSUMER_CONFIG: Partial<ConsumerConfig> = {
   ack_wait: toNanos(10, 'seconds'),
-  max_deliver: 3,
+  max_deliver: 5,
   max_ack_pending: 100,
   ack_policy: AckPolicy.Explicit,
   deliver_policy: DeliverPolicy.All,
@@ -240,7 +241,7 @@ export const DEFAULT_COMMAND_CONSUMER_CONFIG: Partial<ConsumerConfig> = {
 /** Default config for schedule tick consumers. */
 export const DEFAULT_SCHEDULE_CONSUMER_CONFIG: Partial<ConsumerConfig> = {
   ack_wait: toNanos(10, 'seconds'),
-  max_deliver: 3,
+  max_deliver: 5,
   max_ack_pending: 100,
   ack_policy: AckPolicy.Explicit,
   deliver_policy: DeliverPolicy.All,
@@ -250,7 +251,7 @@ export const DEFAULT_SCHEDULE_CONSUMER_CONFIG: Partial<ConsumerConfig> = {
 /** Default config for broadcast event consumers. */
 export const DEFAULT_BROADCAST_CONSUMER_CONFIG: Partial<ConsumerConfig> = {
   ack_wait: toNanos(10, 'seconds'),
-  max_deliver: 3,
+  max_deliver: 5,
   max_ack_pending: 100,
   ack_policy: AckPolicy.Explicit,
   deliver_policy: DeliverPolicy.All,

@@ -8,7 +8,7 @@ schema:
   headline: "RpcContext: Handler Context & Message Settlement"
   description: "Access JetStream metadata and control ack, retry, and terminate actions in NestJS message handlers via RpcContext."
   datePublished: "2026-03-21"
-  dateModified: "2026-10-23"
+  dateModified: "2026-10-29"
 ---
 
 # Handler Context
@@ -161,7 +161,7 @@ async handle(@Payload() data: FulfillDto, @Ctx() ctx: RpcContext) {
 }
 ```
 
-Without `delayMs`, the delay comes from the stream's retry curve, the same one a throwing handler uses (`[2000, 10000]` ms by default, see [`events.retry`](/docs/reference/module-configuration#retry)). With `retry: false` the redelivery is immediate.
+Without `delayMs`, the delay comes from the stream's retry curve, the same one a throwing handler uses (`[2000, 10000, 30000, 60000]` ms by default, see [`events.retry`](/docs/reference/module-configuration#retry)). With `retry: false` the redelivery is immediate.
 
 ### Terminate
 

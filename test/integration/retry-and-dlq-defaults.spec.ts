@@ -98,7 +98,7 @@ describe('Retry pacing and DLQ defaults', () => {
     const firstGap = sut.attemptsAt[1]! - sut.attemptsAt[0]!;
     const secondGap = sut.attemptsAt[2]! - sut.attemptsAt[1]!;
 
-    // Upper bounds matter: without them the default [2s, 10s] curve also passes,
+    // Upper bounds matter: without them the default curve also passes,
     // so the test would not prove that `events.retry` was applied at all.
     expect(firstGap).toBeGreaterThanOrEqual(800);
     expect(firstGap).toBeLessThan(1_800);
@@ -130,6 +130,30 @@ describe('Retry pacing and DLQ defaults', () => {
     // would silently cut the deadline to 2s and redeliver while a handler still runs.
     expect(info.config.ack_wait).toBe(toNanos(10, 'seconds'));
     expect(info.config.backoff ?? []).toEqual([]);
+  });
+
+  it('should raise max_deliver in place on a consumer from the previous default', async () => {
+    // Given a consumer provisioned with three deliveries, as v3.0 did
+    serviceName = uniqueServiceName();
+
+    const previous = await createTestApp(
+      { name: serviceName, port, events: { consumer: { max_deliver: 3 } } },
+      [QuietController],
+    );
+
+    await previous.app.close();
+
+    // When the service boots on the current defaults
+    ({ app } = await createTestApp({ name: serviceName, port }, [QuietController]));
+
+    // Then the same consumer now allows one delivery per retry delay plus the first
+    const jsm = await jetstreamManager(nc);
+    const info = await jsm.consumers.info(
+      streamName(serviceName, StreamKind.Event),
+      consumerName(serviceName, StreamKind.Event),
+    );
+
+    expect(info.config.max_deliver).toBe(5);
   });
 
   it('should provision a dead-letter stream without being asked', async () => {
