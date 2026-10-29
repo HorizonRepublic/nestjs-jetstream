@@ -27,6 +27,8 @@ export enum ConfigErrorReason {
   StreamOwnershipConflict = 'stream-ownership-conflict',
   /** The dead-letter stream is turned off or was never created on the connection. */
   DlqUnavailable = 'dlq-unavailable',
+  /** `purge()` was called with an empty filter; emptying the whole DLQ is `purgeAll()`. */
+  DlqFilterRequired = 'dlq-filter-required',
 }
 
 /** Why the NATS connection was unavailable. */

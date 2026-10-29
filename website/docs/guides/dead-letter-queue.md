@@ -220,7 +220,8 @@ Once a fix ships, the messages that failed before it can go back to their handle
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | `inspect(filter?, options?)` | Lists dead letters, oldest first: subject, handler pattern, reason, failure time, counts, headers and payload |
 | `redrive(filter?, options?)` | Publishes them back to the subject they failed on, then deletes them from the DLQ                             |
-| `purge(filter?, options?)`   | Deletes them for good                                                                                         |
+| `purge(filter, options?)`    | Deletes the dead letters a filter selects and returns how many went                                           |
+| `purgeAll(options?)`         | Empties the whole DLQ in one server call                                                                      |
 
 Every criterion of the filter must match, and an empty filter selects everything:
 
@@ -232,7 +233,7 @@ Every criterion of the filter must match, and an empty filter selects everything
 | `failedAfter` / `failedBefore` | The failure time, bounds included                            |
 | `fromSeq` / `toSeq`            | The DLQ sequence, bounds included                            |
 
-Options are `connection` (the connection whose DLQ to use; the default one when left out) and `limit` (`inspect` stops at 100 unless told otherwise), plus `dryRun` for `redrive` and `purge`, and `maxRedrives` and `perSecond` for `redrive`.
+Options are `connection` (the connection whose DLQ to use; the default one when left out) and `limit` (`inspect` stops at 100 unless told otherwise), plus `dryRun` for `redrive`, `purge` and `purgeAll`, and `maxRedrives` and `perSecond` for `redrive`.
 
 ### What a redrive does
 
@@ -249,6 +250,16 @@ Each dead letter is published to its original subject with its original headers 
 - **`limit` counts skipped records too.** `redrive({}, { limit: 10 })` looks at ten matching records, whatever happens to them.
 
 The report lists the DLQ sequences that went back (`redriven`), those skipped and why (`skipped`), and those that went back but stayed in the DLQ (`notRemoved`). A dry run fills `redriven` with what would go back and changes nothing.
+
+### Purging
+
+`purge()` refuses an empty filter with a `JetstreamConfigError` (reason `dlq-filter-required`), so a forgotten argument cannot wipe the DLQ. Emptying all of it takes a call that says so, `purgeAll()`, which the server does in one step. A filter with only `toSeq` is also purged by the server in one call; any other filter is matched on headers, so its matches are read and deleted in batches. Every purge returns how many dead letters went, and `dryRun` counts them instead.
+
+```typescript
+await dlq.purgeAll(); // the whole DLQ
+await dlq.purge({ toSeq: 1200 }); // everything up to sequence 1200
+await dlq.purge({ subject: 'broadcast.>' }); // every broadcast dead letter
+```
 
 ### Triggering a redrive
 

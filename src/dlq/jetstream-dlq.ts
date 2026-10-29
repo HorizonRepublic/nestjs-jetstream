@@ -25,6 +25,7 @@ import {
   type DeadLetterFilter,
   type DeadLetterRecord,
   type DlqInspectOptions,
+  type DlqPurgeAllOptions,
   type DlqPurgeOptions,
   type DlqPurgeReport,
   type DlqRedriveOptions,
@@ -36,6 +37,7 @@ const DEFAULT_INSPECT_LIMIT = 100;
 const DEFAULT_MAX_REDRIVES = 3;
 const FETCH_BATCH = 256;
 const FETCH_EXPIRES_MS = 2_000;
+const DELETE_BATCH = 64;
 
 /** Headers the DLQ adds on top of the message's own. */
 const TRACKING_HEADERS: ReadonlySet<string> = new Set(
@@ -167,23 +169,47 @@ export class JetstreamDlq {
     return { dryRun, matched, redriven, skipped, notRemoved };
   }
 
-  /** Delete dead letters for good. */
+  /**
+   * Delete the dead letters a filter selects. The filter must set at least one
+   * criterion: emptying the whole DLQ is {@link purgeAll}. An upper sequence
+   * bound alone is purged by the server in one call; every other filter reads
+   * headers, so its matches are deleted in batches.
+   */
   public async purge(
-    filter: DeadLetterFilter = {},
+    filter: DeadLetterFilter,
     options: DlqPurgeOptions = {},
   ): Promise<DlqPurgeReport> {
+    if (Object.keys(filter).length === 0) {
+      throw new JetstreamConfigError(
+        ConfigErrorReason.DlqFilterRequired,
+        'purge() needs a filter with at least one criterion. To empty the whole DLQ, call purgeAll().',
+      );
+    }
+
     const scope = this.scopeOf(options.connection);
     const dlqStream = scope.names.dlqStreamName();
     const dryRun = options.dryRun ?? false;
-    const purged: number[] = [];
+    const purged =
+      (!dryRun && options.limit === undefined
+        ? await this.purgeHead(scope, dlqStream, filter)
+        : null) ?? (await this.purgeMatches(scope, dlqStream, filter, options.limit, dryRun));
 
-    for await (const { record } of this.select(scope, filter, options.limit)) {
-      if (dryRun || (await this.remove(scope, dlqStream, record.seq))) purged.push(record.seq);
-    }
+    this.logPurge(dryRun, dlqStream, purged);
 
-    this.logger.log(
-      `${dryRun ? 'Dry-run purge' : 'Purge'} on ${dlqStream}: ${purged.length} dead letters`,
-    );
+    return { dryRun, purged };
+  }
+
+  /** Empty the whole dead-letter stream in one server call. */
+  public async purgeAll(options: DlqPurgeAllOptions = {}): Promise<DlqPurgeReport> {
+    const scope = this.scopeOf(options.connection);
+    const dlqStream = scope.names.dlqStreamName();
+    const dryRun = options.dryRun ?? false;
+    const { state } = await this.dlqInfo(scope, dlqStream);
+    const purged = dryRun
+      ? state.messages
+      : (await (await scope.connection.getJetStreamManager()).streams.purge(dlqStream)).purged;
+
+    this.logPurge(dryRun, dlqStream, purged);
 
     return { dryRun, purged };
   }
@@ -306,6 +332,66 @@ export class JetstreamDlq {
     } finally {
       await consumer.delete().catch(() => undefined);
     }
+  }
+
+  /**
+   * Server-side purge of everything up to `toSeq`. Only possible when that
+   * bound is the whole filter, or a lower bound that spares nothing joins it.
+   */
+  private async purgeHead(
+    scope: ConnectionScope,
+    dlqStream: string,
+    filter: DeadLetterFilter,
+  ): Promise<number | null> {
+    const { fromSeq, toSeq, ...criteria } = filter;
+
+    if (toSeq === undefined || Object.keys(criteria).length > 0) return null;
+
+    const { state } = await this.dlqInfo(scope, dlqStream);
+
+    if (fromSeq !== undefined && fromSeq > state.first_seq) return null;
+
+    const jsm = await scope.connection.getJetStreamManager();
+
+    return (await jsm.streams.purge(dlqStream, { seq: toSeq + 1 })).purged;
+  }
+
+  private async purgeMatches(
+    scope: ConnectionScope,
+    dlqStream: string,
+    filter: DeadLetterFilter,
+    limit: number | undefined,
+    dryRun: boolean,
+  ): Promise<number> {
+    let purged = 0;
+    let batch: number[] = [];
+
+    for await (const { record } of this.select(scope, filter, limit)) {
+      batch.push(record.seq);
+
+      if (batch.length < DELETE_BATCH) continue;
+
+      purged += dryRun ? batch.length : await this.removeAll(scope, dlqStream, batch);
+      batch = [];
+    }
+
+    return purged + (dryRun ? batch.length : await this.removeAll(scope, dlqStream, batch));
+  }
+
+  private logPurge(dryRun: boolean, dlqStream: string, purged: number): void {
+    this.logger.log(
+      `${dryRun ? 'Dry-run purge' : 'Purge'} on ${dlqStream}: ${purged} dead letters`,
+    );
+  }
+
+  private async removeAll(
+    scope: ConnectionScope,
+    dlqStream: string,
+    seqs: number[],
+  ): Promise<number> {
+    const removed = await Promise.all(seqs.map((seq) => this.remove(scope, dlqStream, seq)));
+
+    return removed.filter(Boolean).length;
   }
 
   private async dlqInfo(scope: ConnectionScope, dlqStream: string): Promise<StreamInfo> {

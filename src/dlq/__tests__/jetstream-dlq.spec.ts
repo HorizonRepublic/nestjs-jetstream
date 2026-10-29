@@ -4,6 +4,7 @@ import type {
   JsMsg,
   OrderedConsumerOptions,
   PubAck,
+  PurgeResponse,
   StreamInfo,
 } from '@nats-io/jetstream';
 import { JetStreamApiError } from '@nats-io/jetstream';
@@ -102,6 +103,7 @@ describe(JetstreamDlq, () => {
           }),
         ),
         deleteMessage: vi.fn().mockResolvedValue(true),
+        purge: vi.fn(),
       },
       consumers: {
         info: vi.fn(async () =>
@@ -428,16 +430,110 @@ describe(JetstreamDlq, () => {
   });
 
   describe('purge', () => {
+    it('should refuse to purge with an empty filter', async () => {
+      // Given
+      stored = [deadLetter({ seq: 1 })];
+
+      // When/Then
+      await expect(sut.purge({})).rejects.toMatchObject({
+        reason: ConfigErrorReason.DlqFilterRequired,
+      });
+      expect(jsm.streams.purge).not.toHaveBeenCalled();
+      expect(jsm.streams.deleteMessage).not.toHaveBeenCalled();
+    });
+
+    it('should empty the whole DLQ in one call only when asked to by name', async () => {
+      // Given
+      stored = [1, 2, 3].map((seq) => deadLetter({ seq }));
+      vi.mocked(jsm.streams.purge).mockResolvedValue(createMock<PurgeResponse>({ purged: 3 }));
+
+      // When
+      const report = await sut.purgeAll();
+
+      // Then
+      expect(report).toEqual({ dryRun: false, purged: 3 });
+      expect(jsm.streams.purge).toHaveBeenCalledWith(names.dlqStreamName());
+      expect(jsm.streams.deleteMessage).not.toHaveBeenCalled();
+    });
+
+    it('should leave everything after the upper bound when only that bound is given', async () => {
+      // Given
+      stored = [1, 2, 3].map((seq) => deadLetter({ seq }));
+      vi.mocked(jsm.streams.purge).mockResolvedValue(createMock<PurgeResponse>({ purged: 2 }));
+
+      // When
+      const report = await sut.purge({ toSeq: 2 });
+
+      // Then
+      expect(report.purged).toBe(2);
+      expect(jsm.streams.purge).toHaveBeenCalledWith(names.dlqStreamName(), { seq: 3 });
+    });
+
+    it('should delete one by one when a lower bound would spare older entries', async () => {
+      // Given
+      stored = [1, 2, 3].map((seq) => deadLetter({ seq }));
+
+      // When
+      const report = await sut.purge({ fromSeq: 2 });
+
+      // Then
+      expect(report.purged).toBe(2);
+      expect(jsm.streams.purge).not.toHaveBeenCalled();
+      expect(vi.mocked(jsm.streams.deleteMessage).mock.calls.map(([, seq]) => seq)).toEqual([2, 3]);
+    });
+
+    it('should delete every match of a filter, in batches', async () => {
+      // Given: more matches than one batch holds
+      stored = Array.from({ length: 70 }, (_, i) => deadLetter({ seq: i + 1 }));
+
+      // When
+      const report = await sut.purge({ pattern: 'order.created' });
+
+      // Then
+      expect(report.purged).toBe(70);
+      expect(jsm.streams.purge).not.toHaveBeenCalled();
+      expect(jsm.streams.deleteMessage).toHaveBeenCalledTimes(70);
+    });
+
+    it('should count only what was actually deleted', async () => {
+      // Given
+      stored = [1, 2].map((seq) => deadLetter({ seq }));
+      vi.mocked(jsm.streams.deleteMessage)
+        .mockResolvedValueOnce(true)
+        .mockRejectedValueOnce(new Error('timeout'));
+
+      // When
+      const report = await sut.purge({ pattern: 'order.created' });
+
+      // Then
+      expect(report.purged).toBe(1);
+    });
+
     it('should report what a dry run would delete without deleting it', async () => {
       // Given
       stored = [deadLetter({ seq: 4 })];
 
       // When
-      const report = await sut.purge({}, { dryRun: true });
+      const report = await sut.purge({ pattern: 'order.created' }, { dryRun: true });
+      const everything = await sut.purgeAll({ dryRun: true });
 
       // Then
-      expect(report).toEqual({ dryRun: true, purged: [4] });
+      expect(report).toEqual({ dryRun: true, purged: 1 });
+      expect(everything).toEqual({ dryRun: true, purged: 1 });
+      expect(jsm.streams.purge).not.toHaveBeenCalled();
       expect(jsm.streams.deleteMessage).not.toHaveBeenCalled();
+    });
+
+    it('should honour a limit by deleting one by one', async () => {
+      // Given
+      stored = [1, 2, 3].map((seq) => deadLetter({ seq }));
+
+      // When
+      const report = await sut.purge({ pattern: 'order.created' }, { limit: 2 });
+
+      // Then
+      expect(report.purged).toBe(2);
+      expect(jsm.streams.purge).not.toHaveBeenCalled();
     });
   });
 

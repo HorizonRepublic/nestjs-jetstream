@@ -259,8 +259,20 @@ describe('DLQ redrive', () => {
     expect(report.skipped).toEqual([
       expect.objectContaining({ reason: DlqRedriveSkipReason.Broadcast }),
     ]);
-    expect(purged.purged).toHaveLength(1);
+    expect(purged.purged).toBe(1);
     expect((await sut.inspect()).map((r) => r.origin)).toEqual([DeadLetterOrigin.Event]);
+  });
+  it('should empty the whole DLQ', async () => {
+    // Given
+    await deadLetter('order.created', { id: 'a' });
+    await deadLetter('order.paid', { id: 'b' });
+
+    // When
+    const report = await sut.purgeAll();
+
+    // Then
+    expect(report).toEqual({ dryRun: false, purged: 2 });
+    expect(await sut.inspect()).toEqual([]);
   });
 });
 

@@ -94,6 +94,14 @@ export interface DlqPurgeOptions extends DlqScopeOptions {
   readonly dryRun?: boolean;
 }
 
+/** Options for {@link JetstreamDlq.purgeAll}. */
+export interface DlqPurgeAllOptions {
+  /** Connection whose dead-letter stream to empty. Default: the default connection. */
+  readonly connection?: string;
+  /** Report how many would be deleted without deleting them. */
+  readonly dryRun?: boolean;
+}
+
 /** A matching record that was not handed back. */
 export interface DlqRedriveSkip {
   readonly seq: number;
@@ -122,6 +130,6 @@ export interface DlqRedriveReport {
 /** What a purge did. */
 export interface DlqPurgeReport {
   readonly dryRun: boolean;
-  /** DLQ sequences deleted (or that would be, on a dry run). */
-  readonly purged: readonly number[];
+  /** How many dead letters were deleted (or would be, on a dry run). */
+  readonly purged: number;
 }

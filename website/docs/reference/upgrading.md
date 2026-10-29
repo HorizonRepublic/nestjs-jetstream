@@ -57,7 +57,7 @@ nats stream edit <stream> --no-discard-per-subject
 
 ### Additive changes
 
-**Dead letters can go back.** `JetstreamDlq` lists, redrives and purges the DLQ stream, with filters, a dry run and a cap on how many times one message is redriven. Broadcasts and recurring schedule ticks are never redriven. `x-redrive-count` joins the reserved headers `setHeader()` refuses. See [Redriving dead letters](/docs/guides/dead-letter-queue#redriving-dead-letters).
+**Dead letters can go back.** `JetstreamDlq` lists, redrives and purges the DLQ stream, or empties it with `purgeAll()`, with filters, a dry run and a cap on how many times one message is redriven. Broadcasts and recurring schedule ticks are never redriven. `x-redrive-count` joins the reserved headers `setHeader()` refuses. See [Redriving dead letters](/docs/guides/dead-letter-queue#redriving-dead-letters).
 
 **Destructive migration is safe with several pods.** The backup stream is now a real lock: only the pod that creates it migrates, the others wait, and a pod that dies mid-migration is taken over once its heartbeat has stopped for 30 seconds, however long the migration runs. A pod that starts while a migration is running waits for it before provisioning. Sourcing fails only after 30 seconds without progress instead of after 30 seconds in total, an interrupted DLQ migration is resumed, and a migration whose new limits cannot hold the existing messages stops before deleting anything. Run a destructive migration only once every pod runs 3.1: older releases still take over and reopen streams by their own rules. See [Stream Migration](/docs/guides/stream-migration).
 

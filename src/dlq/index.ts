@@ -9,6 +9,7 @@ export {
   type DeadLetterHeaders,
   type DeadLetterRecord,
   type DlqInspectOptions,
+  type DlqPurgeAllOptions,
   type DlqPurgeOptions,
   type DlqPurgeReport,
   type DlqRedriveOptions,
