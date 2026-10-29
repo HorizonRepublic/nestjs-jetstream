@@ -3,6 +3,7 @@ import { BaseRpcContext } from '@nestjs/microservices';
 import type { JsMsg } from '@nats-io/jetstream';
 import type { Msg, MsgHdrs } from '@nats-io/transport-node';
 
+import { JetstreamRpcError, RpcErrorReason } from '../errors';
 import { JetstreamHeader } from '../jetstream.constants';
 
 type NatsMessage = JsMsg | Msg;
@@ -118,7 +119,10 @@ export class RpcContext extends BaseRpcContext<[NatsMessage]> {
     this.assertJetStream('retry');
 
     if (this._shouldTerminate) {
-      throw new Error('Cannot retry; terminate() was already called');
+      throw new JetstreamRpcError(
+        RpcErrorReason.SettlementConflict,
+        'Cannot retry; terminate() was already called',
+      );
     }
 
     this._shouldRetry = true;
@@ -138,7 +142,10 @@ export class RpcContext extends BaseRpcContext<[NatsMessage]> {
     this.assertJetStream('terminate');
 
     if (this._shouldRetry) {
-      throw new Error('Cannot terminate; retry() was already called');
+      throw new JetstreamRpcError(
+        RpcErrorReason.SettlementConflict,
+        'Cannot terminate; retry() was already called',
+      );
     }
 
     this._shouldTerminate = true;
@@ -153,7 +160,10 @@ export class RpcContext extends BaseRpcContext<[NatsMessage]> {
   /** Ensure the message is JetStream; settlement actions are not available for Core NATS. */
   private assertJetStream(method: string): void {
     if (!this.isJetStream()) {
-      throw new Error(`${method}() is only available for JetStream messages`);
+      throw new JetstreamRpcError(
+        RpcErrorReason.JetStreamOnly,
+        `${method}() is only available for JetStream messages`,
+      );
     }
   }
 

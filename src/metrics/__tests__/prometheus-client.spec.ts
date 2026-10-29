@@ -1,6 +1,7 @@
 import { createMock } from '@golevelup/ts-vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { ConfigErrorReason } from '../../errors';
 import type { MetricsRegistry } from '../metrics.config';
 import type {
   LoadedPrometheusClient,
@@ -70,12 +71,24 @@ describe(selectPrometheusClient, () => {
 
   it('should fail when no package is installed', () => {
     // When / Then
-    expect(() => selectPrometheusClient([], undefined)).toThrow(/pnpm add @prometheus-io\/client/);
+    expect(() => selectPrometheusClient([], undefined)).toThrow(
+      expect.objectContaining({
+        name: 'JetstreamConfigError',
+        reason: ConfigErrorReason.PrometheusClientMissing,
+        message: expect.stringMatching(/pnpm add @prometheus-io\/client/),
+      }),
+    );
   });
 
   it('should refuse to guess between two installed packages without a registry', () => {
     // When / Then
-    expect(() => selectPrometheusClient([io, legacy], undefined)).toThrow(/Pass metrics.register/);
+    expect(() => selectPrometheusClient([io, legacy], undefined)).toThrow(
+      expect.objectContaining({
+        name: 'JetstreamConfigError',
+        reason: ConfigErrorReason.AmbiguousPrometheusClient,
+        message: expect.stringMatching(/Pass metrics.register/),
+      }),
+    );
   });
 
   it('should fail on a registry neither installed package owns', () => {
@@ -84,7 +97,11 @@ describe(selectPrometheusClient, () => {
 
     // When / Then
     expect(() => selectPrometheusClient([io, legacy], foreign)).toThrow(
-      /not a Registry of the installed/,
+      expect.objectContaining({
+        name: 'JetstreamConfigError',
+        reason: ConfigErrorReason.ForeignRegistry,
+        message: expect.stringMatching(/not a Registry of the installed/),
+      }),
     );
   });
 });

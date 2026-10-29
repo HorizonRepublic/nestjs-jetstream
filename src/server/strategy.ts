@@ -5,6 +5,12 @@ import type { ConsumerInfo } from '@nats-io/jetstream';
 
 import type { ConnectionProvider } from '../connection/connection.provider';
 import type { ConnectionBinding } from '../connection/connection.types';
+import {
+  ConfigErrorReason,
+  ConnectionErrorReason,
+  JetstreamConfigError,
+  JetstreamConnectionError,
+} from '../errors';
 import { StreamKind } from '../interfaces';
 import type { JetstreamModuleOptions } from '../interfaces';
 import { isCoreRpcMode, isJetStreamRpcMode } from '../jetstream.constants';
@@ -124,7 +130,8 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     const normalizedPattern = this.normalizePattern(pattern as MsPattern);
 
     if (this.messageHandlers.has(normalizedPattern)) {
-      throw new Error(
+      throw new JetstreamConfigError(
+        ConfigErrorReason.DuplicateHandler,
         `Duplicate handler registered for pattern "${normalizedPattern}". ` +
           `Each @EventPattern() / @MessagePattern() value must be unique within a microservice; ` +
           `find and remove the second declaration.`,
@@ -152,7 +159,10 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     const nc = this.connection.unwrap;
 
     if (!nc) {
-      throw new Error('Not connected; transport has not started');
+      throw new JetstreamConnectionError(
+        ConnectionErrorReason.NotConnected,
+        'Not connected; transport has not started',
+      );
     }
 
     return nc as T;
@@ -181,7 +191,10 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
   /** Bail out of a boot chain the strategy was closed out from under. */
   private abortIfClosed(): void {
     if (this.closed) {
-      throw new Error('Transport closed while the connection was starting');
+      throw new JetstreamConnectionError(
+        ConnectionErrorReason.ClosedWhileConnecting,
+        'Transport closed while the connection was starting',
+      );
     }
   }
 
@@ -233,14 +246,16 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     if (requested === null) return this.binding.name === this.binding.defaultName;
 
     if (!this.binding.known.has(requested)) {
-      throw new Error(
+      throw new JetstreamConfigError(
+        ConfigErrorReason.UnknownConnection,
         `Unknown connection "${requested}" in handler extras. ` +
           `Configured connections: ${[...this.binding.known].join(', ')}.`,
       );
     }
 
     if (this.binding.publisherOnly.has(requested)) {
-      throw new Error(
+      throw new JetstreamConfigError(
+        ConfigErrorReason.PublisherOnlyConnection,
         `Connection "${requested}" is publisher-only (publisherOnly: true) and cannot host handlers. ` +
           `Remove publisherOnly: true from that connection or bind the handler elsewhere.`,
       );

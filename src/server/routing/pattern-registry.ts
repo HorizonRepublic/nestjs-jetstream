@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { MessageHandler } from '@nestjs/microservices';
 
+import { ConfigErrorReason, JetstreamConfigError } from '../../errors';
 import { MessageKind, StreamKind } from '../../interfaces';
 import type {
   DeclaredSchedule,
@@ -87,7 +88,8 @@ export class PatternRegistry {
       const meta = extras?.meta as Record<string, unknown> | undefined;
 
       if (isBroadcast && isOrdered) {
-        throw new Error(
+        throw new JetstreamConfigError(
+          ConfigErrorReason.ConflictingHandlerKinds,
           `Handler "${pattern}" cannot be both broadcast and ordered. Use one or the other.`,
         );
       }
@@ -274,13 +276,15 @@ export class PatternRegistry {
     hasOtherDelivery: boolean,
   ): RecurringScheduleSpec | undefined {
     if (!isEvent) {
-      throw new Error(
+      throw new JetstreamConfigError(
+        ConfigErrorReason.ScheduleOnMessagePattern,
         `Handler "${pattern}" has a schedule; schedules belong on @EventPattern only.`,
       );
     }
 
     if (hasOtherDelivery) {
-      throw new Error(
+      throw new JetstreamConfigError(
+        ConfigErrorReason.ConflictingHandlerKinds,
         `Handler "${pattern}" cannot be both scheduled and broadcast or ordered. Use one or the other.`,
       );
     }

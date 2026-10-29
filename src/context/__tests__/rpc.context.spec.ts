@@ -5,6 +5,7 @@ import { faker } from '@faker-js/faker';
 import { createMock } from '@golevelup/ts-vitest';
 import { describe, expect, it, vi } from 'vitest';
 
+import { RpcErrorReason } from '../../errors';
 import { JetstreamHeader } from '../../jetstream.constants';
 import { RpcContext } from '../rpc.context';
 
@@ -86,11 +87,11 @@ describe(RpcContext, () => {
     describe('when message is a core Msg', () => {
       it('should return false', () => {
         // Given: a core Msg manually crafted without an ack method
-        const msg = {
+        const msg = createMock<Msg>({
           subject: 'test',
           data: new Uint8Array(),
           headers: undefined,
-        } as unknown as Msg;
+        });
         const sut = new RpcContext([msg]);
 
         // Then: type guard is false
@@ -161,11 +162,11 @@ describe(RpcContext, () => {
 
     describe('when message is a Core Msg', () => {
       it('should return undefined for all JetStream metadata', () => {
-        const msg = {
+        const msg = createMock<Msg>({
           subject: 'test',
           data: new Uint8Array(),
           headers: undefined,
-        } as unknown as Msg;
+        });
         const sut = new RpcContext([msg]);
 
         expect(sut.getDeliveryCount()).toBeUndefined();
@@ -231,21 +232,35 @@ describe(RpcContext, () => {
 
     describe('when message is Core NATS', () => {
       it('should throw on retry()', () => {
-        const msg = { subject: 'test', data: new Uint8Array() } as unknown as Msg;
+        const msg = createMock<Msg>({ subject: 'test', data: new Uint8Array() });
         const sut = new RpcContext([msg]);
 
         expect(() => {
           sut.retry();
-        }).toThrow('retry() is only available for JetStream messages');
+        }).toThrow(
+          expect.objectContaining({
+            name: 'JetstreamRpcError',
+            reason: RpcErrorReason.JetStreamOnly,
+            message: expect.stringContaining('retry() is only available for JetStream messages'),
+          }),
+        );
       });
 
       it('should throw on terminate()', () => {
-        const msg = { subject: 'test', data: new Uint8Array() } as unknown as Msg;
+        const msg = createMock<Msg>({ subject: 'test', data: new Uint8Array() });
         const sut = new RpcContext([msg]);
 
         expect(() => {
           sut.terminate();
-        }).toThrow('terminate() is only available for JetStream messages');
+        }).toThrow(
+          expect.objectContaining({
+            name: 'JetstreamRpcError',
+            reason: RpcErrorReason.JetStreamOnly,
+            message: expect.stringContaining(
+              'terminate() is only available for JetStream messages',
+            ),
+          }),
+        );
       });
     });
 
@@ -257,7 +272,13 @@ describe(RpcContext, () => {
 
         expect(() => {
           sut.terminate();
-        }).toThrow('Cannot terminate; retry() was already called');
+        }).toThrow(
+          expect.objectContaining({
+            name: 'JetstreamRpcError',
+            reason: RpcErrorReason.SettlementConflict,
+            message: expect.stringContaining('Cannot terminate; retry() was already called'),
+          }),
+        );
       });
 
       it('should throw when retry() is called after terminate()', () => {
@@ -267,7 +288,13 @@ describe(RpcContext, () => {
 
         expect(() => {
           sut.retry();
-        }).toThrow('Cannot retry; terminate() was already called');
+        }).toThrow(
+          expect.objectContaining({
+            name: 'JetstreamRpcError',
+            reason: RpcErrorReason.SettlementConflict,
+            message: expect.stringContaining('Cannot retry; terminate() was already called'),
+          }),
+        );
       });
     });
   });

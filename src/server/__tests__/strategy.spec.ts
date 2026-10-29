@@ -7,6 +7,7 @@ import { createMock } from '@golevelup/ts-vitest';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 
 import { ConnectionProvider } from '../../connection';
+import { ConfigErrorReason, ConnectionErrorReason } from '../../errors';
 import type { JetstreamModuleOptions } from '../../interfaces';
 import { StreamKind } from '../../interfaces';
 import type { ScheduleReconciler } from '../../schedule/schedule-reconciler';
@@ -20,7 +21,7 @@ import {
 import { EventRouter, PatternRegistry, RpcRouter } from '../routing';
 import { JetstreamStrategy } from '../strategy';
 
-const fakeHandler = (): MessageHandler => vi.fn() as unknown as MessageHandler;
+const fakeHandler = (): MessageHandler => vi.fn<MessageHandler>();
 
 describe(JetstreamStrategy, () => {
   let sut: JetstreamStrategy;
@@ -343,7 +344,15 @@ describe(JetstreamStrategy, () => {
       // When/Then: the second registration fails fast
       expect(() => {
         sut.addHandler('user.created', fakeHandler(), true);
-      }).toThrow(/Duplicate handler registered for pattern "user\.created"/);
+      }).toThrow(
+        expect.objectContaining({
+          name: 'JetstreamConfigError',
+          reason: ConfigErrorReason.DuplicateHandler,
+          message: expect.stringMatching(
+            /Duplicate handler registered for pattern "user\.created"/,
+          ),
+        }),
+      );
     });
 
     it('should throw when an event handler collides with an RPC handler on the same pattern', () => {
@@ -353,7 +362,13 @@ describe(JetstreamStrategy, () => {
       // When/Then: an RPC handler (isEventHandler=false) for the same pattern is rejected
       expect(() => {
         sut.addHandler('user.created', fakeHandler(), false);
-      }).toThrow(/Duplicate handler registered/);
+      }).toThrow(
+        expect.objectContaining({
+          name: 'JetstreamConfigError',
+          reason: ConfigErrorReason.DuplicateHandler,
+          message: expect.stringMatching(/Duplicate handler registered/),
+        }),
+      );
     });
 
     it('should mention the conflicting pattern in the error message', () => {
@@ -363,7 +378,13 @@ describe(JetstreamStrategy, () => {
       // When/Then
       expect(() => {
         sut.addHandler('orders.placed', fakeHandler(), false);
-      }).toThrow(/orders\.placed/);
+      }).toThrow(
+        expect.objectContaining({
+          name: 'JetstreamConfigError',
+          reason: ConfigErrorReason.DuplicateHandler,
+          message: expect.stringMatching(/orders\.placed/),
+        }),
+      );
     });
   });
 
@@ -413,7 +434,13 @@ describe(JetstreamStrategy, () => {
       Object.defineProperty(connection, 'unwrap', { get: () => null, configurable: true });
 
       // When/Then
-      expect(() => sut.unwrap()).toThrow('Not connected');
+      expect(() => sut.unwrap()).toThrow(
+        expect.objectContaining({
+          name: 'JetstreamConnectionError',
+          reason: ConnectionErrorReason.NotConnected,
+          message: expect.stringContaining('Not connected'),
+        }),
+      );
     });
   });
 

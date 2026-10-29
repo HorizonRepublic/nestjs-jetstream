@@ -3,6 +3,7 @@ import type { Logger } from '@nestjs/common';
 import type { JsMsg } from '@nats-io/jetstream';
 
 import type { RpcContext } from '../../context';
+import { DeliveryErrorReason, JetstreamDeliveryError } from '../../errors';
 import type { HandlerStatus } from '../../interfaces';
 import { retryDelayFor, settleQuietly } from '../../utils';
 import type { DeadLetterCapture } from './dead-letter-capture';
@@ -35,7 +36,10 @@ export const createSettlement = (
         return capture.capture(
           msg,
           data,
-          new Error('Retry requested on the final delivery attempt'),
+          new JetstreamDeliveryError(
+            DeliveryErrorReason.RetryOnFinalAttempt,
+            'Retry requested on the final delivery attempt',
+          ),
         );
       }
 

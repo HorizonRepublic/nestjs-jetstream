@@ -11,6 +11,12 @@ import {
 import { ConnectionProvider } from '../../connection';
 import { NatsCapability } from '../../connection/server-capabilities.types';
 import type { CapabilityUsage } from '../../connection/server-capabilities.types';
+import {
+  ConfigErrorReason,
+  JetstreamConfigError,
+  JetstreamMigrationError,
+  MigrationErrorReason,
+} from '../../errors';
 import { ManagementMode, StreamKind } from '../../interfaces';
 import type { JetstreamModuleOptions } from '../../interfaces';
 import {
@@ -375,7 +381,8 @@ export class StreamProvider {
         .map((c) => `${c.property}: ${JSON.stringify(c.current)} -> ${JSON.stringify(c.desired)}`)
         .join(', ');
 
-      throw new Error(
+      throw new JetstreamMigrationError(
+        MigrationErrorReason.TransportConfigConflict,
         `Stream ${config.name} has transport-controlled config conflicts that cannot be migrated: ${conflicts}. ` +
           `The retention policy is managed by the transport and must match the stream kind.`,
       );
@@ -405,7 +412,8 @@ export class StreamProvider {
     }
 
     if (config.name === this.getStreamName(StreamKind.Schedule)) {
-      throw new Error(
+      throw new JetstreamMigrationError(
+        MigrationErrorReason.ScheduleStream,
         `Stream ${config.name} is a schedule stream and cannot be migrated: NATS refuses ` +
           'sourcing into a stream with allow_msg_schedules, which the migration relies on. ' +
           'Revert the immutable change, or recreate the stream by hand and let the next boot ' +
@@ -414,7 +422,8 @@ export class StreamProvider {
     }
 
     if (this.isSharedStream(config.name)) {
-      throw new Error(
+      throw new JetstreamMigrationError(
+        MigrationErrorReason.SharedStream,
         `Stream ${config.name} is shared across services and cannot be destructively migrated: ` +
           "recreating it would delete every other service's durable broadcast consumers and " +
           'replay retained history to them. Coordinate a manual migration instead.',
@@ -668,7 +677,8 @@ export class StreamProvider {
     const currentConnection = current.slice(this.options.name.length + 1);
     const desiredConnection = desired.slice(this.options.name.length + 1);
 
-    throw new Error(
+    throw new JetstreamConfigError(
+      ConfigErrorReason.StreamOwnershipConflict,
       `Stream ${config.name} is already owned by connection "${currentConnection}", but ` +
         `connection "${desiredConnection}" of the same service is trying to provision it. ` +
         `Both connections resolve the same stream name, which means they reach the same NATS ` +

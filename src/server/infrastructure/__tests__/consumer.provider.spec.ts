@@ -6,6 +6,7 @@ import { createMock } from '@golevelup/ts-vitest';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 
 import { ConnectionProvider } from '../../../connection';
+import { BindingErrorReason, MigrationErrorReason } from '../../../errors';
 import { ManagementMode, StreamKind } from '../../../interfaces';
 import type { JetstreamModuleOptions } from '../../../interfaces';
 import { internalName } from '../../../jetstream.constants';
@@ -250,7 +251,13 @@ describe(ConsumerProvider, () => {
         const jsm = await connection.getJetStreamManager();
 
         // When / Then: throws "migration in progress"
-        await expect(sut.recoverConsumer(jsm, StreamKind.Event)).rejects.toThrow(/being migrated/);
+        await expect(sut.recoverConsumer(jsm, StreamKind.Event)).rejects.toThrow(
+          expect.objectContaining({
+            name: 'JetstreamMigrationError',
+            reason: MigrationErrorReason.InProgress,
+            message: expect.stringMatching(/being migrated/),
+          }),
+        );
 
         // And: consumer was NOT created
         expect(mockJsm.consumers.add).not.toHaveBeenCalled();
@@ -472,7 +479,11 @@ describe(ConsumerProvider, () => {
 
         // When/Then
         await expect(sut.recoverConsumer(jsm as never, StreamKind.Event)).rejects.toThrow(
-          /externally managed/i,
+          expect.objectContaining({
+            name: 'JetstreamBindingError',
+            reason: BindingErrorReason.ExternalConsumerAbsent,
+            message: expect.stringMatching(/externally managed/i),
+          }),
         );
 
         expect(mockJsm.consumers.add).not.toHaveBeenCalled();

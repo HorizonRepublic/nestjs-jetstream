@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 
+import { ConfigErrorReason, JetstreamConfigError } from '../errors';
 import type { AckExtensionConfig } from '../interfaces';
 import type { AckExtension, AckExtensionTarget } from './ack-extension.types';
 
@@ -57,13 +58,15 @@ export const resolveAckExtension = (
   const { interval, maxDuration = DEFAULT_MAX_ACK_EXTENSION_MS } = config;
 
   if (interval !== undefined && (!Number.isFinite(interval) || interval <= 0)) {
-    throw new Error(
+    throw new JetstreamConfigError(
+      ConfigErrorReason.InvalidAckExtension,
       `ackExtension.interval must be a positive number of milliseconds, got ${interval}.`,
     );
   }
 
   if (!isPositive(maxDuration)) {
-    throw new Error(
+    throw new JetstreamConfigError(
+      ConfigErrorReason.InvalidAckExtension,
       `ackExtension.maxDuration must be a positive number of milliseconds or Infinity, got ${maxDuration}.`,
     );
   }

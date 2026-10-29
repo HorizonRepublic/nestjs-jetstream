@@ -1,3 +1,4 @@
+import { ConfigErrorReason, JetstreamConfigError } from '../errors';
 import type { MetricsRegistry } from './metrics.config';
 import type {
   LoadedPrometheusClient,
@@ -85,7 +86,8 @@ export const selectPrometheusClient = (
 ): LoadedPrometheusClient => {
   const [first] = installed;
 
-  if (first === undefined) throw new Error(INSTALL_MESSAGE);
+  if (first === undefined)
+    throw new JetstreamConfigError(ConfigErrorReason.PrometheusClientMissing, INSTALL_MESSAGE);
 
   if (register !== undefined) {
     const owner = installed.find((client) => register instanceof client.runtime.Registry);
@@ -93,10 +95,11 @@ export const selectPrometheusClient = (
     if (owner) return owner;
     if (installed.length === 1) return first;
 
-    throw new Error(FOREIGN_REGISTRY_MESSAGE);
+    throw new JetstreamConfigError(ConfigErrorReason.ForeignRegistry, FOREIGN_REGISTRY_MESSAGE);
   }
 
-  if (installed.length > 1) throw new Error(AMBIGUOUS_MESSAGE);
+  if (installed.length > 1)
+    throw new JetstreamConfigError(ConfigErrorReason.AmbiguousPrometheusClient, AMBIGUOUS_MESSAGE);
 
   return first;
 };

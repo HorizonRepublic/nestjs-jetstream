@@ -16,6 +16,12 @@ export enum ScheduleErrorReason {
   /** The server has no time zone data for a zone the client accepted. */
   ServerTimezoneData = 'server-timezone-data',
   ServerRejected = 'server-rejected',
+  /** The stream briefly could not report the holder's sequence, typically during a leader change. */
+  LeaderChange = 'leader-change',
+  /** Another writer kept replacing the holder with a different definition. */
+  ConcurrentWriter = 'concurrent-writer',
+  /** No stream captures the target service's schedule subjects. */
+  NoScheduleStream = 'no-schedule-stream',
 }
 
 /** One cron field: which values match, and whether it was written as a star. */

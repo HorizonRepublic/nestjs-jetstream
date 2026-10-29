@@ -1,3 +1,4 @@
+import { JetstreamRecordError, RecordErrorReason } from '../errors';
 import type { ScheduleRecordOptions } from '../interfaces';
 import { NATS_CONTROL_HEADER_PREFIX, RESERVED_HEADERS } from '../jetstream.constants';
 
@@ -156,11 +157,17 @@ export class JetstreamRecordBuilder<TData = unknown> {
     const ts = date.getTime();
 
     if (Number.isNaN(ts)) {
-      throw new Error('Schedule date is invalid');
+      throw new JetstreamRecordError(
+        RecordErrorReason.InvalidScheduleDate,
+        'Schedule date is invalid',
+      );
     }
 
     if (ts <= Date.now()) {
-      throw new Error('Schedule date must be in the future');
+      throw new JetstreamRecordError(
+        RecordErrorReason.ScheduleInPast,
+        'Schedule date must be in the future',
+      );
     }
 
     this.scheduleOptions = { at: new Date(ts) };
@@ -190,7 +197,10 @@ export class JetstreamRecordBuilder<TData = unknown> {
    */
   public ttl(nanos: number): this {
     if (!Number.isFinite(nanos) || nanos <= 0) {
-      throw new Error('TTL must be a positive finite value');
+      throw new JetstreamRecordError(
+        RecordErrorReason.InvalidTtl,
+        'TTL must be a positive finite value',
+      );
     }
 
     this.ttlDuration = nanosToGoDuration(nanos);
@@ -228,7 +238,8 @@ export class JetstreamRecordBuilder<TData = unknown> {
     const normalized = key.toLowerCase();
 
     if (normalized.startsWith(NATS_CONTROL_HEADER_PREFIX)) {
-      throw new Error(
+      throw new JetstreamRecordError(
+        RecordErrorReason.ReservedNatsHeader,
         `Header "${key}" is reserved for the NATS server and cannot be set manually. ` +
           'Use setMessageId() for deduplication, ttl() for per-message expiry, ' +
           'and scheduleAt() for delayed delivery.',
@@ -236,7 +247,8 @@ export class JetstreamRecordBuilder<TData = unknown> {
     }
 
     if (RESERVED_HEADERS.has(normalized)) {
-      throw new Error(
+      throw new JetstreamRecordError(
+        RecordErrorReason.ReservedTransportHeader,
         `Header "${key}" is reserved by the JetStream transport and cannot be set manually. ` +
           `Reserved headers: ${[...RESERVED_HEADERS].join(', ')}`,
       );

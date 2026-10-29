@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ConnectionProvider } from '../../connection/connection.provider';
 import type { ConnectionBinding } from '../../connection/connection.types';
+import { ConfigErrorReason } from '../../errors';
 import type { JetstreamModuleOptions } from '../../interfaces';
 import { JetstreamStrategy } from '../strategy';
 
@@ -91,7 +92,13 @@ describe('JetstreamStrategy connection binding', () => {
     // Then it fails fast
     expect(() => {
       sut.addHandler('order.created', handler(), true, {});
-    }).toThrow(/Duplicate handler/);
+    }).toThrow(
+      expect.objectContaining({
+        name: 'JetstreamConfigError',
+        reason: ConfigErrorReason.DuplicateHandler,
+        message: expect.stringMatching(/Duplicate handler/),
+      }),
+    );
   });
 
   it('should allow the same pattern on two different connections', () => {
@@ -116,7 +123,15 @@ describe('JetstreamStrategy connection binding', () => {
     // Then the error lists the configured names
     expect(() => {
       sut.addHandler('order.created', handler(), true, { connection: 'analitycs' });
-    }).toThrow(/Unknown connection "analitycs"[\s\S]*primary[\s\S]*analytics/);
+    }).toThrow(
+      expect.objectContaining({
+        name: 'JetstreamConfigError',
+        reason: ConfigErrorReason.UnknownConnection,
+        message: expect.stringMatching(
+          /Unknown connection "analitycs"[\s\S]*primary[\s\S]*analytics/,
+        ),
+      }),
+    );
   });
 
   it('should throw when the target connection is publisher-only', () => {
@@ -127,6 +142,12 @@ describe('JetstreamStrategy connection binding', () => {
     // Then the error explains why it cannot host handlers
     expect(() => {
       sut.addHandler('order.created', handler(), true, { connection: 'analytics' });
-    }).toThrow(/publisher-only/);
+    }).toThrow(
+      expect.objectContaining({
+        name: 'JetstreamConfigError',
+        reason: ConfigErrorReason.PublisherOnlyConnection,
+        message: expect.stringMatching(/publisher-only/),
+      }),
+    );
   });
 });

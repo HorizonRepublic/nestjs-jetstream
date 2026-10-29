@@ -1,3 +1,4 @@
+import { JetStreamApiError } from '@nats-io/jetstream';
 import type { JetStreamClient as NatsJsClient, JetStreamManager, PubAck } from '@nats-io/jetstream';
 import type { Msg, MsgHdrs, NatsConnection, Status, Subscription } from '@nats-io/transport-node';
 import { headers as natsHeaders } from '@nats-io/transport-node';
@@ -9,6 +10,13 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vi
 
 import { ConnectionProvider } from '../../connection';
 import { ServerCapabilities } from '../../connection/server-capabilities';
+import {
+  ConfigErrorReason,
+  ConnectionErrorReason,
+  PublishErrorReason,
+  RecordErrorReason,
+  RpcErrorReason,
+} from '../../errors';
 import { EventBus } from '../../hooks';
 import type { Codec, JetstreamModuleOptions, TargetSubjectPrefixes } from '../../interfaces';
 import { TransportEvent } from '../../interfaces';
@@ -20,6 +28,7 @@ import {
 } from '../../jetstream.constants';
 import { ScheduleErrorReason } from '../../schedule';
 import { NameResolver } from '../../server/infrastructure/name-resolver';
+import { NatsErrorCode } from '../../server/infrastructure/nats-error-codes';
 import { JetstreamClient } from '../jetstream.client';
 import { JetstreamRecordBuilder } from '../jetstream.record';
 import { RpcReplyInbox } from '../rpc-reply-inbox';
@@ -183,7 +192,13 @@ describe(JetstreamClient, () => {
       Object.defineProperty(connection, 'unwrap', { get: () => null, configurable: true });
 
       // When/Then
-      expect(() => sut.unwrap()).toThrow('Not connected');
+      expect(() => sut.unwrap()).toThrow(
+        expect.objectContaining({
+          name: 'JetstreamConnectionError',
+          reason: ConnectionErrorReason.NotConnected,
+          message: expect.stringContaining('Not connected'),
+        }),
+      );
     });
   });
 
@@ -412,7 +427,11 @@ describe(JetstreamClient, () => {
 
         // When/Then: emit rejects with a descriptive error, nothing is published
         await expect(firstValueFrom(sut.emit('ordered:order.status', record))).rejects.toThrow(
-          /scheduleAt.*ordered/i,
+          expect.objectContaining({
+            name: 'JetstreamRecordError',
+            reason: RecordErrorReason.ScheduleUnsupportedForOrdered,
+            message: expect.stringMatching(/scheduleAt.*ordered/i),
+          }),
         );
 
         expect(mockJs.publish).not.toHaveBeenCalled();
@@ -525,7 +544,13 @@ describe(JetstreamClient, () => {
       // Given a target without a schedule stream
       const jsm = createMock<JetStreamManager>();
 
-      vi.mocked(jsm.streams.find).mockRejectedValue(new Error('no stream'));
+      vi.mocked(jsm.streams.find).mockRejectedValue(
+        new JetStreamApiError({
+          err_code: NatsErrorCode.StreamNotFound,
+          code: 404,
+          description: 'no stream matches subject',
+        }),
+      );
       connection.getJetStreamManager.mockResolvedValue(jsm);
 
       // When / Then
@@ -690,7 +715,13 @@ describe(JetstreamClient, () => {
           new JetstreamClient(options, options.name, connection, codec, eventBus, undefined, {
             events: prefixes.events,
           }),
-      ).toThrow(/targets this service itself/);
+      ).toThrow(
+        expect.objectContaining({
+          name: 'JetstreamConfigError',
+          reason: ConfigErrorReason.SelfTargetPrefix,
+          message: expect.stringMatching(/targets this service itself/),
+        }),
+      );
     });
 
     it('should reject an invalid prefix when the client is created', () => {
@@ -700,7 +731,13 @@ describe(JetstreamClient, () => {
           new JetstreamClient(options, targetName, connection, codec, eventBus, undefined, {
             rpc: 'acme.>',
           }),
-      ).toThrow(/Invalid subjectPrefix "acme\.>"/);
+      ).toThrow(
+        expect.objectContaining({
+          name: 'JetstreamConfigError',
+          reason: ConfigErrorReason.InvalidSubjectPrefix,
+          message: expect.stringMatching(/Invalid subjectPrefix "acme\.>"/),
+        }),
+      );
     });
   });
 
@@ -839,6 +876,24 @@ describe(JetstreamClient, () => {
 
         // When/Then: wrapped in Error
         await expect(firstValueFrom(sut.send('test', {}))).rejects.toThrow('Unknown error');
+      });
+
+      it('should keep the encoding failure as the cause of an internal transport error', async () => {
+        // Given: the codec cannot encode the payload
+        const encodeError = new Error(faker.lorem.sentence());
+
+        vi.mocked(codec.encode).mockImplementation(() => {
+          throw encodeError;
+        });
+
+        // When/Then
+        await expect(firstValueFrom(sut.send('test', {}))).rejects.toThrow(
+          expect.objectContaining({
+            name: 'JetstreamRpcError',
+            reason: RpcErrorReason.InternalTransport,
+            cause: encodeError,
+          }),
+        );
       });
 
       it('should emit TransportEvent.Error on request failure', async () => {
@@ -1044,7 +1099,13 @@ describe(JetstreamClient, () => {
         vi.advanceTimersByTime(DEFAULT_JETSTREAM_RPC_TIMEOUT);
 
         // Then: timeout error surfaces the unified `rpc.timeout` label
-        await expect(resultPromise).rejects.toThrow('rpc.timeout');
+        await expect(resultPromise).rejects.toThrow(
+          expect.objectContaining({
+            name: 'JetstreamRpcError',
+            reason: RpcErrorReason.Timeout,
+            message: 'rpc.timeout',
+          }),
+        );
         expect(eventBus.emit).toHaveBeenCalledWith(
           TransportEvent.RpcTimeout,
           expect.stringContaining('cmd.slow.handler'),
@@ -1144,6 +1205,39 @@ describe(JetstreamClient, () => {
 
         // Then: error propagated as Error instance
         await expect(resultPromise).rejects.toThrow('invalid payload');
+      });
+
+      it('should reject with a typed decode error when the codec throws a non-Error', async () => {
+        // Given
+        const resultPromise = firstValueFrom(sut.send('test', {}));
+
+        await vi.advanceTimersByTimeAsync(0);
+
+        const publishedHeaders: MsgHdrs = mockJs.publish.mock.calls[0]![2]!.headers!;
+        const replyHeaders = natsHeaders();
+
+        replyHeaders.set(
+          JetstreamHeader.CorrelationId,
+          publishedHeaders.get(JetstreamHeader.CorrelationId),
+        );
+        codec.decode.mockImplementation(() => {
+          throw 'invalid payload';
+        });
+
+        // When
+        inboxCallback(
+          null,
+          createMock<Msg>({ data: new Uint8Array([0xff]), headers: replyHeaders }),
+        );
+
+        // Then
+        await expect(resultPromise).rejects.toThrow(
+          expect.objectContaining({
+            name: 'JetstreamRpcError',
+            reason: RpcErrorReason.DecodeFailed,
+            message: 'Decode error',
+          }),
+        );
       });
     });
 
@@ -1246,12 +1340,45 @@ describe(JetstreamClient, () => {
       const result = firstValueFrom(sut.send('rpc.dup', {}));
       // Attach the expectation before the rejection settles; awaited below
       // oxlint-disable-next-line vitest/valid-expect
-      const assertion = expect(result).rejects.toThrow(/duplicate/i);
+      const assertion = expect(result).rejects.toThrow(
+        expect.objectContaining({
+          name: 'JetstreamRpcError',
+          reason: RpcErrorReason.DuplicatePublish,
+          message: expect.stringMatching(/duplicate/i),
+        }),
+      );
 
       await vi.advanceTimersByTimeAsync(0);
 
       // Then: rejected immediately instead of hanging until the RPC timeout
       await vi.advanceTimersByTimeAsync(DEFAULT_JETSTREAM_RPC_TIMEOUT);
+      await assertion;
+    });
+
+    it('should reject with JetstreamPublishError when the command stream is full', async () => {
+      // Given
+      mockJs.publish.mockRejectedValue(
+        new JetStreamApiError({
+          err_code: 10077,
+          code: 503,
+          description: 'maximum bytes exceeded',
+        }),
+      );
+
+      // When
+      const result = firstValueFrom(sut.send('rpc.full', {}));
+      // oxlint-disable-next-line vitest/valid-expect
+      const assertion = expect(result).rejects.toThrow(
+        expect.objectContaining({
+          name: 'JetstreamPublishError',
+          reason: PublishErrorReason.StreamFull,
+          message: 'maximum bytes exceeded',
+        }),
+      );
+
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Then
       await assertion;
     });
   });
@@ -1280,8 +1407,33 @@ describe(JetstreamClient, () => {
       statusSubject.next({ type: 'disconnect', server: '' });
 
       // Then: both reject with Error('Connection lost')
-      await expect(result1).rejects.toThrow('Connection lost');
-      await expect(result2).rejects.toThrow('Connection lost');
+      const connectionLost = expect.objectContaining({
+        name: 'JetstreamRpcError',
+        reason: RpcErrorReason.ConnectionLost,
+        message: 'Connection lost',
+      });
+
+      await expect(result1).rejects.toThrow(connectionLost);
+      await expect(result2).rejects.toThrow(connectionLost);
+    });
+
+    it('should reject pending callbacks when the client closes', async () => {
+      // Given: a pending RPC
+      const result = firstValueFrom(sut.send('rpc.one', {}));
+
+      await vi.advanceTimersByTimeAsync(0);
+
+      // When
+      await sut.close();
+
+      // Then
+      await expect(result).rejects.toThrow(
+        expect.objectContaining({
+          name: 'JetstreamRpcError',
+          reason: RpcErrorReason.ClientClosed,
+          message: 'Client closed',
+        }),
+      );
     });
 
     it('should clear pending maps on disconnect', async () => {

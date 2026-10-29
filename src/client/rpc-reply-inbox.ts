@@ -7,6 +7,7 @@ import {
   type Subscription,
 } from '@nats-io/transport-node';
 
+import { JetstreamRpcError, RpcErrorReason } from '../errors';
 import type { Codec } from '../interfaces';
 import { JetstreamHeader } from '../jetstream.constants';
 import type { RpcReplyCallback } from './client.types';
@@ -155,7 +156,10 @@ export class RpcReplyInbox {
       }
     } catch (err) {
       callback({
-        err: err instanceof Error ? err : new Error('Decode error'),
+        err:
+          err instanceof Error
+            ? err
+            : new JetstreamRpcError(RpcErrorReason.DecodeFailed, 'Decode error', { cause: err }),
         response: null,
         isDisposed: true,
       });

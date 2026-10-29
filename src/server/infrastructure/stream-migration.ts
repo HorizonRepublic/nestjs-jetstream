@@ -7,6 +7,7 @@ import {
   type StreamInfo,
 } from '@nats-io/jetstream';
 
+import { JetstreamMigrationError, MigrationErrorReason } from '../../errors';
 import { NatsErrorCode } from './nats-error-codes';
 import { compareStreamConfig } from './stream-config-diff';
 
@@ -241,7 +242,8 @@ export class StreamMigration {
       await new Promise((r) => setTimeout(r, SOURCING_POLL_INTERVAL_MS));
     }
 
-    throw new Error(
+    throw new JetstreamMigrationError(
+      MigrationErrorReason.SourcingTimeout,
       `Stream sourcing timeout: ${sourceName} has not drained into ${streamName} within ` +
         `${this.sourcingTimeoutMs / 1000}s. The backup is preserved; restoration resumes on the next startup.`,
     );
@@ -266,7 +268,8 @@ export class StreamMigration {
       await new Promise((r) => setTimeout(r, SOURCING_POLL_INTERVAL_MS * 5));
     }
 
-    throw new Error(
+    throw new JetstreamMigrationError(
+      MigrationErrorReason.PeerTimeout,
       `Migration backup ${backupName} did not clear within ${this.peerWaitMs / 1000}s. ` +
         'If no other instance is migrating, recover or remove the backup manually.',
     );

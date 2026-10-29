@@ -16,6 +16,7 @@ import {
   type MockedFunction,
 } from 'vitest';
 
+import { ConnectionErrorReason } from '../../errors';
 import { EventBus } from '../../hooks';
 import type { JetstreamModuleOptions } from '../../interfaces';
 import { TransportEvent } from '../../interfaces';
@@ -178,7 +179,29 @@ describe(ConnectionProvider, () => {
         mockConnect.mockRejectedValue(new Error('CONNECTION_REFUSED'));
 
         // When/Then: throws RuntimeException with server list
-        await expect(sut.getConnection()).rejects.toThrow('NATS connection refused');
+        await expect(sut.getConnection()).rejects.toThrow(
+          expect.objectContaining({
+            name: 'JetstreamConnectionError',
+            reason: ConnectionErrorReason.Refused,
+            message: expect.stringContaining('NATS connection refused'),
+          }),
+        );
+      });
+
+      it('should type the refusal nats.js reports', async () => {
+        // Given: the error nats.js raises for ECONNREFUSED
+        const refusal = new Error('connection refused');
+
+        mockConnect.mockRejectedValue(refusal);
+
+        // When/Then
+        await expect(sut.getConnection()).rejects.toThrow(
+          expect.objectContaining({
+            name: 'JetstreamConnectionError',
+            reason: ConnectionErrorReason.Refused,
+            cause: refusal,
+          }),
+        );
       });
 
       it('should re-throw non-connection errors', async () => {
@@ -192,11 +215,11 @@ describe(ConnectionProvider, () => {
       it('should allow retry after connection failure', async () => {
         // Given: first connection attempt fails, second succeeds
         mockConnect
-          .mockRejectedValueOnce(new Error('Connection refused'))
+          .mockRejectedValueOnce(new Error('connection refused'))
           .mockResolvedValueOnce(mockNc);
 
         // When: first call fails
-        await expect(sut.getConnection()).rejects.toThrow('Connection refused');
+        await expect(sut.getConnection()).rejects.toThrow('NATS connection refused');
 
         // Then: second call should succeed (not return cached rejection)
         const result = await sut.getConnection();
@@ -375,7 +398,7 @@ describe(ConnectionProvider, () => {
       const nc = createNc({
         status: vi.fn().mockReturnValue(
           (async function* (): AsyncGenerator<Status> {
-            yield { type: 'error', error: new Error('test error') } as unknown as Status;
+            yield { type: 'error', error: new Error('test error') };
           })(),
         ),
       });
@@ -447,7 +470,13 @@ describe(ConnectionProvider, () => {
 
     it('should throw if not connected', () => {
       // When/Then: throws before connection
-      expect(() => sut.getJetStreamClient()).toThrow('Not connected');
+      expect(() => sut.getJetStreamClient()).toThrow(
+        expect.objectContaining({
+          name: 'JetstreamConnectionError',
+          reason: ConnectionErrorReason.NotConnected,
+          message: expect.stringContaining('Not connected'),
+        }),
+      );
     });
 
     it('should invalidate cached client on reconnect', async () => {
@@ -456,7 +485,7 @@ describe(ConnectionProvider, () => {
       let callCount = 0;
 
       mockJetstream.mockImplementation(() => {
-        return { id: ++callCount } as unknown as JetStreamClient;
+        return createMock<JetStreamClient>({ apiPrefix: String(++callCount) });
       });
 
       let emitReconnect!: () => void;

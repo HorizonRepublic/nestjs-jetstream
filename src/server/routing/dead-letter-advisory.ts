@@ -5,6 +5,7 @@ import type { JetStreamManager, StoredMsg } from '@nats-io/jetstream';
 import type { Msg, Subscription } from '@nats-io/transport-node';
 
 import { ConnectionProvider } from '../../connection';
+import { DeliveryErrorReason, JetstreamDeliveryError } from '../../errors';
 import type { Codec } from '../../interfaces';
 import { DeadLetterCapture } from './dead-letter-capture';
 import type {
@@ -143,7 +144,7 @@ export class DeadLetterAdvisoryListener {
       await this.capture.captureSource(
         this.source(jsm, target, stored, advisory.deliveries ?? 0),
         this.decode(stored.data),
-        new Error(EXHAUSTED_REASON),
+        new JetstreamDeliveryError(DeliveryErrorReason.DeliveriesExhausted, EXHAUSTED_REASON),
       );
     } catch (err) {
       this.logger.error(

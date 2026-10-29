@@ -1,6 +1,7 @@
 import { faker } from '@faker-js/faker';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { ConfigErrorReason } from '../../errors';
 import type { JetstreamModuleOptions } from '../../interfaces';
 import { normalizeOptions } from '../connection-options';
 
@@ -98,7 +99,13 @@ describe('normalizeOptions', () => {
     };
 
     // When normalized, Then it fails fast
-    expect(() => normalizeOptions(options)).toThrow(/exactly one of `servers` or `connections`/);
+    expect(() => normalizeOptions(options)).toThrow(
+      expect.objectContaining({
+        name: 'JetstreamConfigError',
+        reason: ConfigErrorReason.ServersOrConnections,
+        message: expect.stringMatching(/exactly one of `servers` or `connections`/),
+      }),
+    );
   });
 
   it('should reject supplying neither servers nor connections', () => {
@@ -106,7 +113,13 @@ describe('normalizeOptions', () => {
     const options = { name: 'orders' } as JetstreamModuleOptions;
 
     // When normalized, Then it fails fast
-    expect(() => normalizeOptions(options)).toThrow(/exactly one of `servers` or `connections`/);
+    expect(() => normalizeOptions(options)).toThrow(
+      expect.objectContaining({
+        name: 'JetstreamConfigError',
+        reason: ConfigErrorReason.ServersOrConnections,
+        message: expect.stringMatching(/exactly one of `servers` or `connections`/),
+      }),
+    );
   });
 
   it('should reject an unknown defaultConnection', () => {
@@ -118,7 +131,13 @@ describe('normalizeOptions', () => {
     };
 
     // When normalized, Then it names the known connections
-    expect(() => normalizeOptions(options)).toThrow(/defaultConnection "typo"/);
+    expect(() => normalizeOptions(options)).toThrow(
+      expect.objectContaining({
+        name: 'JetstreamConfigError',
+        reason: ConfigErrorReason.UnknownConnection,
+        message: expect.stringMatching(/defaultConnection "typo"/),
+      }),
+    );
   });
 
   it('should require defaultConnection when no connection is named "default"', () => {
@@ -132,7 +151,13 @@ describe('normalizeOptions', () => {
     };
 
     // When normalized, Then it demands an explicit choice
-    expect(() => normalizeOptions(options)).toThrow(/defaultConnection is required/);
+    expect(() => normalizeOptions(options)).toThrow(
+      expect.objectContaining({
+        name: 'JetstreamConfigError',
+        reason: ConfigErrorReason.DefaultConnectionRequired,
+        message: expect.stringMatching(/defaultConnection is required/),
+      }),
+    );
   });
 
   it('should reject a name with surrounding whitespace', () => {
@@ -145,7 +170,13 @@ describe('normalizeOptions', () => {
     };
 
     // When normalized, Then it fails fast
-    expect(() => normalizeOptions(options)).toThrow(/surrounding whitespace/);
+    expect(() => normalizeOptions(options)).toThrow(
+      expect.objectContaining({
+        name: 'JetstreamConfigError',
+        reason: ConfigErrorReason.InvalidConnectionName,
+        message: expect.stringMatching(/surrounding whitespace/),
+      }),
+    );
   });
 
   it('should reject an empty connections map', () => {
@@ -153,7 +184,13 @@ describe('normalizeOptions', () => {
     const options: JetstreamModuleOptions = { name: 'orders', connections: {} };
 
     // When normalized, Then it fails fast
-    expect(() => normalizeOptions(options)).toThrow(/at least one connection/);
+    expect(() => normalizeOptions(options)).toThrow(
+      expect.objectContaining({
+        name: 'JetstreamConfigError',
+        reason: ConfigErrorReason.NoConnections,
+        message: expect.stringMatching(/at least one connection/),
+      }),
+    );
   });
 
   it('should reject two connections pointing at an identical server set', () => {
@@ -169,7 +206,11 @@ describe('normalizeOptions', () => {
 
     // When normalized, Then both names appear in the error
     expect(() => normalizeOptions(options)).toThrow(
-      /"primary"[\s\S]*"clone"|"clone"[\s\S]*"primary"/,
+      expect.objectContaining({
+        name: 'JetstreamConfigError',
+        reason: ConfigErrorReason.DuplicateCluster,
+        message: expect.stringMatching(/"primary"[\s\S]*"clone"|"clone"[\s\S]*"primary"/),
+      }),
     );
   });
 
@@ -201,7 +242,13 @@ describe('normalizeOptions', () => {
     };
 
     // When normalized, Then the collision is caught
-    expect(() => normalizeOptions(options)).toThrow(/same NATS cluster/);
+    expect(() => normalizeOptions(options)).toThrow(
+      expect.objectContaining({
+        name: 'JetstreamConfigError',
+        reason: ConfigErrorReason.DuplicateCluster,
+        message: expect.stringMatching(/same NATS cluster/),
+      }),
+    );
   });
 
   it('should reject a connection with an empty servers list', () => {
@@ -213,6 +260,12 @@ describe('normalizeOptions', () => {
     };
 
     // When normalized, Then it fails fast
-    expect(() => normalizeOptions(options)).toThrow(/"primary"[\s\S]*at least one server/);
+    expect(() => normalizeOptions(options)).toThrow(
+      expect.objectContaining({
+        name: 'JetstreamConfigError',
+        reason: ConfigErrorReason.NoServers,
+        message: expect.stringMatching(/"primary"[\s\S]*at least one server/),
+      }),
+    );
   });
 });

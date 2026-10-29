@@ -9,6 +9,7 @@ import { ScheduleStore } from '../schedule-store';
 import { ScheduleWriter } from '../schedule-writer';
 import { PutOutcome } from '../schedule.types';
 import type { StoredHolder } from '../schedule.types';
+import { ScheduleErrorReason } from '../schedule.types';
 
 const NOW = new Date('2026-10-23T12:00:00Z');
 const SUBJECT = 'svc__microservice._cron.decl.sync.tick';
@@ -138,7 +139,11 @@ describe(ScheduleWriter, () => {
 
     // Then
     expect(await failure).toEqual(
-      expect.objectContaining({ message: expect.stringMatching(/sequences as unavailable/) }),
+      expect.objectContaining({
+        name: 'JetstreamScheduleError',
+        reason: ScheduleErrorReason.LeaderChange,
+        message: expect.stringMatching(/sequences as unavailable/),
+      }),
     );
     vi.useRealTimers();
   });
@@ -150,7 +155,11 @@ describe(ScheduleWriter, () => {
 
     // When / Then
     await expect(sut.upsert(SUBJECT, TARGET, 'sync.tick', SPEC, NOW)).rejects.toThrow(
-      /kept changing/,
+      expect.objectContaining({
+        name: 'JetstreamScheduleError',
+        reason: ScheduleErrorReason.ConcurrentWriter,
+        message: expect.stringMatching(/kept changing/),
+      }),
     );
   });
 });

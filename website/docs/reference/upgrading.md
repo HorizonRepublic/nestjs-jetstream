@@ -7,7 +7,7 @@ schema:
   headline: "Upgrading NestJS JetStream between major versions"
   description: "Renamed options, changed defaults and how to keep the previous behaviour, release by release."
   datePublished: "2026-10-23"
-  dateModified: "2026-10-23"
+  dateModified: "2026-10-27"
 ---
 
 # Upgrading
@@ -16,6 +16,14 @@ schema:
 > **You get:** what changes for you, release by release, and how to restore the previous behaviour.
 
 Newest first. What each release adds is in the [release notes](/docs/reference/release-notes); this page lists only what you may have to act on.
+
+## v3.0 → v3.1
+
+Nothing to change: every message, class and field from v3.0 keeps working.
+
+### Additive changes
+
+**Errors are typed.** Errors the transport throws, rejects with or hands to `onDeadLetter` are now `Jetstream<Area>Error` classes with a `reason` field, such as `JetstreamConfigError` or `JetstreamRpcError`. They still extend `Error` and keep their messages, so existing `catch` blocks and message checks behave as before. A full stream rejects with `JetstreamPublishError`, which still extends nats.js `JetStreamApiError`; its `name` is now `JetstreamPublishError`. See [Errors](/docs/reference/errors).
 
 ## v2.13 → v3.0
 

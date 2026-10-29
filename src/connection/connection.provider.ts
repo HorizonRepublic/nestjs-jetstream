@@ -15,6 +15,7 @@ import {
 
 import { defer, from, Observable, share, shareReplay, switchMap } from 'rxjs';
 
+import { ConnectionErrorReason, JetstreamConnectionError } from '../errors';
 import { EventBus } from '../hooks';
 import { TransportEvent } from '../interfaces';
 import type { JetstreamModuleOptions } from '../interfaces';
@@ -144,7 +145,10 @@ export class ConnectionProvider {
    */
   public getJetStreamClient(): JetStreamClient {
     if (!this.connection || this.connection.isClosed()) {
-      throw new Error('Not connected; call getConnection() before getJetStreamClient()');
+      throw new JetstreamConnectionError(
+        ConnectionErrorReason.NotConnected,
+        'Not connected; call getConnection() before getJetStreamClient()',
+      );
     }
 
     this.jsClient ??= jetstream(this.connection);
@@ -257,10 +261,14 @@ export class ConnectionProvider {
 
       return nc;
     } catch (err) {
-      if (err instanceof Error && err.message.includes('REFUSED')) {
-        throw new Error(`NATS connection refused: ${(this.options.servers ?? []).join(', ')}`, {
-          cause: err,
-        });
+      if (err instanceof Error && /refused/i.test(err.message)) {
+        throw new JetstreamConnectionError(
+          ConnectionErrorReason.Refused,
+          `NATS connection refused: ${(this.options.servers ?? []).join(', ')}`,
+          {
+            cause: err,
+          },
+        );
       }
 
       throw err;

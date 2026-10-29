@@ -14,6 +14,17 @@ import { Subscription as RxSubscription } from 'rxjs';
 
 import { ConnectionProvider } from '../connection';
 import { NatsCapability } from '../connection/server-capabilities.types';
+import {
+  ConfigErrorReason,
+  ConnectionErrorReason,
+  JetstreamConfigError,
+  JetstreamConnectionError,
+  JetstreamRecordError,
+  JetstreamRpcError,
+  RecordErrorReason,
+  RpcErrorReason,
+  toPublishError,
+} from '../errors';
 import { EventBus } from '../hooks';
 import { TransportEvent } from '../interfaces';
 import type {
@@ -79,7 +90,8 @@ const resolveTargetSubjects = (
   }
 
   if (targetPrefixes !== undefined) {
-    throw new Error(
+    throw new JetstreamConfigError(
+      ConfigErrorReason.SelfTargetPrefix,
       `forFeature({ name: '${target}' }) targets this service itself, so it takes no subjectPrefix: ` +
         'its prefixes come from forRoot().',
     );
@@ -257,7 +269,7 @@ export class JetstreamClient extends ClientProxy {
     this.statusSubscription?.unsubscribe();
     this.statusSubscription = null;
     this.readyForPublish = false;
-    this.rpcInbox.rejectAll(new Error('Client closed'));
+    this.rpcInbox.rejectAll(new JetstreamRpcError(RpcErrorReason.ClientClosed, 'Client closed'));
   }
 
   /**
@@ -269,7 +281,10 @@ export class JetstreamClient extends ClientProxy {
     const nc = this.connection.unwrap;
 
     if (!nc) {
-      throw new Error('Not connected; call connect() before unwrap()');
+      throw new JetstreamConnectionError(
+        ConnectionErrorReason.NotConnected,
+        'Not connected; call connect() before unwrap()',
+      );
     }
 
     return nc as T;
@@ -291,7 +306,8 @@ export class JetstreamClient extends ClientProxy {
 
     if (schedule && publishKind === PublishKind.Ordered) {
       // ADR-51: the schedule target must live in the same stream as the holder, impossible for ordered patterns.
-      throw new Error(
+      throw new JetstreamRecordError(
+        RecordErrorReason.ScheduleUnsupportedForOrdered,
         `scheduleAt() is not supported for ordered events (pattern: ${packet.pattern}). ` +
           'Scheduled delivery is available for workqueue events and broadcasts.',
       );
@@ -366,7 +382,7 @@ export class JetstreamClient extends ClientProxy {
       this.reportPublished(declaredPattern, streamKind, startedAt, 'success');
     } catch (err) {
       this.reportPublished(declaredPattern, streamKind, startedAt, 'error');
-      throw err;
+      throw toPublishError(err);
     }
 
     return undefined as T;
@@ -396,7 +412,13 @@ export class JetstreamClient extends ClientProxy {
 
     const onUnhandled = (err: unknown): void => {
       this.logger.error('Unhandled publish error:', err);
-      callback({ err: new Error('Internal transport error'), response: null, isDisposed: true });
+      callback({
+        err: new JetstreamRpcError(RpcErrorReason.InternalTransport, 'Internal transport error', {
+          cause: err,
+        }),
+        response: null,
+        isDisposed: true,
+      });
     };
 
     let jetStreamCorrelationId: string | null = null;
@@ -571,7 +593,11 @@ export class JetstreamClient extends ClientProxy {
       // RpcTimeout hook + OTel CLIENT span are the canonical signals; no separate log.
       this.eventBus.emit(TransportEvent.RpcTimeout, subject, correlationId);
       this.reportRpcCompleted(declaredPattern, startedAt, 'timeout');
-      callback({ err: new Error(RPC_TIMEOUT_MESSAGE), response: null, isDisposed: true });
+      callback({
+        err: new JetstreamRpcError(RpcErrorReason.Timeout, RPC_TIMEOUT_MESSAGE),
+        response: null,
+        isDisposed: true,
+      });
     });
 
     try {
@@ -588,7 +614,10 @@ export class JetstreamClient extends ClientProxy {
         this.reportPublished(declaredPattern, StreamKind.Command, startedAt, 'error');
         this.reportRpcCompleted(declaredPattern, startedAt, 'error');
         callback({
-          err: new Error('Inbox not initialized; JetStream RPC mode requires a connected inbox'),
+          err: new JetstreamRpcError(
+            RpcErrorReason.InboxNotReady,
+            'Inbox not initialized; JetStream RPC mode requires a connected inbox',
+          ),
           response: null,
           isDisposed: true,
         });
@@ -607,7 +636,8 @@ export class JetstreamClient extends ClientProxy {
 
       if (ack.duplicate) {
         // The reply belongs to the original (deduped) request; fail fast instead of waiting out the timeout.
-        throw new Error(
+        throw new JetstreamRpcError(
+          RpcErrorReason.DuplicatePublish,
           `Duplicate RPC publish for ${subject}: the messageId was already used within the ` +
             'stream dedup window, so the reply belongs to the original request',
         );
@@ -619,7 +649,8 @@ export class JetstreamClient extends ClientProxy {
     } catch (err) {
       if (!this.rpcInbox.discard(correlationId)) return;
 
-      const error = err instanceof Error ? err : new Error('Unknown error');
+      const published = toPublishError(err);
+      const error = published instanceof Error ? published : new Error('Unknown error');
 
       spanHandle.finish({ kind: RpcOutcomeKind.Error, error });
       this.eventBus.emit(TransportEvent.Error, error, `jetstream-rpc-publish:${subject}`);
@@ -670,7 +701,9 @@ export class JetstreamClient extends ClientProxy {
   /** Fail-fast all pending JetStream RPC callbacks on connection loss. */
   private handleDisconnect(): void {
     // The inbox is recreated on the next connect().
-    this.rpcInbox.rejectAll(new Error('Connection lost'));
+    this.rpcInbox.rejectAll(
+      new JetstreamRpcError(RpcErrorReason.ConnectionLost, 'Connection lost'),
+    );
     // Force the next publish to re-run the full connect setup.
     this.readyForPublish = false;
   }

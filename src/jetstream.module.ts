@@ -15,6 +15,7 @@ import { JsonCodec } from './codec';
 import { ConnectionRegistry, createConnectionScope, normalizeOptions } from './connection';
 import type { ConnectionProvider } from './connection/connection.provider';
 import type { ConnectionSharedContext } from './connection/connection.types';
+import { ConfigErrorReason, JetstreamConfigError } from './errors';
 import { JetstreamHealthIndicator } from './health';
 import { EventBus } from './hooks';
 import type {
@@ -117,7 +118,8 @@ export const assertAllConnectionsStarted = (registry: ConnectionRegistry): void 
 
   if (skipped.length === 0) return;
 
-  throw new Error(
+  throw new JetstreamConfigError(
+    ConfigErrorReason.ConnectionsNotStarted,
     `Connections never started: ${skipped.join(', ')}. ` +
       `Their handlers are registered but not subscribed, so messages are silently not processed. ` +
       `Call connectJetstreamMicroservices(app) before app.startAllMicroservices().`,

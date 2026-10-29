@@ -26,6 +26,9 @@ export enum NatsErrorCode {
    */
   NoSuitablePeers = 10005,
 
+  /** The stream refused to store a message, e.g. a `discard: new` stream at its limits. */
+  StreamStoreFailed = 10077,
+
   /** `expect.lastSubjectSequence` did not match: the subject changed since it was read. */
   StreamWrongLastSequence = 10071,
 

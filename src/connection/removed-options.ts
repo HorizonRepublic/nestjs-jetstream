@@ -1,3 +1,5 @@
+import { ConfigErrorReason, JetstreamConfigError } from '../errors';
+
 type OptionsBlock = Readonly<Record<string, unknown>>;
 
 interface RemovedOption {
@@ -61,7 +63,8 @@ export const assertNoRemovedOptions = (options: object): void => {
   }
 
   if (found.length > 0) {
-    throw new Error(
+    throw new JetstreamConfigError(
+      ConfigErrorReason.RemovedOptions,
       `JetstreamModule received options removed in v3:\n- ${found.join('\n- ')}\n` +
         'See the v2.13 → v3.0 section of the migration guide.',
     );

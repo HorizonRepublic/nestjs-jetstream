@@ -3,6 +3,12 @@ import { Logger } from '@nestjs/common';
 import { JetStreamApiError, type ConsumerConfig, type ConsumerInfo } from '@nats-io/jetstream';
 
 import { ConnectionProvider } from '../../connection';
+import {
+  BindingErrorReason,
+  JetstreamBindingError,
+  JetstreamMigrationError,
+  MigrationErrorReason,
+} from '../../errors';
 import { ManagementMode, StreamKind } from '../../interfaces';
 import type { JetstreamModuleOptions } from '../../interfaces';
 import {
@@ -166,7 +172,8 @@ export class ConsumerProvider {
             err instanceof JetStreamApiError &&
             err.apiError().err_code === NatsErrorCode.ConsumerNotFound
           ) {
-            throw new Error(
+            throw new JetstreamBindingError(
+              BindingErrorReason.ExternalConsumerAbsent,
               `Consumer ${name} on ${stream} is externally managed and currently absent; ` +
                 `waiting for it to be restored.`,
               { cause: err },
@@ -221,7 +228,8 @@ export class ConsumerProvider {
     try {
       await jsm.streams.info(backupName);
 
-      throw new Error(
+      throw new JetstreamMigrationError(
+        MigrationErrorReason.InProgress,
         `Stream ${stream} is being migrated (backup ${backupName} exists). ` +
           `Waiting for migration to complete before recovering consumer.`,
       );

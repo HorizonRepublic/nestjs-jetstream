@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type Mocked
 
 import { ConnectionProvider } from '../../../connection';
 import { RpcContext } from '../../../context';
+import { DeliveryErrorReason } from '../../../errors';
 import { EventBus } from '../../../hooks';
 import type { Codec } from '../../../interfaces';
 import { TransportEvent } from '../../../interfaces';
@@ -1059,6 +1060,82 @@ describe(EventRouter, () => {
         } as DeliveryInfo,
       });
 
+    describe('delivery errors handed to onDeadLetter', () => {
+      it('should report a message without a handler as no-handler', async () => {
+        // Given
+        patternRegistry.getHandler.mockReturnValue(null);
+
+        // When
+        events$.next(createDeadLetterMsg());
+        await new Promise(process.nextTick);
+
+        // Then
+        expect(onDeadLetter).toHaveBeenCalledWith(
+          expect.objectContaining({
+            error: expect.objectContaining({
+              name: 'JetstreamDeliveryError',
+              reason: DeliveryErrorReason.NoHandler,
+              message: 'No handler for event: test.subject',
+            }),
+          }),
+        );
+      });
+
+      it('should report an undecodable payload as decode-failed with the codec error as cause', async () => {
+        // Given
+        const codecError = new Error('bad payload');
+
+        patternRegistry.getHandler.mockReturnValue(vi.fn().mockResolvedValue(undefined));
+        codec.decode.mockImplementation(() => {
+          throw codecError;
+        });
+
+        // When
+        events$.next(createDeadLetterMsg());
+        await new Promise(process.nextTick);
+
+        // Then
+        expect(onDeadLetter).toHaveBeenCalledWith(
+          expect.objectContaining({
+            error: expect.objectContaining({
+              name: 'JetstreamDeliveryError',
+              reason: DeliveryErrorReason.DecodeFailed,
+              message: 'Decode error: bad payload',
+              cause: codecError,
+            }),
+          }),
+        );
+      });
+
+      it('should report retry() on the final delivery as retry-on-final-attempt', async () => {
+        // Given
+        patternRegistry.getHandler.mockReturnValue(
+          vi.fn().mockImplementation(async (_data: unknown, ctx: RpcContext) => {
+            ctx.retry();
+          }),
+        );
+
+        const msg = createDeadLetterMsg();
+
+        msg.ack = vi.fn();
+
+        // When
+        events$.next(msg);
+        await new Promise(process.nextTick);
+
+        // Then
+        expect(onDeadLetter).toHaveBeenCalledWith(
+          expect.objectContaining({
+            error: expect.objectContaining({
+              name: 'JetstreamDeliveryError',
+              reason: DeliveryErrorReason.RetryOnFinalAttempt,
+              message: 'Retry requested on the final delivery attempt',
+            }),
+          }),
+        );
+      });
+    });
+
     describe('happy path', () => {
       it('should call onDeadLetter and term when deliveryCount reaches maxDeliver', async () => {
         // Given: a handler that always fails
@@ -1319,11 +1396,13 @@ describe(EventRouter, () => {
 
           patternRegistry.getHandler.mockReturnValue(handler);
 
-          const mockHeaders = new Map([['X-Trace-Id', ['abc123']]]);
+          const mockHeaders = natsHeaders();
+
+          mockHeaders.set('X-Trace-Id', 'abc123');
           const msg = createMock<JsMsg>({
             subject: 'test.subject',
             data: new TextEncoder().encode(JSON.stringify({ key: 'value' })),
-            headers: mockHeaders as unknown as JsMsg['headers'],
+            headers: mockHeaders,
             info: {
               deliveryCount: 3,
               stream: streamName,
@@ -1388,7 +1467,7 @@ describe(EventRouter, () => {
           const msg = createMock<JsMsg>({
             subject: 'test.subject',
             data: new TextEncoder().encode(JSON.stringify({ key: 'value' })),
-            headers: mockHeaders as unknown as JsMsg['headers'],
+            headers: mockHeaders,
             info: {
               deliveryCount: 3,
               stream: streamName,
@@ -1830,7 +1909,7 @@ describe(EventRouter, () => {
         it('should fall back to onDeadLetter when service name is absent', async () => {
           // Given: options with no name (can't derive DLQ stream subject)
           const options: JetstreamModuleOptions = {
-            name: '' as unknown as string,
+            name: '',
             servers: ['nats://localhost:4222'],
             dlq: {},
           };
