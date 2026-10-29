@@ -6,7 +6,7 @@ import { ConnectionProvider } from '../connection';
 import { RpcContext } from '../context';
 import { EventBus } from '../hooks';
 import { MessageKind, StreamKind, TransportEvent } from '../interfaces';
-import type { Codec, HandlerStatus, JetstreamModuleOptions } from '../interfaces';
+import type { Codec, JetstreamModuleOptions } from '../interfaces';
 import { JetstreamHeader } from '../jetstream.constants';
 import {
   ConsumeKind,
@@ -17,7 +17,9 @@ import {
 } from '../otel';
 import { isPromiseLike, serializeError, toError, unwrapResult } from '../utils';
 import { NameResolver } from './infrastructure/name-resolver';
+import { createHandlerReporter } from './routing/handler-reporter';
 import { PatternRegistry } from './routing/pattern-registry';
+import type { HandlerReporter } from './routing/routing.types';
 
 /**
  * Handles RPC via NATS Core request/reply pattern.
@@ -34,6 +36,7 @@ export class CoreRpcServer {
   private readonly otel: ResolvedOtelOptions;
   private readonly serviceName: string;
   private readonly serverEndpoint: ServerEndpoint | null;
+  private readonly reportHandlerCompleted: HandlerReporter;
 
   public constructor(
     options: JetstreamModuleOptions,
@@ -48,6 +51,11 @@ export class CoreRpcServer {
     this.otel = derived.otel;
     this.serviceName = derived.serviceName;
     this.serverEndpoint = derived.serverEndpoint;
+    this.reportHandlerCompleted = createHandlerReporter(
+      eventBus,
+      patternRegistry,
+      StreamKind.Command,
+    );
   }
 
   /** Start listening for RPC requests on the command subject. */
@@ -139,24 +147,6 @@ export class CoreRpcServer {
       this.respondWithError(msg, err);
       this.reportHandlerCompleted(msg, startedAt, 'error');
     }
-  }
-
-  // See EventRouter.reportHandlerCompleted for the rationale on declared
-  // pattern + per-emit hasHook check.
-  private reportHandlerCompleted(msg: Msg, startedAt: number, status: HandlerStatus): void {
-    if (!this.eventBus.hasHook(TransportEvent.HandlerCompleted)) return;
-
-    const declared = this.patternRegistry.resolveDeclared(msg.subject);
-    const pattern = declared?.pattern ?? msg.subject;
-    const kind = declared?.kind ?? StreamKind.Command;
-
-    this.eventBus.emit(
-      TransportEvent.HandlerCompleted,
-      pattern,
-      kind,
-      performance.now() - startedAt,
-      status,
-    );
   }
 
   /** Send an error response back to the caller with x-error header. */

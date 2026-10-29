@@ -20,8 +20,15 @@ export type ParkTimerFn = (msg: JsMsg) => (() => void) | null;
 /** Narrow consume-kind tag emitted by the event router (no `Rpc` here). */
 export type EventConsumeKind = Exclude<ConsumeKind, ConsumeKind.Rpc>;
 
+/** The part of a JetStream or Core NATS message a handler report reads. */
+export type ReportedMessage = Pick<JsMsg, 'subject'>;
+
 /** Reports one handler completion to the event bus. */
-export type HandlerReporter = (msg: JsMsg, startedAt: number, status: HandlerStatus) => void;
+export type HandlerReporter = (
+  msg: ReportedMessage,
+  startedAt: number,
+  status: HandlerStatus,
+) => void;
 
 /** Settles routed messages: ack, nak, term, or dead-letter escalation. */
 export interface Settlement {

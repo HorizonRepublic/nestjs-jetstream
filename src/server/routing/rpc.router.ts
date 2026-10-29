@@ -10,12 +10,7 @@ import { ConnectionProvider } from '../../connection';
 import { RpcContext } from '../../context';
 import { EventBus } from '../../hooks';
 import { MessageKind, StreamKind, TransportEvent } from '../../interfaces';
-import type {
-  Codec,
-  HandlerStatus,
-  JetstreamModuleOptions,
-  RpcRouterOptions,
-} from '../../interfaces';
+import type { Codec, JetstreamModuleOptions, RpcRouterOptions } from '../../interfaces';
 import { DEFAULT_JETSTREAM_RPC_TIMEOUT, JetstreamHeader } from '../../jetstream.constants';
 import {
   ConsumeKind,
@@ -37,6 +32,7 @@ import {
 } from '../../utils';
 import { MessageProvider } from '../infrastructure';
 import { ConcurrencyGate } from './concurrency-gate';
+import { createHandlerReporter } from './handler-reporter';
 import { PatternRegistry } from './pattern-registry';
 import type { ParkTimerFn } from './routing.types';
 
@@ -135,22 +131,11 @@ export class RpcRouter {
       eventBus.emit(TransportEvent.RpcTimeout, subject, correlationId);
     };
 
-    // See EventRouter.reportHandlerCompleted for the rationale on declared
-    // pattern + per-emit hasHook check.
-    const reportHandlerCompleted = (msg: JsMsg, startedAt: number, status: HandlerStatus): void => {
-      if (!eventBus.hasHook(TransportEvent.HandlerCompleted)) return;
-      const declared = patternRegistry.resolveDeclared(msg.subject);
-      const pattern = declared?.pattern ?? msg.subject;
-      const declaredKind = declared?.kind ?? StreamKind.Command;
-
-      eventBus.emit(
-        TransportEvent.HandlerCompleted,
-        pattern,
-        declaredKind,
-        performance.now() - startedAt,
-        status,
-      );
-    };
+    const reportHandlerCompleted = createHandlerReporter(
+      eventBus,
+      patternRegistry,
+      StreamKind.Command,
+    );
 
     const publishReply = (
       replyTo: string,

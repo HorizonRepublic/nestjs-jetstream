@@ -14,8 +14,9 @@ import {
   unwrapResult,
 } from '../../utils';
 import type { DeadLetterCapture } from './dead-letter-capture';
+import { createHandlerReporter } from './handler-reporter';
 import { settleOrphanTick } from './orphan-ticks';
-import type { HandlerReporter, RoutePipelineContext } from './routing.types';
+import type { RoutePipelineContext } from './routing.types';
 import { createSettlement, statusForContext } from './settlement';
 
 /** Routing shape resolved for one incoming message. */
@@ -23,27 +24,6 @@ interface ResolvedEvent {
   readonly handler: MessageHandler;
   readonly data: unknown;
 }
-
-/**
- * Reports handler completion to the event bus using the declared pattern
- * (not the wire subject) so metric cardinality stays bounded. hasHook is
- * checked per-emit, not snapshotted, so late subscribers (e.g. the metrics
- * service bootstrapping after this router starts) still receive events.
- */
-const createHandlerReporter = (rctx: RoutePipelineContext): HandlerReporter => {
-  const { eventBus, patternRegistry, kind } = rctx;
-
-  return (msg, startedAt, status) => {
-    if (!eventBus.hasHook(TransportEvent.HandlerCompleted)) return;
-
-    const declared = patternRegistry.resolveDeclared(msg.subject);
-    const pattern = declared?.pattern ?? msg.subject;
-    const declaredKind = declared?.kind ?? kind;
-    const durationMs = performance.now() - startedAt;
-
-    eventBus.emit(TransportEvent.HandlerCompleted, pattern, declaredKind, durationMs, status);
-  };
-};
 
 /**
  * Resolves an incoming message to its handler and decoded payload. Returns
@@ -161,7 +141,11 @@ export const createWorkqueuePipeline = (
   const { kind, spanKind, logger, eventBus, otel, serviceName, serverEndpoint } = rctx;
   const { ackExtension } = rctx;
 
-  const reportHandlerCompleted = createHandlerReporter(rctx);
+  const reportHandlerCompleted = createHandlerReporter(
+    rctx.eventBus,
+    rctx.patternRegistry,
+    rctx.kind,
+  );
   const resolveEvent = createEventResolver(rctx);
   const { settleSuccess, settleFailure } = createSettlement(logger, rctx.capture, rctx.retryDelays);
 
@@ -258,7 +242,11 @@ export const createOrderedPipeline = (
   const { spanKind, codec, logger, eventBus, patternRegistry, otel } = rctx;
   const { serviceName, serverEndpoint } = rctx;
 
-  const reportHandlerCompleted = createHandlerReporter(rctx);
+  const reportHandlerCompleted = createHandlerReporter(
+    rctx.eventBus,
+    rctx.patternRegistry,
+    rctx.kind,
+  );
 
   return (msg) => {
     const subject = msg.subject;
