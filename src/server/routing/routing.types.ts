@@ -1,7 +1,7 @@
 import type { Logger } from '@nestjs/common';
 
 import type { JsMsg } from '@nats-io/jetstream';
-import type { MsgHdrs } from '@nats-io/transport-node';
+import type { MsgHdrs, NatsConnection } from '@nats-io/transport-node';
 
 import type { RpcContext } from '../../context';
 import type { EventBus } from '../../hooks';
@@ -64,6 +64,22 @@ export interface RoutePipelineContext {
   readonly capture: DeadLetterCapture | null;
   /** How a schedule tick with no handler is settled; `null` outside the schedule stream. */
   readonly orphans: OrphanTickPolicy | null;
+}
+
+/** Per-subscription context of the JetStream RPC pipeline; see {@link RoutePipelineContext}. */
+export interface RpcPipelineContext {
+  readonly nc: NatsConnection;
+  readonly codec: Codec;
+  readonly logger: Logger;
+  readonly eventBus: EventBus;
+  readonly patternRegistry: PatternRegistry;
+  readonly otel: ResolvedOtelOptions;
+  readonly serviceName: string;
+  readonly serverEndpoint: ServerEndpoint | null;
+  /** Resolved ack extension, or null when disabled. */
+  readonly ackExtension: AckExtension | null;
+  /** Handler deadline, in ms. */
+  readonly timeout: number;
 }
 
 /**
