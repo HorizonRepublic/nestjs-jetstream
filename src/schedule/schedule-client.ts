@@ -1,10 +1,8 @@
-import { JetStreamApiError } from '@nats-io/jetstream';
-
 import type { ConnectionProvider } from '../connection/connection.provider';
 import { NatsCapability } from '../connection/server-capabilities.types';
 import { ScheduleOrigin, StreamKind } from '../interfaces';
 import type { ClientScheduleSpec, Codec, ScheduleChange, ScheduleInfo } from '../interfaces';
-import { NatsErrorCode } from '../server/infrastructure/nats-error-codes';
+import { isNatsError, NatsErrorCode } from '../server/infrastructure/nats-error-codes';
 import type { SubjectResolver } from '../server/infrastructure/subject-resolver';
 import { JetstreamScheduleError } from './schedule-error';
 import {
@@ -101,10 +99,7 @@ export class ScheduleClient {
     try {
       stream = await jsm.streams.find(tickSubject);
     } catch (err) {
-      if (
-        !(err instanceof JetStreamApiError) ||
-        err.apiError().err_code !== NatsErrorCode.StreamNotFound
-      ) {
+      if (!isNatsError(err, NatsErrorCode.StreamNotFound)) {
         throw err;
       }
 

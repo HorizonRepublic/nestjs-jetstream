@@ -1,7 +1,6 @@
 import { Logger } from '@nestjs/common';
 
 import {
-  JetStreamApiError,
   RetentionPolicy,
   StorageType,
   type StreamConfig,
@@ -39,11 +38,11 @@ import { isDlqEnabled, dlqStreamOverrides } from './dlq-options';
 import { InfrastructureBinder } from './infrastructure-binder';
 import { kindOptionsBlock, resolveManagementMode } from './management';
 import { NameResolver } from './name-resolver';
-import { NatsErrorCode } from './nats-error-codes';
+import { isNatsError, natsErrorCode, NatsErrorCode } from './nats-error-codes';
 import { assertStorageBudget } from './provisioning-budget';
 import {
   JetstreamProvisioningError,
-  mapProvisioningError,
+  runProvisioningOp,
   type ProvisioningErrorContext,
 } from './provisioning-error';
 import {
@@ -238,14 +237,11 @@ export class StreamProvider {
 
           return await this.handleExistingStream(jsm, currentInfo, config, ctx);
         } catch (err) {
-          if (
-            err instanceof JetStreamApiError &&
-            err.apiError().err_code === NatsErrorCode.StreamNotFound
-          ) {
+          if (isNatsError(err, NatsErrorCode.StreamNotFound)) {
             this.logger.log(`Creating stream: ${config.name}`);
 
             try {
-              return await this.runStreamOp(ctx, () => jsm.streams.add(config as StreamConfig));
+              return await runProvisioningOp(ctx, () => jsm.streams.add(config as StreamConfig));
             } catch (createErr) {
               // Two connections of one service racing to create the same stream
               // both saw "not found"; the loser lands here. Re-read the stream so
@@ -265,9 +261,8 @@ export class StreamProvider {
   /** JetStream API error code behind either a raw or an already-mapped provisioning error. */
   private errorCodeOf(err: unknown): number | undefined {
     if (err instanceof JetstreamProvisioningError) return err.errCode;
-    if (err instanceof JetStreamApiError) return err.apiError().err_code;
 
-    return undefined;
+    return natsErrorCode(err);
   }
 
   /** Turn a lost create race into an ownership error when the winner is a sibling connection. */
@@ -321,14 +316,11 @@ export class StreamProvider {
 
           return await this.handleExistingStream(jsm, currentInfo, config, ctx);
         } catch (err) {
-          if (
-            err instanceof JetStreamApiError &&
-            err.apiError().err_code === NatsErrorCode.StreamNotFound
-          ) {
+          if (isNatsError(err, NatsErrorCode.StreamNotFound)) {
             this.logger.log(`Creating DLQ stream: ${config.name}`);
 
             try {
-              return await this.runStreamOp(ctx, () => jsm.streams.add(config as StreamConfig));
+              return await runProvisioningOp(ctx, () => jsm.streams.add(config as StreamConfig));
             } catch (createErr) {
               // The DLQ name is service-scoped too, so sibling connections can
               // lose the same create race as on the event stream.
@@ -392,7 +384,7 @@ export class StreamProvider {
       // Mutable-only or enable-only changes: normal update
       this.logger.debug(`Stream exists, updating: ${config.name}`);
 
-      return await this.runStreamOp(ctx, () => jsm.streams.update(config.name, config));
+      return await runProvisioningOp(ctx, () => jsm.streams.update(config.name, config));
     }
 
     if (!this.options.provisioning?.allowDestructiveMigration) {
@@ -405,7 +397,7 @@ export class StreamProvider {
       if (diff.hasMutableChanges) {
         const mutableConfig = this.buildMutableOnlyConfig(config, currentInfo.config, diff);
 
-        return await this.runStreamOp(ctx, () => jsm.streams.update(config.name, mutableConfig));
+        return await runProvisioningOp(ctx, () => jsm.streams.update(config.name, mutableConfig));
       }
 
       return currentInfo;
@@ -519,18 +511,6 @@ export class StreamProvider {
       maxBytes: config.max_bytes,
       numReplicas: config.num_replicas ?? 1,
     };
-  }
-
-  private async runStreamOp<T>(ctx: ProvisioningErrorContext, op: () => Promise<T>): Promise<T> {
-    try {
-      return await op();
-    } catch (err) {
-      if (err instanceof JetStreamApiError) {
-        throw mapProvisioningError(err, ctx);
-      }
-
-      throw err;
-    }
   }
 
   private partitionByManagement(kinds: StreamKind[]): {

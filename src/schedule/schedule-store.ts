@@ -1,9 +1,8 @@
-import { JetStreamApiError } from '@nats-io/jetstream';
 import type { StoredMsg } from '@nats-io/jetstream';
 
 import type { ConnectionProvider } from '../connection/connection.provider';
 import { ScheduleOrigin } from '../interfaces';
-import { NatsErrorCode } from '../server/infrastructure/nats-error-codes';
+import { natsErrorCode, NatsErrorCode } from '../server/infrastructure/nats-error-codes';
 import { JetstreamScheduleError } from './schedule-error';
 import { readHolder } from './schedule-holder';
 import { PutOutcome, ScheduleErrorReason } from './schedule.types';
@@ -24,11 +23,8 @@ const REJECTION_CODES: ReadonlySet<number> = new Set([
 /** Holders read in parallel by `list()`. */
 const LIST_BATCH_SIZE = 32;
 
-const errorCodeOf = (err: unknown): number | undefined =>
-  err instanceof JetStreamApiError ? err.apiError().err_code : undefined;
-
 const translatePublishError = (err: unknown, holder: HolderMessage): unknown => {
-  const code = errorCodeOf(err);
+  const code = natsErrorCode(err);
 
   if (code === NatsErrorCode.MessageSchedulesTimeZoneInvalid) {
     return new JetstreamScheduleError(
@@ -105,7 +101,7 @@ export class ScheduleStore {
 
       return PutOutcome.Written;
     } catch (err) {
-      const code = errorCodeOf(err);
+      const code = natsErrorCode(err);
 
       if (code !== undefined && CONFLICT_CODES.has(code)) return PutOutcome.Conflict;
       if (code === NatsErrorCode.StreamExpectedLastSeqPerSubjectNotReady) {

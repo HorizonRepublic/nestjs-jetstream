@@ -27,8 +27,12 @@ import { PatternRegistry } from '../routing';
 import { InfrastructureBinder } from './infrastructure-binder';
 import { kindOptionsBlock, resolveManagementMode } from './management';
 import { NameResolver } from './name-resolver';
-import { NatsErrorCode } from './nats-error-codes';
-import { mapProvisioningError, type ProvisioningErrorContext } from './provisioning-error';
+import { isNatsError, NatsErrorCode } from './nats-error-codes';
+import {
+  mapProvisioningError,
+  runProvisioningOp,
+  type ProvisioningErrorContext,
+} from './provisioning-error';
 import { MIGRATION_BACKUP_SUFFIX } from './stream-migration';
 import { StreamProvider } from './stream.provider';
 
@@ -125,12 +129,9 @@ export class ConsumerProvider {
           await jsm.consumers.info(stream, name);
           this.logger.debug(`Consumer exists, updating: ${name}`);
 
-          return await this.runConsumerOp(ctx, () => jsm.consumers.update(stream, name, config));
+          return await runProvisioningOp(ctx, () => jsm.consumers.update(stream, name, config));
         } catch (err) {
-          if (
-            !(err instanceof JetStreamApiError) ||
-            err.apiError().err_code !== NatsErrorCode.ConsumerNotFound
-          ) {
+          if (!isNatsError(err, NatsErrorCode.ConsumerNotFound)) {
             throw err;
           }
 
@@ -168,10 +169,7 @@ export class ConsumerProvider {
         try {
           return await jsm.consumers.info(stream, name);
         } catch (err) {
-          if (
-            err instanceof JetStreamApiError &&
-            err.apiError().err_code === NatsErrorCode.ConsumerNotFound
-          ) {
+          if (isNatsError(err, NatsErrorCode.ConsumerNotFound)) {
             throw new JetstreamBindingError(
               BindingErrorReason.ExternalConsumerAbsent,
               `Consumer ${name} on ${stream} is externally managed and currently absent; ` +
@@ -201,10 +199,7 @@ export class ConsumerProvider {
           // Another pod may have recreated the consumer; use it as-is
           return await jsm.consumers.info(stream, name);
         } catch (err) {
-          if (
-            !(err instanceof JetStreamApiError) ||
-            err.apiError().err_code !== NatsErrorCode.ConsumerNotFound
-          ) {
+          if (!isNatsError(err, NatsErrorCode.ConsumerNotFound)) {
             throw err;
           }
 
@@ -235,10 +230,7 @@ export class ConsumerProvider {
       );
     } catch (err) {
       // StreamNotFound means no backup, so no migration in progress
-      if (
-        err instanceof JetStreamApiError &&
-        err.apiError().err_code === NatsErrorCode.StreamNotFound
-      ) {
+      if (isNatsError(err, NatsErrorCode.StreamNotFound)) {
         return;
       }
 
@@ -262,10 +254,7 @@ export class ConsumerProvider {
     try {
       return await jsm.consumers.add(stream, config);
     } catch (addErr) {
-      if (
-        addErr instanceof JetStreamApiError &&
-        addErr.apiError().err_code === NatsErrorCode.ConsumerAlreadyExists
-      ) {
+      if (isNatsError(addErr, NatsErrorCode.ConsumerAlreadyExists)) {
         this.logger.debug(`Consumer ${name} created by another pod, using existing`);
 
         return await jsm.consumers.info(stream, name);
@@ -276,18 +265,6 @@ export class ConsumerProvider {
       }
 
       throw addErr;
-    }
-  }
-
-  private async runConsumerOp<T>(ctx: ProvisioningErrorContext, op: () => Promise<T>): Promise<T> {
-    try {
-      return await op();
-    } catch (err) {
-      if (err instanceof JetStreamApiError) {
-        throw mapProvisioningError(err, ctx);
-      }
-
-      throw err;
     }
   }
 
