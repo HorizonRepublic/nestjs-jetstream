@@ -71,6 +71,23 @@ export { RpcContext } from './context';
 // Health
 export { JetstreamHealthIndicator } from './health';
 
+export {
+  DeadLetterOrigin,
+  JetstreamDlq,
+  DlqRedriveSkipReason,
+  type DeadLetterFilter,
+  type DeadLetterHeaders,
+  type DeadLetterRecord,
+  type DlqInspectOptions,
+  type DlqPurgeAllOptions,
+  type DlqPurgeOptions,
+  type DlqPurgeReport,
+  type DlqRedriveOptions,
+  type DlqScopeOptions,
+  type DlqRedriveReport,
+  type DlqRedriveSkip,
+} from './dlq';
+
 // Constants (selective: only what users need)
 export {
   streamName,

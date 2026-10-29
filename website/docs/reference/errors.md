@@ -118,6 +118,8 @@ Thrown during startup, so it stops the application before it serves traffic.
 | `publisher-only-connection`   | A handler is bound to a `publisherOnly` connection                                     |
 | `connections-not-started`     | `connectJetstreamMicroservices(app)` was not called before `startAllMicroservices()`   |
 | `stream-ownership-conflict`   | A stream is already owned by another connection of the same service                    |
+| `dlq-unavailable`             | `JetstreamDlq` was called on a connection whose DLQ stream is off or was never created |
+| `dlq-filter-required`         | `JetstreamDlq.purge()` got an empty filter; emptying the whole DLQ is `purgeAll()`     |
 | `removed-options`             | Options removed in v3 are still passed                                                 |
 | `self-target-prefix`          | `forFeature()` targets the service itself and passes a `subjectPrefix`                 |
 | `invalid-subject-prefix`      | A `subjectPrefix` is empty, malformed or contains `>`                                  |

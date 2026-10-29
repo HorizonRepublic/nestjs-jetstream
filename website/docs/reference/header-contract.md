@@ -8,7 +8,7 @@ schema:
   headline: "Header Contract: NATS Message Headers Used by the Transport"
   description: "Stable contract for NATS message headers the transport reads and writes."
   datePublished: "2026-04-24"
-  dateModified: "2026-10-23"
+  dateModified: "2026-10-29"
 ---
 
 # Header Contract
@@ -20,26 +20,27 @@ The transport reads and writes the headers below and nothing else. Names are **s
 
 ## At a glance
 
-| Header                 |   Read    |   Write   | Source            | What it does                                                                |
-| ---------------------- | :-------: | :-------: | ----------------- | --------------------------------------------------------------------------- |
-| `traceparent`          |     ✓     |     ✓     | W3C Trace Context | Links the consume span to the upstream producer span.                       |
-| `tracestate`           |     ✓     |     ✓     | W3C Trace Context | Vendor-specific trace state. Forwarded as-is.                               |
-| `baggage`              |     ✓     |     ✓     | W3C Baggage       | App-level context propagation. Forwarded.                                   |
-| `Nats-Msg-Id`          |     ✓     |     ✓     | NATS standard     | Dedup key. Surfaces on consume spans as `messaging.message.id`.             |
-| `x-correlation-id`     |    RPC    |    RPC    | Library           | Identifies the matching RPC reply.                                          |
-| `x-reply-to`           |    RPC    |    RPC    | Library           | Inbox subject for the RPC reply.                                            |
-| `x-error`              | RPC reply | RPC reply | Library           | Marks the reply payload as an error envelope.                               |
-| `x-subject`            |     -     |     ✓     | Library           | Original subject the message was published to.                              |
-| `x-caller-name`        |     -     |     ✓     | Library           | Internal name of the sending service.                                       |
-| `x-dead-letter-reason` |     -     |    DLQ    | Library           | DLQ tracking: exhausted-retry reason.                                       |
-| `x-original-subject`   |     -     |    DLQ    | Library           | DLQ tracking: original target subject.                                      |
-| `x-original-stream`    |     -     |    DLQ    | Library           | DLQ tracking: original stream name.                                         |
-| `x-failed-at`          |     -     |    DLQ    | Library           | DLQ tracking: ISO 8601 failure timestamp.                                   |
-| `x-delivery-count`     |     -     |    DLQ    | Library           | DLQ tracking: delivery attempt counter.                                     |
-| `x-schedule-hash`      |  Holder   |  Holder   | Library           | Fingerprint of a recurring schedule's definition. Skips unchanged rewrites. |
-| `x-schedule-pattern`   |  Holder   |  Holder   | Library           | Handler pattern a recurring schedule's ticks go to.                         |
-| `Nats-Scheduler`       |   Tick    |     -     | NATS server       | Subject of the holder that fired the tick.                                  |
-| `Nats-Schedule-Next`   |     -     |     -     | NATS server       | Next fire time of the schedule, set on each tick.                           |
+| Header                 |   Read    |   Write   | Source            | What it does                                                                    |
+| ---------------------- | :-------: | :-------: | ----------------- | ------------------------------------------------------------------------------- |
+| `traceparent`          |     ✓     |     ✓     | W3C Trace Context | Links the consume span to the upstream producer span.                           |
+| `tracestate`           |     ✓     |     ✓     | W3C Trace Context | Vendor-specific trace state. Forwarded as-is.                                   |
+| `baggage`              |     ✓     |     ✓     | W3C Baggage       | App-level context propagation. Forwarded.                                       |
+| `Nats-Msg-Id`          |     ✓     |     ✓     | NATS standard     | Dedup key. Surfaces on consume spans as `messaging.message.id`.                 |
+| `x-correlation-id`     |    RPC    |    RPC    | Library           | Identifies the matching RPC reply.                                              |
+| `x-reply-to`           |    RPC    |    RPC    | Library           | Inbox subject for the RPC reply.                                                |
+| `x-error`              | RPC reply | RPC reply | Library           | Marks the reply payload as an error envelope.                                   |
+| `x-subject`            |     -     |     ✓     | Library           | Original subject the message was published to.                                  |
+| `x-caller-name`        |     -     |     ✓     | Library           | Internal name of the sending service.                                           |
+| `x-dead-letter-reason` |     -     |    DLQ    | Library           | DLQ tracking: exhausted-retry reason.                                           |
+| `x-original-subject`   |     -     |    DLQ    | Library           | DLQ tracking: original target subject.                                          |
+| `x-original-stream`    |     -     |    DLQ    | Library           | DLQ tracking: original stream name.                                             |
+| `x-failed-at`          |     -     |    DLQ    | Library           | DLQ tracking: ISO 8601 failure timestamp.                                       |
+| `x-delivery-count`     |     -     |    DLQ    | Library           | DLQ tracking: delivery attempt counter.                                         |
+| `x-redrive-count`      |     ✓     |  Redrive  | Library           | Times the message was redriven from the DLQ; carried into the next dead letter. |
+| `x-schedule-hash`      |  Holder   |  Holder   | Library           | Fingerprint of a recurring schedule's definition. Skips unchanged rewrites.     |
+| `x-schedule-pattern`   |  Holder   |  Holder   | Library           | Handler pattern a recurring schedule's ticks go to.                             |
+| `Nats-Scheduler`       |   Tick    |     -     | NATS server       | Subject of the holder that fired the tick.                                      |
+| `Nats-Schedule-Next`   |     -     |     -     | NATS server       | Next fire time of the schedule, set on each tick.                               |
 
 Header names are matched **case-insensitively** per the W3C Trace Context specification.
 
@@ -49,7 +50,7 @@ A schedule holder is the message on the `_cron.` subject that defines a [recurri
 
 `JetstreamRecordBuilder.setHeader()` throws on these, because the library populates them:
 
-- `x-correlation-id` · `x-reply-to` · `x-error` · `x-schedule-hash` · `x-schedule-pattern`
+- `x-correlation-id` · `x-reply-to` · `x-error` · `x-schedule-hash` · `x-schedule-pattern` · `x-redrive-count`
 
 The builder accepts `x-subject` and `x-caller-name`. The transport writes both before your custom headers are applied, so a value you set for either one **wins**. Set them only when you are deliberately relabelling a message, because the consume span and `ctx.getCallerName()` read what arrives on the wire.
 

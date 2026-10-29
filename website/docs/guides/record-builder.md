@@ -8,7 +8,7 @@ schema:
   headline: "JetstreamRecordBuilder: Headers, Message IDs & Deduplication"
   description: "Build NestJS NATS messages with custom headers, deterministic message IDs for publish-side deduplication, and per-request RPC timeouts."
   datePublished: "2026-03-21"
-  dateModified: "2026-10-23"
+  dateModified: "2026-10-29"
 ---
 
 # Record Builder & Deduplication
@@ -90,7 +90,7 @@ It applies to `client.send()` only. `client.emit()` waits for no response, so th
 
 ## Headers the transport sets itself
 
-`setHeader()` throws for the headers the transport reserves (`x-correlation-id`, `x-reply-to`, `x-error`, and the schedule headers `x-schedule-hash` and `x-schedule-pattern`) and for every header starting with `nats-`, whatever the casing. The error is thrown at the `setHeader()` call, not at `build()`. Reach the `Nats-*` headers through `setMessageId()`, `ttl()` and `scheduleAt()`. [Header Contract](/docs/reference/header-contract) lists every header the transport reads and writes, including `x-subject` and `x-caller-name`, which you can overwrite.
+`setHeader()` throws for the headers the transport reserves (`x-correlation-id`, `x-reply-to`, `x-error`, the schedule headers `x-schedule-hash` and `x-schedule-pattern`, and `x-redrive-count`) and for every header starting with `nats-`, whatever the casing. The error is thrown at the `setHeader()` call, not at `build()`. Reach the `Nats-*` headers through `setMessageId()`, `ttl()` and `scheduleAt()`. [Header Contract](/docs/reference/header-contract) lists every header the transport reads and writes, including `x-subject` and `x-caller-name`, which you can overwrite.
 
 ## API summary
 
