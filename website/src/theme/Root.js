@@ -225,7 +225,7 @@ export default function Root({ children }) {
   "headline": "Troubleshooting: NestJS JetStream Transport",
   "description": "Fix common NestJS JetStream issues, from connection errors and consumer lag to RPC timeouts, DLQ publish failures and stream migration recovery.",
   "datePublished": "2026-03-26",
-  "dateModified": "2026-10-23"
+  "dateModified": "2026-10-29"
 },
       
     '/docs/': {

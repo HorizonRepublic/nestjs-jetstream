@@ -611,6 +611,72 @@ describe(StreamProvider, () => {
       });
     });
 
+    describe('single replica on a clustered server', () => {
+      const eventStream = (): string => `${internalName(options.name)}_ev-stream`;
+
+      const provisionWith = async (
+        replicas: number,
+        clusterName: string | undefined,
+      ): Promise<string[]> => {
+        sut = makeSut();
+        mockJsm.streams.info.mockRejectedValue(streamNotFound());
+        mockJsm.streams.add.mockImplementation(async (config: StreamConfig) =>
+          createMock<StreamInfo>({
+            config: { ...config, num_replicas: replicas },
+            cluster: clusterName === undefined ? undefined : { name: clusterName },
+          }),
+        );
+
+        const warnSpy = vi.spyOn(Logger.prototype, 'warn');
+
+        await sut.ensureStreams([StreamKind.Event]);
+
+        return warnSpy.mock.calls
+          .map((args: unknown[]) => String(args[0]))
+          .filter((m) => m.includes('single replica'));
+      };
+
+      it('should warn once about every stream left at the default single replica', async () => {
+        // Given
+        options = { ...options, dlq: {} };
+
+        // When
+        const warnings = await provisionWith(1, faker.lorem.word());
+
+        // Then
+        expect(warnings).toHaveLength(1);
+        expect(warnings[0]).toContain(eventStream());
+        expect(warnings[0]).toContain(`${internalName(options.name)}_dlq-stream`);
+      });
+
+      it('should not warn when the single replica is set explicitly', async () => {
+        // Given
+        options = { ...options, events: { stream: { num_replicas: 1 } } };
+
+        // When
+        const warnings = await provisionWith(1, faker.lorem.word());
+
+        // Then
+        expect(warnings).toEqual([]);
+      });
+
+      it('should not warn on a server without clustering', async () => {
+        // When
+        const warnings = await provisionWith(1, undefined);
+
+        // Then
+        expect(warnings).toEqual([]);
+      });
+
+      it('should not warn when the stream is replicated', async () => {
+        // When
+        const warnings = await provisionWith(3, faker.lorem.word());
+
+        // Then
+        expect(warnings).toEqual([]);
+      });
+    });
+
     describe('stripTransportControlled', () => {
       it('should silently strip retention from user overrides', async () => {
         // Given: options include retention override (bypassing TypeScript via cast)
@@ -809,6 +875,7 @@ describe(StreamProvider, () => {
       mockStreamInfo({
         config: { ...DEFAULT_EVENT_STREAM_CONFIG, name: sut.getStreamName(StreamKind.Event) },
       } as never);
+      mockJsm.streams.update.mockResolvedValue(createMock<StreamInfo>());
 
       // When
       await sut.ensureStreams([StreamKind.Event]);

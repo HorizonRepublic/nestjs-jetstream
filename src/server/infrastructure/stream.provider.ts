@@ -47,6 +47,11 @@ import { StreamMigration } from './stream-migration';
 import { mergeOwnedMetadata, StreamOwnership } from './stream-ownership';
 import { subjectCovers } from './subject-utils';
 
+interface ProvisionedStream {
+  readonly info: StreamInfo;
+  readonly explicitReplicas: boolean;
+}
+
 /**
  * Bring the discard settings to what NATS accepts. A stream with message
  * schedules refuses `discard: new`. `discard_new_per_subject` needs `discard:
@@ -139,8 +144,15 @@ export class StreamProvider {
       await assertStorageBudget(jsm, this.options.name, reservations, this.logger);
     }
 
+    const provisioned: ProvisionedStream[] = [];
+
     await Promise.all([
-      ...autoKinds.map((kind) => this.ensureStream(jsm, kind)),
+      ...autoKinds.map(async (kind) => {
+        provisioned.push({
+          info: await this.ensureStream(jsm, kind),
+          explicitReplicas: this.getOverrides(kind).num_replicas !== undefined,
+        });
+      }),
       ...externalKinds.map((kind) => this.bindStream(jsm, kind)),
     ]);
 
@@ -148,9 +160,35 @@ export class StreamProvider {
       if (dlqIsManual) {
         await this.bindDlqStream(jsm);
       } else {
-        await this.ensureDlqStream(jsm);
+        provisioned.push({
+          info: await this.ensureDlqStream(jsm),
+          explicitReplicas: dlqStreamOverrides(this.options).num_replicas !== undefined,
+        });
       }
     }
+
+    this.warnOnSingleReplica(provisioned);
+  }
+
+  /**
+   * On a clustered JetStream a single-replica stream goes down with its node and
+   * is lost with its disk. An explicit `num_replicas: 1` is a deliberate choice.
+   */
+  private warnOnSingleReplica(provisioned: ProvisionedStream[]): void {
+    const exposed = provisioned
+      .filter(
+        ({ info, explicitReplicas }) =>
+          !explicitReplicas && info.cluster?.name !== undefined && info.config.num_replicas === 1,
+      )
+      .map(({ info }) => info.config.name);
+
+    if (exposed.length === 0) return;
+
+    this.logger.warn(
+      `Streams on a single replica of a clustered JetStream: ${exposed.join(', ')}. ` +
+        'Losing the node that holds one makes it unavailable, and losing its disk loses its messages. ' +
+        'Set num_replicas: 3 in the stream override, or num_replicas: 1 to keep one replica without this warning.',
+    );
   }
 
   /**
