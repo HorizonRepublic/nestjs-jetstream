@@ -48,7 +48,7 @@ What each kind is for:
 
 - **Event** carries workqueue events. A message is removed once a consumer acks it.
 - **Command** carries RPC requests in [JetStream RPC mode](/docs/patterns/rpc) only. It is short-lived: a request nobody answered within three minutes is a request nobody wants answered.
-- **Broadcast** is one stream shared by every service. An hour of `max_age` gives a starting pod enough catch-up without letting config updates pile up.
+- **Broadcast** is one stream shared by every service. An hour of `max_age` gives a starting pod enough catch-up without letting config updates pile up. A service down for longer misses what aged out, so broadcast suits signals rather than business events; see [retention window](/docs/patterns/broadcast#retention-window).
 - **Ordered** keeps messages for a day under `Limits` retention, because an ordered consumer replays a subject from the beginning instead of consuming it away.
 - **Schedule** holds [recurring schedules](/docs/guides/recurring-schedules) and their ticks, and exists only when a handler declares `schedule`. It also sets `allow_msg_schedules` and `allow_msg_ttl`. `max_age` stays off because an aged-out holder silently stops its schedule; ticks expire through their own TTL instead.
 - **DLQ** is created unless you pass `dlq: false`. Thirty days under `Limits` retention: reading a dead letter must not remove it. See [Dead Letter Queue](/docs/guides/dead-letter-queue#built-in-dlq-stream).
