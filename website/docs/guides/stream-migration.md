@@ -8,7 +8,7 @@ schema:
   headline: "How to migrate immutable stream properties"
   description: "Safely change immutable stream properties without losing messages via blue-green sourcing."
   datePublished: "2026-04-02"
-  dateModified: "2026-10-23"
+  dateModified: "2026-10-29"
 ---
 
 # How to migrate immutable stream properties
@@ -49,12 +49,17 @@ Without the flag, the transport logs a warning, applies only the mutable part of
 The transport recreates the stream blue-green via [NATS stream sourcing](https://docs.nats.io/nats-concepts/jetstream/streams#sources), a server-side copy:
 
 ```text
+Lock       Create the backup stream; only one pod can, the others wait
+
 Phase 1/4  Quiesce: remove the original's subjects
            (new publishes are rejected loudly instead of being acked
             into a stream that is about to be deleted)
 
 Phase 2/4  Create backup stream ← sourcing ← original
            (server-side copy; completion is tracked via source lag)
+
+           (aborts here if the new max_msgs or max_bytes cannot hold
+            what the stream already has)
 
 Phase 3/4  Delete original, create it again with the new config
 
@@ -68,7 +73,9 @@ A producer either gets an ack (the message survives the migration) or a rejectio
 
 ### Backup stream as a distributed lock
 
-The backup stream (`{stream}__migration_backup`) holds the messages between delete and recreate, and also acts as a lock: other pods' self-healing sees it and waits instead of recreating consumers.
+The backup stream (`{stream}__migration_backup`) holds the messages between delete and recreate, and is also the lock. NATS creates a stream atomically, so of several pods that start a migration at once, exactly one creates the backup and migrates; the rest wait for it to finish and then find nothing left to change.
+
+The pod holding the lock writes a heartbeat into the backup's metadata every 5 seconds. Every other pod waits while that heartbeat keeps changing, and takes the migration over only after watching it stand still for 30 seconds, so a migration of any length is never interrupted and clock skew between hosts plays no part. A takeover finishes the migration from where it stopped. Backups left by releases before 3.1 carry no heartbeat; they keep the old rule and count as abandoned 90 seconds after they were created.
 
 ## What happens during migration
 
@@ -88,6 +95,10 @@ Waiting keeps old pods from overwriting a newer pod's consumer config, and keeps
 
 Its startup blocks until all phases complete, then it creates consumers and starts processing.
 
+### To other pods starting up
+
+A pod that starts while another one is migrating a stream it uses waits for that migration before it provisions anything, so it cannot reopen a quiesced stream or recreate consumers halfway through.
+
 ## Duration
 
 Sourcing runs on the server, so no message crosses the network to the application, and the copy is bounded by the server's disk or memory. Duration grows with message count and size. No measured figures are published: time a migration of a realistic stream on your own hardware before a rolling update.
@@ -96,9 +107,10 @@ Sourcing runs on the server, so no message crosses the network to the applicatio
 
 - **Failure before the original is deleted.** The quiesce is rolled back (subjects restored), the backup is removed, and an error is thrown: the original stream is intact and serving traffic.
 - **Failure after the original is deleted.** The backup is the only copy of the data and is always preserved. Restoration resumes automatically on the next application startup.
-- **Sourcing timeout (30 s).** Same as above: the backup is preserved and the restore resumes on the next startup.
-- **Process killed mid-migration.** Detected on the next startup: a stranded backup is restored into the stream (recreating it first if the crash happened between delete and create), then cleaned up.
-- **Instances migrating concurrently (rolling deploy).** Backups carry a start timestamp. An instance that finds a backup younger than 90 s waits for that migration (up to 60 s) instead of interfering; older backups are treated as leftovers and recovered.
+- **New limits too small.** If the new `max_msgs` or `max_bytes` cannot hold the messages already in the stream, the migration stops before deleting anything and throws a `JetstreamMigrationError` with reason `insufficient-capacity`. Raise the limits, or let consumers drain the stream, and restart. `max_msgs_per_subject` is not checked.
+- **Sourcing stalls.** The copy may take as long as it needs; it fails with reason `sourcing-timeout` only after 30 seconds without progress. Before the delete, that rolls back as above; after it, the backup is preserved.
+- **Process killed mid-migration.** Its heartbeat stops, and the next pod to start, or one already waiting, takes the migration over 30 seconds later. If the original was never deleted, the backup is simply dropped; otherwise it is restored into the stream (recreating it first if the crash happened between delete and create), then cleaned up. The DLQ stream is recovered the same way.
+- **Instances migrating concurrently (rolling deploy).** Only the pod that created the backup migrates; see [the lock](#backup-stream-as-a-distributed-lock).
 
 ## Manual streams are never migrated
 

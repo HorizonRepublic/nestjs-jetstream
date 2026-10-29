@@ -282,10 +282,8 @@ export class StreamProvider {
       async () => {
         this.logger.log(`Ensuring ${label}: ${config.name}`);
 
-        // Finish any migration a previous process left unfinished.
-        if (kind !== 'dlq') {
-          await this.migration.recoverInterrupted(jsm, config.name, config);
-        }
+        // Wait out a migration another instance is running, or finish one it abandoned.
+        await this.migration.settle(jsm, config.name, config);
 
         try {
           const currentInfo = await jsm.streams.info(config.name);

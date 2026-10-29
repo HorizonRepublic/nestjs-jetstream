@@ -16,4 +16,11 @@ export {
   type StreamConfigDiffResult,
 } from './stream-config-diff';
 
-export { StreamMigration } from './stream-migration';
+export {
+  MIGRATION_BACKUP_SUFFIX,
+  MIGRATION_HEARTBEAT_KEY,
+  MIGRATION_PHASE_KEY,
+  StreamMigration,
+} from './stream-migration';
+
+export { MigrationPhase, type MigrationTiming } from './stream-migration.types';
