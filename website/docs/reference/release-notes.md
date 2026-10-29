@@ -8,7 +8,7 @@ schema:
   headline: "Release Notes: NestJS JetStream Transport"
   description: "Version-by-version changelog covering new features, behavior changes, and breaking changes."
   datePublished: "2026-03-26"
-  dateModified: "2026-10-23"
+  dateModified: "2026-10-29"
 ---
 
 # Release Notes
@@ -17,6 +17,16 @@ schema:
 > **You get:** what changed in each release, with the breaking parts called out.
 
 Notable changes per version. What you have to change when upgrading is in [Upgrading](/docs/reference/upgrading), and the full commit-level record is in [CHANGELOG.md](https://github.com/HorizonRepublic/nestjs-jetstream/blob/main/CHANGELOG.md).
+
+## v3.1
+
+Dead letters can now go back. [`JetstreamDlq`](/docs/guides/dead-letter-queue#redriving-dead-letters) lists the DLQ stream with filters, redrives what a fix has made processable to its original subject, and purges the rest. A redrive counter stops a message that keeps failing from looping, and only `purgeAll()` empties the whole DLQ. Broadcasts and recurring schedule ticks are never redriven, since replaying an old signal can roll state back.
+
+A full stream no longer loses messages silently. Event, command and DLQ streams reject the publish with a `JetstreamPublishError` once they reach a limit, instead of evicting the oldest message nobody has processed yet. Retries now span about 100 seconds before a message is dead-lettered, so a database failover or a restarting dependency no longer sends a whole window of traffic to the DLQ.
+
+[Destructive stream migration](/docs/guides/stream-migration) is safe with several pods. The backup stream is a real lock with a heartbeat, a pod that starts during a migration waits for it, and messages that sourcing moves out of a work-queue stream are given back if a migration fails. Errors across the transport are typed [`Jetstream<Area>Error`](/docs/reference/errors) classes with a `reason`, and on clustered JetStream a startup warning names every stream left on a single replica.
+
+Two defaults change on the first boot, the discard policy and the retry curve, and rolling back to v3.0 needs one manual step. All of it is in [Upgrading](/docs/reference/upgrading#v30--v31).
 
 ## v3.0
 
