@@ -2,6 +2,7 @@ import { Logger } from '@nestjs/common';
 
 import type { MessageKind, TransportEventSubscriber, TransportHooks } from '../interfaces';
 import { TransportEvent } from '../interfaces';
+import { errorMessage } from '../utils';
 import type { TransportListener, TransportSubscriberRegistry } from './hooks.types';
 
 /**
@@ -116,15 +117,11 @@ export class EventBus {
 
       if (result && typeof (result as Promise<unknown>).catch === 'function') {
         (result as Promise<unknown>).catch((err: unknown) => {
-          this.logger.error(
-            `Async hook "${event}" rejected: ${err instanceof Error ? err.message : String(err)}`,
-          );
+          this.logger.error(`Async hook "${event}" rejected: ${errorMessage(err)}`);
         });
       }
     } catch (err) {
-      this.logger.error(
-        `Hook "${event}" threw an error: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      this.logger.error(`Hook "${event}" threw an error: ${errorMessage(err)}`);
     }
   }
 }

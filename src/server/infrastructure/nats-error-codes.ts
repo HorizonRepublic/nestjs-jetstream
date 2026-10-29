@@ -1,3 +1,5 @@
+import { JetStreamApiError } from '@nats-io/jetstream';
+
 /**
  * NATS JetStream API error codes used by the transport.
  *
@@ -53,3 +55,9 @@ export enum NatsErrorCode {
   /** The schedule time zone is unknown to the server, usually an image without tzdata. */
   MessageSchedulesTimeZoneInvalid = 10223,
 }
+
+export const natsErrorCode = (err: unknown): number | undefined =>
+  err instanceof JetStreamApiError ? err.apiError().err_code : undefined;
+
+export const isNatsError = (err: unknown, code: NatsErrorCode): err is JetStreamApiError =>
+  natsErrorCode(err) === code;

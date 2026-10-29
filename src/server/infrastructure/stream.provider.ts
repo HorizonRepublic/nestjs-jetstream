@@ -1,7 +1,6 @@
 import { Logger } from '@nestjs/common';
 
 import {
-  JetStreamApiError,
   RetentionPolicy,
   StorageType,
   type StreamConfig,
@@ -11,12 +10,7 @@ import {
 import { ConnectionProvider } from '../../connection';
 import { NatsCapability } from '../../connection/server-capabilities.types';
 import type { CapabilityUsage } from '../../connection/server-capabilities.types';
-import {
-  ConfigErrorReason,
-  JetstreamConfigError,
-  JetstreamMigrationError,
-  MigrationErrorReason,
-} from '../../errors';
+import { JetstreamMigrationError, MigrationErrorReason } from '../../errors';
 import { ManagementMode, StreamKind } from '../../interfaces';
 import type { JetstreamModuleOptions } from '../../interfaces';
 import {
@@ -26,7 +20,6 @@ import {
   DEFAULT_ORDERED_STREAM_CONFIG,
   DEFAULT_SCHEDULE_STREAM_CONFIG,
   DEFAULT_DLQ_STREAM_CONFIG,
-  STREAM_OWNER_METADATA_KEY,
 } from '../../jetstream.constants';
 import {
   deriveOtelAttrs,
@@ -39,13 +32,9 @@ import { isDlqEnabled, dlqStreamOverrides } from './dlq-options';
 import { InfrastructureBinder } from './infrastructure-binder';
 import { kindOptionsBlock, resolveManagementMode } from './management';
 import { NameResolver } from './name-resolver';
-import { NatsErrorCode } from './nats-error-codes';
+import { isNatsError, NatsErrorCode } from './nats-error-codes';
 import { assertStorageBudget } from './provisioning-budget';
-import {
-  JetstreamProvisioningError,
-  mapProvisioningError,
-  type ProvisioningErrorContext,
-} from './provisioning-error';
+import { runProvisioningOp, type ProvisioningErrorContext } from './provisioning-error';
 import {
   formatProvisioningSummary,
   type ExternalBinding,
@@ -54,6 +43,7 @@ import {
 } from './provisioning-summary';
 import { compareStreamConfig, type StreamConfigDiffResult } from './stream-config-diff';
 import { StreamMigration } from './stream-migration';
+import { mergeOwnedMetadata, StreamOwnership } from './stream-ownership';
 import { subjectCovers } from './subject-utils';
 
 /**
@@ -66,22 +56,10 @@ import { subjectCovers } from './subject-utils';
  *
  * All operations are idempotent: safe to call on every startup and reconnection.
  */
-/**
- * Combine user-supplied stream metadata with the transport's ownership stamp.
- *
- * The stamp augments rather than replaces, so a `metadata` block in the kind's
- * overrides survives. Returns `undefined` when neither side contributes, so the
- * caller can omit the field entirely.
- */
-const mergeOwnedMetadata = (
-  overrides: Record<string, string> | undefined,
-  ownership: Record<string, string> | undefined,
-): Record<string, string> | undefined =>
-  overrides || ownership ? { ...overrides, ...ownership } : undefined;
-
 export class StreamProvider {
   private readonly logger = new Logger('Jetstream:Stream');
   private readonly migration = new StreamMigration();
+  private readonly ownership: StreamOwnership;
 
   private readonly otel: ResolvedOtelOptions;
   private readonly otelServiceName: string;
@@ -98,6 +76,7 @@ export class StreamProvider {
     this.otel = derived.otel;
     this.otelServiceName = derived.serviceName;
     this.otelEndpoint = derived.serverEndpoint;
+    this.ownership = new StreamOwnership(options);
   }
 
   /**
@@ -209,94 +188,23 @@ export class StreamProvider {
     jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
     kind: StreamKind,
   ): Promise<StreamInfo> {
-    const config = this.buildConfig(kind);
-    const ctx = this.errorContext(kind, config);
-
-    return withProvisioningSpan(
-      this.otel,
-      {
-        serviceName: this.otelServiceName,
-        endpoint: this.otelEndpoint,
-        entity: 'stream',
-        name: config.name,
-        action: 'ensure',
-        maxBytes: ctx.maxBytes,
-        numReplicas: ctx.numReplicas,
-        reservation:
-          ctx.maxBytes !== undefined && ctx.numReplicas !== undefined
-            ? ctx.maxBytes * ctx.numReplicas
-            : undefined,
-      },
-      async () => {
-        this.logger.log(`Ensuring stream: ${config.name}`);
-
-        // Finish any migration a previous process left unfinished.
-        await this.migration.recoverInterrupted(jsm, config.name, config);
-
-        try {
-          const currentInfo = await jsm.streams.info(config.name);
-
-          return await this.handleExistingStream(jsm, currentInfo, config, ctx);
-        } catch (err) {
-          if (
-            err instanceof JetStreamApiError &&
-            err.apiError().err_code === NatsErrorCode.StreamNotFound
-          ) {
-            this.logger.log(`Creating stream: ${config.name}`);
-
-            try {
-              return await this.runStreamOp(ctx, () => jsm.streams.add(config as StreamConfig));
-            } catch (createErr) {
-              // Two connections of one service racing to create the same stream
-              // both saw "not found"; the loser lands here. Re-read the stream so
-              // the ownership check can report which connections collided instead
-              // of a bare "name already in use".
-              await this.rethrowAsOwnershipConflict(jsm, config, createErr);
-              throw createErr;
-            }
-          }
-
-          throw err;
-        }
-      },
-    );
-  }
-
-  /** JetStream API error code behind either a raw or an already-mapped provisioning error. */
-  private errorCodeOf(err: unknown): number | undefined {
-    if (err instanceof JetstreamProvisioningError) return err.errCode;
-    if (err instanceof JetStreamApiError) return err.apiError().err_code;
-
-    return undefined;
-  }
-
-  /** Turn a lost create race into an ownership error when the winner is a sibling connection. */
-  private async rethrowAsOwnershipConflict(
-    jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
-    config: Partial<StreamConfig> & { name: string },
-    createErr: unknown,
-  ): Promise<void> {
-    if (this.errorCodeOf(createErr) !== NatsErrorCode.StreamAlreadyExists) return;
-
-    let current: StreamInfo;
-
-    try {
-      current = await jsm.streams.info(config.name);
-    } catch {
-      // The re-read is a diagnostic nicety; if it fails, the caller still gets
-      // the original create error rather than this one.
-      return;
-    }
-
-    this.assertOwnership(current, config);
+    return this.ensureStreamConfig(jsm, kind, this.buildConfig(kind));
   }
 
   /** Ensure a dead-letter queue stream exists, creating or updating as needed. */
   private async ensureDlqStream(
     jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
   ): Promise<StreamInfo> {
-    const config = this.buildDlqConfig();
-    const ctx = this.errorContext('dlq', config);
+    return this.ensureStreamConfig(jsm, 'dlq', this.buildDlqConfig());
+  }
+
+  private async ensureStreamConfig(
+    jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
+    kind: ReservationKind,
+    config: Partial<StreamConfig> & { name: string; subjects: string[] },
+  ): Promise<StreamInfo> {
+    const ctx = this.errorContext(kind, config);
+    const label = kind === 'dlq' ? 'DLQ stream' : 'stream';
 
     return withProvisioningSpan(
       this.otel,
@@ -314,25 +222,29 @@ export class StreamProvider {
             : undefined,
       },
       async () => {
-        this.logger.log(`Ensuring DLQ stream: ${config.name}`);
+        this.logger.log(`Ensuring ${label}: ${config.name}`);
+
+        // Finish any migration a previous process left unfinished.
+        if (kind !== 'dlq') {
+          await this.migration.recoverInterrupted(jsm, config.name, config);
+        }
 
         try {
           const currentInfo = await jsm.streams.info(config.name);
 
           return await this.handleExistingStream(jsm, currentInfo, config, ctx);
         } catch (err) {
-          if (
-            err instanceof JetStreamApiError &&
-            err.apiError().err_code === NatsErrorCode.StreamNotFound
-          ) {
-            this.logger.log(`Creating DLQ stream: ${config.name}`);
+          if (isNatsError(err, NatsErrorCode.StreamNotFound)) {
+            this.logger.log(`Creating ${label}: ${config.name}`);
 
             try {
-              return await this.runStreamOp(ctx, () => jsm.streams.add(config as StreamConfig));
+              return await runProvisioningOp(ctx, () => jsm.streams.add(config as StreamConfig));
             } catch (createErr) {
-              // The DLQ name is service-scoped too, so sibling connections can
-              // lose the same create race as on the event stream.
-              await this.rethrowAsOwnershipConflict(jsm, config, createErr);
+              // Two connections of one service racing to create the same stream
+              // both saw "not found"; the loser lands here. Re-read the stream so
+              // the ownership check can report which connections collided instead
+              // of a bare "name already in use".
+              await this.ownership.rethrowAsConflict(jsm, config, createErr);
               throw createErr;
             }
           }
@@ -355,7 +267,7 @@ export class StreamProvider {
       config.subjects = merged.filter((s) => !merged.some((other) => subjectCovers(other, s)));
     }
 
-    this.assertOwnership(currentInfo, config);
+    this.ownership.assertOwnership(currentInfo, config);
 
     // Preserve metadata the transport did not author, such as migration markers
     // or operator-set keys. An update replaces the whole config, so omitting the
@@ -392,7 +304,7 @@ export class StreamProvider {
       // Mutable-only or enable-only changes: normal update
       this.logger.debug(`Stream exists, updating: ${config.name}`);
 
-      return await this.runStreamOp(ctx, () => jsm.streams.update(config.name, config));
+      return await runProvisioningOp(ctx, () => jsm.streams.update(config.name, config));
     }
 
     if (!this.options.provisioning?.allowDestructiveMigration) {
@@ -405,7 +317,7 @@ export class StreamProvider {
       if (diff.hasMutableChanges) {
         const mutableConfig = this.buildMutableOnlyConfig(config, currentInfo.config, diff);
 
-        return await this.runStreamOp(ctx, () => jsm.streams.update(config.name, mutableConfig));
+        return await runProvisioningOp(ctx, () => jsm.streams.update(config.name, mutableConfig));
       }
 
       return currentInfo;
@@ -521,18 +433,6 @@ export class StreamProvider {
     };
   }
 
-  private async runStreamOp<T>(ctx: ProvisioningErrorContext, op: () => Promise<T>): Promise<T> {
-    try {
-      return await op();
-    } catch (err) {
-      if (err instanceof JetStreamApiError) {
-        throw mapProvisioningError(err, ctx);
-      }
-
-      throw err;
-    }
-  }
-
   private partitionByManagement(kinds: StreamKind[]): {
     autoKinds: StreamKind[];
     externalKinds: StreamKind[];
@@ -555,26 +455,16 @@ export class StreamProvider {
     jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
     kind: StreamKind,
   ): Promise<StreamInfo> {
-    const name = this.names.streamName(kind);
-
-    return withProvisioningSpan(
-      this.otel,
-      {
-        serviceName: this.otelServiceName,
-        endpoint: this.otelEndpoint,
-        entity: 'stream',
-        name,
-        action: 'bind',
-      },
-      () => this.binder.bindStream(jsm, kind),
-    );
+    return this.withBindSpan(this.names.streamName(kind), () => this.binder.bindStream(jsm, kind));
   }
 
   private async bindDlqStream(
     jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
   ): Promise<StreamInfo> {
-    const name = this.names.dlqStreamName();
+    return this.withBindSpan(this.names.dlqStreamName(), () => this.binder.bindDlqStream(jsm));
+  }
 
+  private withBindSpan(name: string, bind: () => Promise<StreamInfo>): Promise<StreamInfo> {
     return withProvisioningSpan(
       this.otel,
       {
@@ -584,7 +474,7 @@ export class StreamProvider {
         name,
         action: 'bind',
       },
-      () => this.binder.bindDlqStream(jsm),
+      bind,
     );
   }
 
@@ -607,7 +497,7 @@ export class StreamProvider {
 
     const defaults = this.getDefaults(kind);
     const overrides = this.getOverrides(kind);
-    const ownership = this.ownershipMetadata(kind);
+    const ownership = this.ownership.metadataFor(kind);
 
     if (
       kind === StreamKind.Schedule &&
@@ -633,60 +523,6 @@ export class StreamProvider {
   }
 
   /**
-   * Ownership stamp for a stream this connection provisions.
-   *
-   * The broadcast stream is shared by every service in the cluster, so stamping
-   * it would flip-flop on each deploy exactly as a per-service description
-   * would. Under Manual management the streams are externally owned and their
-   * metadata is not ours to write.
-   */
-  private ownershipMetadata(kind: StreamKind): Record<string, string> | undefined {
-    if (kind === StreamKind.Broadcast) return undefined;
-
-    return this.ownershipStamp(kind);
-  }
-
-  /** The stamp itself, for any entity whose name is scoped to this service. */
-  private ownershipStamp(kind: StreamKind | 'dlq'): Record<string, string> | undefined {
-    if (resolveManagementMode(this.options, kind, 'stream') === ManagementMode.Manual) {
-      return undefined;
-    }
-
-    const connection = (this.options as { connectionName?: string }).connectionName ?? 'default';
-
-    return { [STREAM_OWNER_METADATA_KEY]: `${this.options.name}:${connection}` };
-  }
-
-  /**
-   * Fail when a stream was provisioned by a different connection of this service.
-   *
-   * Two connections into one cluster resolve identical stream names and would
-   * silently overwrite each other's configuration. A stamp from another service
-   * is left alone; sharing a stream across services is a separate concern.
-   */
-  private assertOwnership(
-    currentInfo: StreamInfo,
-    config: Partial<StreamConfig> & { name: string },
-  ): void {
-    const desired = config.metadata?.[STREAM_OWNER_METADATA_KEY];
-    const current = currentInfo.config.metadata?.[STREAM_OWNER_METADATA_KEY];
-
-    if (desired === undefined || current === undefined || current === desired) return;
-    if (!current.startsWith(`${this.options.name}:`)) return;
-
-    const currentConnection = current.slice(this.options.name.length + 1);
-    const desiredConnection = desired.slice(this.options.name.length + 1);
-
-    throw new JetstreamConfigError(
-      ConfigErrorReason.StreamOwnershipConflict,
-      `Stream ${config.name} is already owned by connection "${currentConnection}", but ` +
-        `connection "${desiredConnection}" of the same service is trying to provision it. ` +
-        `Both connections resolve the same stream name, which means they reach the same NATS ` +
-        `cluster. Point them at distinct clusters or give them distinct service names.`,
-    );
-  }
-
-  /**
    * Build the DLQ stream config: library defaults merged with user overrides,
    * with transport-controlled settings like retention stripped.
    */
@@ -698,7 +534,7 @@ export class StreamProvider {
     const safeOverrides = this.stripTransportControlled(overrides);
     // The DLQ name is service-scoped like the event and command streams, so two
     // connections of one service reaching the same cluster collide here too.
-    const metadata = mergeOwnedMetadata(safeOverrides.metadata, this.ownershipStamp('dlq'));
+    const metadata = mergeOwnedMetadata(safeOverrides.metadata, this.ownership.stamp('dlq'));
 
     return {
       ...DEFAULT_DLQ_STREAM_CONFIG,

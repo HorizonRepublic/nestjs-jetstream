@@ -1,4 +1,4 @@
-import { type JetStreamApiError } from '@nats-io/jetstream';
+import { JetStreamApiError } from '@nats-io/jetstream';
 
 import { JetstreamBaseError } from '../../errors/jetstream-error';
 import { type ProvisioningEntity } from '../../otel';
@@ -110,4 +110,20 @@ export const mapProvisioningError = (
     reservation,
     cause: err,
   });
+};
+
+/** Run a stream or consumer API call, mapping a JetStream API failure to {@link JetstreamProvisioningError}. */
+export const runProvisioningOp = async <T>(
+  ctx: ProvisioningErrorContext,
+  op: () => Promise<T>,
+): Promise<T> => {
+  try {
+    return await op();
+  } catch (err) {
+    if (err instanceof JetStreamApiError) {
+      throw mapProvisioningError(err, ctx);
+    }
+
+    throw err;
+  }
 };

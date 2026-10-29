@@ -4,6 +4,7 @@ import type { ConnectionRegistry } from '../connection/connection-registry';
 import type { ConnectionScope } from '../connection/connection.types';
 import { EventBus } from '../hooks';
 import { TransportEvent } from '../interfaces';
+import { errorMessage } from '../utils';
 
 const DRAINED = Symbol('drained');
 const TIMED_OUT = Symbol('timed-out');
@@ -67,7 +68,7 @@ export class ShutdownManager {
         scope.strategy?.close();
       } catch (err) {
         this.logger.warn(
-          `Connection "${scope.name}" failed to stop accepting messages: ${err instanceof Error ? err.message : String(err)}`,
+          `Connection "${scope.name}" failed to stop accepting messages: ${errorMessage(err)}`,
         );
       }
     }
@@ -108,9 +109,7 @@ export class ShutdownManager {
         );
       }
     } catch (err) {
-      this.logger.warn(
-        `Connection "${scope.name}" failed to drain: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      this.logger.warn(`Connection "${scope.name}" failed to drain: ${errorMessage(err)}`);
     } finally {
       clearTimeout(timeoutId);
     }

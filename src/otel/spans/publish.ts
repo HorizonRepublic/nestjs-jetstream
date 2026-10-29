@@ -5,6 +5,7 @@ import type { MsgHdrs } from '@nats-io/transport-node';
 import { SpanKind, SpanStatusCode, context, trace } from '@opentelemetry/api';
 
 import type { JetstreamRecord } from '../../client';
+import { errorMessage, toError } from '../../utils';
 import {
   ATTR_JETSTREAM_SCHEDULE_TARGET,
   HOOK_PUBLISH,
@@ -37,7 +38,7 @@ const shouldTracePublishSafe = (
   try {
     return predicate(subject, record);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = errorMessage(err);
 
     logger.debug(`OTel shouldTracePublish threw: ${message}`);
 
@@ -156,7 +157,7 @@ export const withPublishSpan = async <T>(
 
     return result;
   } catch (err) {
-    const error = err instanceof Error ? err : new Error(String(err));
+    const error = toError(err);
 
     span.recordException(error);
     span.setStatus({ code: SpanStatusCode.ERROR, message: error.message });

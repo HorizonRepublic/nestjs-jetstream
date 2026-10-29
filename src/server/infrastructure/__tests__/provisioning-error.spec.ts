@@ -6,6 +6,7 @@ import { NatsErrorCode } from '../nats-error-codes';
 import {
   JetstreamProvisioningError,
   mapProvisioningError,
+  runProvisioningOp,
   type ProvisioningErrorContext,
 } from '../provisioning-error';
 
@@ -95,5 +96,45 @@ describe('mapProvisioningError', () => {
     expect(result.entity).toBe('consumer');
     expect(result.reservation).toBeUndefined();
     expect(result.maxBytes).toBeUndefined();
+  });
+});
+
+describe('runProvisioningOp', () => {
+  it('should return what the operation resolves', async () => {
+    // When
+    const result = await runProvisioningOp(streamCtx, async () => 'ok');
+
+    // Then
+    expect(result).toBe('ok');
+  });
+
+  it('should map a JetStream API failure to a provisioning error', async () => {
+    // Given
+    const apiErr = new JetStreamApiError({
+      err_code: NatsErrorCode.NoSuitablePeers,
+      code: 500,
+      description: 'no suitable peers for placement',
+    });
+
+    // When / Then
+    await expect(
+      runProvisioningOp(streamCtx, async () => {
+        throw apiErr;
+      }),
+    ).rejects.toThrow(
+      expect.objectContaining({ name: 'JetstreamProvisioningError', cause: apiErr }),
+    );
+  });
+
+  it('should rethrow any other failure unchanged', async () => {
+    // Given
+    const failure = new Error('timeout');
+
+    // When / Then
+    await expect(
+      runProvisioningOp(streamCtx, async () => {
+        throw failure;
+      }),
+    ).rejects.toBe(failure);
   });
 });

@@ -9,6 +9,7 @@ import {
   type Span,
 } from '@opentelemetry/api';
 
+import { toError } from '../../utils';
 import {
   ATTR_JETSTREAM_MIGRATION_REASON,
   ATTR_JETSTREAM_PROVISIONING_ACTION,
@@ -78,7 +79,7 @@ const finishOk = (span: Span): void => {
 };
 
 const finishError = (span: Span, err: unknown): void => {
-  const error = err instanceof Error ? err : new Error(String(err));
+  const error = toError(err);
 
   span.recordException(error);
   span.setStatus({ code: SpanStatusCode.ERROR, message: error.message });

@@ -1,6 +1,6 @@
 import { Logger } from '@nestjs/common';
 
-import { JetStreamApiError, RetentionPolicy } from '@nats-io/jetstream';
+import { RetentionPolicy } from '@nats-io/jetstream';
 import type { ConsumerInfo, StreamInfo } from '@nats-io/jetstream';
 
 import { BindingErrorReason, JetstreamBindingError } from '../../errors';
@@ -12,7 +12,7 @@ import { PatternRegistry } from '../routing';
 import { isDlqEnabled } from './dlq-options';
 import { kindOptionsBlock, type ManagedKind } from './management';
 import { NameResolver } from './name-resolver';
-import { NatsErrorCode } from './nats-error-codes';
+import { isNatsError, NatsErrorCode } from './nats-error-codes';
 import { JetstreamProvisioningError } from './provisioning-error';
 import { MIGRATION_BACKUP_SUFFIX } from './stream-migration';
 import { coversOrEquals } from './subject-utils';
@@ -115,10 +115,7 @@ export class InfrastructureBinder {
     try {
       return await jsm.streams.info(name);
     } catch (err) {
-      if (
-        err instanceof JetStreamApiError &&
-        err.apiError().err_code === NatsErrorCode.StreamNotFound
-      ) {
+      if (isNatsError(err, NatsErrorCode.StreamNotFound)) {
         const api = err.apiError();
 
         throw new JetstreamProvisioningError({
@@ -143,10 +140,7 @@ export class InfrastructureBinder {
     try {
       return await jsm.consumers.info(stream, consumer);
     } catch (err) {
-      if (
-        err instanceof JetStreamApiError &&
-        err.apiError().err_code === NatsErrorCode.ConsumerNotFound
-      ) {
+      if (isNatsError(err, NatsErrorCode.ConsumerNotFound)) {
         const api = err.apiError();
 
         throw new JetstreamProvisioningError({

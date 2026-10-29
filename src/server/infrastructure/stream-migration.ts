@@ -1,14 +1,9 @@
 import { Logger } from '@nestjs/common';
 
-import {
-  JetStreamApiError,
-  type JetStreamManager,
-  type StreamConfig,
-  type StreamInfo,
-} from '@nats-io/jetstream';
+import { type JetStreamManager, type StreamConfig, type StreamInfo } from '@nats-io/jetstream';
 
 import { JetstreamMigrationError, MigrationErrorReason } from '../../errors';
-import { NatsErrorCode } from './nats-error-codes';
+import { isNatsError, NatsErrorCode } from './nats-error-codes';
 import { compareStreamConfig } from './stream-config-diff';
 
 export const MIGRATION_BACKUP_SUFFIX = '__migration_backup';
@@ -314,10 +309,7 @@ export class StreamMigration {
     try {
       return await jsm.streams.info(name);
     } catch (err) {
-      if (
-        err instanceof JetStreamApiError &&
-        err.apiError().err_code === NatsErrorCode.StreamNotFound
-      ) {
+      if (isNatsError(err, NatsErrorCode.StreamNotFound)) {
         return null;
       }
 
