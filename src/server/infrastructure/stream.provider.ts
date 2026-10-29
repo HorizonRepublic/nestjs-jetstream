@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 
 import {
+  DiscardPolicy,
   RetentionPolicy,
   StorageType,
   type StreamConfig,
@@ -45,6 +46,25 @@ import { compareStreamConfig, type StreamConfigDiffResult } from './stream-confi
 import { StreamMigration } from './stream-migration';
 import { mergeOwnedMetadata, StreamOwnership } from './stream-ownership';
 import { subjectCovers } from './subject-utils';
+
+/**
+ * Bring the discard settings to what NATS accepts. A stream with message
+ * schedules refuses `discard: new`. `discard_new_per_subject` needs `discard:
+ * new` and a positive `max_msgs_per_subject`, and without it a full subject
+ * still evicts its oldest message.
+ */
+const withAcceptedDiscard = <T extends Partial<StreamConfig>>(config: T): T => {
+  const discard = config.allow_msg_schedules === true ? DiscardPolicy.Old : config.discard;
+
+  return {
+    ...config,
+    discard,
+    discard_new_per_subject:
+      config.discard_new_per_subject !== false &&
+      discard === DiscardPolicy.New &&
+      (config.max_msgs_per_subject ?? 0) > 0,
+  };
+};
 
 /**
  * Manages JetStream stream lifecycle: creation, updates, and idempotent ensures.
@@ -512,14 +532,14 @@ export class StreamProvider {
 
     const metadata = mergeOwnedMetadata(overrides.metadata, ownership);
 
-    return {
+    return withAcceptedDiscard({
       ...defaults,
       ...overrides,
       name,
       subjects,
       description,
       ...(metadata ? { metadata } : {}),
-    };
+    });
   }
 
   /**
@@ -536,14 +556,14 @@ export class StreamProvider {
     // connections of one service reaching the same cluster collide here too.
     const metadata = mergeOwnedMetadata(safeOverrides.metadata, this.ownership.stamp('dlq'));
 
-    return {
+    return withAcceptedDiscard({
       ...DEFAULT_DLQ_STREAM_CONFIG,
       ...safeOverrides,
       name,
       subjects,
       description,
       ...(metadata ? { metadata } : {}),
-    };
+    });
   }
 
   /** Get default config for a stream kind. */

@@ -8,7 +8,7 @@ schema:
   headline: "Default Stream & Consumer Configs for NATS JetStream"
   description: "Default stream, consumer, and connection settings for every NestJS JetStream StreamKind (event, broadcast, ordered, command, schedule, DLQ)."
   datePublished: "2026-03-21"
-  dateModified: "2026-10-23"
+  dateModified: "2026-10-29"
 ---
 
 # Default Configs
@@ -20,21 +20,25 @@ Override any of these through [module configuration](/docs/reference/module-conf
 
 ## Stream Defaults
 
-Every stream is created with `storage: File`, `num_replicas: 1` (see [replicas in production](#replicas-in-production)), `discard: Old`, `allow_direct: true` and `compression: S2`. What differs per kind:
+Every stream is created with `storage: File`, `num_replicas: 1` (see [replicas in production](#replicas-in-production)), `allow_direct: true` and `compression: S2`. What differs per kind:
 
-| Property               | Event       | Command      | Broadcast   | Ordered     | Schedule    | DLQ         |
-| ---------------------- | ----------- | ------------ | ----------- | ----------- | ----------- | ----------- |
-| `retention`            | `Workqueue` | `Workqueue`  | `Limits`    | `Limits`    | `Workqueue` | `Limits`    |
-| `allow_rollup_hdrs`    | `true`      | `false`      | `true`      | `false`     | `true`      | `false`     |
-| `max_consumers`        | `100`       | `50`         | `200`       | `100`       | `100`       | `100`       |
-| `max_msg_size`         | `1 MB`      | `1 MB`       | `1 MB`      | `1 MB`      | `1 MB`      | `1 MB`      |
-| `max_msgs_per_subject` | `100,000`   | `10,000`     | `50,000`    | `500,000`   | unlimited   | `50,000`    |
-| `max_msgs`             | `1,000,000` | `100,000`    | `500,000`   | `5,000,000` | unlimited   | `500,000`   |
-| `max_bytes`            | `512 MB`    | `64 MB`      | `256 MB`    | `1 GB`      | `64 MB`     | `256 MB`    |
-| `max_age`              | `7 days`    | `3 minutes`  | `1 hour`    | `1 day`     | none        | `30 days`   |
-| `duplicate_window`     | `2 minutes` | `30 seconds` | `2 minutes` | `2 minutes` | `2 minutes` | `2 minutes` |
+| Property                  | Event       | Command      | Broadcast   | Ordered     | Schedule    | DLQ         |
+| ------------------------- | ----------- | ------------ | ----------- | ----------- | ----------- | ----------- |
+| `retention`               | `Workqueue` | `Workqueue`  | `Limits`    | `Limits`    | `Workqueue` | `Limits`    |
+| `discard`                 | `New`       | `New`        | `Old`       | `Old`       | `Old`       | `New`       |
+| `discard_new_per_subject` | `true`      | `true`       | `false`     | `false`     | `false`     | `true`      |
+| `allow_rollup_hdrs`       | `true`      | `false`      | `true`      | `false`     | `true`      | `false`     |
+| `max_consumers`           | `100`       | `50`         | `200`       | `100`       | `100`       | `100`       |
+| `max_msg_size`            | `1 MB`      | `1 MB`       | `1 MB`      | `1 MB`      | `1 MB`      | `1 MB`      |
+| `max_msgs_per_subject`    | `100,000`   | `10,000`     | `50,000`    | `500,000`   | unlimited   | `50,000`    |
+| `max_msgs`                | `1,000,000` | `100,000`    | `500,000`   | `5,000,000` | unlimited   | `500,000`   |
+| `max_bytes`               | `512 MB`    | `64 MB`      | `256 MB`    | `1 GB`      | `64 MB`     | `256 MB`    |
+| `max_age`                 | `7 days`    | `3 minutes`  | `1 hour`    | `1 day`     | none        | `30 days`   |
+| `duplicate_window`        | `2 minutes` | `30 seconds` | `2 minutes` | `2 minutes` | `2 minutes` | `2 minutes` |
 
 `max_bytes` is what the account is charged for, not what the stream currently holds: JetStream counts it against the account's storage budget the moment the stream is created. A service that provisions events plus a DLQ reserves **768 MB**, and one that also uses ordered delivery reserves **1.75 GB**, so a 10 GB file store carries roughly a dozen services instead of one.
+
+`discard` decides what a full stream does. Under `New` it rejects the publish and the producer gets a [`JetstreamPublishError`](/docs/reference/errors) with reason `stream-full`; under `Old` it accepts the publish and evicts the oldest message without telling anyone. Event, command and DLQ streams hold messages nobody has processed yet, so evicting one loses it: they use `New`. Broadcast and ordered streams are rolling windows that consumers read rather than consume away, so they keep `Old`. NATS refuses `New` on a stream with `allow_msg_schedules`, so the schedule stream, and an event stream with scheduling turned on, keep `Old` whatever the override says. `discard_new_per_subject` applies the same rule to `max_msgs_per_subject`; without it, a subject at its own limit still evicts its oldest message. The transport turns it off by itself wherever NATS would refuse it: under `discard: Old` or without a positive `max_msgs_per_subject`.
 
 `max_msg_size` matches the NATS server's own `max_payload` default of 1 MB. A larger value here has no effect until the server is reconfigured to accept larger payloads.
 
@@ -132,7 +136,7 @@ JetstreamModule.forRoot({
 
 ### Mutable (can be changed at any time)
 
-`num_replicas`, `max_age`, `max_bytes`, `max_msgs`, `max_msg_size`, `max_msgs_per_subject`, `discard`, `duplicate_window`, `subjects`, `compression`, `description`, `allow_rollup_hdrs`, `allow_direct`
+`num_replicas`, `max_age`, `max_bytes`, `max_msgs`, `max_msg_size`, `max_msgs_per_subject`, `discard`, `discard_new_per_subject`, `duplicate_window`, `subjects`, `compression`, `description`, `allow_rollup_hdrs`, `allow_direct`
 
 The transport applies mutable changes on startup: update the value in `forRoot()` and restart.
 

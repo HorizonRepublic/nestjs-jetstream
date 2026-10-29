@@ -305,7 +305,7 @@ export default function Root({ children }) {
   "headline": "Default Stream & Consumer Configs for NATS JetStream",
   "description": "Default stream, consumer, and connection settings for every NestJS JetStream StreamKind (event, broadcast, ordered, command, schedule, DLQ).",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-10-23"
+  "dateModified": "2026-10-29"
 },
       
     '/docs/reference/edge-cases/': {
@@ -361,7 +361,7 @@ export default function Root({ children }) {
   "headline": "Upgrading NestJS JetStream between major versions",
   "description": "Renamed options, changed defaults and how to keep the previous behaviour, release by release.",
   "datePublished": "2026-10-23",
-  "dateModified": "2026-10-27"
+  "dateModified": "2026-10-29"
 },
       
 

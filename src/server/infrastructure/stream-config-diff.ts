@@ -58,6 +58,11 @@ const ENABLE_ONLY_PROPERTIES: ReadonlySet<keyof StreamConfig> = new Set([
   'deny_purge',
 ] as const satisfies (keyof StreamConfig)[]);
 
+/** Boolean properties the server leaves out of stream info while they are off. */
+const OMITTED_WHEN_FALSE: ReadonlySet<keyof StreamConfig> = new Set([
+  'discard_new_per_subject',
+] as const satisfies (keyof StreamConfig)[]);
+
 /**
  * Compare current (from NATS) vs desired (from forRoot config) stream configuration.
  *
@@ -72,7 +77,7 @@ export const compareStreamConfig = (
   const changes: StreamConfigChange[] = [];
 
   for (const key of Object.keys(desired) as (keyof StreamConfig)[]) {
-    const currentVal = current[key];
+    const currentVal = current[key] ?? (OMITTED_WHEN_FALSE.has(key) ? false : undefined);
     const desiredVal = desired[key];
 
     if (isEqual(currentVal, desiredVal)) continue;
