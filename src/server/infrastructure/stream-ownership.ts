@@ -21,6 +21,8 @@ export const mergeOwnedMetadata = (
 ): Record<string, string> | undefined =>
   overrides || ownership ? { ...overrides, ...ownership } : undefined;
 
+type OwnedStreamConfig = Partial<StreamConfig> & { name: string };
+
 /** JetStream API error code behind either a raw or an already-mapped provisioning error. */
 const errorCodeOf = (err: unknown): number | undefined => {
   if (err instanceof JetstreamProvisioningError) return err.errCode;
@@ -64,10 +66,7 @@ export class StreamOwnership {
    * silently overwrite each other's configuration. A stamp from another service
    * is left alone; sharing a stream across services is a separate concern.
    */
-  public assertOwnership(
-    currentInfo: StreamInfo,
-    config: Partial<StreamConfig> & { name: string },
-  ): void {
+  public assertOwnership(currentInfo: StreamInfo, config: OwnedStreamConfig): void {
     const desired = config.metadata?.[STREAM_OWNER_METADATA_KEY];
     const current = currentInfo.config.metadata?.[STREAM_OWNER_METADATA_KEY];
 
@@ -89,7 +88,7 @@ export class StreamOwnership {
   /** Turn a lost create race into an ownership error when the winner is a sibling connection. */
   public async rethrowAsConflict(
     jsm: JetStreamManager,
-    config: Partial<StreamConfig> & { name: string },
+    config: OwnedStreamConfig,
     createErr: unknown,
   ): Promise<void> {
     if (errorCodeOf(createErr) !== NatsErrorCode.StreamAlreadyExists) return;
