@@ -1,6 +1,8 @@
+import { Logger } from '@nestjs/common';
+
 import { faker } from '@faker-js/faker';
 import { createMock } from '@golevelup/ts-vitest';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
 import { ConnectionProvider } from '../../../connection';
 import type { JetstreamModuleOptions } from '../../../interfaces';
@@ -15,7 +17,9 @@ import { MetadataProvider } from '../metadata.provider';
 
 const mockPut = vi.fn<(k: string, data: string) => Promise<number>>();
 
-const mockKv = { put: mockPut };
+const mockStatus = vi.fn<() => Promise<unknown>>();
+
+const mockKv = { put: mockPut, status: mockStatus };
 const mockCreate = vi.fn<(name: string, opts?: unknown) => Promise<typeof mockKv>>();
 
 vi.mock('@nats-io/kv', () => {
@@ -38,6 +42,7 @@ describe(MetadataProvider, () => {
 
     mockCreate.mockResolvedValue(mockKv);
     mockPut.mockResolvedValue(1);
+    mockStatus.mockResolvedValue({ streamInfo: { config: { num_replicas: 1 } } });
 
     options = {
       name: faker.lorem.word(),
@@ -142,6 +147,59 @@ describe(MetadataProvider, () => {
         // Then: no KV interaction
         expect(mockCreate).not.toHaveBeenCalled();
         expect(mockPut).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('single replica on a clustered server', () => {
+      const entries = new Map<string, Record<string, unknown>>([['key', { v: 1 }]]);
+
+      const singleReplicaWarnings = (spy: MockInstance<Logger['warn']>): string[] =>
+        spy.mock.calls
+          .map((args: unknown[]) => String(args[0]))
+          .filter((m: string) => m.includes('single replica'));
+
+      beforeEach(() => {
+        mockStatus.mockResolvedValue({
+          streamInfo: { config: { num_replicas: 1 }, cluster: { name: faker.lorem.word() } },
+        });
+      });
+
+      it('should warn when the bucket keeps the default single replica', async () => {
+        // Given
+        const warnSpy = vi.spyOn(Logger.prototype, 'warn');
+
+        // When
+        await sut.publish(entries);
+
+        // Then
+        expect(singleReplicaWarnings(warnSpy)).toEqual([
+          expect.stringContaining(DEFAULT_METADATA_BUCKET),
+        ]);
+      });
+
+      it('should not warn when the single replica is set explicitly', async () => {
+        // Given
+        options.metadata = { replicas: 1 };
+        sut = new MetadataProvider(options, connection);
+
+        const warnSpy = vi.spyOn(Logger.prototype, 'warn');
+
+        // When
+        await sut.publish(entries);
+
+        // Then
+        expect(singleReplicaWarnings(warnSpy)).toEqual([]);
+      });
+
+      it('should still publish when the bucket status cannot be read', async () => {
+        // Given
+        mockStatus.mockRejectedValue(new Error('status unavailable'));
+
+        // When
+        await sut.publish(entries);
+
+        // Then
+        expect(mockPut).toHaveBeenCalledOnce();
       });
     });
 

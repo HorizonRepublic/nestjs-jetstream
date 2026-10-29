@@ -8,7 +8,7 @@ schema:
   headline: "Troubleshooting: NestJS JetStream Transport"
   description: "Fix common NestJS JetStream issues, from connection errors and consumer lag to RPC timeouts, DLQ publish failures and stream migration recovery."
   datePublished: "2026-03-26"
-  dateModified: "2026-10-23"
+  dateModified: "2026-10-29"
 ---
 
 # Troubleshooting
@@ -223,6 +223,14 @@ Stream orders__microservice_ev-stream (allow_msg_ttl) needs NATS JetStream API l
 ```
 
 A feature needs a newer server than the one the client talks to: `ttl()` / `allow_msg_ttl` need 2.11, `scheduleAt()` / `allow_msg_schedules` 2.12, cron and interval schedules 2.14. Older servers accept these settings and silently ignore them, so the transport fails the boot or the call instead. Upgrade every node in the cluster, or drop the feature. See [NATS server versions](/docs/getting-started/installation#nats-server-versions).
+
+### `Streams on a single replica of a clustered JetStream`
+
+```text
+Streams on a single replica of a clustered JetStream: orders__microservice_ev-stream, orders__microservice_dlq-stream. ...
+```
+
+The server runs clustered JetStream, but these streams keep the default `num_replicas: 1`, so they go down with their node and are lost with its disk. Set `num_replicas: 3` in each stream override, or `num_replicas: 1` explicitly to keep one replica on purpose. See [Replicas in production](/docs/reference/default-configs#replicas-in-production).
 
 ### Boot fails in Manual mode
 

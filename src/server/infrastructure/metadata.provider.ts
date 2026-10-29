@@ -24,6 +24,7 @@ export class MetadataProvider {
   private readonly logger = new Logger('Jetstream:Metadata');
   private readonly bucketName: string;
   private readonly replicas: number;
+  private readonly explicitReplicas: boolean;
   private readonly ttl: number;
   private currentEntries?: Map<string, Record<string, unknown>>;
   private heartbeatTimer?: ReturnType<typeof setInterval>;
@@ -35,6 +36,7 @@ export class MetadataProvider {
   ) {
     this.bucketName = options.metadata?.bucket ?? DEFAULT_METADATA_BUCKET;
     this.replicas = options.metadata?.replicas ?? DEFAULT_METADATA_REPLICAS;
+    this.explicitReplicas = options.metadata?.replicas !== undefined;
     this.ttl = Math.max(options.metadata?.ttl ?? DEFAULT_METADATA_TTL, MIN_METADATA_TTL);
   }
 
@@ -133,6 +135,25 @@ export class MetadataProvider {
       ttl: this.ttl,
     });
 
+    if (!this.explicitReplicas) await this.warnOnSingleReplica(this.cachedKv);
+
     return this.cachedKv;
+  }
+
+  /** Same check as for streams; discovery data is rewritten every heartbeat, so a failed read only skips it. */
+  private async warnOnSingleReplica(kv: KV): Promise<void> {
+    try {
+      const { streamInfo } = await kv.status();
+
+      if (streamInfo.cluster?.name === undefined || streamInfo.config.num_replicas !== 1) return;
+
+      this.logger.warn(
+        `KV bucket "${this.bucketName}" keeps a single replica on a clustered JetStream, so ` +
+          'service discovery stops while its node is down. Set metadata.replicas: 3, or ' +
+          'metadata.replicas: 1 to keep one replica without this warning.',
+      );
+    } catch (err) {
+      this.logger.debug(`Could not read the replica count of KV bucket "${this.bucketName}"`, err);
+    }
   }
 }

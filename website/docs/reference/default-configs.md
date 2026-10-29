@@ -125,12 +125,15 @@ JetstreamModule.forRoot({
   schedule: { stream: { num_replicas: 3 } },
   rpc: { mode: 'jetstream', stream: { num_replicas: 3 } },
   dlq: { stream: { num_replicas: 3 } },
+  metadata: { replicas: 3 },
 });
 ```
 
 :::tip
 `num_replicas` is mutable: NATS adds or removes replicas on an existing stream without downtime or recreation.
 :::
+
+When the server runs clustered JetStream, the transport logs one warning at startup naming every stream, and the [handler metadata](/docs/patterns/handler-metadata) KV bucket, left at the default single replica. Losing the node that holds such a stream makes it unavailable, and losing its disk loses its messages. Set `num_replicas: 3` to fix it. To keep one replica on purpose, say on a staging cluster, set `num_replicas: 1` explicitly and the warning stays quiet. Streams under `management: Manual` are never checked, since their replicas are not the transport's to choose.
 
 ## Immutable vs mutable stream properties
 

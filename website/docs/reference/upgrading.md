@@ -47,6 +47,8 @@ nats stream edit <stream> --no-discard-per-subject
 
 ### Additive changes
 
+**A warning for single-replica streams on a cluster.** On clustered JetStream, streams and the handler metadata bucket left at the default `num_replicas: 1` are named in one startup warning. Set `num_replicas: 3`, or `num_replicas: 1` explicitly to silence it. See [Replicas in production](/docs/reference/default-configs#replicas-in-production).
+
 **Errors are typed.** Errors the transport throws, rejects with or hands to `onDeadLetter` are now `Jetstream<Area>Error` classes with a `reason` field, such as `JetstreamConfigError` or `JetstreamRpcError`. They still extend `Error` and keep their messages, so existing `catch` blocks and message checks behave as before. A full stream rejects with `JetstreamPublishError`, which still extends nats.js `JetStreamApiError`; its `name` is now `JetstreamPublishError`. See [Errors](/docs/reference/errors).
 
 ## v2.13 → v3.0
