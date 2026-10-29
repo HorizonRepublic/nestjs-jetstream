@@ -20,6 +20,7 @@ import {
 import {
   deriveOtelAttrs,
   withProvisioningSpan,
+  type ProvisioningSpanContext,
   type ResolvedOtelOptions,
   type ServerEndpoint,
 } from '../../otel';
@@ -35,6 +36,21 @@ import {
 } from './provisioning-error';
 import { MIGRATION_BACKUP_SUFFIX } from './stream-migration';
 import { StreamProvider } from './stream.provider';
+
+type ProvisioningSpanTarget = Omit<ProvisioningSpanContext, 'action'>;
+
+type DurableConsumerConfig = Partial<ConsumerConfig> & { durable_name: string };
+
+interface ConsumerTarget {
+  readonly stream: string;
+  readonly name: string;
+  readonly config: DurableConsumerConfig;
+  readonly spanAttrs: ProvisioningSpanTarget;
+}
+
+/** One subject goes in `filter_subject`; any other count in `filter_subjects`. */
+const consumerFilter = (subjects: string[]): Partial<ConsumerConfig> =>
+  subjects.length === 1 ? { filter_subject: subjects[0] } : { filter_subjects: subjects };
 
 /**
  * Manages JetStream consumer lifecycle: creation and idempotent ensures.
@@ -97,48 +113,27 @@ export class ConsumerProvider {
     jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
     kind: StreamKind,
   ): Promise<ConsumerInfo> {
-    const stream = this.streamProvider.getStreamName(kind);
-    const config = this.buildConfig(kind);
-    const name = config.durable_name;
-
-    const spanAttrs = {
-      serviceName: this.otelServiceName,
-      endpoint: this.otelEndpoint,
-      entity: 'consumer' as const,
-      name,
-    };
+    const target = this.resolveTarget(kind);
+    const { stream, name, config } = target;
 
     if (resolveManagementMode(this.options, kind, 'consumer') === ManagementMode.Manual) {
-      return withProvisioningSpan(this.otel, { ...spanAttrs, action: 'bind' }, () =>
+      return withProvisioningSpan(this.otel, { ...target.spanAttrs, action: 'bind' }, () =>
         this.binder.bindConsumer(jsm, kind),
       );
     }
 
-    return withProvisioningSpan(
-      this.otel,
-      {
-        ...spanAttrs,
-        action: 'ensure',
-      },
-      async () => {
-        this.logger.log(`Ensuring consumer: ${name} on stream: ${stream}`);
+    return withProvisioningSpan(this.otel, { ...target.spanAttrs, action: 'ensure' }, async () => {
+      this.logger.log(`Ensuring consumer: ${name} on stream: ${stream}`);
 
-        const ctx: ProvisioningErrorContext = { entity: 'consumer', name, kind };
+      const ctx: ProvisioningErrorContext = { entity: 'consumer', name, kind };
 
-        try {
-          await jsm.consumers.info(stream, name);
-          this.logger.debug(`Consumer exists, updating: ${name}`);
+      return this.lookupOrCreate(jsm, kind, target, async () => {
+        await jsm.consumers.info(stream, name);
+        this.logger.debug(`Consumer exists, updating: ${name}`);
 
-          return await runProvisioningOp(ctx, () => jsm.consumers.update(stream, name, config));
-        } catch (err) {
-          if (!isNatsError(err, NatsErrorCode.ConsumerNotFound)) {
-            throw err;
-          }
-
-          return await this.createConsumer(jsm, stream, name, kind, config);
-        }
-      },
-    );
+        return await runProvisioningOp(ctx, () => jsm.consumers.update(stream, name, config));
+      });
+    });
   }
 
   /**
@@ -153,60 +148,75 @@ export class ConsumerProvider {
     jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
     kind: StreamKind,
   ): Promise<ConsumerInfo> {
+    const target = this.resolveTarget(kind);
+    const { stream, name } = target;
+
+    if (resolveManagementMode(this.options, kind, 'consumer') === ManagementMode.Manual) {
+      return withProvisioningSpan(
+        this.otel,
+        { ...target.spanAttrs, action: 'rebind' },
+        async () => {
+          try {
+            return await jsm.consumers.info(stream, name);
+          } catch (err) {
+            if (isNatsError(err, NatsErrorCode.ConsumerNotFound)) {
+              throw new JetstreamBindingError(
+                BindingErrorReason.ExternalConsumerAbsent,
+                `Consumer ${name} on ${stream} is externally managed and currently absent; ` +
+                  `waiting for it to be restored.`,
+                { cause: err },
+              );
+            }
+
+            throw err;
+          }
+        },
+      );
+    }
+
+    return withProvisioningSpan(this.otel, { ...target.spanAttrs, action: 'recover' }, async () => {
+      this.logger.log(`Recovering consumer: ${name} on stream: ${stream}`);
+
+      // The migration backup stream acts as a lock held by the migrating pod
+      await this.assertNoMigrationInProgress(jsm, stream);
+
+      // Another pod may have recreated the consumer; use it as-is
+      return this.lookupOrCreate(jsm, kind, target, () => jsm.consumers.info(stream, name));
+    });
+  }
+
+  private resolveTarget(kind: StreamKind): ConsumerTarget {
     const stream = this.streamProvider.getStreamName(kind);
     const config = this.buildConfig(kind);
     const name = config.durable_name;
 
-    const spanAttrs = {
-      serviceName: this.otelServiceName,
-      endpoint: this.otelEndpoint,
-      entity: 'consumer' as const,
+    return {
+      stream,
       name,
+      config,
+      spanAttrs: {
+        serviceName: this.otelServiceName,
+        endpoint: this.otelEndpoint,
+        entity: 'consumer',
+        name,
+      },
     };
+  }
 
-    if (resolveManagementMode(this.options, kind, 'consumer') === ManagementMode.Manual) {
-      return withProvisioningSpan(this.otel, { ...spanAttrs, action: 'rebind' }, async () => {
-        try {
-          return await jsm.consumers.info(stream, name);
-        } catch (err) {
-          if (isNatsError(err, NatsErrorCode.ConsumerNotFound)) {
-            throw new JetstreamBindingError(
-              BindingErrorReason.ExternalConsumerAbsent,
-              `Consumer ${name} on ${stream} is externally managed and currently absent; ` +
-                `waiting for it to be restored.`,
-              { cause: err },
-            );
-          }
+  /** Run the lookup, creating the consumer when the server reports it missing. */
+  private async lookupOrCreate(
+    jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
+    kind: StreamKind,
+    target: ConsumerTarget,
+    lookup: () => Promise<ConsumerInfo>,
+  ): Promise<ConsumerInfo> {
+    try {
+      return await lookup();
+    } catch (err) {
+      if (!isNatsError(err, NatsErrorCode.ConsumerNotFound)) throw err;
 
-          throw err;
-        }
-      });
+      return await this.createConsumer(jsm, target.stream, target.name, kind, target.config);
     }
-
-    return withProvisioningSpan(
-      this.otel,
-      {
-        ...spanAttrs,
-        action: 'recover',
-      },
-      async () => {
-        this.logger.log(`Recovering consumer: ${name} on stream: ${stream}`);
-
-        // The migration backup stream acts as a lock held by the migrating pod
-        await this.assertNoMigrationInProgress(jsm, stream);
-
-        try {
-          // Another pod may have recreated the consumer; use it as-is
-          return await jsm.consumers.info(stream, name);
-        } catch (err) {
-          if (!isNatsError(err, NatsErrorCode.ConsumerNotFound)) {
-            throw err;
-          }
-
-          return await this.createConsumer(jsm, stream, name, kind, config);
-        }
-      },
-    );
   }
 
   /**
@@ -245,7 +255,7 @@ export class ConsumerProvider {
     stream: string,
     name: string,
     kind: StreamKind,
-    config: Partial<ConsumerConfig> & { durable_name: string },
+    config: DurableConsumerConfig,
   ): Promise<ConsumerInfo> {
     this.logger.log(`Creating consumer: ${name}`);
 
@@ -269,12 +279,22 @@ export class ConsumerProvider {
   }
 
   /** Build consumer config by merging defaults with user overrides. */
-  private buildConfig(kind: StreamKind): Partial<ConsumerConfig> & { durable_name: string } {
+  private buildConfig(kind: StreamKind): DurableConsumerConfig {
     const durableName = this.getConsumerName(kind);
 
     const defaults = this.getDefaults(kind);
     const overrides = this.getOverrides(kind);
 
+    return {
+      ...defaults,
+      ...overrides,
+      name: durableName,
+      durable_name: durableName,
+      ...consumerFilter(this.filterSubjects(kind)),
+    };
+  }
+
+  private filterSubjects(kind: StreamKind): string[] {
     if (kind === StreamKind.Broadcast) {
       const broadcastPatterns = this.patternRegistry.getBroadcastPatterns();
 
@@ -282,23 +302,7 @@ export class ConsumerProvider {
         throw new Error('Broadcast consumer requested but no broadcast patterns are registered');
       }
 
-      if (broadcastPatterns.length === 1) {
-        return {
-          ...defaults,
-          ...overrides,
-          name: durableName,
-          durable_name: durableName,
-          filter_subject: broadcastPatterns[0],
-        };
-      }
-
-      return {
-        ...defaults,
-        ...overrides,
-        name: durableName,
-        durable_name: durableName,
-        filter_subjects: broadcastPatterns,
-      };
+      return broadcastPatterns;
     }
 
     if (kind !== StreamKind.Event && kind !== StreamKind.Command && kind !== StreamKind.Schedule) {
@@ -306,47 +310,10 @@ export class ConsumerProvider {
     }
 
     if (this.names.hasCustomPrefix(kind)) {
-      return this.buildCustomPrefixConfig(kind, durableName, defaults, overrides);
+      return this.handlerPatterns(kind).map((p) => this.names.subject(kind, p));
     }
 
-    const filter_subject = this.names.filterSubject(kind);
-
-    return {
-      ...defaults,
-      ...overrides,
-      name: durableName,
-      durable_name: durableName,
-      filter_subject,
-    };
-  }
-
-  private buildCustomPrefixConfig(
-    kind: StreamKind,
-    durableName: string,
-    defaults: Partial<ConsumerConfig>,
-    overrides: Partial<ConsumerConfig>,
-  ): Partial<ConsumerConfig> & { durable_name: string } {
-    const patterns = this.handlerPatterns(kind);
-
-    const subjects = patterns.map((p) => this.names.subject(kind, p));
-
-    if (subjects.length === 1) {
-      return {
-        ...defaults,
-        ...overrides,
-        name: durableName,
-        durable_name: durableName,
-        filter_subject: subjects[0],
-      };
-    }
-
-    return {
-      ...defaults,
-      ...overrides,
-      name: durableName,
-      durable_name: durableName,
-      filter_subjects: subjects,
-    };
+    return [this.names.filterSubject(kind)];
   }
 
   private handlerPatterns(kind: StreamKind): string[] {
