@@ -1,6 +1,6 @@
 import { Logger } from '@nestjs/common';
 
-import type { StreamInfo } from '@nats-io/jetstream';
+import type { StreamConfig, StreamInfo } from '@nats-io/jetstream';
 import { DiscardPolicy, JetStreamApiError, RetentionPolicy, StorageType } from '@nats-io/jetstream';
 
 import { faker } from '@faker-js/faker';
@@ -543,17 +543,19 @@ describe(StreamProvider, () => {
       });
 
       describe('when the existing stream already allows message schedules', () => {
-        const existingWithSchedules = (): StreamInfo['config'] =>
-          ({
-            ...DEFAULT_EVENT_STREAM_CONFIG,
+        const existingWithSchedules = (): Partial<StreamConfig> => {
+          const { discard_new_per_subject: _, ...defaults } = DEFAULT_EVENT_STREAM_CONFIG;
+
+          return {
+            ...defaults,
             name: eventStream(),
             subjects: [`${internalName(options.name)}.ev.>`],
             description: `JetStream ev stream for ${options.name}`,
             discard: DiscardPolicy.Old,
-            discard_new_per_subject: undefined,
             allow_msg_schedules: true,
             metadata: { [STREAM_OWNER_METADATA_KEY]: `${options.name}:default` },
-          }) as StreamInfo['config'];
+          };
+        };
 
         it('should keep discard old when the override no longer mentions schedules', async () => {
           // Given: schedules were enabled once and cannot be turned off in place
