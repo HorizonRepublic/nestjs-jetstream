@@ -226,6 +226,55 @@ describe(ConnectionProvider, () => {
 
         expect(result).toBe(mockNc);
       });
+
+      it('should refuse to dial again once shutdown finished', async () => {
+        // Given: a connection that was shut down
+        await sut.getConnection();
+        await sut.shutdown();
+
+        // When/Then: a late caller is rejected instead of opening a connection nothing closes
+        await expect(sut.getConnection()).rejects.toThrow(
+          expect.objectContaining({
+            name: 'JetstreamConnectionError',
+            reason: ConnectionErrorReason.ShuttingDown,
+          }),
+        );
+        expect(mockConnect).toHaveBeenCalledOnce();
+      });
+
+      it('should refuse callers while the connection is draining', async () => {
+        // Given: a drain that is still running
+        mockNc.drain.mockReturnValue(new Promise<void>(() => {}));
+        await sut.getConnection();
+        void sut.shutdown();
+        await new Promise(process.nextTick);
+
+        // When/Then
+        await expect(sut.getConnection()).rejects.toThrow(
+          expect.objectContaining({ reason: ConnectionErrorReason.ShuttingDown }),
+        );
+      });
+
+      it('should stay shut down when a dial in flight lands during shutdown', async () => {
+        // Given: a dial that resolves only after shutdown started
+        const { promise: dialed, resolve: finishDial } = Promise.withResolvers<NatsConnection>();
+
+        mockConnect.mockReturnValueOnce(dialed);
+        const first = sut.getConnection();
+        const stopping = sut.shutdown();
+
+        // When: the dial completes and shutdown drains it
+        finishDial(mockNc);
+        await first;
+        await stopping;
+
+        // Then: the drained connection is not replaced by a new one
+        await expect(sut.getConnection()).rejects.toThrow(
+          expect.objectContaining({ reason: ConnectionErrorReason.ShuttingDown }),
+        );
+        expect(mockNc.drain).toHaveBeenCalledOnce();
+        expect(mockConnect).toHaveBeenCalledOnce();
+      });
     });
   });
 

@@ -73,6 +73,8 @@ nats stream edit <stream> --no-discard-per-subject
 
 **`rpc_timeout_total` names the pattern and the side.** Caller timeouts used to land under `subject="<unmatched>"` and were mixed with handler deadlines. The counter now carries the declared pattern on both sides and a new `side` label, `client` or `server`. Queries that sum or rate the metric keep working; one that selected `subject="<unmatched>"` to find caller timeouts should select `side="client"` instead.
 
+**Calls made after shutdown fail instead of reconnecting.** An `emit()` or `send()` from a handler still running at the end of shutdown, or from any code after it, used to dial a fresh connection that nothing closed, which could keep the process alive. It now fails with `JetstreamConnectionError` and reason `shutting-down`.
+
 **DLQ filters reject invalid bounds.** A `fromSeq` or `toSeq` that is not a non-negative integer, or an invalid date, now throws `JetstreamConfigError` with reason `dlq-filter-invalid` instead of matching every dead letter.
 
 ### Additive changes

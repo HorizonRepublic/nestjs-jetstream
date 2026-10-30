@@ -96,8 +96,17 @@ export class ConnectionProvider {
    * Establish NATS connection. Idempotent: returns cached connection on subsequent calls.
    *
    * @throws Error if connection is refused (fail fast).
+   * @throws JetstreamConnectionError with reason `shutting-down` once {@link shutdown} has begun.
    */
   public async getConnection(): Promise<NatsConnection> {
+    // A late emit or send must not open a connection that nothing will close.
+    if (this.shuttingDown) {
+      throw new JetstreamConnectionError(
+        ConnectionErrorReason.ShuttingDown,
+        'The transport is shutting down; no new connection is opened',
+      );
+    }
+
     if (this.connection && !this.connection.isClosed()) {
       return this.connection;
     }
@@ -292,7 +301,6 @@ export class ConnectionProvider {
       const previous = this.connection;
 
       this.connection = nc;
-      this.shuttingDown = false;
       // Replacing a closed connection; a first dial keeps lookups already waiting on it.
       if (previous) this.resetConnectionCaches();
       this.logger.log(`NATS connection established: ${nc.getServer()}`);

@@ -135,11 +135,12 @@ Thrown during startup, so it stops the application before it serves traffic.
 
 ## `JetstreamConnectionError`
 
-| Reason                    | When                                                             |
-| ------------------------- | ---------------------------------------------------------------- |
-| `not-connected`           | `unwrap()` or a JetStream client was requested before connecting |
-| `refused`                 | The servers refused the connection; the NATS error is `cause`    |
-| `closed-while-connecting` | The transport closed while its connection was still starting     |
+| Reason                    | When                                                                                          |
+| ------------------------- | --------------------------------------------------------------------------------------------- |
+| `not-connected`           | `unwrap()` or a JetStream client was requested before connecting                              |
+| `refused`                 | The servers refused the connection; the NATS error is `cause`                                 |
+| `closed-while-connecting` | The transport closed while its connection was still starting                                  |
+| `shutting-down`           | A publish, RPC call or JetStream lookup ran after shutdown began; no new connection is opened |
 
 ## `JetstreamProvisioningError`
 

@@ -38,6 +38,7 @@ export enum ConnectionErrorReason {
   NotConnected = 'not-connected',
   ClosedWhileConnecting = 'closed-while-connecting',
   Refused = 'refused',
+  ShuttingDown = 'shutting-down',
 }
 
 /** Why a record built with `JetstreamRecordBuilder` was rejected. */
