@@ -1,5 +1,59 @@
 # Changelog
 
+## [3.1.0](https://github.com/HorizonRepublic/nestjs-jetstream/compare/nestjs-jetstream-v3.0.0...nestjs-jetstream-v3.1.0) (2026-10-30)
+
+
+### Features
+
+* **dlq:** inspect, redrive and purge dead letters through JetstreamDlq, and empty the DLQ with purgeAll ([a6fb2b3](https://github.com/HorizonRepublic/nestjs-jetstream/commit/a6fb2b3ac7404a1cfa8a9e59932ad7d5a292b1ad))
+* **errors:** pass typed delivery errors to onDeadLetter ([29d264c](https://github.com/HorizonRepublic/nestjs-jetstream/commit/29d264c5a448d96d05b2bdcd8919403ab275ac2a))
+* **errors:** reject publishes into a full stream with JetstreamPublishError ([29d264c](https://github.com/HorizonRepublic/nestjs-jetstream/commit/29d264c5a448d96d05b2bdcd8919403ab275ac2a))
+* **errors:** type every user-reachable error with a reason and an isJetstreamError guard ([29d264c](https://github.com/HorizonRepublic/nestjs-jetstream/commit/29d264c5a448d96d05b2bdcd8919403ab275ac2a))
+* **provisioning:** warn about streams and the metadata bucket left on a single replica of clustered JetStream ([cd9e595](https://github.com/HorizonRepublic/nestjs-jetstream/commit/cd9e5954541b6e9ce48e5fa4ce7a2384d22883ed))
+
+
+### Bug Fixes
+
+* **client:** build forFeature clients from their connection's options ([c34e225](https://github.com/HorizonRepublic/nestjs-jetstream/commit/c34e225bcb1ffff689c03c60343477828457794e))
+* **client:** keep JetStream RPC calls pending across a disconnect ([c34e225](https://github.com/HorizonRepublic/nestjs-jetstream/commit/c34e225bcb1ffff689c03c60343477828457794e))
+* **client:** reject reserved headers on records built without the builder and accept Nats-Expected-* ([44a2d41](https://github.com/HorizonRepublic/nestjs-jetstream/commit/44a2d41a9f5e7758b8ebf6bc2742e573c41e83b6))
+* **client:** report JetStream RPC calls abandoned by the caller as cancelled ([c34e225](https://github.com/HorizonRepublic/nestjs-jetstream/commit/c34e225bcb1ffff689c03c60343477828457794e))
+* **connection:** rebuild client state after a terminal close ([c34e225](https://github.com/HorizonRepublic/nestjs-jetstream/commit/c34e225bcb1ffff689c03c60343477828457794e))
+* **connection:** refuse to reconnect once shutdown has begun ([44a2d41](https://github.com/HorizonRepublic/nestjs-jetstream/commit/44a2d41a9f5e7758b8ebf6bc2742e573c41e83b6))
+* **connection:** report refused NATS connections as JetstreamConnectionError ([29d264c](https://github.com/HorizonRepublic/nestjs-jetstream/commit/29d264c5a448d96d05b2bdcd8919403ab275ac2a))
+* **consumers:** retry consume flows as soon as NATS reconnects ([44a2d41](https://github.com/HorizonRepublic/nestjs-jetstream/commit/44a2d41a9f5e7758b8ebf6bc2742e573c41e83b6))
+* **consumers:** retry failed events for about 100 seconds before dead-lettering them ([1ee6043](https://github.com/HorizonRepublic/nestjs-jetstream/commit/1ee60436bf7798463fc29c11f559efc00208846b))
+* **dead-letter:** capture JetStream commands whose only delivery was abandoned ([d50823d](https://github.com/HorizonRepublic/nestjs-jetstream/commit/d50823d6b342675e03f76828b5c1dc5c67de3461))
+* **dead-letter:** let a handler running on the final delivery settle its message, and capture it on shutdown ([d50823d](https://github.com/HorizonRepublic/nestjs-jetstream/commit/d50823d6b342675e03f76828b5c1dc5c67de3461))
+* **dlq:** fall back to onDeadLetter without retrying when the DLQ stream is full ([4ba1320](https://github.com/HorizonRepublic/nestjs-jetstream/commit/4ba13202411e8ebfb0ab219122b8eaa833123797))
+* **dlq:** hold up to max_msgs dead letters instead of capping the single DLQ subject at 50,000 ([4ba1320](https://github.com/HorizonRepublic/nestjs-jetstream/commit/4ba13202411e8ebfb0ab219122b8eaa833123797))
+* **dlq:** refuse a purge whose filter criteria are all undefined ([cf66671](https://github.com/HorizonRepublic/nestjs-jetstream/commit/cf66671cb231170abf47fd50ca3500f065a70068))
+* **dlq:** reject NaN, negative or fractional sequence bounds and invalid dates in DLQ filters ([cf66671](https://github.com/HorizonRepublic/nestjs-jetstream/commit/cf66671cb231170abf47fd50ca3500f065a70068))
+* **health:** report a connection down once its handlers lost it for good ([c34e225](https://github.com/HorizonRepublic/nestjs-jetstream/commit/c34e225bcb1ffff689c03c60343477828457794e))
+* **health:** report consumer flows and degrade on stalled ones, with an opt-in readiness failure ([44a2d41](https://github.com/HorizonRepublic/nestjs-jetstream/commit/44a2d41a9f5e7758b8ebf6bc2742e573c41e83b6))
+* **metrics:** count schedule handler errors as handler errors ([d50823d](https://github.com/HorizonRepublic/nestjs-jetstream/commit/d50823d6b342675e03f76828b5c1dc5c67de3461))
+* **metrics:** label rpc_timeout_total with the declared pattern and side ([44a2d41](https://github.com/HorizonRepublic/nestjs-jetstream/commit/44a2d41a9f5e7758b8ebf6bc2742e573c41e83b6))
+* **metrics:** track connection_up per named connection ([44a2d41](https://github.com/HorizonRepublic/nestjs-jetstream/commit/44a2d41a9f5e7758b8ebf6bc2742e573c41e83b6))
+* **migration:** check per-subject limits before deleting the original ([5e176d0](https://github.com/HorizonRepublic/nestjs-jetstream/commit/5e176d0244cc278adfb3f272f7f6248e78912a8d))
+* **migration:** give back messages sourcing moved out of a work-queue stream when a migration fails before the delete ([8b071af](https://github.com/HorizonRepublic/nestjs-jetstream/commit/8b071afbc9283fe26f14f89c17f1f4c472a4cd51))
+* **migration:** keep a migration lock lost to a takeover or to silence from writing or acting on it ([cf66671](https://github.com/HorizonRepublic/nestjs-jetstream/commit/cf66671cb231170abf47fd50ca3500f065a70068))
+* **migration:** keep a takeover claim from rolling back the backup's config ([cf66671](https://github.com/HorizonRepublic/nestjs-jetstream/commit/cf66671cb231170abf47fd50ca3500f065a70068))
+* **migration:** lock destructive migrations with the backup stream and a heartbeat so pods never undo each other's work ([8b071af](https://github.com/HorizonRepublic/nestjs-jetstream/commit/8b071afbc9283fe26f14f89c17f1f4c472a4cd51))
+* **migration:** pause work-queue consumers while a stream is copied ([5e176d0](https://github.com/HorizonRepublic/nestjs-jetstream/commit/5e176d0244cc278adfb3f272f7f6248e78912a8d))
+* **migration:** refuse to migrate a non-empty stream that allows message schedules ([5e176d0](https://github.com/HorizonRepublic/nestjs-jetstream/commit/5e176d0244cc278adfb3f272f7f6248e78912a8d))
+* **migration:** resume an interrupted migration of the DLQ stream ([8b071af](https://github.com/HorizonRepublic/nestjs-jetstream/commit/8b071afbc9283fe26f14f89c17f1f4c472a4cd51))
+* **migration:** stop before deleting anything when the new limits cannot hold the stream's messages ([8b071af](https://github.com/HorizonRepublic/nestjs-jetstream/commit/8b071afbc9283fe26f14f89c17f1f4c472a4cd51))
+* **migration:** wait for sourcing while it makes progress instead of failing after a fixed 30 seconds ([8b071af](https://github.com/HorizonRepublic/nestjs-jetstream/commit/8b071afbc9283fe26f14f89c17f1f4c472a4cd51))
+* **otel:** keep consuming when a shouldTraceConsume predicate throws ([5dd6840](https://github.com/HorizonRepublic/nestjs-jetstream/commit/5dd6840a8c8a29ce882b9197f346a9060b30869e))
+* **routing:** keep queued messages alive while handlers make progress, and hand them back when every handler hangs ([d50823d](https://github.com/HorizonRepublic/nestjs-jetstream/commit/d50823d6b342675e03f76828b5c1dc5c67de3461))
+* **rpc:** free the concurrency slot when a JetStream RPC handler times out ([5dd6840](https://github.com/HorizonRepublic/nestjs-jetstream/commit/5dd6840a8c8a29ce882b9197f346a9060b30869e))
+* **rpc:** keep JetStream commands alive until the RPC timeout ([d50823d](https://github.com/HorizonRepublic/nestjs-jetstream/commit/d50823d6b342675e03f76828b5c1dc5c67de3461))
+* **schedule:** report a missing schedule stream only when the server says so ([29d264c](https://github.com/HorizonRepublic/nestjs-jetstream/commit/29d264c5a448d96d05b2bdcd8919403ab275ac2a))
+* **server:** resume a recreated broadcast consumer after its ack floor ([5e176d0](https://github.com/HorizonRepublic/nestjs-jetstream/commit/5e176d0244cc278adfb3f272f7f6248e78912a8d))
+* **server:** tear down a partially started connection before retrying its boot ([5dd6840](https://github.com/HorizonRepublic/nestjs-jetstream/commit/5dd6840a8c8a29ce882b9197f346a9060b30869e))
+* **shutdown:** let in-flight handlers and dead-letter captures settle before a bounded drain ([5dd6840](https://github.com/HorizonRepublic/nestjs-jetstream/commit/5dd6840a8c8a29ce882b9197f346a9060b30869e))
+* **streams:** reject publishes to a full event, command or DLQ stream instead of evicting unprocessed messages ([4ba1320](https://github.com/HorizonRepublic/nestjs-jetstream/commit/4ba13202411e8ebfb0ab219122b8eaa833123797))
+
 ## [3.0.0](https://github.com/HorizonRepublic/nestjs-jetstream/compare/nestjs-jetstream-v2.13.0...nestjs-jetstream-v3.0.0) (2026-10-23)
 
 
