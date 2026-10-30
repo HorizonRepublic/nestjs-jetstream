@@ -224,9 +224,13 @@ export const createRpcPipeline = (rctx: RpcPipelineContext): RouteFn => {
     }
 
     let settled = false;
+    // The deadline frees the concurrency slot too: a hung handler must not hold it forever.
+    const { promise: deadlinePassed, resolve: releaseSlot } = Promise.withResolvers<void>();
+
     const timeoutId = setTimeout(() => {
       if (settled) return;
       settled = true;
+      releaseSlot();
       if (stopAckExtension !== null) stopAckExtension();
       // Close the CONSUMER span early via the abort signal; the handler's
       // eventual resolution is ignored (span is idempotent after first finish).
@@ -242,7 +246,7 @@ export const createRpcPipeline = (rctx: RpcPipelineContext): RouteFn => {
       reportHandlerCompleted(msg, startedAt, 'terminated');
     }, timeout);
 
-    return (pending as Promise<unknown>).then(
+    const handlerSettled = (pending as Promise<unknown>).then(
       (result) => {
         if (settled) return;
         settled = true;
@@ -266,5 +270,7 @@ export const createRpcPipeline = (rctx: RpcPipelineContext): RouteFn => {
         reportHandlerCompleted(msg, startedAt, 'error');
       },
     );
+
+    return Promise.race([handlerSettled, deadlinePassed]);
   };
 };

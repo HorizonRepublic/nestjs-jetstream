@@ -694,6 +694,43 @@ describe(RpcRouter, () => {
       expect(maxConcurrent).toBe(2);
       expect(handler).toHaveBeenCalledTimes(2);
     });
+
+    it('should free the slot of a handler that timed out and never settles', async () => {
+      vi.useFakeTimers();
+
+      // Given: concurrency 1, a short timeout, and a first handler that hangs forever
+      const timeout = faker.number.int({ min: 50, max: 500 });
+
+      sut = new RpcRouter(messageProvider, patternRegistry, connection, codec, eventBus, {
+        concurrency: 1,
+        timeout,
+      });
+      await sut.start();
+
+      const handler = vi
+        .fn()
+        .mockReturnValueOnce(new Promise(() => {}))
+        .mockResolvedValueOnce({ ok: true });
+
+      patternRegistry.getHandler.mockReturnValue(handler);
+
+      const hung = createRpcMsg('cmd.hung', {}, faker.string.uuid(), faker.string.uuid());
+      const next = createRpcMsg('cmd.next', {}, faker.string.uuid(), faker.string.uuid());
+
+      commands$.next(hung);
+      commands$.next(next);
+
+      // When: the first handler's deadline passes
+      await vi.advanceTimersByTimeAsync(timeout);
+
+      // Then: the hung command is terminated and the parked one runs and settles
+      expect(hung.term).toHaveBeenCalledWith('Handler timeout');
+      expect(handler).toHaveBeenCalledTimes(2);
+      expect(next.ack).toHaveBeenCalled();
+
+      sut.destroy();
+      vi.useRealTimers();
+    });
   });
 
   describe('ack extension', () => {
