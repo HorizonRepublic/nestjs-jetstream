@@ -8,7 +8,7 @@ schema:
   headline: "Release Notes: NestJS JetStream Transport"
   description: "Version-by-version changelog covering new features, behavior changes, and breaking changes."
   datePublished: "2026-03-26"
-  dateModified: "2026-10-29"
+  dateModified: "2026-10-30"
 ---
 
 # Release Notes
@@ -25,6 +25,8 @@ Dead letters can now go back. [`JetstreamDlq`](/docs/guides/dead-letter-queue#re
 A full stream no longer loses messages silently. Event, command and DLQ streams reject the publish with a `JetstreamPublishError` once they reach a limit, instead of evicting the oldest message nobody has processed yet. Retries now span about 100 seconds before a message is dead-lettered, so a database failover or a restarting dependency no longer sends a whole window of traffic to the DLQ.
 
 [Destructive stream migration](/docs/guides/stream-migration) is safe with several pods. The backup stream is a real lock with a heartbeat, a pod that starts during a migration waits for it, and messages that sourcing moves out of a work-queue stream are given back if a migration fails. Errors across the transport are typed [`Jetstream<Area>Error`](/docs/reference/errors) classes with a `reason`, and on clustered JetStream a startup warning names every stream left on a single replica.
+
+Shutdown waits for handlers already running, so a rolling deploy no longer reprocesses their messages or loses RPC replies. A JetStream-mode RPC rides out a brief disconnect instead of failing a command that still runs, a client on a named connection follows that connection's RPC mode, and a connection that closes for good is re-dialled for clients while health reports a server that cannot follow it as down.
 
 Two defaults change on the first boot, the discard policy and the retry curve, and rolling back to v3.0 needs one manual step. All of it is in [Upgrading](/docs/reference/upgrading#v30--v31).
 
