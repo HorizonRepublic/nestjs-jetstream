@@ -6,6 +6,8 @@ import { Registry } from 'prom-client';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 
 import { ConnectionProvider } from '../../connection';
+import { ConnectionRegistry } from '../../connection/connection-registry';
+import type { ConnectionScope } from '../../connection/connection.types';
 import { ConfigErrorReason } from '../../errors';
 import { EventBus } from '../../hooks';
 import type {
@@ -244,6 +246,55 @@ describe(JetstreamMetricsService, () => {
 
       // Then
       expect(await sampleValue(register, 'jetstream_connection_up', { server })).toBe(1);
+    });
+
+    it('should flip only the disconnected connection to 0 when several are configured', async () => {
+      // Given: two named connections on different servers
+      const { subs } = await setup({ options, register, client, eventBus });
+      const serverA = faker.internet.url();
+      const serverB = faker.internet.url();
+
+      dispatch(subs, TransportEvent.Connect, serverA, 'primary');
+      dispatch(subs, TransportEvent.Connect, serverB, 'analytics');
+
+      // When: only the primary connection drops
+      dispatch(subs, TransportEvent.Disconnect, 'primary');
+
+      // Then: the analytics server stays up
+      expect(await sampleValue(register, 'jetstream_connection_up', { server: serverA })).toBe(0);
+      expect(await sampleValue(register, 'jetstream_connection_up', { server: serverB })).toBe(1);
+    });
+
+    it('should keep a shared server up while another connection on it is alive', async () => {
+      // Given: two named connections on the same server
+      const { subs } = await setup({ options, register, client, eventBus });
+      const server = faker.internet.url();
+
+      dispatch(subs, TransportEvent.Connect, server, 'primary');
+      dispatch(subs, TransportEvent.Connect, server, 'analytics');
+
+      // When
+      dispatch(subs, TransportEvent.Disconnect, 'primary');
+
+      // Then
+      expect(await sampleValue(register, 'jetstream_connection_up', { server })).toBe(1);
+    });
+
+    it('should drop the previous server when a connection reconnects elsewhere', async () => {
+      // Given: one connection on server A
+      const { subs } = await setup({ options, register, client, eventBus });
+      const serverA = faker.internet.url();
+      const serverB = faker.internet.url();
+
+      dispatch(subs, TransportEvent.Connect, serverA, 'primary');
+      dispatch(subs, TransportEvent.Disconnect, 'primary');
+
+      // When: it comes back on server B
+      dispatch(subs, TransportEvent.Reconnect, serverB, 'primary');
+
+      // Then
+      expect(await sampleValue(register, 'jetstream_connection_up', { server: serverA })).toBe(0);
+      expect(await sampleValue(register, 'jetstream_connection_up', { server: serverB })).toBe(1);
     });
   });
 
@@ -793,6 +844,49 @@ describe(JetstreamMetricsService, () => {
       const text = await register.metrics();
 
       expect(text).toContain(`jetstream_connection_up{server="${server}"} 1`);
+    });
+
+    it('should seed every named connection so a later disconnect finds it', async () => {
+      // Given: two live named connections
+      const serverA = faker.internet.url();
+      const serverB = faker.internet.url();
+      const scopeOf = (name: string, server: string): ConnectionScope =>
+        createMock<ConnectionScope>({
+          name,
+          connection: createMock<ConnectionProvider>({
+            unwrap: createMock<NatsConnection>({
+              getServer: () => server,
+              isClosed: () => false,
+            }),
+          }),
+        });
+      const registry = new ConnectionRegistry(
+        new Map([
+          ['primary', scopeOf('primary', serverA)],
+          ['analytics', scopeOf('analytics', serverB)],
+        ]),
+        'primary',
+      );
+      const subs = captureSubscribers(eventBus);
+      const sut = new JetstreamMetricsService(
+        eventBus,
+        { register, pollInterval: 0 },
+        client,
+        options,
+        null,
+        null,
+        null,
+        registry,
+      );
+
+      await sut.onApplicationBootstrap();
+
+      // When
+      dispatch(subs, TransportEvent.Disconnect, 'analytics');
+
+      // Then
+      expect(await sampleValue(register, 'jetstream_connection_up', { server: serverA })).toBe(1);
+      expect(await sampleValue(register, 'jetstream_connection_up', { server: serverB })).toBe(0);
     });
   });
 });

@@ -118,15 +118,15 @@ Handler and RPC buckets run `[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1
 
 All but `jetstream_connection_up` are refreshed every `pollInterval` ms from `consumers.info()` and `streams.info()` for every durable consumer this service owns. `jetstream_connection_up` follows connection events.
 
-| Name                                 | Labels                       | Source field                               |
-| ------------------------------------ | ---------------------------- | ------------------------------------------ |
-| `jetstream_consumer_num_pending`     | `stream`, `consumer`, `kind` | `ConsumerInfo.num_pending`                 |
-| `jetstream_consumer_num_ack_pending` | `stream`, `consumer`, `kind` | `ConsumerInfo.num_ack_pending`             |
-| `jetstream_consumer_num_redelivered` | `stream`, `consumer`, `kind` | `ConsumerInfo.num_redelivered`             |
-| `jetstream_consumer_num_waiting`     | `stream`, `consumer`, `kind` | `ConsumerInfo.num_waiting`                 |
-| `jetstream_stream_messages`          | `stream`                     | `StreamInfo.state.messages`                |
-| `jetstream_stream_bytes`             | `stream`                     | `StreamInfo.state.bytes`                   |
-| `jetstream_connection_up`            | `server`                     | `1` while connected, `0` after disconnect. |
+| Name                                 | Labels                       | Source field                                                                                   |
+| ------------------------------------ | ---------------------------- | ---------------------------------------------------------------------------------------------- |
+| `jetstream_consumer_num_pending`     | `stream`, `consumer`, `kind` | `ConsumerInfo.num_pending`                                                                     |
+| `jetstream_consumer_num_ack_pending` | `stream`, `consumer`, `kind` | `ConsumerInfo.num_ack_pending`                                                                 |
+| `jetstream_consumer_num_redelivered` | `stream`, `consumer`, `kind` | `ConsumerInfo.num_redelivered`                                                                 |
+| `jetstream_consumer_num_waiting`     | `stream`, `consumer`, `kind` | `ConsumerInfo.num_waiting`                                                                     |
+| `jetstream_stream_messages`          | `stream`                     | `StreamInfo.state.messages`                                                                    |
+| `jetstream_stream_bytes`             | `stream`                     | `StreamInfo.state.bytes`                                                                       |
+| `jetstream_connection_up`            | `server`                     | `1` while a connection on that server is up, `0` once every connection on it has disconnected. |
 
 `pollInterval: 0` turns polling off. Counters and histograms keep updating from transport events.
 

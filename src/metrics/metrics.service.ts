@@ -10,6 +10,7 @@ import {
 import type { JetStreamManager } from '@nats-io/jetstream';
 
 import { ConnectionProvider } from '../connection';
+import { ConnectionRegistry } from '../connection/connection-registry';
 import { ConfigErrorReason, JetstreamConfigError } from '../errors';
 import { EventBus } from '../hooks';
 import type {
@@ -25,6 +26,7 @@ import {
   consumerName,
   isJetStreamRpcMode,
   JETSTREAM_CONNECTION,
+  JETSTREAM_CONNECTIONS,
   JETSTREAM_OPTIONS,
   streamName,
 } from '../jetstream.constants';
@@ -42,6 +44,7 @@ import {
 } from './metrics.constants';
 import { createMetrics } from './metrics.factory';
 import type {
+  ConnectionServerState,
   ConsumerPollTarget,
   JetstreamMetrics,
   LoadedPrometheusClient,
@@ -49,6 +52,9 @@ import type {
   ResolvedSubjectLabels,
 } from './metrics.types';
 import { PollRunner } from './poll-runner';
+
+/** Key for the connection of a single-connection application, whose events carry no name. */
+const UNNAMED_CONNECTION = '';
 
 /**
  * Built-in Prometheus metrics service. On bootstrap, instantiates the metric
@@ -62,7 +68,7 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
 
   private metrics: JetstreamMetrics | null = null;
   private pollRunner: PollRunner | null = null;
-  private readonly activeServers = new Set<string>();
+  private readonly connectionServers = new Map<string, ConnectionServerState>();
 
   public constructor(
     private readonly eventBus: EventBus,
@@ -74,6 +80,9 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
     @Inject(JETSTREAM_CONNECTION)
     private readonly connection: ConnectionProvider | null = null,
     @Optional() private readonly names: NameResolver | null = null,
+    @Optional()
+    @Inject(JETSTREAM_CONNECTIONS)
+    private readonly registry: ConnectionRegistry | null = null,
   ) {}
 
   public async onApplicationBootstrap(): Promise<void> {
@@ -124,14 +133,22 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
    * come online; later disconnects/reconnects update it normally.
    */
   private syncInitialConnectionState(): void {
+    const scopes = this.registry?.all() ?? [];
+
+    // Named connections tag their events, so seed each under its own name.
+    if (scopes.length > 1) {
+      for (const scope of scopes) {
+        const nc = scope.connection.unwrap;
+
+        if (nc && !nc.isClosed()) this.markUp(nc.getServer(), scope.name);
+      }
+
+      return;
+    }
+
     const nc = this.connection?.unwrap;
 
-    if (!nc) return;
-
-    const server = nc.getServer();
-
-    this.activeServers.add(server);
-    this.metrics?.connectionUp.labels({ server }).set(1);
+    if (nc) this.markUp(nc.getServer(), undefined);
   }
 
   /** Skips polling for publisher-only deployments and when no kinds are active. */
@@ -221,23 +238,44 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
     this.eventBus.subscribe(TransportEvent.RpcCompleted, this.onRpcCompleted);
   }
 
-  private readonly onConnect = (server: string): void => {
-    this.activeServers.add(server);
-    this.metrics?.connectionUp.labels({ server }).set(1);
+  private readonly onConnect = (server: string, connection?: string): void => {
+    this.markUp(server, connection);
   };
 
-  private readonly onReconnect = (server: string): void => {
-    this.activeServers.add(server);
-    this.metrics?.connectionUp.labels({ server }).set(1);
+  private readonly onReconnect = (server: string, connection?: string): void => {
+    this.markUp(server, connection);
   };
 
-  private readonly onDisconnect = (): void => {
-    // Disconnect carries no server name: flip every observed server to 0;
-    // the next Connect/Reconnect re-flips the live one back to 1.
-    for (const server of this.activeServers) {
-      this.metrics?.connectionUp.labels({ server }).set(0);
+  // Disconnect carries no server name; the connection name locates it.
+  private readonly onDisconnect = (connection?: string): void => {
+    const state = this.connectionServers.get(connection ?? UNNAMED_CONNECTION);
+
+    if (!state) return;
+
+    state.up = false;
+    this.publishServer(state.server);
+  };
+
+  private markUp(server: string, connection: string | undefined): void {
+    const key = connection ?? UNNAMED_CONNECTION;
+    const previous = this.connectionServers.get(key);
+
+    this.connectionServers.set(key, { server, up: true });
+
+    if (previous && previous.server !== server) this.publishServer(previous.server);
+    this.publishServer(server);
+  }
+
+  /** A server is up while any connection last seen on it is up. */
+  private publishServer(server: string): void {
+    let up = false;
+
+    for (const state of this.connectionServers.values()) {
+      if (state.server === server && state.up) up = true;
     }
-  };
+
+    this.metrics?.connectionUp.labels({ server }).set(up ? 1 : 0);
+  }
 
   private readonly onError = (_err: Error, context?: string): void => {
     this.metrics?.errorsTotal.labels({ context: mapErrorContext(context) }).inc();

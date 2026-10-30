@@ -69,6 +69,8 @@ nats stream edit <stream> --no-discard-per-subject
 
 **An RPC handler timeout frees its concurrency slot.** A handler still running past `rpc.timeout` no longer blocks new commands, so stuck handlers can exceed `concurrency`.
 
+**`connection_up` follows each named connection.** With several connections, one disconnecting no longer drops every server to `0` until the others reconnect.
+
 **DLQ filters reject invalid bounds.** A `fromSeq` or `toSeq` that is not a non-negative integer, or an invalid date, now throws `JetstreamConfigError` with reason `dlq-filter-invalid` instead of matching every dead letter.
 
 ### Additive changes
