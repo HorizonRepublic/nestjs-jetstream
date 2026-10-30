@@ -39,6 +39,32 @@ class OrdersController {
 
 type DesiredStream = Partial<StreamConfig> & { name: string; subjects: string[] };
 
+type StreamsCall = (...args: unknown[]) => Promise<unknown>;
+
+/** Wraps one `jsm.streams` call; lets a test stall an instance the way a network partition would. */
+type StreamsInterceptor = (
+  method: PropertyKey,
+  args: unknown[],
+  call: () => Promise<unknown>,
+) => Promise<unknown>;
+
+const intercepted = (target: JetStreamManager, around: StreamsInterceptor): JetStreamManager => {
+  const streams = new Proxy(target.streams, {
+    get: (obj, method, receiver): unknown => {
+      const value: unknown = Reflect.get(obj, method, receiver);
+
+      if (typeof value !== 'function') return value;
+
+      return (...args: unknown[]): Promise<unknown> =>
+        around(method, args, () => (value as StreamsCall).apply(obj, args));
+    },
+  });
+
+  return new Proxy(target, {
+    get: (obj, prop, receiver) => (prop === 'streams' ? streams : Reflect.get(obj, prop, receiver)),
+  });
+};
+
 describe('Stream migration lock', () => {
   let nc: NatsConnection;
   let jsm: JetStreamManager;
@@ -138,6 +164,66 @@ describe('Stream migration lock', () => {
     await expect(jsm.streams.info(`${stream}${MIGRATION_BACKUP_SUFFIX}`)).rejects.toThrow(
       /not found/,
     );
+  });
+
+  it('should not delete the original once a stalled owner wakes up after a takeover', async () => {
+    // Given: the owner is cut off from NATS right after it starts the backup
+    const desired = await seedStream(200);
+    const deletedByOwner: unknown[] = [];
+    let partition: Promise<void> = Promise.resolve();
+    let partitioned = false;
+    let heal = (): void => {};
+
+    const owner = intercepted(jsm, async (method, args, call) => {
+      await partition;
+
+      if (method === 'delete') deletedByOwner.push(args[0]);
+
+      const result = await call();
+      const [name, config] = args as [string, Partial<StreamConfig> | undefined];
+
+      if (
+        !partitioned &&
+        method === 'update' &&
+        name === backupOf(stream) &&
+        config?.sources?.length
+      ) {
+        partitioned = true;
+        partition = new Promise((resolve) => {
+          heal = resolve;
+        });
+      }
+
+      return result;
+    });
+    const ownerOutcome = new StreamMigration(FAST)
+      .migrate(owner, stream, desired)
+      .then(() => null)
+      .catch((err: unknown) => err);
+
+    await waitForCondition(() => partitioned, 5_000);
+
+    // When: another instance takes the migration over, and the owner comes
+    // back while the taker is about to purge the original
+    let takerStalled: Promise<unknown> | undefined;
+    const taker = intercepted(jsm, async (method, args, call) => {
+      if (takerStalled === undefined && method === 'purge' && args[0] === stream) {
+        takerStalled = ownerOutcome;
+        heal();
+      }
+
+      if (takerStalled !== undefined) await takerStalled;
+
+      return call();
+    });
+    const recovered = await new StreamMigration(FAST).settle(taker, stream, desired);
+
+    // Then: the stale owner stood down without deleting, and nothing is lost
+    expect(await ownerOutcome).toMatchObject({ reason: MigrationErrorReason.LockLost });
+    expect(deletedByOwner).not.toContain(stream);
+    expect(recovered).toBe(true);
+    expect((await jsm.streams.info(stream)).state.messages).toBe(200);
+    await expect(jsm.streams.info(backupOf(stream))).rejects.toThrow(/not found/);
   });
 
   it('should wait for a live migration without touching its backup', async () => {

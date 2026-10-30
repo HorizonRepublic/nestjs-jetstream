@@ -29,6 +29,8 @@ export enum ConfigErrorReason {
   DlqUnavailable = 'dlq-unavailable',
   /** `purge()` was called with an empty filter; emptying the whole DLQ is `purgeAll()`. */
   DlqFilterRequired = 'dlq-filter-required',
+  /** A DLQ filter bound is not a non-negative integer, or a date in it is invalid. */
+  DlqFilterInvalid = 'dlq-filter-invalid',
 }
 
 /** Why the NATS connection was unavailable. */

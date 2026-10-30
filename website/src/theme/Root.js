@@ -97,7 +97,7 @@ export default function Root({ children }) {
   "headline": "How to configure a Dead Letter Queue",
   "description": "Capture NestJS NATS JetStream messages that exhaust all delivery attempts via a DLQ stream or onDeadLetter callback.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-10-29"
+  "dateModified": "2026-10-30"
 },
       
     '/docs/guides/external-infrastructure/': {
@@ -217,7 +217,7 @@ export default function Root({ children }) {
   "headline": "How to migrate immutable stream properties",
   "description": "Safely change immutable stream properties without losing messages via blue-green sourcing.",
   "datePublished": "2026-04-02",
-  "dateModified": "2026-10-29"
+  "dateModified": "2026-10-30"
 },
       
     '/docs/guides/troubleshooting/': {

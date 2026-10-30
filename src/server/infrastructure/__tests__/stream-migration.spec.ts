@@ -1,3 +1,5 @@
+import { Logger } from '@nestjs/common';
+
 import type {
   JetStreamManager,
   PurgeResponse,
@@ -21,6 +23,11 @@ import {
 import { MigrationPhase } from '../stream-migration.types';
 
 const FAST = { heartbeatIntervalMs: 20, abandonedAfterMs: 100, stallTimeoutMs: 200 };
+
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 
 const notFound = (): JetStreamApiError =>
   new JetStreamApiError({ err_code: 10059, code: 404, description: 'stream not found' });
@@ -440,6 +447,112 @@ describe(StreamMigration, () => {
       expect(streams.get(backupName)?.messages).toBe(6);
     });
 
+    it('should neither reclaim nor act on a lock another instance took over while it stalled', async () => {
+      // Given: slow sourcing spans several heartbeats, and a rival claims the
+      // backup as soon as this instance attaches the source
+      const streams = new Map([[streamName, original(6)]]);
+      const startedAt = Date.now();
+      const jsm = createFakeJsm(streams, (name) =>
+        name === backupName && Date.now() - startedAt < 150 ? 6 : 0,
+      );
+      const fakeUpdate = vi.mocked(jsm.streams.update).getMockImplementation()!;
+      let rivalClaimed = false;
+      let writesAfterClaim = 0;
+
+      vi.mocked(jsm.streams.update).mockImplementation(async (name, config) => {
+        if (name === backupName && rivalClaimed) writesAfterClaim += 1;
+
+        const result = await fakeUpdate(name, config);
+        const lock = streams.get(backupName);
+
+        if (name === backupName && !rivalClaimed && config.sources?.length && lock) {
+          lock.config.metadata = {
+            ...lock.config.metadata,
+            'nestjs-jetstream-migration-owner': 'rival',
+          };
+          rivalClaimed = true;
+        }
+
+        return result;
+      });
+
+      // When
+      await expect(
+        new StreamMigration(FAST).migrate(jsm, streamName, desired),
+      ).rejects.toMatchObject({
+        reason: MigrationErrorReason.LockLost,
+      });
+
+      // Then: the rival keeps the lock and the original is never deleted
+      expect(writesAfterClaim).toBe(0);
+      expect(streams.get(backupName)?.config.metadata).toMatchObject({
+        'nestjs-jetstream-migration-owner': 'rival',
+      });
+      expect(jsm.streams.delete).not.toHaveBeenCalled();
+      expect(streams.has(streamName)).toBe(true);
+    });
+
+    it('should not write a heartbeat read before a takeover once it has been silent too long', async () => {
+      // Given: right after the backup starts, every read of it stalls past the
+      // abandonment window and returns what it saw before a rival's claim
+      const streams = new Map([[streamName, original(6)]]);
+      const jsm = createFakeJsm(streams);
+      const fakeInfo = vi.mocked(jsm.streams.info).getMockImplementation()!;
+      const fakeUpdate = vi.mocked(jsm.streams.update).getMockImplementation()!;
+      const warn = vi.spyOn(Logger.prototype, 'warn');
+      let stale: StreamInfo | undefined;
+      let staleUntil = 0;
+      let writesAfterClaim = 0;
+
+      vi.mocked(jsm.streams.info).mockImplementation(async (name) => {
+        const wait = staleUntil - Date.now();
+
+        if (name !== backupName || stale === undefined || wait <= 0) return fakeInfo(name);
+
+        await sleep(wait);
+
+        return stale;
+      });
+      vi.mocked(jsm.streams.update).mockImplementation(async (name, config) => {
+        if (name === backupName && stale !== undefined) writesAfterClaim += 1;
+
+        const result = await fakeUpdate(name, config);
+
+        if (name === backupName && stale === undefined && config.sources?.length) {
+          stale = await fakeInfo(backupName);
+          staleUntil = Date.now() + 150;
+
+          const lock = streams.get(backupName)!;
+
+          lock.config.metadata = {
+            ...lock.config.metadata,
+            'nestjs-jetstream-migration-owner': 'rival',
+          };
+        }
+
+        return result;
+      });
+
+      // When
+      await expect(
+        new StreamMigration(FAST).migrate(jsm, streamName, desired),
+      ).rejects.toMatchObject({
+        reason: MigrationErrorReason.LockLost,
+      });
+
+      // Then: the stale read is never written back, and the loss is put down to silence
+      expect(writesAfterClaim).toBe(0);
+      expect(streams.get(backupName)?.config.metadata).toMatchObject({
+        'nestjs-jetstream-migration-owner': 'rival',
+      });
+      expect(jsm.streams.delete).not.toHaveBeenCalled();
+
+      const warnings = warn.mock.calls.map(([message]) => String(message));
+
+      expect(warnings.some((message) => message.includes('went silent'))).toBe(true);
+      expect(warnings.some((message) => message.includes('taken over'))).toBe(false);
+    });
+
     it('should keep migrating when a single heartbeat fails', async () => {
       // Given: slow sourcing, and the first heartbeat after it starts is rejected
       const streams = new Map([[streamName, original(10)]]);
@@ -737,6 +850,39 @@ describe(StreamMigration, () => {
       // Then
       expect(streams.get(streamName)).toMatchObject({ messages: 6, config: { sources: [] } });
       expect(streams.has(backupName)).toBe(false);
+    });
+
+    it('should claim the lock without writing back the config it read before the claim', async () => {
+      // Given: an abandoned backup, whose sources change between the claim's read and its write
+      const lock = backup(4, { [MIGRATION_HEARTBEAT_KEY]: '9', [MIGRATION_PHASE_KEY]: 'backup' });
+
+      lock.config.sources = [{ name: streamName }];
+
+      const streams = new Map([
+        [streamName, original(4)],
+        [backupName, lock],
+      ]);
+      const jsm = createFakeJsm(streams);
+      const fakeUpdate = vi.mocked(jsm.streams.update).getMockImplementation()!;
+      let sourcesAfterClaim: StreamConfig['sources'];
+
+      vi.mocked(jsm.streams.update).mockImplementation(async (name, config) => {
+        const claiming = name === backupName && sourcesAfterClaim === undefined;
+
+        if (claiming) streams.get(backupName)!.config.sources = [];
+
+        const result = await fakeUpdate(name, config);
+
+        if (claiming) sourcesAfterClaim = streams.get(backupName)!.config.sources;
+
+        return result;
+      });
+
+      // When
+      await new StreamMigration(FAST).settle(jsm, streamName, desired);
+
+      // Then
+      expect(sourcesAfterClaim).toEqual([]);
     });
 
     it('should back off when another instance claims the abandoned backup first', async () => {

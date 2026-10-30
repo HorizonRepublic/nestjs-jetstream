@@ -8,7 +8,7 @@ schema:
   headline: "How to migrate immutable stream properties"
   description: "Safely change immutable stream properties without losing messages via blue-green sourcing."
   datePublished: "2026-04-02"
-  dateModified: "2026-10-29"
+  dateModified: "2026-10-30"
 ---
 
 # How to migrate immutable stream properties
@@ -75,7 +75,7 @@ A producer either gets an ack (the message survives the migration) or a rejectio
 
 The backup stream (`{stream}__migration_backup`) holds the messages between delete and recreate, and is also the lock. NATS creates a stream atomically, so of several pods that start a migration at once, exactly one creates the backup and migrates; the rest wait for it to finish and then find nothing left to change.
 
-The pod holding the lock writes a heartbeat into the backup's metadata every 5 seconds. Every other pod waits while that heartbeat keeps changing, and takes the migration over only after watching it stand still for 30 seconds, so a migration of any length is not interrupted while its pod is alive, and clock skew between hosts plays no part. A takeover finishes the migration from where it stopped. The pod that held the lock checks it still does before each destructive step, and stops with a `lock-lost` error if its heartbeat stopped landing or another pod took over. Backups left by releases before 3.1 carry no heartbeat; they keep the old rule and count as abandoned 90 seconds after they were created.
+The pod holding the lock writes a heartbeat into the backup's metadata every 5 seconds. Every other pod waits while that heartbeat keeps changing, and takes the migration over only after watching it stand still for 30 seconds, so a migration of any length is not interrupted while its pod is alive, and clock skew between hosts plays no part. A takeover finishes the migration from where it stopped. The pod that held the lock checks it still does before each destructive step, and stops with a `lock-lost` error if its heartbeat stopped landing or another pod took over. It also stops writing to the lock for good once it sees another pod's id on it, or once its last heartbeat is within one interval of the 30-second takeover window. NATS has no compare-and-set on stream updates, so that one-interval margin, not an atomic check, keeps a pod that stalled from overwriting a takeover. Backups left by releases before 3.1 carry no heartbeat; they keep the old rule and count as abandoned 90 seconds after they were created.
 
 :::warning Finish the rollout before a destructive migration
 Releases before 3.1 know none of this: they take over any backup older than 90 seconds, and reopen a quiesced stream when they start. Run a destructive migration only once no pod of an older release can start against the cluster.

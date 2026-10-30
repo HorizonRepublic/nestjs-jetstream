@@ -36,6 +36,23 @@ const LEGACY_ACTIVE_GRACE_MS = 90_000;
 /** Desired stream configuration shape accepted by migration entry points. */
 type MigrationStreamConfig = Partial<StreamConfig> & { name: string; subjects: string[] };
 
+type StreamMetadata = Record<string, string>;
+
+/** Why a migration lease stopped being held. */
+enum LeaseLoss {
+  /** Another instance's id is on the backup. */
+  Superseded = 'superseded',
+  /** No write landed for long enough that another instance may take over. */
+  Silent = 'silent',
+}
+
+const ROLLBACK_LEFT_TO: Readonly<Record<LeaseLoss, string>> = {
+  [LeaseLoss.Superseded]: 'left to the instance that took the migration over',
+  [LeaseLoss.Silent]:
+    'skipped: this instance lost its lock by going silent; the stream stays quiesced with its ' +
+    'backup until another instance takes the migration over',
+};
+
 const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -65,6 +82,7 @@ class MigrationLease {
   private timer: ReturnType<typeof setInterval> | undefined;
   private beats = 0;
   private lastWriteAt = Date.now();
+  private loss: LeaseLoss | undefined;
 
   public constructor(
     private readonly jsm: JetStreamManager,
@@ -82,11 +100,42 @@ class MigrationLease {
     this.timer.unref();
   }
 
-  /** Change the backup's config, stamping this owner and a fresh heartbeat. */
-  public update(patch: Partial<StreamConfig>, phase?: MigrationPhase): Promise<void> {
-    const next = this.queue.then(async () => {
+  /**
+   * Write this owner over whoever holds the backup; only a takeover does this.
+   * Sends the metadata alone, so nats.js merges it into the config it reads
+   * right before the update and sources are never rolled back. The phase is
+   * as fresh as the read just before: stream updates have no compare-and-set.
+   */
+  public claim(): Promise<void> {
+    return this.enqueue(async () => {
       const { config } = await this.jsm.streams.info(this.backupName);
 
+      this.beats += 1;
+      await this.jsm.streams.update(this.backupName, {
+        metadata: {
+          ...config.metadata,
+          [MIGRATION_OWNER_KEY]: this.owner,
+          [MIGRATION_HEARTBEAT_KEY]: String(this.beats),
+        },
+      });
+      this.lastWriteAt = Date.now();
+    });
+  }
+
+  /**
+   * Change the backup's config, stamping a fresh heartbeat. Refuses, and
+   * loses the lease for good, once another owner's id is on the backup or
+   * this lease has been silent long enough for another instance to take over.
+   */
+  public update(patch: Partial<StreamConfig>, phase?: MigrationPhase): Promise<void> {
+    return this.enqueue(async () => {
+      this.throwIfLost();
+
+      const { config } = await this.jsm.streams.info(this.backupName);
+
+      this.checkHeld(config.metadata);
+
+      // Stream updates have no compare-and-set: the silence check leaves a heartbeat's margin before a claim, not a guarantee.
       this.beats += 1;
       await this.jsm.streams.update(this.backupName, {
         ...config,
@@ -100,10 +149,6 @@ class MigrationLease {
       });
       this.lastWriteAt = Date.now();
     });
-
-    this.queue = next.catch(() => undefined);
-
-    return next;
   }
 
   /**
@@ -113,12 +158,21 @@ class MigrationLease {
    */
   public async assertHeld(): Promise<void> {
     await this.queue;
+    this.throwIfLost();
 
-    const silentFor = Date.now() - this.lastWriteAt;
-    const safeFor = this.timing.abandonedAfterMs - this.timing.heartbeatIntervalMs;
     const { config } = await this.jsm.streams.info(this.backupName);
 
-    if (silentFor < safeFor && config.metadata?.[MIGRATION_OWNER_KEY] === this.owner) return;
+    this.checkHeld(config.metadata);
+  }
+
+  /** Why the lease was lost, or `undefined` while it is held. */
+  public get lossReason(): LeaseLoss | undefined {
+    return this.loss;
+  }
+
+  /** Local check, no round trip: for loops that must not outlive the lease. */
+  public throwIfLost(): void {
+    if (this.loss === undefined) return;
 
     throw new JetstreamMigrationError(
       MigrationErrorReason.LockLost,
@@ -130,6 +184,43 @@ class MigrationLease {
   public async stop(): Promise<void> {
     clearInterval(this.timer);
     await this.queue;
+  }
+
+  private enqueue(step: () => Promise<void>): Promise<void> {
+    const next = this.queue.then(step);
+
+    this.queue = next.catch(() => undefined);
+
+    return next;
+  }
+
+  /**
+   * Lose the lease for good unless the backup still names this owner and the
+   * last write is recent enough that no other instance can have taken over.
+   */
+  private checkHeld(metadata: StreamMetadata | undefined): void {
+    const safeFor = this.timing.abandonedAfterMs - this.timing.heartbeatIntervalMs;
+
+    if (metadata?.[MIGRATION_OWNER_KEY] !== this.owner) {
+      this.markLost(LeaseLoss.Superseded);
+    } else if (Date.now() - this.lastWriteAt >= safeFor) {
+      this.markLost(LeaseLoss.Silent);
+    }
+
+    this.throwIfLost();
+  }
+
+  private markLost(reason: LeaseLoss): void {
+    if (this.loss !== undefined) return;
+
+    this.loss = reason;
+    clearInterval(this.timer);
+    this.logger.warn(
+      reason === LeaseLoss.Superseded
+        ? `Migration lock on ${this.backupName} was taken over by another instance`
+        : `Migration lock on ${this.backupName} went silent long enough for another instance ` +
+            'to take it over; this instance no longer writes to it',
+    );
   }
 }
 
@@ -301,7 +392,7 @@ export class StreamMigration {
         // Phase 2: Backup via sourcing
         this.logger.log(`  Phase 2/4: Backing up ${drainedCount} messages -> ${backupName}`);
         await lease.update({ sources: [{ name: streamName }] });
-        await this.waitForSourceDrained(jsm, backupName, streamName, drainedCount, true);
+        await this.waitForSourceDrained(jsm, backupName, streamName, drainedCount, true, lease);
       }
 
       // Phase 3: Delete + recreate. The backup's source names the stream about
@@ -389,7 +480,7 @@ export class StreamMigration {
     const lease = new MigrationLease(jsm, backupName, this.timing, this.logger);
 
     try {
-      await lease.update({});
+      await lease.claim();
     } catch (err) {
       if (isNatsError(err, NatsErrorCode.StreamNotFound)) return null;
 
@@ -460,6 +551,7 @@ export class StreamMigration {
         backupName,
         backupInfo.state.messages,
         false,
+        lease,
       );
       await this.dropBackup(jsm, backupName, lease);
       await jsm.streams.update(streamName, {
@@ -512,7 +604,7 @@ export class StreamMigration {
     }
 
     await lease.update({ sources: [{ name: streamName }] });
-    await this.waitForSourceDrained(jsm, backupName, streamName, 0, true);
+    await this.waitForSourceDrained(jsm, backupName, streamName, 0, true, lease);
     await lease.assertHeld();
     await lease.update({ sources: [] }, MigrationPhase.Restore);
     await jsm.streams.purge(streamName);
@@ -542,7 +634,14 @@ export class StreamMigration {
       ...streamConfig,
       sources: [...otherSources, { name: backupName }],
     });
-    await this.waitForSourceDrained(jsm, streamName, backupName, backupInfo.state.messages, false);
+    await this.waitForSourceDrained(
+      jsm,
+      streamName,
+      backupName,
+      backupInfo.state.messages,
+      false,
+      lease,
+    );
 
     // Backup deleted before the source detaches: the order recovery relies on.
     await this.dropBackup(jsm, backupName, lease);
@@ -603,12 +702,15 @@ export class StreamMigration {
     sourceName: string,
     minimumMessages: number,
     countsMessages: boolean,
+    lease: MigrationLease,
   ): Promise<void> {
     let mostMessages = -1;
     let leastLag = Number.POSITIVE_INFINITY;
     let progressAt = Date.now();
 
     for (;;) {
+      lease.throwIfLost();
+
       const info = await jsm.streams.info(streamName);
       const source = (info.sources ?? []).find((s) => s.name === sourceName);
 
@@ -653,11 +755,19 @@ export class StreamMigration {
     lease: MigrationLease,
   ): Promise<void> {
     try {
-      // A lost lock means another instance owns the backup now; leave both to it.
+      // A lost lock leaves the stream and its backup to whoever takes the migration over.
       await lease.assertHeld();
       await this.returnBackup(jsm, streamName, openConfig, lease);
       await jsm.streams.update(streamName, openConfig);
     } catch (rollbackErr) {
+      const loss = lease.lossReason;
+
+      if (loss !== undefined) {
+        this.logger.warn(`Rollback of ${streamName} ${ROLLBACK_LEFT_TO[loss]}`);
+
+        return;
+      }
+
       this.logger.error(
         `Rollback of ${streamName} after a failed migration also failed; the stream stays ` +
           'quiesced with its backup until another instance takes the migration over:',

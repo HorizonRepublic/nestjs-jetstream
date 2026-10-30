@@ -22,10 +22,14 @@ import { StreamKind } from '../../interfaces';
 import type { ResolvedConnectionOptions } from '../../interfaces';
 import { JetstreamDlqHeader, RESERVED_HEADERS } from '../../jetstream.constants';
 import { NameResolver } from '../../server/infrastructure/name-resolver';
-import { DeadLetterOrigin, DlqRedriveSkipReason } from '../dlq.types';
+import { DeadLetterOrigin, DlqRedriveSkipReason, type DeadLetterFilter } from '../dlq.types';
 import { JetstreamDlq } from '../jetstream-dlq';
 
 const encoder = new TextEncoder();
+
+type FilterCall = (filter: DeadLetterFilter) => Promise<unknown>;
+
+type FilterCallCase = [string, FilterCall];
 
 interface StoredDeadLetter {
   readonly seq: number;
@@ -429,6 +433,23 @@ describe(JetstreamDlq, () => {
     });
   });
 
+  it.each([
+    ['inspect', (filter): Promise<unknown> => sut.inspect(filter)],
+    ['redrive', (filter): Promise<unknown> => sut.redrive(filter)],
+  ] satisfies FilterCallCase[])(
+    'should refuse a filter with a NaN bound in %s',
+    async (_, call) => {
+      // Given
+      stored = [deadLetter({ seq: 1 })];
+
+      // When/Then
+      await expect(call({ toSeq: Number.NaN })).rejects.toMatchObject({
+        reason: ConfigErrorReason.DlqFilterInvalid,
+      });
+      expect(publish).not.toHaveBeenCalled();
+    },
+  );
+
   describe('purge', () => {
     it('should refuse to purge with an empty filter', async () => {
       // Given
@@ -437,6 +458,39 @@ describe(JetstreamDlq, () => {
       // When/Then
       await expect(sut.purge({})).rejects.toMatchObject({
         reason: ConfigErrorReason.DlqFilterRequired,
+      });
+      expect(jsm.streams.purge).not.toHaveBeenCalled();
+      expect(jsm.streams.deleteMessage).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['subject', { subject: undefined }],
+      ['toSeq', { toSeq: undefined }],
+      ['every given criterion', { pattern: undefined, reason: undefined, failedAfter: undefined }],
+    ])('should refuse to purge when %s is undefined', async (_, filter) => {
+      // Given: a filter built from absent query parameters
+      stored = [1, 2].map((seq) => deadLetter({ seq }));
+
+      // When/Then
+      await expect(sut.purge(filter)).rejects.toMatchObject({
+        reason: ConfigErrorReason.DlqFilterRequired,
+      });
+      expect(jsm.streams.purge).not.toHaveBeenCalled();
+      expect(jsm.streams.deleteMessage).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['a NaN upper bound', { toSeq: Number.NaN }],
+      ['a negative upper bound', { toSeq: -1 }],
+      ['a fractional lower bound', { fromSeq: 1.5 }],
+      ['an invalid date', { failedAfter: new Date(Number.NaN) }],
+    ])('should refuse to purge with %s', async (_, filter) => {
+      // Given
+      stored = [1, 2].map((seq) => deadLetter({ seq }));
+
+      // When/Then
+      await expect(sut.purge(filter)).rejects.toMatchObject({
+        reason: ConfigErrorReason.DlqFilterInvalid,
       });
       expect(jsm.streams.purge).not.toHaveBeenCalled();
       expect(jsm.streams.deleteMessage).not.toHaveBeenCalled();
@@ -467,6 +521,20 @@ describe(JetstreamDlq, () => {
       // Then
       expect(report.purged).toBe(2);
       expect(jsm.streams.purge).toHaveBeenCalledWith(names.dlqStreamName(), { seq: 3 });
+    });
+
+    it('should still purge by the upper bound on the server when other criteria are undefined', async () => {
+      // Given
+      stored = [1, 2, 3].map((seq) => deadLetter({ seq }));
+      vi.mocked(jsm.streams.purge).mockResolvedValue(createMock<PurgeResponse>({ purged: 2 }));
+
+      // When
+      const report = await sut.purge({ toSeq: 2, subject: undefined, reason: undefined });
+
+      // Then
+      expect(report.purged).toBe(2);
+      expect(jsm.streams.purge).toHaveBeenCalledWith(names.dlqStreamName(), { seq: 3 });
+      expect(jsm.streams.deleteMessage).not.toHaveBeenCalled();
     });
 
     it('should delete one by one when a lower bound would spare older entries', async () => {

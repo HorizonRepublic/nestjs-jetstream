@@ -18,6 +18,26 @@ const withinWindow = (failedAt: Date | undefined, filter: DeadLetterFilter): boo
   return filter.failedBefore === undefined || failedAt <= filter.failedBefore;
 };
 
+/** Whether any criterion is set; a key holding `undefined` sets nothing. */
+export const setsAnyCriterion = (criteria: Partial<DeadLetterFilter>): boolean => {
+  const values: unknown[] = Object.values(criteria);
+
+  return values.some((value) => value !== undefined);
+};
+
+const isSequence = (value: number | undefined): boolean =>
+  value === undefined || (Number.isSafeInteger(value) && value >= 0);
+
+const isValidDate = (value: Date | undefined): boolean =>
+  value === undefined || !Number.isNaN(value.getTime());
+
+/** Whether every bound the filter sets is usable; NaN or an invalid date would match everything. */
+export const isValidFilter = (filter: DeadLetterFilter): boolean =>
+  isSequence(filter.fromSeq) &&
+  isSequence(filter.toSeq) &&
+  isValidDate(filter.failedAfter) &&
+  isValidDate(filter.failedBefore);
+
 /** Whether a dead letter meets every criterion the filter sets. */
 export const matchesDeadLetter = (record: DeadLetterRecord, filter: DeadLetterFilter): boolean => {
   if (filter.subject !== undefined && !coversOrEquals(filter.subject, record.subject)) return false;
