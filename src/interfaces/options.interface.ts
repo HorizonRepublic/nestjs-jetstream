@@ -160,6 +160,7 @@ export interface StreamConsumerOverrides {
    * Auto-extend the NATS ack deadline via `msg.working()` during handler execution.
    *
    * - `false` (default): disabled; NATS redelivers after `ack_wait` if not acked.
+   *   On `rpc`, commands are still kept alive up to the RPC timeout.
    * - `true`: auto-extend at `ack_wait / 2` interval (calculated from consumer config).
    * - `number`: explicit extension interval in milliseconds.
    * - `{ interval?, maxDuration? }`: the same, plus how long one message may be extended.

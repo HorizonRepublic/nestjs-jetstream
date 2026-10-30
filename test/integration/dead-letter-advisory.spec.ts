@@ -360,8 +360,8 @@ describe('Dead letters from unsettled deliveries', () => {
       expect(await streamMessages(dlqStreamName(serviceName))).toBe(1);
     }, 40_000);
 
-    it('lets a command handler that answers late settle the command', async () => {
-      // Given a command handler that outlives the command's ack_wait
+    it('keeps a command alive up to the RPC timeout, so the server never gives up on it', async () => {
+      // Given a command handler that outlives the command's ack_wait, with ack extension off
       const { app, module } = await createTestApp(
         {
           ...options(),
@@ -376,13 +376,27 @@ describe('Dead letters from unsettled deliveries', () => {
 
       apps.push(app);
       const client = module.get<ClientProxy>(getClientToken(serviceName));
+      const advisories: unknown[] = [];
+      const watcher = nc.subscribe(
+        `$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.${streamName(serviceName, StreamKind.Command)}.>`,
+        {
+          callback: (_err, msg) => {
+            advisories.push(msg.json());
+          },
+        },
+      );
 
       // When it is called
-      const reply = await firstValueFrom(client.send('order.slow-command', { id: 12 }));
+      const reply = await firstValueFrom(client.send('order.slow-command', { id: 12 })).finally(
+        () => {
+          watcher.unsubscribe();
+        },
+      );
 
       await new Promise((resolve) => setTimeout(resolve, 1_000));
 
-      // Then the caller gets the answer and nothing is dead-lettered
+      // Then no replica could have dead-lettered it, and the caller gets the answer
+      expect(advisories).toHaveLength(0);
       expect(reply).toEqual({ id: 12 });
       expect(deadLetters).toHaveLength(0);
       expect(await streamMessages(streamName(serviceName, StreamKind.Command))).toBe(0);

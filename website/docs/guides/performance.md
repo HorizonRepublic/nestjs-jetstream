@@ -103,7 +103,7 @@ events: {
 
 `interval` in the same object sets the extension period in milliseconds instead.
 
-For JetStream RPC the RPC timeout bounds how long the caller waits, and `ackExtension` keeps the command message alive independently. Size both for the expected handler duration.
+For JetStream RPC the RPC timeout bounds how long the caller waits. With `ackExtension` off, a command is still kept alive until that timeout, so a handler slower than `ack_wait` is not given up on by the server while its caller still waits. Set `ackExtension` on `rpc` to choose the interval and limit yourself.
 
 ## S2 compression
 

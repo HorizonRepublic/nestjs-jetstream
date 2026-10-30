@@ -78,6 +78,22 @@ export const resolveAckExtension = (
 };
 
 /**
+ * Ack extension for a JetStream RPC command. The caller waits for the reply
+ * until the RPC timeout, so with extension off the command is still kept alive
+ * that long; past ack_wait the server would otherwise give up on it and another
+ * replica could dead-letter a command its handler is about to answer.
+ */
+export const resolveCommandExtension = (
+  config: AckExtensionConfig | undefined,
+  ackWaitNanos: number | undefined,
+  timeoutMs: number,
+): AckExtension =>
+  resolveAckExtension(config, ackWaitNanos) ?? {
+    intervalMs: intervalFromAckWait(ackWaitNanos),
+    maxDurationMs: timeoutMs,
+  };
+
+/**
  * Keep-alive for a message parked behind the concurrency limit. The server's
  * ack_wait clock runs from delivery, so a parked message is extended whether or
  * not `ackExtension` is on, and without its limit: that limit bounds handler

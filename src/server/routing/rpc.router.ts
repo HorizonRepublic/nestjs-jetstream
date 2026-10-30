@@ -18,7 +18,7 @@ import {
 } from '../../otel';
 import {
   handlerRunLimit,
-  resolveAckExtension,
+  resolveCommandExtension,
   resolveParkExtension,
   startAckExtensionTimer,
   type AckExtension,
@@ -47,7 +47,7 @@ export class RpcRouter {
   private readonly logger = new Logger('Jetstream:RpcRouter');
   private readonly timeout: number;
   private readonly concurrency: number | undefined;
-  private resolvedAckExtension: AckExtension | null | undefined;
+  private resolvedAckExtension: AckExtension | undefined;
   private subscription: Subscription | null = null;
   private cachedNc: NatsConnection | null = null;
   private readonly inFlight = new InFlightTracker();
@@ -86,11 +86,12 @@ export class RpcRouter {
   }
 
   /** Lazily resolve the ack extension (needs ackWaitMap populated at runtime). */
-  private get ackExtension(): AckExtension | null {
+  private get ackExtension(): AckExtension {
     if (this.resolvedAckExtension !== undefined) return this.resolvedAckExtension;
-    this.resolvedAckExtension = resolveAckExtension(
+    this.resolvedAckExtension = resolveCommandExtension(
       this.rpcOptions?.ackExtension,
       this.ackWaitMap?.get(StreamKind.Command),
+      this.timeout,
     );
     return this.resolvedAckExtension;
   }

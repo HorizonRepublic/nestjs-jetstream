@@ -1,6 +1,7 @@
 export {
   handlerRunLimit,
   resolveAckExtension,
+  resolveCommandExtension,
   resolveParkExtension,
   startAckExtensionTimer,
 } from './ack-extension';

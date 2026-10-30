@@ -8,6 +8,7 @@ import {
   _ackExtensionPoolForTest,
   DEFAULT_MAX_ACK_EXTENSION_MS,
   resolveAckExtension,
+  resolveCommandExtension,
   resolveParkExtension,
   startAckExtensionTimer,
 } from '../ack-extension';
@@ -128,6 +129,31 @@ describe('resolveAckExtension', () => {
           message: expect.stringMatching(/ackExtension\.maxDuration/),
         }),
       );
+    });
+  });
+});
+
+describe('resolveCommandExtension', () => {
+  describe('happy path', () => {
+    it('should extend a command up to the RPC timeout when ack extension is off', () => {
+      // Given
+      const timeout = faker.number.int({ min: 1_000, max: 600_000 });
+
+      // When
+      const sut = resolveCommandExtension(undefined, 10_000_000_000, timeout);
+
+      // Then
+      expect(sut).toEqual({ intervalMs: 5_000, maxDurationMs: timeout });
+    });
+  });
+
+  describe('edge cases', () => {
+    it('should keep an extension the user configured', () => {
+      // When
+      const sut = resolveCommandExtension({ interval: 700, maxDuration: 900 }, undefined, 60_000);
+
+      // Then
+      expect(sut).toEqual({ intervalMs: 700, maxDurationMs: 900 });
     });
   });
 });
