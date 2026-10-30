@@ -18,6 +18,7 @@ import {
 import { isPromiseLike, serializeError, toError, unwrapResult } from '../utils';
 import { NameResolver } from './infrastructure/name-resolver';
 import { createHandlerReporter } from './routing/handler-reporter';
+import { InFlightTracker } from './routing/in-flight-tracker';
 import { PatternRegistry } from './routing/pattern-registry';
 import type { HandlerReporter } from './routing/routing.types';
 
@@ -32,6 +33,7 @@ import type { HandlerReporter } from './routing/routing.types';
 export class CoreRpcServer {
   private readonly logger = new Logger('Jetstream:CoreRpc');
   private subscription: Subscription | null = null;
+  private readonly inFlight = new InFlightTracker();
 
   private readonly otel: ResolvedOtelOptions;
   private readonly serviceName: string;
@@ -66,6 +68,8 @@ export class CoreRpcServer {
       : `${this.serviceName}.cmd.>`;
     const queue = `${this.serviceName}_cmd_queue`;
 
+    // A second start replaces the subscription instead of answering every request twice.
+    this.stop();
     this.subscription = nc.subscribe(subject, {
       queue,
       callback: (err, msg) => {
@@ -74,21 +78,28 @@ export class CoreRpcServer {
           return;
         }
 
-        this.handleRequest(msg).catch((handlerErr: unknown) => {
+        const handled = this.handleRequest(msg).catch((handlerErr: unknown) => {
           this.logger.error('Unhandled request error:', handlerErr);
         });
+
+        this.inFlight.track(handled);
       },
     });
 
     this.logger.log(`Core RPC listening: ${subject} (queue: ${queue})`);
   }
 
-  /** Stop listening and clean up the subscription. */
+  /** Stop listening and clean up the subscription; requests already running still reply. */
   public stop(): void {
     if (this.subscription) {
       this.subscription.unsubscribe();
       this.subscription = null;
     }
+  }
+
+  /** Resolve once every request already received has been answered. */
+  public async whenIdle(): Promise<void> {
+    await this.inFlight.whenIdle();
   }
 
   /** Handle an incoming Core NATS request. */

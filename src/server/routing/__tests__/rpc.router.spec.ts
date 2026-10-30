@@ -85,6 +85,70 @@ describe(RpcRouter, () => {
       });
     });
 
+    describe('when destroyed with a command still running', () => {
+      it('should ack and reply before reporting idle', async () => {
+        // Given a handler that is mid-execution
+        const { promise: result, resolve: finish } = Promise.withResolvers<unknown>();
+        const responseData = { id: faker.number.int() };
+
+        patternRegistry.getHandler.mockReturnValue(vi.fn().mockReturnValue(result));
+        await sut.start();
+
+        const replyTo = faker.string.uuid();
+        const msg = createRpcMsg(faker.lorem.slug(), {}, replyTo, faker.string.uuid());
+
+        commands$.next(msg);
+
+        // When routing stops and the handler finishes afterwards
+        sut.destroy();
+
+        let idle = false;
+        const waiting = sut.whenIdle().then(() => {
+          idle = true;
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(idle).toBe(false);
+        finish(responseData);
+        await waiting;
+
+        // Then the command was settled and answered
+        expect(msg.ack).toHaveBeenCalledOnce();
+        expect(mockNc.publish).toHaveBeenCalledWith(
+          replyTo,
+          codec.encode(responseData),
+          expect.objectContaining({ headers: expect.anything() }),
+        );
+      });
+
+      it('should report idle at the deadline of a handler that never settles', async () => {
+        vi.useFakeTimers();
+
+        // Given a hung handler
+        const timeout = faker.number.int({ min: 50, max: 500 });
+
+        sut = new RpcRouter(messageProvider, patternRegistry, connection, codec, eventBus, {
+          timeout,
+        });
+        patternRegistry.getHandler.mockReturnValue(vi.fn().mockReturnValue(new Promise(() => {})));
+        await sut.start();
+        commands$.next(
+          createRpcMsg(faker.lorem.slug(), {}, faker.string.uuid(), faker.string.uuid()),
+        );
+        sut.destroy();
+
+        // When the deadline passes
+        const waiting = sut.whenIdle();
+
+        await vi.advanceTimersByTimeAsync(timeout);
+
+        // Then shutdown is not held by the abandoned handler
+        await expect(waiting).resolves.toBeUndefined();
+
+        vi.useRealTimers();
+      });
+    });
+
     describe('when started twice', () => {
       it('should route each command to its handler once', async () => {
         // Given a router started a second time

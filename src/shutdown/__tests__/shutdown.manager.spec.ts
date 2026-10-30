@@ -27,7 +27,9 @@ const makeScope = (
   const connection = createMock<ConnectionProvider>({
     shutdown: vi.fn(shutdownImpl ?? ((): Promise<void> => Promise.resolve())),
   });
-  const strategy = createMock<JetstreamStrategy>();
+  const strategy = createMock<JetstreamStrategy>({
+    whenIdle: vi.fn((): Promise<void> => Promise.resolve()),
+  });
   const scope = createMock<ConnectionScope>({
     name,
     critical: true,
@@ -139,6 +141,35 @@ describe(ShutdownManager, () => {
         expect(order.slice(0, 2).toSorted()).toEqual(['close:a', 'close:b']);
         expect(order.slice(2).toSorted()).toEqual(['drain:a', 'drain:b']);
       });
+
+      it('should wait for in-flight handlers after closing and before draining', async () => {
+        // Given a connection whose handlers are still running when it closes
+        const order: string[] = [];
+        const { promise: handlersDone, resolve: finishHandlers } = Promise.withResolvers<void>();
+        const busy = makeScope('busy', {}, async () => {
+          order.push('drain');
+        });
+
+        busy.strategy.close.mockImplementation(() => {
+          order.push('close');
+        });
+        busy.strategy.whenIdle.mockImplementation(async () => {
+          await handlersDone;
+          order.push('idle');
+        });
+        sut = new ShutdownManager(registryOf([busy]), eventBus, timeout);
+
+        // When shutdown starts and the handlers finish afterwards
+        const pending = sut.shutdown();
+
+        await Promise.resolve();
+        expect(busy.connection.shutdown).not.toHaveBeenCalled();
+        finishHandlers();
+        await pending;
+
+        // Then the drain starts only once the handlers settled
+        expect(order).toEqual(['close', 'idle', 'drain']);
+      });
     });
 
     describe('idempotency', () => {
@@ -188,6 +219,49 @@ describe(ShutdownManager, () => {
         expect(eventBus.emit).toHaveBeenCalledWith(TransportEvent.ShutdownComplete);
       });
 
+      it('should drain anyway when in-flight handlers outlast the budget', async () => {
+        // Given a connection whose handlers never finish and a short budget
+        vi.useFakeTimers();
+
+        const budget = faker.number.int({ min: 50, max: 500 });
+        const hung = makeScope('hung', { shutdownTimeout: budget });
+
+        hung.strategy.whenIdle.mockReturnValue(new Promise<void>(() => {}));
+        sut = new ShutdownManager(registryOf([hung]), eventBus, 30_000);
+
+        // When shutdown starts and the budget elapses
+        const pending = sut.shutdown();
+
+        await vi.advanceTimersByTimeAsync(budget);
+
+        // Then the connection is still drained and shutdown completes
+        await expect(pending).resolves.toBeUndefined();
+        expect(hung.connection.shutdown).toHaveBeenCalled();
+        expect(eventBus.emit).toHaveBeenCalledWith(TransportEvent.ShutdownComplete);
+      });
+
+      it('should share one budget between waiting for handlers and draining', async () => {
+        // Given handlers that take most of the budget and a drain that hangs
+        vi.useFakeTimers();
+
+        const budget = 1_000;
+        const slow = makeScope('slow', { shutdownTimeout: budget }, () => new Promise(() => {}));
+
+        slow.strategy.whenIdle.mockImplementation(
+          () => new Promise<void>((resolve) => setTimeout(resolve, budget - 100)),
+        );
+        sut = new ShutdownManager(registryOf([slow]), eventBus, 30_000);
+
+        // When shutdown starts and the budget elapses
+        const pending = sut.shutdown();
+
+        await vi.advanceTimersByTimeAsync(budget);
+
+        // Then shutdown completes at the budget rather than budget plus the drain
+        await expect(pending).resolves.toBeUndefined();
+        expect(slow.connection.shutdown).toHaveBeenCalled();
+      });
+
       it('should keep going when one strategy throws while closing', async () => {
         // Given a strategy whose close() throws
         const failing = makeScope('failing');
@@ -208,6 +282,17 @@ describe(ShutdownManager, () => {
         expect(healthy.connection.shutdown).toHaveBeenCalled();
         expect(failing.connection.shutdown).toHaveBeenCalled();
         expect(eventBus.emit).toHaveBeenCalledWith(TransportEvent.ShutdownComplete);
+      });
+
+      it('should still drain when waiting for in-flight handlers fails', async () => {
+        // Given a strategy whose in-flight wait rejects
+        primary.strategy.whenIdle.mockRejectedValue(new Error(faker.lorem.sentence()));
+
+        // When shutdown runs
+        await expect(sut.shutdown()).resolves.toBeUndefined();
+
+        // Then the connection is drained regardless
+        expect(primary.connection.shutdown).toHaveBeenCalled();
       });
 
       it('should keep draining the rest when one connection throws', async () => {

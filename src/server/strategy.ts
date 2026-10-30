@@ -93,7 +93,10 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     callback();
   }
 
-  /** Stop all consumers, routers, subscriptions, and metadata heartbeat. Called during shutdown. */
+  /**
+   * Stop all consumers, routers, subscriptions, and metadata heartbeat. Called
+   * during shutdown. Handlers already running are not cut off; see {@link whenIdle}.
+   */
   public close(): void {
     this.closed = true;
 
@@ -103,6 +106,19 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     }
 
     this.teardown();
+  }
+
+  /**
+   * Resolve once every handler already running has settled its message and
+   * sent its reply. Call after {@link close}, before the connection drains:
+   * acks and replies cannot go out on a drained connection.
+   */
+  public async whenIdle(): Promise<void> {
+    await Promise.all([
+      this.eventRouter.whenIdle(),
+      this.rpcRouter.whenIdle(),
+      this.coreRpcServer.whenIdle(),
+    ]);
   }
 
   /**

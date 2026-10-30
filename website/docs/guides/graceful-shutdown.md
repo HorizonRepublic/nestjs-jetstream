@@ -1,21 +1,21 @@
 ---
 sidebar_position: 5
 title: "Graceful Shutdown"
-description: "Automatic shutdown handling: consumption stops, the NATS connection drains, and unfinished work is redelivered."
+description: "Automatic shutdown handling: consumption stops, handlers already running finish and settle, then the NATS connection drains."
 schema:
   type: Article
   headline: "Graceful Shutdown"
-  description: "Automatic shutdown handling: consumption stops, the NATS connection drains, and unfinished work is redelivered."
+  description: "Automatic shutdown handling: consumption stops, handlers already running finish and settle, then the NATS connection drains."
   datePublished: "2026-03-21"
-  dateModified: "2026-10-23"
+  dateModified: "2026-10-30"
 ---
 
 # Graceful Shutdown
 
 > **Use when:** you are working out what a rolling deploy does to messages in flight.
-> **You get:** the shutdown sequence, the drain timeout, and why redelivery is the guarantee instead of waiting.
+> **You get:** the shutdown sequence, what happens to handlers still running, and the shutdown budget.
 
-The transport shuts down through the NestJS application lifecycle: consumption stops, then the connection drains, and whatever was in flight comes back through redelivery. You write no shutdown code beyond enabling the hooks.
+The transport shuts down through the NestJS application lifecycle: consumption stops, handlers already running finish and settle their messages, then the connection drains. You write no shutdown code beyond enabling the hooks.
 
 ## Enabling shutdown hooks
 
@@ -34,31 +34,37 @@ The process dies on the signal without calling `onApplicationShutdown()`, and th
 `JetstreamModule` implements `OnApplicationShutdown`. On a termination signal it runs:
 
 1. **`ShutdownStart` hook.**
-2. **Stop consumers**: `strategy.close()` closes the consumer iterators and tears down the routing pipeline, so no new messages are taken.
-3. **Drain the connection**: `nc.drain()` stops the subscriptions, flushes pending publishes and closes the connection.
-4. **Safety timeout**: a drain that has not finished within `shutdownTimeout` is abandoned and shutdown goes on, so a stuck connection cannot block the process.
-5. **`ShutdownComplete` hook.**
+2. **Stop consumers**: `strategy.close()` closes the consumer iterators and the Core RPC subscription, so no new messages are taken. Messages fetched but still waiting for a [concurrency](/docs/guides/performance) slot are handed back to the server with a `nak`, so another instance picks them up at once.
+3. **Wait for in-flight handlers**: handlers that were already running finish, and their outcome is settled as usual: the event is acked or retried, the JetStream RPC command is acked and the caller gets its reply, the Core RPC request is answered.
+4. **Drain the connection**: `nc.drain()` stops the subscriptions, flushes pending publishes and closes the connection.
+5. **Safety timeout**: steps 3 and 4 share one `shutdownTimeout` budget. When it runs out, shutdown completes without waiting further, so a hung handler or a stuck connection cannot block the process.
+6. **`ShutdownComplete` hook.**
 
 ```mermaid
 flowchart LR
     A[SIGTERM] --> B[onApplicationShutdown]
     B --> C[ShutdownStart hook]
     C --> D[Stop consumers]
-    D --> E[Drain NATS connection]
-    E --> F{Drain within timeout?}
-    F -- Yes --> G[ShutdownComplete hook]
-    F -- No --> G
+    D --> E[Wait for in-flight handlers]
+    E --> F[Drain NATS connection]
+    F --> G{Within timeout?}
+    G -- Yes --> H[ShutdownComplete hook]
+    G -- No --> H
 ```
 
-:::warning Handlers are not awaited
-Stopping consumers tears down the routing pipeline, so a handler that is mid-execution is abandoned, not awaited. Its message never gets an ack, and JetStream redelivers it once the consumer's `ack_wait` expires. Delivery stays at-least-once and you lose nothing, but a handler running at SIGTERM runs again on another instance. If that was the message's final delivery, it goes to the [dead letter queue](/docs/guides/dead-letter-queue#deliveries-no-handler-settled) instead.
+:::warning Handlers that outlast the budget
+A handler still running when `shutdownTimeout` runs out is not awaited any further. Its message never gets an ack, and JetStream redelivers it once the consumer's `ack_wait` expires, so the handler runs again on another instance. If that was the message's final delivery, it goes to the [dead letter queue](/docs/guides/dead-letter-queue#deliveries-no-handler-settled) instead. A JetStream RPC command is delivered only once, so its caller gets no reply and times out.
 
-Keep handlers short and idempotent. If a unit of work must run only once, make it resumable or guard it with an idempotency key; do not rely on shutdown to let it finish.
+A JetStream RPC handler that is already past its own `rpc.timeout` is not waited for: the command was terminated at the deadline.
+
+Delivery stays at-least-once. Keep handlers idempotent, and set `shutdownTimeout` above your slowest handler so a rolling deploy does not cut one off.
 :::
+
+NestJS calls `onModuleDestroy()` on every provider before the transport stops consuming, and handlers finish later, during `onApplicationShutdown()`. A handler that needs a resource, such as a database pool, must find it still open: release such resources in `onApplicationShutdown()` or later, not in `onModuleDestroy()`.
 
 ## Configuring the timeout
 
-`shutdownTimeout` bounds the drain. The default is **10 seconds** (10,000 ms).
+`shutdownTimeout` bounds the wait for in-flight handlers and the drain together. The default is **10 seconds** (10,000 ms).
 
 ```typescript title="src/app.module.ts"
 JetstreamModule.forRoot({
@@ -68,16 +74,16 @@ JetstreamModule.forRoot({
 })
 ```
 
-The budget covers the connection drain, not handler execution, so it does not need to exceed your slowest handler. Raise it only if drains hit the ceiling against a slow or degraded cluster. When it fires, the transport closes the connection at once and JetStream redelivers anything unacked after `ack_wait`.
+Set it above your slowest handler, plus a margin for the drain. When it fires, shutdown completes without waiting further and JetStream redelivers anything unacked after `ack_wait`. Keep it below the grace period of your orchestrator (`terminationGracePeriodSeconds` in Kubernetes, 30 seconds by default), or the process is killed before shutdown completes.
 
-During a rolling deploy, `ack_wait` (not this timeout) decides when a message abandoned at SIGTERM becomes available to another instance.
+During a rolling deploy, `ack_wait` (not this timeout) decides when a message cut off at SIGTERM becomes available to another instance.
 
 ## Multiple connections
 
 With [connections](/docs/guides/multi-connection), shutdown runs in two phases instead of draining one connection at a time:
 
 1. **Every** connection stops accepting new messages.
-2. **Then** every connection drains in parallel, each bounded by its own `shutdownTimeout`.
+2. **Then** every connection waits for its in-flight handlers and drains, in parallel, each bounded by its own `shutdownTimeout`.
 
 Draining one by one would let a connection keep taking work while its peers are already winding down. The ceiling for the whole SIGTERM is `max(timeouts)`, not their sum. A connection that throws while draining does not stop the others from closing. A connection that never connected has nothing to drain and is skipped.
 

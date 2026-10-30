@@ -19,8 +19,9 @@ import {
 import { resolveAckExtension, startAckExtensionTimer, type AckExtension } from '../../utils';
 import { MessageProvider } from '../infrastructure';
 import { ConcurrencyGate } from './concurrency-gate';
+import { InFlightTracker } from './in-flight-tracker';
 import { PatternRegistry } from './pattern-registry';
-import type { ParkTimerFn } from './routing.types';
+import type { ParkTimerFn, RouteFn } from './routing.types';
 import { createRpcPipeline } from './rpc-pipeline';
 
 /**
@@ -42,6 +43,7 @@ export class RpcRouter {
   private resolvedAckExtension: AckExtension | null | undefined;
   private subscription: Subscription | null = null;
   private cachedNc: NatsConnection | null = null;
+  private readonly inFlight = new InFlightTracker();
 
   private readonly otel: ResolvedOtelOptions;
   private readonly serviceName: string;
@@ -95,7 +97,7 @@ export class RpcRouter {
     const ackExtension = this.ackExtension;
     const maxActive = this.concurrency ?? Number.POSITIVE_INFINITY;
 
-    const handleSafe = createRpcPipeline({
+    const pipeline = createRpcPipeline({
       nc: this.cachedNc,
       codec: this.codec,
       logger,
@@ -107,6 +109,13 @@ export class RpcRouter {
       ackExtension,
       timeout: this.timeout,
     });
+    const handleSafe: RouteFn = (msg) => {
+      const pending = pipeline(msg);
+
+      if (pending !== undefined) this.inFlight.track(pending);
+
+      return pending;
+    };
 
     const parkTimer: ParkTimerFn | null =
       ackExtension === null
@@ -128,7 +137,15 @@ export class RpcRouter {
     });
   }
 
-  /** Stop routing and unsubscribe. */
+  /**
+   * Resolve once every command already routed has been settled and answered,
+   * or abandoned at its deadline.
+   */
+  public async whenIdle(): Promise<void> {
+    await this.inFlight.whenIdle();
+  }
+
+  /** Stop routing and unsubscribe; commands already running still settle and reply. */
   public destroy(): void {
     this.subscription?.unsubscribe();
     this.subscription = null;

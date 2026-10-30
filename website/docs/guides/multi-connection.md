@@ -207,7 +207,7 @@ With a single connection, `degraded` and `connections` are absent and the respon
 Draining connections one at a time has a bug: while the first drains, the others keep accepting work. Shutdown runs in two phases instead.
 
 1. Every connection stops accepting new messages.
-2. Every connection drains in parallel, each bounded by its own `shutdownTimeout`.
+2. Every connection lets its in-flight handlers finish and then drains, in parallel, each bounded by its own `shutdownTimeout`.
 
 The ceiling for the whole SIGTERM is `max(timeouts)`, not their sum. A connection that throws while draining does not stop the others from closing.
 

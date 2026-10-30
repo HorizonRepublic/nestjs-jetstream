@@ -8,7 +8,7 @@ schema:
   headline: "Module Configuration Reference"
   description: "Reference for forRoot(), forRootAsync(), and forFeature() registration methods with stream, consumer, and connection options."
   datePublished: "2026-03-21"
-  dateModified: "2026-10-29"
+  dateModified: "2026-10-30"
 ---
 
 # Module Configuration
@@ -245,7 +245,7 @@ Every field in `JetstreamModuleOptions`. Blocks that need more than a line have 
 | `otel`              | `OtelOptions \| boolean`                     | enabled                | OpenTelemetry tracing, a no-op without an SDK. `false` turns it off. See [Tracing](/docs/observability/tracing).                  |
 | `metadata`          | `MetadataRegistryOptions`                    | auto                   | Handler metadata in NATS KV, on when any handler has `meta`. No-op under `publisherOnly`. See [metadata](#metadata).              |
 | `provisioning`      | `ProvisioningOptions`                        | `{ management: Auto }` | Who owns streams and consumers. See [provisioning](#provisioning).                                                                |
-| `shutdownTimeout`   | `number`                                     | `10_000`               | Drain budget in milliseconds. The connection is closed when it runs out. See [Graceful Shutdown](/docs/guides/graceful-shutdown). |
+| `shutdownTimeout`   | `number`                                     | `10_000`               | Handler and drain budget, in ms. The connection closes when it runs out. See [Graceful Shutdown](/docs/guides/graceful-shutdown). |
 | `connectionOptions` | `Partial<ConnectionOptions>`                 | none                   | Raw NATS options for TLS, auth and reconnection. See [connectionOptions](#connectionoptions).                                     |
 
 `name`, `hooks`, `metrics`, `otel` and `onDeadLetter` stay at the root even when you use `connections`: they describe or observe the service as a whole.

@@ -75,6 +75,41 @@ describe(EventRouter, () => {
         });
       });
 
+      describe('when destroyed with a handler still running', () => {
+        it('should let the handler settle its message before reporting idle', async () => {
+          // Given a handler that is mid-execution
+          const { promise: work, resolve: finish } = Promise.withResolvers<void>();
+
+          patternRegistry.getHandler.mockReturnValue(vi.fn().mockReturnValue(work));
+          sut.start();
+
+          const msg = createMock<JsMsg>({
+            ack: vi.fn(),
+            subject: faker.lorem.word(),
+            data: new TextEncoder().encode('{}'),
+            info: { deliveryCount: 1 },
+          });
+
+          events$.next(msg);
+
+          // When routing stops and the handler finishes afterwards
+          sut.destroy();
+
+          let idle = false;
+          const waiting = sut.whenIdle().then(() => {
+            idle = true;
+          });
+
+          await new Promise(process.nextTick);
+          expect(idle).toBe(false);
+          finish();
+          await waiting;
+
+          // Then the message was still acked before the router reported idle
+          expect(msg.ack).toHaveBeenCalledOnce();
+        });
+      });
+
       describe('when started twice', () => {
         it('should route each message to its handler once', async () => {
           // Given a router started a second time
