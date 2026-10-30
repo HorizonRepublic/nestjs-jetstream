@@ -22,6 +22,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Full history: Docusaurus reads each doc's last commit date for the
+          # sitemap lastmod and "Last updated" line.
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
