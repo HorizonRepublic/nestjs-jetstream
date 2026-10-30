@@ -67,9 +67,11 @@ export const createMetrics = (opts: CreateMetricsOptions): JetstreamMetrics => {
       'Total publish/send operations performed by the client.',
       ['subject', 'kind', 'status'],
     ),
-    rpcTimeoutTotal: counter('rpc_timeout_total', 'RPC calls that exceeded the timeout deadline.', [
-      'subject',
-    ]),
+    rpcTimeoutTotal: counter(
+      'rpc_timeout_total',
+      'RPC calls that exceeded the timeout deadline, by the side that gave up.',
+      ['subject', 'side'],
+    ),
     consumerRecoveredTotal: counter(
       'consumer_recovered_total',
       'Self-healing recoveries after consume-loop failures.',

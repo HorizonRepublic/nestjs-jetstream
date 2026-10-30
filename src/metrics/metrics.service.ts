@@ -50,6 +50,7 @@ import type {
   LoadedPrometheusClient,
   RecoveredKindLabel,
   ResolvedSubjectLabels,
+  RpcTimeoutSide,
 } from './metrics.types';
 import { PollRunner } from './poll-runner';
 
@@ -229,7 +230,6 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
     this.eventBus.subscribe(TransportEvent.Disconnect, this.onDisconnect);
     this.eventBus.subscribe(TransportEvent.Reconnect, this.onReconnect);
     this.eventBus.subscribe(TransportEvent.Error, this.onError);
-    this.eventBus.subscribe(TransportEvent.RpcTimeout, this.onRpcTimeout);
     this.eventBus.subscribe(TransportEvent.MessageRouted, this.onMessageRouted);
     this.eventBus.subscribe(TransportEvent.DeadLetter, this.onDeadLetter);
     this.eventBus.subscribe(TransportEvent.ConsumerRecovered, this.onConsumerRecovered);
@@ -281,12 +281,12 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
     this.metrics?.errorsTotal.labels({ context: mapErrorContext(context) }).inc();
   };
 
-  private readonly onRpcTimeout = (subject: string, _correlationId: string): void => {
-    const declared = this.resolveDeclared(subject);
-    const subjectLabel = declared?.pattern ?? UNMATCHED_SUBJECT_LABEL;
-
-    this.metrics?.rpcTimeoutTotal.labels({ subject: subjectLabel }).inc();
-  };
+  // The RpcTimeout hook is not used: the caller emits the target service's
+  // wire subject, which the local registry cannot resolve, and both sides
+  // share it. The completion events carry the declared pattern instead.
+  private countRpcTimeout(pattern: string, side: RpcTimeoutSide): void {
+    this.metrics?.rpcTimeoutTotal.labels({ subject: pattern, side }).inc();
+  }
 
   // `_kind` collapses broadcast/ordered into MessageKind.Event; we use
   // declared.kind from PatternRegistry for the precise label instead.
@@ -339,6 +339,11 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
 
     this.metrics.messagesProcessedTotal.labels(labels).inc();
     this.metrics.handlerDurationSeconds.labels(labels).observe(durationMs / 1000);
+
+    // A command is terminated only when its handler ran past rpc.timeout.
+    if (kind === StreamKind.Command && status === 'terminated') {
+      this.countRpcTimeout(pattern, 'server');
+    }
   };
 
   private readonly onPublished = (
@@ -363,6 +368,8 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
     this.metrics?.rpcDurationSeconds
       .labels({ subject: pattern, status })
       .observe(durationMs / 1000);
+
+    if (status === 'timeout') this.countRpcTimeout(pattern, 'client');
   };
 
   private resolveDeclared(subject: string): ResolvedSubjectLabels | null {

@@ -140,7 +140,6 @@ describe(JetstreamMetricsService, () => {
           TransportEvent.Disconnect,
           TransportEvent.Reconnect,
           TransportEvent.Error,
-          TransportEvent.RpcTimeout,
           TransportEvent.MessageRouted,
           TransportEvent.DeadLetter,
           TransportEvent.ConsumerRecovered,
@@ -322,51 +321,77 @@ describe(JetstreamMetricsService, () => {
     });
   });
 
-  describe('RpcTimeout -> rpc_timeout_total counter', () => {
-    it('should increment using the declared pattern when available', async () => {
+  describe('rpc_timeout_total counter', () => {
+    it('should count a client round-trip timeout under the declared pattern', async () => {
+      // Given: no local handler for the called pattern
+      const { subs } = await setup({ options, register, client, eventBus });
+      const pattern = faker.word.noun();
+
+      // When: the caller's deadline expires
+      dispatch(subs, TransportEvent.RpcCompleted, pattern, 5_000, 'timeout');
+
+      // Then
+      expect(
+        await sampleValue(register, 'jetstream_rpc_timeout_total', {
+          subject: pattern,
+          side: 'client',
+        }),
+      ).toBe(1);
+    });
+
+    it('should count a handler deadline under the declared pattern', async () => {
       // Given
-      const patternRegistry = createMock<PatternRegistry>();
+      const { subs } = await setup({ options, register, client, eventBus });
+      const pattern = faker.word.noun();
 
-      patternRegistry.resolveDeclared.mockReturnValue({
-        pattern: 'orders.get',
-        kind: StreamKind.Command,
-      });
-
-      const { subs } = await setup({
-        options,
-        patternRegistry,
-        register,
-        client,
-        eventBus,
-      });
-
-      // When
+      // When: the server terminated a command whose handler ran past rpc.timeout
       dispatch(
         subs,
-        TransportEvent.RpcTimeout,
-        'orders__microservice.cmd.orders.get',
-        faker.string.uuid(),
+        TransportEvent.HandlerCompleted,
+        pattern,
+        StreamKind.Command,
+        30_000,
+        'terminated',
       );
 
       // Then
       expect(
-        await sampleValue(register, 'jetstream_rpc_timeout_total', { subject: 'orders.get' }),
+        await sampleValue(register, 'jetstream_rpc_timeout_total', {
+          subject: pattern,
+          side: 'server',
+        }),
       ).toBe(1);
     });
 
-    it('should bucket into the UNMATCHED sentinel when the pattern registry has no entry', async () => {
+    it('should ignore round trips and handlers that did not time out', async () => {
+      // Given
+      const { subs } = await setup({ options, register, client, eventBus });
+      const pattern = faker.word.noun();
+
+      // When
+      dispatch(subs, TransportEvent.RpcCompleted, pattern, 5, 'error');
+      dispatch(subs, TransportEvent.HandlerCompleted, pattern, StreamKind.Command, 5, 'error');
+      dispatch(subs, TransportEvent.HandlerCompleted, pattern, StreamKind.Event, 5, 'terminated');
+
+      // Then
+      expect(
+        await sampleValue(register, 'jetstream_rpc_timeout_total', { subject: pattern }),
+      ).toBeUndefined();
+    });
+
+    it('should not count the raw RpcTimeout hook, whose wire subject is ambiguous', async () => {
       // Given
       const { subs } = await setup({ options, register, client, eventBus });
 
       // When
       dispatch(subs, TransportEvent.RpcTimeout, 'unknown.subject', faker.string.uuid());
 
-      // Then: cardinality stays bounded, no raw wire subject leaks into the label
+      // Then: no <unmatched> bucket and no double count
       expect(
         await sampleValue(register, 'jetstream_rpc_timeout_total', {
           subject: UNMATCHED_SUBJECT_LABEL,
         }),
-      ).toBe(1);
+      ).toBeUndefined();
     });
   });
 

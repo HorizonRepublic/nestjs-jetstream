@@ -142,3 +142,6 @@ export interface ConnectionServerState {
   server: string;
   up: boolean;
 }
+
+/** Which end of an RPC gave up: the caller waiting for a reply, or the handler past its deadline. */
+export type RpcTimeoutSide = 'client' | 'server';
