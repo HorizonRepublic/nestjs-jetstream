@@ -7,8 +7,12 @@ schema:
   headline: Testing
   description: "Running unit and integration tests with Vitest and Testcontainers."
   datePublished: "2026-03-21"
-  dateModified: "2026-10-23"
+  dateModified: "2026-10-30"
 ---
+
+<head>
+  <meta name="robots" content="noindex, follow" />
+</head>
 
 # Testing
 
