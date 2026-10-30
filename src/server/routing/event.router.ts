@@ -142,6 +142,9 @@ export class EventRouter {
 
   /** Start routing event, broadcast, and ordered messages to handlers. */
   public start(): void {
+    // A second start replaces the pipeline instead of routing every message twice.
+    if (this.subscriptions.length > 0) this.destroy();
+
     this.subscribeToStream(this.messageProvider.events$, StreamKind.Event);
     this.subscribeToStream(this.messageProvider.broadcasts$, StreamKind.Broadcast);
 

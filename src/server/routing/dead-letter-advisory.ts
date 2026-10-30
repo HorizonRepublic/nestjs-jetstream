@@ -53,6 +53,8 @@ export class DeadLetterAdvisoryListener {
     const nc = await this.connection.getConnection();
 
     await this.readRetention(targets);
+    // Watching again replaces the subscriptions; duplicates would capture each advisory twice.
+    this.stop();
 
     for (const target of targets) {
       const subscription = nc.subscribe(

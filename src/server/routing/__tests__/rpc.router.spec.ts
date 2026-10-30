@@ -85,6 +85,27 @@ describe(RpcRouter, () => {
       });
     });
 
+    describe('when started twice', () => {
+      it('should route each command to its handler once', async () => {
+        // Given a router started a second time
+        const handler = vi.fn().mockResolvedValue({ ok: true });
+
+        patternRegistry.getHandler.mockReturnValue(handler);
+        await sut.start();
+        await sut.start();
+
+        const msg = createRpcMsg(faker.lorem.slug(), {}, faker.string.uuid(), faker.string.uuid());
+
+        // When
+        commands$.next(msg);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // Then
+        expect(handler).toHaveBeenCalledOnce();
+        expect(msg.ack).toHaveBeenCalledOnce();
+      });
+    });
+
     describe('when destroyed', () => {
       it('should unsubscribe from commands stream', async () => {
         await sut.start();

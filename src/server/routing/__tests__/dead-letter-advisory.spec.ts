@@ -309,6 +309,23 @@ describe(DeadLetterAdvisoryListener, () => {
     });
   });
 
+  describe('edge cases on restart', () => {
+    it('should replace the subscriptions when watching again', async () => {
+      // Given a listener already watching the target
+      const unsubscribe = vi.fn();
+
+      subscribe.mockReturnValue(createMock<Subscription>({ unsubscribe }));
+      await sut.watch([target]);
+
+      // When it is asked to watch again
+      await sut.watch([target]);
+
+      // Then the first subscription is gone, so each advisory is captured once
+      expect(subscribe).toHaveBeenCalledTimes(2);
+      expect(unsubscribe).toHaveBeenCalledOnce();
+    });
+  });
+
   describe('error paths', () => {
     it('should log a subscription error and not touch the stream', async () => {
       // Given

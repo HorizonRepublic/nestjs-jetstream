@@ -74,6 +74,32 @@ describe(EventRouter, () => {
           expect(broadcasts$.observed).toBe(true);
         });
       });
+
+      describe('when started twice', () => {
+        it('should route each message to its handler once', async () => {
+          // Given a router started a second time
+          const handler = vi.fn().mockResolvedValue(undefined);
+
+          patternRegistry.getHandler.mockReturnValue(handler);
+          sut.start();
+          sut.start();
+
+          const msg = createMock<JsMsg>({
+            ack: vi.fn(),
+            subject: faker.lorem.word(),
+            data: new TextEncoder().encode('{}'),
+            info: { deliveryCount: 1 },
+          });
+
+          // When
+          events$.next(msg);
+          await new Promise(process.nextTick);
+
+          // Then
+          expect(handler).toHaveBeenCalledOnce();
+          expect(msg.ack).toHaveBeenCalledOnce();
+        });
+      });
     });
 
     describe('when schedule handlers are registered', () => {

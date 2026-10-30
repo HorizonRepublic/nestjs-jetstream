@@ -102,12 +102,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
       this.retryTimer = null;
     }
 
-    this.metadataProvider?.destroy();
-    this.eventRouter.destroy();
-    this.rpcRouter.destroy();
-    this.coreRpcServer.stop();
-    this.messageProvider.destroy();
-    this.started = false;
+    this.teardown();
   }
 
   /**
@@ -212,7 +207,9 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
       this.retryAttempt = 0;
       this.logger.log(`Connection "${this.connectionName}" started`);
     } catch (err) {
-      this.started = false;
+      // A step after the routers subscribed may have failed; a retry on top of
+      // their live subscriptions would route every message twice.
+      this.teardown();
 
       const delay = Math.min(RETRY_BASE_DELAY_MS * 2 ** this.retryAttempt, RETRY_MAX_DELAY_MS);
 
@@ -224,6 +221,16 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
 
       this.scheduleRetry(delay);
     }
+  }
+
+  /** Stop everything a boot chain may have started, leaving the strategy restartable. */
+  private teardown(): void {
+    this.metadataProvider?.destroy();
+    this.eventRouter.destroy();
+    this.rpcRouter.destroy();
+    this.coreRpcServer.stop();
+    this.messageProvider.destroy();
+    this.started = false;
   }
 
   private scheduleRetry(delay: number): void {

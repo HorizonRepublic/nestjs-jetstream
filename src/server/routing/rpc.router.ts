@@ -88,6 +88,8 @@ export class RpcRouter {
   /** Start routing command messages to handlers. */
   public async start(): Promise<void> {
     this.cachedNc = await this.connection.getConnection();
+    // A second start replaces the subscription instead of leaking the first one.
+    this.destroy();
 
     const logger = this.logger;
     const ackExtension = this.ackExtension;
