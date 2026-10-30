@@ -50,7 +50,7 @@ describe(JetstreamClient, () => {
     statusSubject = new Subject<Status>();
     targetName = faker.lorem.word();
     options = {
-      name: faker.lorem.word(),
+      name: `${targetName}-caller`,
       servers: ['nats://localhost:4222'],
     };
 
