@@ -169,6 +169,36 @@ describe(DeadLetterAdvisoryListener, () => {
       // Then
       expect(deleteMessage).toHaveBeenCalledWith(target.stream, seq, false);
     });
+
+    it('should finish a capture that was running when it stopped before reporting idle', async () => {
+      // Given a capture still waiting on the dead-letter callback
+      const seq = faker.number.int({ min: 1, max: 10_000 });
+      const { promise: captured, resolve: finishCapture } = Promise.withResolvers<void>();
+
+      getMessage.mockResolvedValue(stored(seq, {}));
+      captureSource.mockImplementation(async (source: DeadLetterSource) => {
+        await captured;
+        await source.release('Moved to DLQ stream');
+      });
+      await sut.watch([target]);
+      await receive({ stream: target.stream, stream_seq: seq, deliveries: 2 });
+
+      // When the listener stops and the capture completes afterwards
+      sut.stop();
+
+      let idle = false;
+      const waiting = sut.whenIdle().then(() => {
+        idle = true;
+      });
+
+      await new Promise(process.nextTick);
+      expect(idle).toBe(false);
+      finishCapture();
+      await waiting;
+
+      // Then the captured message was deleted before the listener reported idle
+      expect(deleteMessage).toHaveBeenCalledWith(target.stream, seq, false);
+    });
   });
 
   describe('edge cases', () => {

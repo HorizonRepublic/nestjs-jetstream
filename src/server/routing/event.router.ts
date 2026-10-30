@@ -179,9 +179,9 @@ export class EventRouter {
     await this.advisories.watch(targets);
   }
 
-  /** Resolve once every handler already routed has settled its message. */
+  /** Resolve once every handler already routed, and every dead-letter capture, has settled. */
   public async whenIdle(): Promise<void> {
-    await this.inFlight.whenIdle();
+    await Promise.all([this.inFlight.whenIdle(), this.advisories?.whenIdle()]);
   }
 
   /**

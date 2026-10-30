@@ -26,6 +26,7 @@ import { dlqStreamName, JetstreamDlqHeader } from '../../../jetstream.constants'
 import type { ScheduleStore } from '../../../schedule/schedule-store';
 import { MessageProvider } from '../../infrastructure';
 import { NameResolver } from '../../infrastructure/name-resolver';
+import { DeadLetterAdvisoryListener } from '../dead-letter-advisory';
 import { EventRouter } from '../event.router';
 import { PatternRegistry } from '../pattern-registry';
 
@@ -107,6 +108,42 @@ describe(EventRouter, () => {
 
           // Then the message was still acked before the router reported idle
           expect(msg.ack).toHaveBeenCalledOnce();
+        });
+      });
+
+      describe('when a dead-letter capture is still running', () => {
+        it('should wait for it before reporting idle', async () => {
+          // Given a router with dead-letter capture whose advisory listener is busy
+          const { promise: captureDone, resolve: finishCapture } = Promise.withResolvers<void>();
+          const listenerIdle = vi
+            .spyOn(DeadLetterAdvisoryListener.prototype, 'whenIdle')
+            .mockReturnValue(captureDone);
+
+          sut = new EventRouter(
+            messageProvider,
+            patternRegistry,
+            codec,
+            eventBus,
+            createMock<DeadLetterConfig>(),
+            undefined,
+            undefined,
+            createMock<ConnectionProvider>(),
+          );
+
+          // When waiting for idle
+          let idle = false;
+          const waiting = sut.whenIdle().then(() => {
+            idle = true;
+          });
+
+          await new Promise(process.nextTick);
+          expect(idle).toBe(false);
+          finishCapture();
+          await waiting;
+
+          // Then the router reported idle only after the capture finished
+          expect(listenerIdle).toHaveBeenCalledOnce();
+          listenerIdle.mockRestore();
         });
       });
 

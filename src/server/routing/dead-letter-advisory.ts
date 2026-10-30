@@ -8,6 +8,7 @@ import { ConnectionProvider } from '../../connection';
 import { DeliveryErrorReason, JetstreamDeliveryError } from '../../errors';
 import type { Codec } from '../../interfaces';
 import { DeadLetterCapture } from './dead-letter-capture';
+import { InFlightTracker } from './in-flight-tracker';
 import type {
   DeadLetterSource,
   DeadLetterWatchTarget,
@@ -41,6 +42,7 @@ export class DeadLetterAdvisoryListener {
   private readonly workQueues = new Set<string>();
   private readonly backlog: (() => Promise<void>)[] = [];
   private active = 0;
+  private readonly inFlight = new InFlightTracker();
 
   public constructor(
     private readonly connection: ConnectionProvider,
@@ -78,6 +80,15 @@ export class DeadLetterAdvisoryListener {
 
       this.subscriptions.push(subscription);
     }
+  }
+
+  /**
+   * Resolve once every advisory already received has been captured, queued ones
+   * included: a capture cut short would run again on a later advisory, and the
+   * server sends each advisory only once.
+   */
+  public async whenIdle(): Promise<void> {
+    await this.inFlight.whenIdle();
   }
 
   public stop(): void {
@@ -118,10 +129,12 @@ export class DeadLetterAdvisoryListener {
       if (task === undefined) return;
 
       this.active += 1;
-      void task().finally(() => {
-        this.active -= 1;
-        this.drain();
-      });
+      this.inFlight.track(
+        task().finally(() => {
+          this.active -= 1;
+          this.drain();
+        }),
+      );
     }
   }
 
