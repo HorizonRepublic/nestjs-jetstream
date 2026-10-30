@@ -253,7 +253,7 @@ The report lists the DLQ sequences that went back (`redriven`), those skipped an
 
 ### Purging
 
-`purge()` refuses an empty filter with a `JetstreamConfigError` (reason `dlq-filter-required`), so a forgotten argument cannot wipe the DLQ. A criterion set to `undefined` counts as absent, so `purge({ subject: undefined })`, say from a missing query parameter, is refused as well. Emptying all of it takes a call that says so, `purgeAll()`, which the server does in one step. A filter with only `toSeq` is also purged by the server in one call; any other filter is matched on headers, so its matches are read and deleted in batches. Every purge returns how many dead letters went, and `dryRun` counts them instead.
+`purge()` refuses an empty filter with a `JetstreamConfigError` (reason `dlq-filter-required`), so a forgotten argument cannot wipe the DLQ. A criterion set to `undefined` counts as absent, so `purge({ subject: undefined })`, say from a missing query parameter, is refused as well. `inspect()`, `redrive()` and `purge()` reject a `fromSeq` or `toSeq` that is not a non-negative integer, and an invalid date, with reason `dlq-filter-invalid`, since `NaN` would otherwise match everything. Emptying all of it takes a call that says so, `purgeAll()`, which the server does in one step. A filter with only `toSeq` is also purged by the server in one call; any other filter is matched on headers, so its matches are read and deleted in batches. Every purge returns how many dead letters went, and `dryRun` counts them instead.
 
 ```typescript
 await dlq.purgeAll(); // the whole DLQ

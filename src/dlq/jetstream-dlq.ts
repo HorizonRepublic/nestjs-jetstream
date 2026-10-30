@@ -18,7 +18,7 @@ import { isDlqEnabled } from '../server/infrastructure/dlq-options';
 import { isNatsError, NatsErrorCode } from '../server/infrastructure/nats-error-codes';
 import { coversOrEquals } from '../server/infrastructure/subject-utils';
 import { errorMessage } from '../utils';
-import { matchesDeadLetter, setsAnyCriterion } from './dead-letter-filter';
+import { isValidFilter, matchesDeadLetter, setsAnyCriterion } from './dead-letter-filter';
 import {
   DeadLetterOrigin,
   DlqRedriveSkipReason,
@@ -74,6 +74,15 @@ const parseDate = (value: string): Date | undefined => {
   return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 };
 
+const assertValidFilter = (filter: DeadLetterFilter): void => {
+  if (isValidFilter(filter)) return;
+
+  throw new JetstreamConfigError(
+    ConfigErrorReason.DlqFilterInvalid,
+    'DLQ filter sequence bounds must be non-negative integers and its dates valid.',
+  );
+};
+
 const filtersOf = (config: ConsumerConfig): string[] => {
   if (config.filter_subjects?.length) return config.filter_subjects;
   if (config.filter_subject) return [config.filter_subject];
@@ -95,6 +104,8 @@ export class JetstreamDlq {
     filter: DeadLetterFilter = {},
     options: DlqInspectOptions = {},
   ): Promise<DeadLetterRecord[]> {
+    assertValidFilter(filter);
+
     const scope = this.scopeOf(options.connection);
     const records: DeadLetterRecord[] = [];
 
@@ -118,6 +129,8 @@ export class JetstreamDlq {
     filter: DeadLetterFilter = {},
     options: DlqRedriveOptions = {},
   ): Promise<DlqRedriveReport> {
+    assertValidFilter(filter);
+
     const scope = this.scopeOf(options.connection);
     const dlqStream = scope.names.dlqStreamName();
     const dryRun = options.dryRun ?? false;
@@ -185,6 +198,8 @@ export class JetstreamDlq {
         'purge() needs a filter with at least one criterion. To empty the whole DLQ, call purgeAll().',
       );
     }
+
+    assertValidFilter(filter);
 
     const scope = this.scopeOf(options.connection);
     const dlqStream = scope.names.dlqStreamName();
@@ -345,7 +360,9 @@ export class JetstreamDlq {
   ): Promise<number | null> {
     const { fromSeq, toSeq, ...criteria } = filter;
 
-    if (toSeq === undefined || setsAnyCriterion(criteria)) return null;
+    // A seq the server cannot read as one (NaN, 0) makes it purge everything.
+    if (toSeq === undefined || !Number.isSafeInteger(toSeq) || toSeq < 0) return null;
+    if (setsAnyCriterion(criteria)) return null;
 
     const { state } = await this.dlqInfo(scope, dlqStream);
 

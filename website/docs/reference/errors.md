@@ -106,31 +106,32 @@ An error your handler throws reaches `onDeadLetter` as is.
 
 Thrown during startup, so it stops the application before it serves traffic.
 
-| Reason                        | When                                                                                   |
-| ----------------------------- | -------------------------------------------------------------------------------------- |
-| `servers-or-connections`      | Both or neither of `servers` and `connections` are set                                 |
-| `no-connections`              | `connections` is empty                                                                 |
-| `no-servers`                  | A connection declares no servers                                                       |
-| `invalid-connection-name`     | A connection name is empty or has surrounding whitespace                               |
-| `default-connection-required` | No connection is called `default` and `defaultConnection` is not set                   |
-| `unknown-connection`          | A connection name in `defaultConnection`, handler extras or a lookup is not configured |
-| `duplicate-cluster`           | Two consuming connections point at the same NATS cluster                               |
-| `publisher-only-connection`   | A handler is bound to a `publisherOnly` connection                                     |
-| `connections-not-started`     | `connectJetstreamMicroservices(app)` was not called before `startAllMicroservices()`   |
-| `stream-ownership-conflict`   | A stream is already owned by another connection of the same service                    |
-| `dlq-unavailable`             | `JetstreamDlq` was called on a connection whose DLQ stream is off or was never created |
-| `dlq-filter-required`         | `JetstreamDlq.purge()` got an empty filter; emptying the whole DLQ is `purgeAll()`     |
-| `removed-options`             | Options removed in v3 are still passed                                                 |
-| `self-target-prefix`          | `forFeature()` targets the service itself and passes a `subjectPrefix`                 |
-| `invalid-subject-prefix`      | A `subjectPrefix` is empty, malformed or contains `>`                                  |
-| `duplicate-handler`           | Two handlers declare the same pattern                                                  |
-| `conflicting-handler-kinds`   | A handler is declared broadcast and ordered, or scheduled and broadcast or ordered     |
-| `schedule-on-message-pattern` | A schedule is declared on `@MessagePattern`                                            |
-| `invalid-ack-extension`       | `ackExtension.interval` or `ackExtension.maxDuration` is not a positive number         |
-| `metrics-registry-missing`    | Metrics are enabled but no Prometheus registry was resolved                            |
-| `prometheus-client-missing`   | Metrics are enabled but neither `@prometheus-io/client` nor `prom-client` is installed |
-| `ambiguous-prometheus-client` | Both Prometheus packages are installed and `metrics.register` is not set               |
-| `foreign-registry`            | `metrics.register` belongs to neither installed Prometheus package                     |
+| Reason                        | When                                                                                     |
+| ----------------------------- | ---------------------------------------------------------------------------------------- |
+| `servers-or-connections`      | Both or neither of `servers` and `connections` are set                                   |
+| `no-connections`              | `connections` is empty                                                                   |
+| `no-servers`                  | A connection declares no servers                                                         |
+| `invalid-connection-name`     | A connection name is empty or has surrounding whitespace                                 |
+| `default-connection-required` | No connection is called `default` and `defaultConnection` is not set                     |
+| `unknown-connection`          | A connection name in `defaultConnection`, handler extras or a lookup is not configured   |
+| `duplicate-cluster`           | Two consuming connections point at the same NATS cluster                                 |
+| `publisher-only-connection`   | A handler is bound to a `publisherOnly` connection                                       |
+| `connections-not-started`     | `connectJetstreamMicroservices(app)` was not called before `startAllMicroservices()`     |
+| `stream-ownership-conflict`   | A stream is already owned by another connection of the same service                      |
+| `dlq-unavailable`             | `JetstreamDlq` was called on a connection whose DLQ stream is off or was never created   |
+| `dlq-filter-required`         | `JetstreamDlq.purge()` got an empty filter; emptying the whole DLQ is `purgeAll()`       |
+| `dlq-filter-invalid`          | A DLQ filter has a sequence bound that is not a non-negative integer, or an invalid date |
+| `removed-options`             | Options removed in v3 are still passed                                                   |
+| `self-target-prefix`          | `forFeature()` targets the service itself and passes a `subjectPrefix`                   |
+| `invalid-subject-prefix`      | A `subjectPrefix` is empty, malformed or contains `>`                                    |
+| `duplicate-handler`           | Two handlers declare the same pattern                                                    |
+| `conflicting-handler-kinds`   | A handler is declared broadcast and ordered, or scheduled and broadcast or ordered       |
+| `schedule-on-message-pattern` | A schedule is declared on `@MessagePattern`                                              |
+| `invalid-ack-extension`       | `ackExtension.interval` or `ackExtension.maxDuration` is not a positive number           |
+| `metrics-registry-missing`    | Metrics are enabled but no Prometheus registry was resolved                              |
+| `prometheus-client-missing`   | Metrics are enabled but neither `@prometheus-io/client` nor `prom-client` is installed   |
+| `ambiguous-prometheus-client` | Both Prometheus packages are installed and `metrics.register` is not set                 |
+| `foreign-registry`            | `metrics.register` belongs to neither installed Prometheus package                       |
 
 ## `JetstreamConnectionError`
 
