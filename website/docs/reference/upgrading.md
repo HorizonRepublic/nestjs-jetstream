@@ -7,7 +7,7 @@ schema:
   headline: "Upgrading NestJS JetStream between major versions"
   description: "Renamed options, changed defaults and how to keep the previous behaviour, release by release."
   datePublished: "2026-10-23"
-  dateModified: "2026-10-29"
+  dateModified: "2026-10-30"
 ---
 
 # Upgrading
@@ -54,6 +54,22 @@ events: { stream: { discard: DiscardPolicy.Old } },
 ```bash
 nats stream edit <stream> --no-discard-per-subject
 ```
+
+### Fixes you may notice
+
+**Shutdown waits for running handlers.** Once consumption stops, the transport waits for handlers already running, so their acks and RPC replies still go out, then drains the connection. Both steps share `shutdownTimeout`, part of which is kept for the drain; whatever is still open at the end is closed. Set `shutdownTimeout` above your slowest handler and below your orchestrator's grace period. See [Graceful Shutdown](/docs/guides/graceful-shutdown#configuring-the-timeout).
+
+**A JetStream-mode RPC survives a brief disconnect.** A call already published keeps waiting for its reply across a reconnect instead of failing at once, since the command still runs once the connection is back. It fails with `connection-lost` only when the connection closes for good, and otherwise ends at its timeout. See [Connection lost](/docs/patterns/rpc#connection-lost).
+
+**RPC outcomes gain `cancelled`.** Unsubscribing from a JetStream-mode `send()` before the reply now ends the trace and reports `RpcCompleted` with `status: 'cancelled'`. A `switch` over `RpcOutcomeStatus` that ends in `never` needs a new case, and an error-rate query on `status!="success"` counts these calls.
+
+**A client on a named connection uses that connection's `rpc` options.** `forFeature({ connection })` now follows the connection's RPC mode and timeout instead of the root ones.
+
+**Health stays down after a connection that serves handlers closes for good.** A client may dial a fresh connection, but handlers do not move to it, so the health indicator keeps reporting that connection as down until the process restarts.
+
+**An RPC handler timeout frees its concurrency slot.** A handler still running past `rpc.timeout` no longer blocks new commands, so stuck handlers can exceed `concurrency`.
+
+**DLQ filters reject invalid bounds.** A `fromSeq` or `toSeq` that is not a non-negative integer, or an invalid date, now throws `JetstreamConfigError` with reason `dlq-filter-invalid` instead of matching every dead letter.
 
 ### Additive changes
 

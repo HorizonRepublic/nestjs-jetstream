@@ -353,7 +353,7 @@ export default function Root({ children }) {
   "headline": "Release Notes: NestJS JetStream Transport",
   "description": "Version-by-version changelog covering new features, behavior changes, and breaking changes.",
   "datePublished": "2026-03-26",
-  "dateModified": "2026-10-29"
+  "dateModified": "2026-10-30"
 },
       
     '/docs/reference/upgrading/': {
@@ -361,7 +361,7 @@ export default function Root({ children }) {
   "headline": "Upgrading NestJS JetStream between major versions",
   "description": "Renamed options, changed defaults and how to keep the previous behaviour, release by release.",
   "datePublished": "2026-10-23",
-  "dateModified": "2026-10-29"
+  "dateModified": "2026-10-30"
 },
       
 
