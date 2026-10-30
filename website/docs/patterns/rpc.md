@@ -8,7 +8,7 @@ schema:
   headline: "NestJS NATS RPC: Core vs JetStream Request/Reply"
   description: "Synchronous NestJS NATS request-reply in Core NATS or JetStream mode, with timeout handling, error serialization, and per-request overrides."
   datePublished: "2026-03-21"
-  dateModified: "2026-10-23"
+  dateModified: "2026-10-30"
 ---
 
 # RPC (Request/Reply)
@@ -201,7 +201,11 @@ The per-request value only changes how long the client waits. In JetStream mode 
 
 ## Connection lost
 
-In JetStream mode, a dropped connection rejects every pending call at once with `Connection lost` instead of letting each one wait for its timeout. The client clears the timers, tears down its inbox subscription, and recreates the inbox on the next `connect()`. In Core mode the NATS client rejects pending `nc.request()` calls itself.
+A short disconnect does not fail pending calls. In JetStream mode the command is already stored in the stream and runs once the handler's connection is back, and NATS resubscribes the reply inbox after the reconnect, so the reply still reaches the caller. Failing those calls early would make a caller that retries on error run the command twice. Each call stays bounded by its timeout instead. In Core mode a pending `nc.request()` also waits for its timeout.
+
+A connection that closes for good, for example once `maxReconnectAttempts` runs out, is different. In JetStream mode every pending call fails at once with `connection-lost`, the client drops its inbox, and the next call dials a new connection and opens a new inbox. In Core mode NATS rejects pending `nc.request()` calls itself.
+
+Unsubscribing from `send()` before it settles, through `timeout()` or `takeUntil()` for example, abandons the call: the `RpcClientSend` span ends with an `rpc.cancelled` event and `RpcCompleted` reports `cancelled`. A JetStream-mode command that was already published still runs; only its reply is ignored.
 
 ## See also
 

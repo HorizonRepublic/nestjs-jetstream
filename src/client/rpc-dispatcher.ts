@@ -29,6 +29,7 @@ interface PendingRpc {
   readonly declaredPattern: string;
   readonly startedAt: number;
   readonly callback: RpcReplyCallback;
+  settled: boolean;
 }
 
 interface RpcSettlement {
@@ -38,7 +39,8 @@ interface RpcSettlement {
   /** Omitted when the publish leg was already reported. */
   readonly published?: PublishStatus;
   readonly status: RpcOutcomeStatus;
-  readonly packet: WritePacket;
+  /** Omitted when nobody is listening any more. */
+  readonly packet?: WritePacket;
 }
 
 /** Sends `client.send()` requests in Core or JetStream RPC mode and settles each exactly once. */
@@ -63,7 +65,13 @@ export class RpcDispatcher {
       },
       host.otel,
     );
-    const call: PendingRpc = { span, declaredPattern, startedAt: performance.now(), callback };
+    const call: PendingRpc = {
+      span,
+      declaredPattern,
+      startedAt: performance.now(),
+      callback,
+      settled: false,
+    };
 
     try {
       const nc = host.isReady() ? (host.connection.unwrap as NatsConnection) : await host.connect();
@@ -156,7 +164,13 @@ export class RpcDispatcher {
       },
       host.otel,
     );
-    const call: PendingRpc = { span, declaredPattern, startedAt: performance.now(), callback };
+    const call: PendingRpc = {
+      span,
+      declaredPattern,
+      startedAt: performance.now(),
+      callback,
+      settled: false,
+    };
 
     const settleRoundTrip: RpcReplyCallback = (packet: WritePacket) => {
       // Translate the inbox-callback WritePacket into an RPC outcome. A native
@@ -182,7 +196,9 @@ export class RpcDispatcher {
       }
     };
 
-    inbox.register(correlationId, settleRoundTrip);
+    inbox.register(correlationId, settleRoundTrip, () => {
+      this.settle(call, { outcome: { kind: RpcOutcomeKind.Cancelled }, status: 'cancelled' });
+    });
 
     // Arm the deadline BEFORE awaiting connect() so a permanent NATS outage
     // (where `maxReconnectAttempts: -1` keeps connect() pending forever) still
@@ -271,6 +287,9 @@ export class RpcDispatcher {
   }
 
   private settle(call: PendingRpc, settlement: RpcSettlement): void {
+    if (call.settled) return;
+    call.settled = true;
+
     call.span.finish(settlement.outcome);
     settlement.announce?.();
 
@@ -284,6 +303,6 @@ export class RpcDispatcher {
     }
 
     this.host.reporter.rpcCompleted(call.declaredPattern, call.startedAt, settlement.status);
-    call.callback(settlement.packet);
+    if (settlement.packet) call.callback(settlement.packet);
   }
 }

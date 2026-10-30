@@ -13,6 +13,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 
 import { resolveOtelOptions } from '../config';
 import {
+  RPC_CANCELLED_EVENT,
   RPC_TIMEOUT_MESSAGE,
   RpcOutcomeKind,
   beginRpcClientSpan,
@@ -153,6 +154,20 @@ describe('beginRpcClientSpan', () => {
 
       expect(span.status.code).toBe(SpanStatusCode.ERROR);
       expect(span.events.some((event) => event.name === 'exception')).toBe(true);
+    });
+
+    it('should end a Cancelled span without an error status', () => {
+      // Given
+      const handle = beginRpcClientSpan(baseCtx(), resolveOtelOptions());
+
+      // When
+      handle.finish({ kind: RpcOutcomeKind.Cancelled });
+
+      // Then
+      const span = exporter.getFinishedSpans()[0]!;
+
+      expect(span.status.code).toBe(SpanStatusCode.UNSET);
+      expect(span.events.map((event) => event.name)).toEqual([RPC_CANCELLED_EVENT]);
     });
 
     it('should be idempotent across repeated finish() calls', () => {

@@ -8,7 +8,7 @@ schema:
   headline: "How to register lifecycle hooks for NestJS JetStream"
   description: "Subscribe to transport events for monitoring, alerting, and logging integration."
   datePublished: "2026-03-21"
-  dateModified: "2026-10-23"
+  dateModified: "2026-10-30"
 ---
 
 # How to register lifecycle hooks
@@ -30,7 +30,7 @@ Every event is a member of the `TransportEvent` enum:
 | `MessageRouted`      | `(subject: string, kind: MessageKind) => void`            | A message is successfully routed to its handler                                                                     |
 | `HandlerCompleted`   | `(subject, kind: StreamKind, durationMs, status) => void` | A handler returns or throws (success/error/retried/terminated).                                                     |
 | `Published`          | `(subject, kind: StreamKind, durationMs, status) => void` | Every client-side publish leg completes (event emit or RPC publish).                                                |
-| `RpcCompleted`       | `(subject, durationMs, status) => void`                   | RPC round-trip settles on the caller side (success / error / timeout).                                              |
+| `RpcCompleted`       | `(subject, durationMs, status) => void`                   | RPC round-trip settles on the caller side (success / error / timeout / cancelled).                                  |
 | `ConsumerRecovered`  | `(label, attempts: number) => void`                       | Self-healing recovers a consumer after one or more failed restarts                                                  |
 | `ShutdownStart`      | `() => void`                                              | Graceful shutdown sequence begins                                                                                   |
 | `ShutdownComplete`   | `() => void`                                              | Graceful shutdown sequence finishes                                                                                 |
