@@ -210,6 +210,8 @@ otel: {
 }
 ```
 
+A predicate that throws is treated as `true`: the span is created, the handler runs as usual and the error is logged at `debug` level.
+
 ## Cross-language interoperability
 
 Any publisher that injects a `traceparent` header joins the trace, whatever its language. The [Header Contract](/docs/reference/header-contract) has the wire-level details and Go and Python examples.

@@ -48,6 +48,26 @@ export const safelyInvokeHook = <A extends readonly unknown[]>(
   }
 };
 
+/**
+ * Evaluate a user sampling predicate so a throw cannot derail the message path.
+ * Fails open: a broken filter keeps tracing instead of black-holing spans.
+ */
+export const shouldTraceSafely = <A extends readonly unknown[]>(
+  predicateName: string,
+  predicate: ((...args: A) => boolean) | undefined,
+  ...args: A
+): boolean => {
+  if (!predicate) return true;
+
+  try {
+    return predicate(...args);
+  } catch (err) {
+    logger.debug(`OTel ${predicateName} threw: ${errorMessage(err)}`);
+
+    return true;
+  }
+};
+
 const stripIpv6Brackets = (host: string): string =>
   host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
 

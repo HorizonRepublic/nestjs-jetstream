@@ -1,11 +1,9 @@
-import { Logger } from '@nestjs/common';
-
 import type { MsgHdrs } from '@nats-io/transport-node';
 
 import { SpanKind, SpanStatusCode, context, trace } from '@opentelemetry/api';
 
 import type { JetstreamRecord } from '../../client';
-import { errorMessage, toError } from '../../utils';
+import { toError } from '../../utils';
 import {
   ATTR_JETSTREAM_SCHEDULE_TARGET,
   HOOK_PUBLISH,
@@ -16,35 +14,10 @@ import { buildPublishAttributes } from '../attributes';
 import { captureBodyAttribute, captureMatchingHeaders } from '../capture';
 import { hdrsSetter } from '../carrier';
 import type { PublishKind, ResolvedOtelOptions, ServerEndpoint } from '../config';
-import { safelyInvokeHook } from '../internal-utils';
+import { safelyInvokeHook, shouldTraceSafely } from '../internal-utils';
 import { injectContext } from '../propagator';
 import { JetstreamTrace } from '../trace-kinds';
 import { getTracer } from '../tracer';
-
-const logger = new Logger('Jetstream:Otel');
-
-/**
- * Evaluate `shouldTracePublish` defensively. A throwing user predicate
- * must not derail a publish: fail open (assume "trace it") so a buggy
- * filter doesn't black-hole spans, and surface the failure at debug.
- */
-const shouldTracePublishSafe = (
-  predicate: ResolvedOtelOptions['shouldTracePublish'],
-  subject: string,
-  record: JetstreamRecord,
-): boolean => {
-  if (!predicate) return true;
-
-  try {
-    return predicate(subject, record);
-  } catch (err) {
-    const message = errorMessage(err);
-
-    logger.debug(`OTel shouldTracePublish threw: ${message}`);
-
-    return true;
-  }
-};
 
 /**
  * Input required to build a publish span. The caller (JetstreamClient)
@@ -92,7 +65,7 @@ export const withPublishSpan = async <T>(
 
   const shouldCreateSpan =
     config.traces.has(JetstreamTrace.Publish) &&
-    shouldTracePublishSafe(config.shouldTracePublish, ctx.subject, ctx.record);
+    shouldTraceSafely('shouldTracePublish', config.shouldTracePublish, ctx.subject, ctx.record);
 
   if (!shouldCreateSpan) {
     // Propagate the ambient context so downstream consumers stay linked even without a PRODUCER span.
