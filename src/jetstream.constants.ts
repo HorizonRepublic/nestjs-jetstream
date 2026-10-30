@@ -345,11 +345,19 @@ export const RESERVED_HEADERS: ReadonlySet<string> = new Set<string>([
 
 /**
  * Lowercase prefix of NATS server control headers (Nats-Msg-Id, Nats-TTL,
- * Nats-Rollup, Nats-Schedule-*, Nats-Expected-*). These drive server-side
+ * Nats-Rollup, Nats-Schedule-*, Nats-Batch-*). These drive server-side
  * behavior (a stray Nats-Rollup purges every pending message on the
  * subject), so they are managed exclusively through builder APIs.
  */
 export const NATS_CONTROL_HEADER_PREFIX = 'nats-';
+
+/**
+ * Lowercase prefix of the optimistic concurrency headers (Nats-Expected-Stream,
+ * Nats-Expected-Last-Sequence, Nats-Expected-Last-Subject-Sequence,
+ * Nats-Expected-Last-Msg-Id). They only make the server refuse a publish
+ * whose precondition fails, so a caller may set them.
+ */
+export const NATS_EXPECTED_HEADER_PREFIX = 'nats-expected-';
 
 /**
  * Build the internal service name with microservice suffix.

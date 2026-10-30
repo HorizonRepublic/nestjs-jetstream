@@ -289,6 +289,23 @@ describe(JetstreamClient, () => {
         expect(mockJs.publish).not.toHaveBeenCalled();
       });
 
+      it('should pass optimistic concurrency headers of a constructed record through', async () => {
+        // Given: the expected-sequence guard a caller sets for optimistic concurrency
+        const sequence = faker.string.numeric(3);
+        const record = new JetstreamRecord(
+          {},
+          new Map([['Nats-Expected-Last-Subject-Sequence', sequence]]),
+        );
+
+        // When
+        await firstValueFrom(sut.emit('user.updated', record));
+
+        // Then
+        const publishedHeaders: MsgHdrs = mockJs.publish.mock.calls[0]![2]!.headers!;
+
+        expect(publishedHeaders.get('Nats-Expected-Last-Subject-Sequence')).toBe(sequence);
+      });
+
       it('should reject a constructed record that carries a NATS control header', async () => {
         // Given: a stray Nats-Rollup would purge the subject on the server
         const record = new JetstreamRecord({}, new Map([['Nats-Rollup', 'sub']]));

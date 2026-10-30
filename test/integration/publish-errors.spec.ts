@@ -5,6 +5,7 @@ import { TestingModule } from '@nestjs/testing';
 import { DiscardPolicy, JetStreamApiError, jetstreamManager } from '@nats-io/jetstream';
 import type { NatsConnection } from '@nats-io/transport-node';
 
+import { faker } from '@faker-js/faker';
 import { firstValueFrom } from 'rxjs';
 import type { StartedTestContainer } from 'testcontainers';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -13,6 +14,7 @@ import {
   getClientToken,
   internalName,
   JetstreamPublishError,
+  JetstreamRecord,
   NatsErrorCode,
   PublishErrorReason,
 } from '../../src';
@@ -89,6 +91,58 @@ describe('Publish errors', () => {
         message: 'maximum messages exceeded',
         cause: expect.any(JetStreamApiError),
       });
+    });
+  });
+
+  describe('when a record carries optimistic concurrency headers', () => {
+    let app: INestApplication;
+    let module: TestingModule;
+    let client: ClientProxy;
+    let target: string;
+    let stream: string;
+
+    const emitExpecting = async (header: string, value: string): Promise<unknown> =>
+      firstValueFrom(
+        client.emit(
+          'order.placed',
+          new JetstreamRecord({ id: faker.string.uuid() }, new Map([[header, value]])),
+        ),
+      );
+
+    beforeEach(async () => {
+      target = uniqueServiceName();
+      stream = `${target}-occ`;
+
+      await (
+        await jetstreamManager(nc)
+      ).streams.add({ name: stream, subjects: [`${internalName(target)}.ev.>`] });
+
+      ({ app, module } = await createTestApp({ name: uniqueServiceName(), port }, [], [target]));
+      client = module.get<ClientProxy>(getClientToken(target));
+    });
+
+    afterEach(async () => {
+      await app.close();
+      await deleteStreamIfExists(await jetstreamManager(nc), stream);
+    });
+
+    it('should publish when the expectation holds', async () => {
+      // Given: an empty subject, so its last sequence is 0
+      // When/Then
+      await expect(emitExpecting('Nats-Expected-Last-Subject-Sequence', '0')).resolves.toBe(
+        undefined,
+      );
+      await expect(emitExpecting('Nats-Expected-Stream', stream)).resolves.toBe(undefined);
+    });
+
+    it('should let the server refuse a publish whose expectation fails', async () => {
+      // Given: the subject already holds a message
+      await emitExpecting('Nats-Expected-Stream', stream);
+
+      // When/Then: the server, not the transport, rejects the stale write
+      await expect(emitExpecting('Nats-Expected-Last-Subject-Sequence', '0')).rejects.toThrow(
+        /wrong last sequence/i,
+      );
     });
   });
 });

@@ -1,6 +1,10 @@
 import { JetstreamRecordError, RecordErrorReason } from '../errors';
 import type { ScheduleRecordOptions } from '../interfaces';
-import { NATS_CONTROL_HEADER_PREFIX, RESERVED_HEADERS } from '../jetstream.constants';
+import {
+  NATS_CONTROL_HEADER_PREFIX,
+  NATS_EXPECTED_HEADER_PREFIX,
+  RESERVED_HEADERS,
+} from '../jetstream.constants';
 
 /*
  * The CJS and ESM builds each define their own JetstreamRecord. When an app
@@ -20,12 +24,15 @@ const RECORD_BRAND = Symbol.for('@horizon-republic/nestjs-jetstream/JetstreamRec
 export const assertHeaderAllowed = (key: string): void => {
   const normalized = key.toLowerCase();
 
-  if (normalized.startsWith(NATS_CONTROL_HEADER_PREFIX)) {
+  if (
+    normalized.startsWith(NATS_CONTROL_HEADER_PREFIX) &&
+    !normalized.startsWith(NATS_EXPECTED_HEADER_PREFIX)
+  ) {
     throw new JetstreamRecordError(
       RecordErrorReason.ReservedNatsHeader,
       `Header "${key}" is reserved for the NATS server and cannot be set manually. ` +
         'Use setMessageId() for deduplication, ttl() for per-message expiry, ' +
-        'and scheduleAt() for delayed delivery.',
+        'and scheduleAt() for delayed delivery. Nats-Expected-* headers are allowed.',
     );
   }
 
