@@ -28,6 +28,8 @@ A full stream no longer loses messages silently. Event, command and DLQ streams 
 
 Shutdown waits for handlers already running, so a rolling deploy no longer reprocesses their messages or loses RPC replies. A JetStream-mode RPC rides out a brief disconnect instead of failing a command that still runs, a client on a named connection follows that connection's RPC mode, and a connection that closes for good is re-dialled for clients while health reports a server that cannot follow it as down.
 
+Delivery accounting holds up under load. Messages queued behind `concurrency` stay alive instead of being redelivered and dead-lettered without a handler failing, a pod whose handlers hang hands its queue to the others, a handler that answers late on its last delivery keeps its message out of the DLQ, and commands abandoned by a crashed pod reach the DLQ instead of piling up. A recreated broadcast consumer resumes where it stopped instead of replaying the retained history, a migration pauses the stream's consumers while it copies and checks per-subject limits before deleting anything, and health reports consumers stuck in self-healing, as `degraded` by default.
+
 Two defaults change on the first boot, the discard policy and the retry curve, and rolling back to v3.0 needs one manual step. All of it is in [Upgrading](/docs/reference/upgrading#v30--v31).
 
 ## v3.0
