@@ -9,6 +9,7 @@ import {
   type StreamState,
 } from '@nats-io/jetstream';
 import { nuid } from '@nats-io/nuid';
+import { headers as natsHeaders, type MsgHdrs } from '@nats-io/transport-node';
 
 import { JetstreamMigrationError, MigrationErrorReason } from '../../errors';
 import { isNatsError, NatsErrorCode } from './nats-error-codes';
@@ -30,6 +31,8 @@ const DEFAULT_TIMING: MigrationTiming = {
   stallTimeoutMs: 30_000,
 };
 const SOURCING_POLL_INTERVAL_MS = 100;
+/** Headers a republished message must not carry: the server refuses or re-checks them. */
+const REPUBLISH_DROPPED_HEADER = /^Nats-(Expected-|Stream-Source$)/i;
 /** Backups written before the heartbeat existed: younger ones belong to a live migration. */
 const LEGACY_ACTIVE_GRACE_MS = 90_000;
 
@@ -60,6 +63,12 @@ const sleep = (ms: number): Promise<void> =>
 
 const backupNameOf = (streamName: string): string => `${streamName}${MIGRATION_BACKUP_SUFFIX}`;
 
+/** Why a stream that allows message schedules and holds messages is not migrated. */
+export const schedulesRefusal = (streamName: string, messages: number): string =>
+  `Stream ${streamName} allows message schedules and holds ${messages} messages: NATS refuses ` +
+  'sourcing into such a stream, so a migration could not restore them. Revert the immutable ' +
+  'change, or let consumers drain the stream before migrating.';
+
 /**
  * Sourcing out of a stream that is not `Limits` acknowledges what it copies, so
  * every message no consumer filter covers moves into the backup instead.
@@ -69,6 +78,23 @@ const sourcingMoves = (config: Partial<StreamConfig>): boolean =>
 
 const withoutSource = (sources: StreamSource[] | undefined, name: string): StreamSource[] =>
   (sources ?? []).filter((s) => s.name !== name);
+
+/** NATS refuses to source into a stream that allows message schedules. */
+const allowsSchedules = (config: Partial<StreamConfig>): boolean =>
+  config.allow_msg_schedules === true;
+
+/** Copy a stored message's headers, minus those a publish may not carry. */
+const republishHeaders = (stored: MsgHdrs | undefined): MsgHdrs => {
+  const hdrs = natsHeaders();
+
+  for (const key of stored?.keys() ?? []) {
+    if (REPUBLISH_DROPPED_HEADER.test(key)) continue;
+
+    for (const value of stored?.values(key) ?? []) hdrs.append(key, value);
+  }
+
+  return hdrs;
+};
 
 /**
  * The migration lock: whoever holds the backup stream owns the migration. A
@@ -386,6 +412,7 @@ export class StreamMigration {
       const quiesced = await jsm.streams.info(streamName);
       const drainedCount = quiesced.state.messages;
 
+      this.assertRestorable(streamName, newConfig, drainedCount);
       this.assertFits(streamName, newConfig, quiesced.state);
 
       if (drainedCount > 0) {
@@ -443,11 +470,13 @@ export class StreamMigration {
       try {
         // The owner id keeps two configs from ever matching, so a second
         // create fails instead of succeeding as an idempotent no-op.
+        // NATS refuses to source into a backup that allows message schedules.
         await jsm.streams.add({
           ...config,
           name: backupName,
           subjects: [],
           sources: [],
+          allow_msg_schedules: false,
           metadata: {
             [MIGRATION_STARTED_AT_KEY]: new Date().toISOString(),
             [MIGRATION_OWNER_KEY]: lease.owner,
@@ -630,6 +659,14 @@ export class StreamMigration {
       await lease.update({ sources: [] }, MigrationPhase.Restore);
     }
 
+    if (allowsSchedules(streamConfig)) {
+      // Left by an older release: sourcing into this stream is refused.
+      await this.republishBackup(jsm, streamName, backupInfo, lease);
+      await this.dropBackup(jsm, backupName, lease);
+
+      return;
+    }
+
     await jsm.streams.update(streamName, {
       ...streamConfig,
       sources: [...otherSources, { name: backupName }],
@@ -646,6 +683,45 @@ export class StreamMigration {
     // Backup deleted before the source detaches: the order recovery relies on.
     await this.dropBackup(jsm, backupName, lease);
     await jsm.streams.update(streamName, { ...streamConfig, sources: otherSources });
+  }
+
+  /**
+   * Publish every message of the backup into the stream, oldest first. One
+   * published again after a crash is dropped as a duplicate within the
+   * stream's duplicate window.
+   */
+  private async republishBackup(
+    jsm: JetStreamManager,
+    streamName: string,
+    backupInfo: StreamInfo,
+    lease: MigrationLease,
+  ): Promise<void> {
+    const backupName = backupInfo.config.name;
+    const { first_seq: first, last_seq: last, messages } = backupInfo.state;
+    const js = jsm.jetstream();
+
+    if (messages === 0) return;
+
+    this.logger.warn(
+      `Stream ${streamName} allows message schedules, which NATS refuses to source into; ` +
+        `republishing ${messages} messages from ${backupName}`,
+    );
+
+    for (let seq = first; seq <= last; seq++) {
+      lease.throwIfLost();
+
+      const stored = await jsm.streams.getMessage(backupName, { seq });
+
+      if (stored === null) continue;
+
+      const hdrs = republishHeaders(stored.header);
+
+      await js.publish(stored.subject, stored.data, {
+        headers: hdrs,
+        msgID: hdrs.get('Nats-Msg-Id') || `${backupName}:${seq}`,
+        expect: { streamName },
+      });
+    }
   }
 
   private async dropBackup(
@@ -686,6 +762,20 @@ export class StreamMigration {
       `Stream ${streamName} holds ${state.messages} messages (${state.bytes} bytes), more than the ` +
         `new config allows (max_msgs ${maxMsgs}, max_bytes ${maxBytes}). Raise the limits, or let ` +
         'consumers drain the stream, before migrating.',
+    );
+  }
+
+  /** NATS refuses to source the backup back into a stream that allows message schedules. */
+  private assertRestorable(
+    streamName: string,
+    config: MigrationStreamConfig,
+    messages: number,
+  ): void {
+    if (messages === 0 || !allowsSchedules(config)) return;
+
+    throw new JetstreamMigrationError(
+      MigrationErrorReason.MessageSchedules,
+      schedulesRefusal(streamName, messages),
     );
   }
 

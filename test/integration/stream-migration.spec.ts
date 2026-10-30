@@ -188,6 +188,25 @@ describe('Stream sourcing behavior (NATS verification)', () => {
     expect((await jsm.streams.info(nameB)).state.messages).toBe(2);
   });
 
+  it('should refuse sourcing into a stream that allows message schedules', async () => {
+    // Given
+    const origin = `sched-src-${Date.now()}`;
+    const target = `sched-dst-${Date.now()}`;
+
+    streams.push(origin, target);
+    await jsm.streams.add({ name: origin, subjects: [`${origin}.>`] });
+    await jsm.streams.add({ name: target, subjects: [`${target}.>`], allow_msg_schedules: true });
+
+    // When
+    const failure = await jsm.streams
+      .update(target, { subjects: [`${target}.>`], sources: [{ name: origin }] })
+      .catch((err: unknown) => err);
+
+    // Then
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toMatch(/source can not also schedule messages/);
+  });
+
   describe('Stream migration via transport', () => {
     describe('empty stream migration (storage change)', () => {
       it('should recreate stream with new storage type', async () => {

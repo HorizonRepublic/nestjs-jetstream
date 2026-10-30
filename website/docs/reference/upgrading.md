@@ -83,6 +83,8 @@ nats stream edit <stream> --no-discard-per-subject
 
 **A recreated broadcast consumer no longer replays history.** When self-healing recreates a broadcast consumer that disappeared, it resumes after the last ack floor it read, refreshed every 10 seconds, instead of receiving everything the broadcast stream retains. A recreated consumer of any kind also brings its `ack_wait` and `max_deliver` into ack extension and dead-letter detection. See [Broadcast Events](/docs/patterns/broadcast#a-recreated-consumer-resumes-where-it-stopped).
 
+**Streams that allow message schedules are not migrated while they hold messages.** NATS refuses to source into such a stream, so the restore could never finish and every boot failed. The boot now throws `JetstreamMigrationError` with reason `message-schedules` before the stream is quiesced, and a restore left stuck this way by 3.0 is finished on the next boot.
+
 **DLQ filters reject invalid bounds.** A `fromSeq` or `toSeq` that is not a non-negative integer, or an invalid date, now throws `JetstreamConfigError` with reason `dlq-filter-invalid` instead of matching every dead letter.
 
 **Messages queued behind `concurrency` are no longer redelivered.** A message waiting for a free slot is now kept alive with `msg.working()`, whether or not `ackExtension` is on, and its wait no longer counts against `ackExtension.maxDuration`. Before, a backlog that took longer than `ack_wait` to drain was redelivered and handled twice, and could reach `max_deliver` and the DLQ without a handler ever failing. If no handler starts or finishes for `ackExtension.maxDuration` (5 minutes by default), the pod hands its queue back to other pods. See [Concurrency control](/docs/guides/performance#concurrency-control).

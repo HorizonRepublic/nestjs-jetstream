@@ -17,7 +17,14 @@ import { faker } from '@faker-js/faker';
 import type { StartedTestContainer } from 'testcontainers';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
-import { dlqStreamName, JetstreamMigrationError, MigrationErrorReason } from '../../src';
+import {
+  consumerName,
+  dlqStreamName,
+  JetstreamMigrationError,
+  MigrationErrorReason,
+  StreamKind,
+  streamName,
+} from '../../src';
 import {
   MIGRATION_BACKUP_SUFFIX,
   MIGRATION_HEARTBEAT_KEY,
@@ -120,9 +127,12 @@ describe('Stream migration lock', () => {
   const backupOf = (name: string): string => `${name}${MIGRATION_BACKUP_SUFFIX}`;
 
   /** A backup as a migrating instance leaves it, holding `count` messages of its own. */
-  const createBackup = async (count: number, metadata: Record<string, string>): Promise<void> => {
+  const createBackup = async (
+    count: number,
+    metadata: Record<string, string>,
+    staging = `${backupOf(stream)}.staging`,
+  ): Promise<void> => {
     const backup = backupOf(stream);
-    const staging = `${backup}.staging`;
 
     await jsm.streams.add({
       name: backup,
@@ -346,6 +356,100 @@ describe('Stream migration lock', () => {
     expect(info.config.storage).toBe(StorageType.File);
     expect(info.config.subjects).toEqual([`${stream}.>`]);
     expect(info.state.messages).toBe(20);
+    await expect(jsm.streams.info(backupOf(stream))).rejects.toThrow(/not found/);
+  });
+
+  it('should refuse to migrate a stream that allows message schedules and holds messages', async () => {
+    // Given: an event stream with schedules on, holding a message nobody consumed yet
+    const serviceName = uniqueServiceName();
+
+    stream = streamName(serviceName, StreamKind.Event);
+
+    const first = await createTestApp(
+      { name: serviceName, port, events: { stream: { allow_msg_schedules: true } } },
+      [OrdersController],
+    );
+
+    await first.app.close();
+    await jsm.consumers.delete(stream, consumerName(serviceName, StreamKind.Event));
+
+    const { config } = await jsm.streams.info(stream);
+
+    await js.publish(config.subjects[0]!.replace('>', 'order.created'), '{}');
+
+    // When: the next deploy changes an immutable property
+    const failure = await createTestApp(
+      {
+        name: serviceName,
+        port,
+        provisioning: { allowDestructiveMigration: true },
+        events: { stream: { allow_msg_schedules: true, storage: StorageType.Memory } },
+      },
+      [OrdersController],
+    ).catch((err: unknown) => err);
+
+    // Then
+    try {
+      expect(failure).toBeInstanceOf(JetstreamMigrationError);
+      expect(failure).toMatchObject({ reason: MigrationErrorReason.MessageSchedules });
+
+      const info = await jsm.streams.info(stream);
+
+      expect(info.config.storage).toBe(StorageType.File);
+      expect(info.config.subjects).toEqual(config.subjects);
+      expect(info.state.messages).toBe(1);
+      await expect(jsm.streams.info(backupOf(stream))).rejects.toThrow(/not found/);
+    } finally {
+      await cleanupStreams(nc, serviceName);
+    }
+  });
+
+  it('should refuse a migration into a stream that allows message schedules, before deleting anything', async () => {
+    // Given
+    const desired = await seedStream(5);
+
+    // When
+    const failure = await new StreamMigration(FAST)
+      .migrate(jsm, stream, { ...desired, allow_msg_schedules: true })
+      .catch((err: unknown) => err);
+
+    // Then: the original is reopened with every message
+    expect(failure).toMatchObject({ reason: MigrationErrorReason.MessageSchedules });
+
+    const info = await jsm.streams.info(stream);
+
+    expect(info.config.subjects).toEqual([`${stream}.>`]);
+    expect(info.state.messages).toBe(5);
+    await expect(jsm.streams.info(backupOf(stream))).rejects.toThrow(/not found/);
+  });
+
+  it('should finish a restore stuck on a stream that allows message schedules', async () => {
+    // Given: an older release deleted the original and recreated it with
+    // schedules on, so the backup cannot be sourced back
+    stream = `mig-${faker.string.alphanumeric(8).toLowerCase()}`;
+
+    const desired: DesiredStream = {
+      name: stream,
+      subjects: [`${stream}.>`],
+      retention: RetentionPolicy.Workqueue,
+      allow_msg_schedules: true,
+    };
+
+    await createBackup(25, live(MigrationPhase.Restore), `${stream}.order`);
+    await jsm.streams.add(desired);
+    await js.publish(`${stream}.order`, 'published-after-recreate');
+
+    // When
+    const recovered = await new StreamMigration(FAST).settle(jsm, stream, desired);
+
+    // Then
+    expect(recovered).toBe(true);
+
+    const info = await jsm.streams.info(stream);
+
+    expect(info.config.allow_msg_schedules).toBe(true);
+    expect(info.config.sources ?? []).toEqual([]);
+    expect(info.state.messages).toBe(26);
     await expect(jsm.streams.info(backupOf(stream))).rejects.toThrow(/not found/);
   });
 

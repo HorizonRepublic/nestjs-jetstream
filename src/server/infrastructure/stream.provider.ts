@@ -43,7 +43,7 @@ import {
   type StreamReservation,
 } from './provisioning-summary';
 import { compareStreamConfig, type StreamConfigDiffResult } from './stream-config-diff';
-import { StreamMigration } from './stream-migration';
+import { schedulesRefusal, StreamMigration } from './stream-migration';
 import { mergeOwnedMetadata, StreamOwnership } from './stream-ownership';
 import { subjectCovers } from './subject-utils';
 
@@ -405,6 +405,32 @@ export class StreamProvider {
       return currentInfo;
     }
 
+    this.assertMigratable(currentInfo, config);
+
+    await withMigrationSpan(
+      this.otel,
+      {
+        serviceName: this.otelServiceName,
+        endpoint: this.otelEndpoint,
+        stream: config.name,
+        reason: diff.changes
+          .filter((c) => c.mutability === 'immutable')
+          .map((c) => c.property)
+          .join(', '),
+      },
+      async () => {
+        await this.migration.migrate(jsm, config.name, config);
+      },
+    );
+
+    return await jsm.streams.info(config.name);
+  }
+
+  /** Refuse a destructive migration the transport cannot carry out safely. */
+  private assertMigratable(
+    currentInfo: StreamInfo,
+    config: Partial<StreamConfig> & { name: string; subjects: string[] },
+  ): void {
     if (config.name === this.getStreamName(StreamKind.Schedule)) {
       throw new JetstreamMigrationError(
         MigrationErrorReason.ScheduleStream,
@@ -424,23 +450,13 @@ export class StreamProvider {
       );
     }
 
-    await withMigrationSpan(
-      this.otel,
-      {
-        serviceName: this.otelServiceName,
-        endpoint: this.otelEndpoint,
-        stream: config.name,
-        reason: diff.changes
-          .filter((c) => c.mutability === 'immutable')
-          .map((c) => c.property)
-          .join(', '),
-      },
-      async () => {
-        await this.migration.migrate(jsm, config.name, config);
-      },
-    );
-
-    return await jsm.streams.info(config.name);
+    // Refused before the stream is quiesced; the migration checks again once it is.
+    if (config.allow_msg_schedules === true && currentInfo.state.messages > 0) {
+      throw new JetstreamMigrationError(
+        MigrationErrorReason.MessageSchedules,
+        schedulesRefusal(config.name, currentInfo.state.messages),
+      );
+    }
   }
 
   private buildMutableOnlyConfig(
