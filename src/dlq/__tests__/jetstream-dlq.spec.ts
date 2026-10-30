@@ -315,6 +315,7 @@ describe(JetstreamDlq, () => {
     it.each([
       [DeadLetterOrigin.Schedule, StreamKind.Schedule, DlqRedriveSkipReason.ScheduleTick],
       [DeadLetterOrigin.Broadcast, StreamKind.Broadcast, DlqRedriveSkipReason.Broadcast],
+      [DeadLetterOrigin.Command, StreamKind.Command, DlqRedriveSkipReason.Command],
     ])('should never send a %s back', async (_, kind, reason) => {
       // Given
       stored = [deadLetter({ seq: 1, kind })];

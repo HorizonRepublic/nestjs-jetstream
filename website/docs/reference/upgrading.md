@@ -87,6 +87,8 @@ nats stream edit <stream> --no-discard-per-subject
 
 **A handler that outlives `ack_wait` on the last delivery keeps its message.** Its late ack now settles the message, and a late failure reaches the DLQ with the handler's own error. Before, the replica that got the server's `MAX_DELIVERIES` advisory dead-lettered the message while the handler was still running, so a handler that then succeeded left a copy in the DLQ that a redrive would run again. A handler counts as hung after `ackExtension.maxDuration`, 5 minutes by default. This holds when the advisory reaches the replica running the handler; see [Deliveries no handler settled](/docs/guides/dead-letter-queue#deliveries-no-handler-settled) for several replicas.
 
+**Abandoned commands go to the DLQ.** A JetStream-mode command whose only delivery was never settled, because its pod crashed or was stopped mid-handler, used to stay in the command stream until `max_age`, and with `discard_new_per_subject` could make publishes to its subject fail. With dead letters enabled it now goes to the DLQ and `onDeadLetter` once its `ack_wait` runs out, and is removed from the command stream. A redrive skips it with the new reason `command`, and `inspect()` reports its origin as `command`. With restricted permissions, the advisory and stream permissions listed in [Deliveries no handler settled](/docs/guides/dead-letter-queue#deliveries-no-handler-settled) now also apply to the command stream.
+
 **Schedule handler errors count as `handler`.** `jetstream_errors_total` used to file an error thrown by a schedule handler under `context="other"`.
 
 ### Additive changes

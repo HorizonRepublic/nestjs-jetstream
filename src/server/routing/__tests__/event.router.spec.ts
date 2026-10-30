@@ -2456,7 +2456,7 @@ describe(EventRouter, () => {
         }),
       );
 
-    it('should watch event, schedule and broadcast consumers that have a delivery limit', async () => {
+    it('should watch event, command, schedule and broadcast consumers that have a delivery limit', async () => {
       // Given
       const subscribe = vi.fn();
       const event = consumer(3);
@@ -2476,11 +2476,11 @@ describe(EventRouter, () => {
         ]),
       );
 
-      // Then: commands are not dead-lettered, so their consumer is left alone
+      // Then: an abandoned command would otherwise stay in its work queue
       const subjects = subscribe.mock.calls.map(([subject]) => subject as string);
 
       expect(subjects).toEqual(
-        [event, schedule, broadcast].map(
+        [event, schedule, broadcast, command].map(
           (info) => `$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.${info.stream_name}.${info.name}`,
         ),
       );

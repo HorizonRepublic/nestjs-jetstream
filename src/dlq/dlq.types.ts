@@ -1,6 +1,8 @@
 /** Which kind of message a dead letter was, judged by the stream it came from. */
 export enum DeadLetterOrigin {
   Event = 'event',
+  /** A JetStream RPC command whose delivery was abandoned; its caller has given up on the reply. */
+  Command = 'command',
   Broadcast = 'broadcast',
   Schedule = 'schedule',
   /** The original stream is none this connection provisions, e.g. renamed since. */
@@ -13,6 +15,8 @@ export enum DlqRedriveSkipReason {
   Broadcast = 'broadcast',
   /** A recurring schedule fires again on its own; a late tick would run out of turn. */
   ScheduleTick = 'schedule-tick',
+  /** A command's caller gave up on the reply; replaying it would run its side effects for no one. */
+  Command = 'command',
   /** No consumer of this service would deliver the subject, so the message would sit unhandled. */
   NoConsumer = 'no-consumer',
   /** It already went back `maxRedrives` times and failed each time. */

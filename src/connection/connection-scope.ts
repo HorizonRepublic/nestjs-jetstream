@@ -205,6 +205,7 @@ export const createConnectionScope = (
     buildRpcRouterOptions(options),
     ackWaitMap,
     options,
+    eventRouter.finalDeliveries,
   );
 
   const coreRpc = new CoreRpcServer(options, connection, patterns, codec, eventBus, names);

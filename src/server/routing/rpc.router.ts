@@ -17,6 +17,7 @@ import {
   type ServerEndpoint,
 } from '../../otel';
 import {
+  handlerRunLimit,
   resolveAckExtension,
   resolveParkExtension,
   startAckExtensionTimer,
@@ -24,6 +25,7 @@ import {
 } from '../../utils';
 import { MessageProvider } from '../infrastructure';
 import { ConcurrencyGate } from './concurrency-gate';
+import type { FinalDeliveries } from './final-deliveries';
 import { InFlightTracker } from './in-flight-tracker';
 import { PatternRegistry } from './pattern-registry';
 import type { ParkTimerFn, RouteFn } from './routing.types';
@@ -63,6 +65,7 @@ export class RpcRouter {
     private readonly rpcOptions?: RpcRouterOptions | undefined,
     private readonly ackWaitMap?: Map<StreamKind, number> | undefined,
     options?: JetstreamModuleOptions,
+    private readonly finalDeliveries?: FinalDeliveries | null | undefined,
   ) {
     this.timeout = rpcOptions?.timeout ?? DEFAULT_JETSTREAM_RPC_TIMEOUT;
     this.concurrency = rpcOptions?.concurrency;
@@ -114,10 +117,14 @@ export class RpcRouter {
       ackExtension,
       timeout: this.timeout,
     });
+    const runLimit = handlerRunLimit(ackExtension);
     const handleSafe: RouteFn = (msg) => {
       const pending = pipeline(msg);
 
-      if (pending !== undefined) this.inFlight.track(pending);
+      if (pending !== undefined) {
+        this.inFlight.track(pending);
+        this.finalDeliveries?.track(msg, pending, runLimit);
+      }
 
       return pending;
     };

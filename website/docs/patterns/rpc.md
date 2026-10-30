@@ -105,6 +105,8 @@ sequenceDiagram
 
 A command is never redelivered: a failing handler terminates the message (`term`) and the error goes back to the caller. Retrying a command behind the caller's back could, for example, charge a card twice.
 
+A command whose pod crashes or is stopped mid-handler is not run again either. Once its `ack_wait` runs out it goes to the [dead-letter queue](/docs/guides/dead-letter-queue#deliveries-no-handler-settled), when one is enabled, and leaves the command stream.
+
 If the server is down, the command waits in the stream and runs when a server starts. When the client's timeout expires first, the client gets a timeout error, yet the handler may still run later and publish a reply nobody listens to. Make such handlers idempotent.
 
 ## Core or JetStream

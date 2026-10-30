@@ -62,6 +62,7 @@ const ORPHAN_FALLBACK_DELIVERIES = 3;
 /** Kinds whose exhausted deliveries are captured from server advisories. */
 const ADVISORY_WATCHED_KINDS: ReadonlySet<StreamKind> = new Set([
   StreamKind.Event,
+  StreamKind.Command,
   StreamKind.Schedule,
   StreamKind.Broadcast,
 ]);
