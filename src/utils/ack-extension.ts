@@ -91,6 +91,13 @@ export const resolveParkExtension = (
   maxDurationMs: Number.POSITIVE_INFINITY,
 });
 
+/**
+ * How long a handler may run before it counts as hung: the extension limit,
+ * or its default when extension is off.
+ */
+export const handlerRunLimit = (extension: AckExtension | null): number =>
+  extension?.maxDurationMs ?? DEFAULT_MAX_ACK_EXTENSION_MS;
+
 interface AckEntry {
   msg: AckExtensionTarget;
   interval: number;

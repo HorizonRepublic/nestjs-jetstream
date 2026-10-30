@@ -90,7 +90,7 @@ events: {
 
 The transport calls `msg.working()` every half `ack_wait`, which resets the deadline on the server.
 
-Extension stops after 5 minutes per message, so a hung handler cannot hold its message forever. The transport logs a warning naming the subject, and the server redelivers the message once `ack_wait` runs out. The first handler keeps running, and keeps its concurrency slot, until it returns. Set the limit to the slowest legitimate run, or `Infinity` to remove it:
+Extension stops after 5 minutes per message, so a hung handler cannot hold its message forever. The transport logs a warning naming the subject, and the server redelivers the message once `ack_wait` runs out. The first handler keeps running, and keeps its concurrency slot, until it returns. On the last delivery, the same limit decides when a running handler counts as hung and its message goes to the [dead-letter queue](/docs/guides/dead-letter-queue#deliveries-no-handler-settled). Set the limit to the slowest legitimate run, or `Infinity` to remove it:
 
 ```typescript
 events: {

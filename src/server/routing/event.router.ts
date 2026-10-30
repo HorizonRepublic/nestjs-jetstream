@@ -25,6 +25,7 @@ import {
 } from '../../otel';
 import type { ScheduleStore } from '../../schedule/schedule-store';
 import {
+  handlerRunLimit,
   resolveAckExtension,
   resolveParkExtension,
   resolveRetryDelays,
@@ -36,6 +37,7 @@ import { ConcurrencyGate } from './concurrency-gate';
 import { DeadLetterAdvisoryListener } from './dead-letter-advisory';
 import { DeadLetterCapture } from './dead-letter-capture';
 import { createOrderedPipeline, createWorkqueuePipeline } from './event-pipeline';
+import { FinalDeliveries } from './final-deliveries';
 import { InFlightTracker } from './in-flight-tracker';
 import { PatternRegistry } from './pattern-registry';
 import { OrphanOutcome } from './routing.types';
@@ -88,6 +90,8 @@ export class EventRouter {
   private readonly serverEndpoint: ServerEndpoint | null;
   private readonly capture: DeadLetterCapture | null;
   private readonly advisories: DeadLetterAdvisoryListener | null;
+  /** Final deliveries handled in this process; the advisory capture leaves them to their handler. */
+  public readonly finalDeliveries: FinalDeliveries | null;
   private maxDeliverByStream = new Map<string, number>();
   private readonly startedAt = Date.now();
 
@@ -132,9 +136,14 @@ export class EventRouter {
         )
       : null;
 
+    const capture = this.capture;
+
+    this.finalDeliveries = capture
+      ? new FinalDeliveries((msg) => capture.isFinalDelivery(msg))
+      : null;
     this.advisories =
-      this.capture && connection
-        ? new DeadLetterAdvisoryListener(connection, this.capture, codec)
+      capture && connection
+        ? new DeadLetterAdvisoryListener(connection, capture, codec, this.finalDeliveries)
         : null;
   }
 
@@ -226,10 +235,14 @@ export class EventRouter {
     };
 
     const pipeline = isOrdered ? createOrderedPipeline(rctx) : createWorkqueuePipeline(rctx);
+    const runLimit = handlerRunLimit(ackExtension);
     const route: RouteFn = (msg) => {
       const pending = pipeline(msg);
 
-      if (pending !== undefined) this.inFlight.track(pending);
+      if (pending !== undefined) {
+        this.inFlight.track(pending);
+        this.finalDeliveries?.track(msg, pending, runLimit);
+      }
 
       return pending;
     };

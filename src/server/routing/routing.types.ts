@@ -14,6 +14,9 @@ import type { PatternRegistry } from './pattern-registry';
 /** Routes one message; `undefined` means the whole flow completed synchronously. */
 export type RouteFn = (msg: JsMsg) => Promise<void> | undefined;
 
+/** True when this delivery is the consumer's last attempt for the message. */
+export type FinalDeliveryCheck = (msg: JsMsg) => boolean;
+
 /** Starts an ack-extension timer for a parked message; returns its stop function. */
 export type ParkTimerFn = (msg: JsMsg) => (() => void) | null;
 
@@ -134,4 +137,9 @@ export interface MaxDeliveriesAdvisory {
   readonly consumer?: string;
   readonly stream_seq?: number;
   readonly deliveries?: number;
+}
+
+/** A `MAX_DELIVERIES` advisory that names the stream message it is about. */
+export interface ParsedMaxDeliveriesAdvisory extends MaxDeliveriesAdvisory {
+  readonly stream_seq: number;
 }

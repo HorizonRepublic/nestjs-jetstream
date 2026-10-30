@@ -13,6 +13,7 @@ import {
   dlqStreamName,
   getClientToken,
   internalName,
+  JetstreamDeliveryError,
   JetstreamDlqHeader,
   StreamKind,
   streamName,
@@ -39,7 +40,7 @@ const holdHandlers = (): void => {
   });
 };
 
-/** Never settles while held: every delivery runs out its ack_wait. */
+/** Never settles while held: every delivery runs out its ack_wait, and the last one counts as hung. */
 @Controller()
 class HangingController {
   public attempts = 0;
@@ -57,6 +58,25 @@ class HangingController {
   }
 }
 
+/** Outlives ack_wait on its only delivery, then succeeds or throws. */
+@Controller()
+class OverrunController {
+  public completed = 0;
+
+  @EventPattern('order.overrun')
+  public async onOverrun(@Payload() _data: unknown): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, ACK_WAIT_MS * 3));
+    this.completed++;
+  }
+
+  @EventPattern('order.overrun-fails')
+  public async onOverrunFails(@Payload() _data: unknown): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, ACK_WAIT_MS * 3));
+    this.completed++;
+    throw new Error('handler failed late');
+  }
+}
+
 describe('Dead letters from unsettled deliveries', () => {
   let nc: NatsConnection;
   let container: StartedTestContainer;
@@ -68,8 +88,15 @@ describe('Dead letters from unsettled deliveries', () => {
   const options = (): Partial<JetstreamModuleOptions> & { name: string; port: number } => ({
     name: serviceName,
     port,
-    events: { consumer: { max_deliver: 2, ack_wait: toNanos(ACK_WAIT_MS / 1_000, 'seconds') } },
-    broadcast: { consumer: { max_deliver: 2, ack_wait: toNanos(ACK_WAIT_MS / 1_000, 'seconds') } },
+    // A handler past maxDuration counts as hung, so its message is captured while it runs.
+    events: {
+      consumer: { max_deliver: 2, ack_wait: toNanos(ACK_WAIT_MS / 1_000, 'seconds') },
+      ackExtension: { maxDuration: ACK_WAIT_MS },
+    },
+    broadcast: {
+      consumer: { max_deliver: 2, ack_wait: toNanos(ACK_WAIT_MS / 1_000, 'seconds') },
+      ackExtension: { maxDuration: ACK_WAIT_MS },
+    },
     onDeadLetter: async (info) => {
       deadLetters.push(info);
     },
@@ -119,7 +146,7 @@ describe('Dead letters from unsettled deliveries', () => {
   });
 
   it('moves an event whose deliveries all ran out to the DLQ and off the stream', async () => {
-    // Given a handler that never settles within ack_wait
+    // Given a hung handler
     const { client, controller } = await start();
 
     // When one event is published
@@ -178,4 +205,61 @@ describe('Dead letters from unsettled deliveries', () => {
     expect(deadLetters).toHaveLength(1);
     expect(await streamMessages(dlqStreamName(serviceName))).toBe(1);
   }, 30_000);
+  describe('when the handler of the final delivery is still running here', () => {
+    const startOverrun = async (): Promise<{
+      client: ClientProxy;
+      controller: OverrunController;
+    }> => {
+      const { app, module } = await createTestApp(
+        {
+          ...options(),
+          events: {
+            consumer: { max_deliver: 1, ack_wait: toNanos(ACK_WAIT_MS / 1_000, 'seconds') },
+          },
+        },
+        [OverrunController],
+        [serviceName],
+      );
+
+      apps.push(app);
+
+      return {
+        client: module.get<ClientProxy>(getClientToken(serviceName)),
+        controller: module.get(OverrunController),
+      };
+    };
+
+    it('lets a handler that succeeds late settle the message instead of dead-lettering it', async () => {
+      // Given a handler that outlives ack_wait on the only delivery allowed
+      const { client, controller } = await startOverrun();
+
+      // When an event is published and its handler finishes after the server gave up
+      await firstValueFrom(client.emit('order.overrun', { id: 9 }));
+      await waitForCondition(() => controller.completed === 1, 15_000);
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+
+      // Then its ack removes it, and nothing reaches the DLQ
+      expect(deadLetters).toHaveLength(0);
+      expect(await streamMessages(streamName(serviceName, StreamKind.Event))).toBe(0);
+      expect(await streamMessages(dlqStreamName(serviceName))).toBe(0);
+    }, 30_000);
+
+    it('dead-letters once when that handler fails late', async () => {
+      // Given a handler that outlives ack_wait and then throws
+      const { client, controller } = await startOverrun();
+
+      // When an event is published
+      await firstValueFrom(client.emit('order.overrun-fails', { id: 10 }));
+      await waitForCondition(() => controller.completed === 1, 15_000);
+      await waitForCondition(() => deadLetters.length > 0, 5_000);
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+
+      // Then the handler's own error is what reaches the DLQ, once
+      expect(deadLetters).toHaveLength(1);
+      expect(deadLetters[0]?.error).toMatchObject({ status: 'error' });
+      expect(deadLetters[0]?.error).not.toBeInstanceOf(JetstreamDeliveryError);
+      expect(await streamMessages(dlqStreamName(serviceName))).toBe(1);
+      expect(await streamMessages(streamName(serviceName, StreamKind.Event))).toBe(0);
+    }, 30_000);
+  });
 });

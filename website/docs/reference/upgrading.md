@@ -85,6 +85,8 @@ nats stream edit <stream> --no-discard-per-subject
 
 **Messages queued behind `concurrency` are no longer redelivered.** A message waiting for a free slot is now kept alive with `msg.working()`, whether or not `ackExtension` is on, and its wait no longer counts against `ackExtension.maxDuration`. Before, a backlog that took longer than `ack_wait` to drain was redelivered and handled twice, and could reach `max_deliver` and the DLQ without a handler ever failing. See [Concurrency control](/docs/guides/performance#concurrency-control).
 
+**A handler that outlives `ack_wait` on the last delivery keeps its message.** Its late ack now settles the message, and a late failure reaches the DLQ with the handler's own error. Before, the replica that got the server's `MAX_DELIVERIES` advisory dead-lettered the message while the handler was still running, so a handler that then succeeded left a copy in the DLQ that a redrive would run again. A handler counts as hung after `ackExtension.maxDuration`, 5 minutes by default. This holds when the advisory reaches the replica running the handler; see [Deliveries no handler settled](/docs/guides/dead-letter-queue#deliveries-no-handler-settled) for several replicas.
+
 **Schedule handler errors count as `handler`.** `jetstream_errors_total` used to file an error thrown by a schedule handler under `context="other"`.
 
 ### Additive changes

@@ -58,7 +58,8 @@ export interface AckExtensionOptions {
    *
    * Past it the transport stops extending and logs a warning; the handler keeps
    * running and the server redelivers the message once `ack_wait` runs out.
-   * `Infinity` removes the limit.
+   * On the last delivery, a handler past this limit counts as hung and its
+   * message is dead-lettered while it runs. `Infinity` removes the limit.
    */
   maxDuration?: number;
 }
