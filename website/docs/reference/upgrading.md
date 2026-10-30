@@ -83,6 +83,8 @@ nats stream edit <stream> --no-discard-per-subject
 
 **A recreated broadcast consumer no longer replays history.** When self-healing recreates a broadcast consumer that disappeared, it resumes after the last ack floor it read, refreshed every 10 seconds, instead of receiving everything the broadcast stream retains. A recreated consumer of any kind also brings its `ack_wait` and `max_deliver` into ack extension and dead-letter detection. See [Broadcast Events](/docs/patterns/broadcast#a-recreated-consumer-resumes-where-it-stopped).
 
+**A migration checks per-subject limits.** A lowered `max_msgs_per_subject` that cannot hold the messages on some subject now stops the migration with `insufficient-capacity` before anything is deleted, instead of evicting the oldest messages of that subject or stalling the restore.
+
 **Streams that allow message schedules are not migrated while they hold messages.** NATS refuses to source into such a stream, so the restore could never finish and every boot failed. The boot now throws `JetstreamMigrationError` with reason `message-schedules` before the stream is quiesced, and a restore left stuck this way by 3.0 is finished on the next boot.
 
 **DLQ filters reject invalid bounds.** A `fromSeq` or `toSeq` that is not a non-negative integer, or an invalid date, now throws `JetstreamConfigError` with reason `dlq-filter-invalid` instead of matching every dead letter.

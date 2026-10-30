@@ -31,6 +31,8 @@ const DEFAULT_TIMING: MigrationTiming = {
   stallTimeoutMs: 30_000,
 };
 const SOURCING_POLL_INTERVAL_MS = 100;
+/** Subjects named in a per-subject capacity error. */
+const OVERFULL_SUBJECTS_SHOWN = 3;
 /** Headers a republished message must not carry: the server refuses or re-checks them. */
 const REPUBLISH_DROPPED_HEADER = /^Nats-(Expected-|Stream-Source$)/i;
 /** Backups written before the heartbeat existed: younger ones belong to a live migration. */
@@ -413,7 +415,7 @@ export class StreamMigration {
       const drainedCount = quiesced.state.messages;
 
       this.assertRestorable(streamName, newConfig, drainedCount);
-      this.assertFits(streamName, newConfig, quiesced.state);
+      await this.assertFits(jsm, streamName, currentInfo.config, newConfig, quiesced.state);
 
       if (drainedCount > 0) {
         // Phase 2: Backup via sourcing
@@ -748,20 +750,65 @@ export class StreamMigration {
     });
   }
 
-  /** Refuse to recreate a stream whose new limits would evict or reject what it holds. */
-  private assertFits(streamName: string, config: MigrationStreamConfig, state: StreamState): void {
+  /**
+   * Refuse to recreate a stream whose new limits would evict or reject what
+   * it holds: an evicted message is lost, a rejected one stalls the restore.
+   */
+  private async assertFits(
+    jsm: JetStreamManager,
+    streamName: string,
+    current: StreamConfig,
+    config: MigrationStreamConfig,
+    state: StreamState,
+  ): Promise<void> {
     const maxMsgs = config.max_msgs ?? -1;
     const maxBytes = config.max_bytes ?? -1;
     const tooMany = maxMsgs > 0 && state.messages > maxMsgs;
     const tooBig = maxBytes > 0 && state.bytes > maxBytes;
 
-    if (!tooMany && !tooBig) return;
+    if (tooMany || tooBig) {
+      throw new JetstreamMigrationError(
+        MigrationErrorReason.InsufficientCapacity,
+        `Stream ${streamName} holds ${state.messages} messages (${state.bytes} bytes), more than the ` +
+          `new config allows (max_msgs ${maxMsgs}, max_bytes ${maxBytes}). Raise the limits, or let ` +
+          'consumers drain the stream, before migrating.',
+      );
+    }
+
+    await this.assertSubjectsFit(jsm, streamName, current, config, state);
+  }
+
+  /** Per-subject counts are listed only when the limit goes down: listing them is costly. */
+  private async assertSubjectsFit(
+    jsm: JetStreamManager,
+    streamName: string,
+    current: StreamConfig,
+    config: MigrationStreamConfig,
+    state: StreamState,
+  ): Promise<void> {
+    const limit = config.max_msgs_per_subject ?? -1;
+    const currentLimit = current.max_msgs_per_subject;
+    const lowered = limit > 0 && (currentLimit <= 0 || limit < currentLimit);
+
+    if (!lowered || state.messages <= limit) return;
+
+    const { state: detailed } = await jsm.streams.info(streamName, { subjects_filter: '>' });
+    const overfull = Object.entries(detailed.subjects ?? {})
+      .filter(([, count]) => count > limit)
+      .toSorted(([, a], [, b]) => b - a);
+
+    if (overfull.length === 0) return;
+
+    const shown = overfull
+      .slice(0, OVERFULL_SUBJECTS_SHOWN)
+      .map(([subject, count]) => `${subject} (${count})`)
+      .join(', ');
 
     throw new JetstreamMigrationError(
       MigrationErrorReason.InsufficientCapacity,
-      `Stream ${streamName} holds ${state.messages} messages (${state.bytes} bytes), more than the ` +
-        `new config allows (max_msgs ${maxMsgs}, max_bytes ${maxBytes}). Raise the limits, or let ` +
-        'consumers drain the stream, before migrating.',
+      `Stream ${streamName} holds more messages on ${overfull.length} subject(s) than the new ` +
+        `max_msgs_per_subject ${limit} allows: ${shown}. Raise the limit, or let consumers drain ` +
+        'those subjects, before migrating.',
     );
   }
 

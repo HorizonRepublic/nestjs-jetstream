@@ -2,6 +2,7 @@ import { Controller } from '@nestjs/common';
 import { EventPattern, Payload } from '@nestjs/microservices';
 
 import {
+  DiscardPolicy,
   jetstream,
   jetstreamManager,
   RetentionPolicy,
@@ -205,6 +206,66 @@ describe('Stream sourcing behavior (NATS verification)', () => {
     // Then
     expect(failure).toBeInstanceOf(Error);
     expect((failure as Error).message).toMatch(/source can not also schedule messages/);
+  });
+
+  describe('when a sourced message exceeds the per-subject limit', () => {
+    const seedSubjects = async (origin: string): Promise<void> => {
+      await jsm.streams.add({ name: origin, subjects: [`${origin}.>`] });
+
+      for (let i = 0; i < 5; i++) await js.publish(`${origin}.busy`, String(i));
+      for (let i = 0; i < 2; i++) await js.publish(`${origin}.quiet`, String(i));
+    };
+
+    it('should evict the oldest messages of the subject under DiscardPolicy.Old', async () => {
+      // Given
+      const origin = `subj-old-a-${Date.now()}`;
+      const target = `subj-old-b-${Date.now()}`;
+
+      streams.push(origin, target);
+      await seedSubjects(origin);
+
+      // When
+      await jsm.streams.add({
+        name: target,
+        subjects: [],
+        max_msgs_per_subject: 2,
+        sources: [{ name: origin }],
+      });
+      await waitForCondition(async () => {
+        const source = (await jsm.streams.info(target)).sources?.[0];
+
+        return source !== undefined && source.active >= 0 && source.lag === 0;
+      }, 10_000);
+
+      // Then: sourcing completes, three messages of the busy subject are gone
+      expect((await jsm.streams.info(target)).state.messages).toBe(4);
+    });
+
+    it('should stall sourcing for good under a per-subject DiscardPolicy.New', async () => {
+      // Given
+      const origin = `subj-new-a-${Date.now()}`;
+      const target = `subj-new-b-${Date.now()}`;
+
+      streams.push(origin, target);
+      await seedSubjects(origin);
+
+      // When
+      await jsm.streams.add({
+        name: target,
+        subjects: [],
+        max_msgs_per_subject: 2,
+        discard: DiscardPolicy.New,
+        discard_new_per_subject: true,
+        sources: [{ name: origin }],
+      });
+      await new Promise((r) => setTimeout(r, 2_000));
+
+      // Then: the rejected message blocks everything after it
+      const info = await jsm.streams.info(target);
+
+      expect(info.state.messages).toBe(2);
+      expect(info.sources?.[0]?.lag).toBeGreaterThan(0);
+    });
   });
 
   describe('Stream migration via transport', () => {

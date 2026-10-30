@@ -359,6 +359,42 @@ describe('Stream migration lock', () => {
     await expect(jsm.streams.info(backupOf(stream))).rejects.toThrow(/not found/);
   });
 
+  it('should refuse a migration whose per-subject limit cannot hold a subject, before deleting anything', async () => {
+    // Given: every message on one subject
+    const desired = await seedStream(20);
+
+    // When
+    const failure = await new StreamMigration(FAST)
+      .migrate(jsm, stream, { ...desired, max_msgs_per_subject: 10 })
+      .catch((err: unknown) => err);
+
+    // Then
+    expect(failure).toBeInstanceOf(JetstreamMigrationError);
+    expect(failure).toMatchObject({ reason: MigrationErrorReason.InsufficientCapacity });
+    expect((failure as Error).message).toContain(`${stream}.order`);
+
+    const info = await jsm.streams.info(stream);
+
+    expect(info.config.storage).toBe(StorageType.File);
+    expect(info.config.subjects).toEqual([`${stream}.>`]);
+    expect(info.state.messages).toBe(20);
+    await expect(jsm.streams.info(backupOf(stream))).rejects.toThrow(/not found/);
+  });
+
+  it('should migrate when every subject fits a lowered per-subject limit', async () => {
+    // Given
+    const desired = await seedStream(10);
+
+    // When
+    await new StreamMigration(FAST).migrate(jsm, stream, { ...desired, max_msgs_per_subject: 10 });
+
+    // Then
+    const info = await jsm.streams.info(stream);
+
+    expect(info.config.storage).toBe(StorageType.Memory);
+    expect(info.state.messages).toBe(10);
+  });
+
   it('should refuse to migrate a stream that allows message schedules and holds messages', async () => {
     // Given: an event stream with schedules on, holding a message nobody consumed yet
     const serviceName = uniqueServiceName();

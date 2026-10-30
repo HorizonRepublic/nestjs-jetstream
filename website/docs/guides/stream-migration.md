@@ -54,7 +54,7 @@ Lock       Create the backup stream; only one pod can, the others wait
 Phase 1/4  Quiesce: remove the original's subjects
            (new publishes are rejected loudly instead of being acked
             into a stream that is about to be deleted; aborts here if
-            the new max_msgs or max_bytes cannot hold what it has)
+            the new limits cannot hold what it has)
 
 Phase 2/4  Backup ← sourcing ← original
            (server-side copy; completion is tracked via source lag)
@@ -111,7 +111,7 @@ Sourcing runs on the server, so no message crosses the network to the applicatio
 
 - **Failure before the original is deleted.** Whatever sourcing moved into the backup goes back into the original, the quiesce is rolled back (subjects restored), the backup is removed, and an error is thrown: the original stream has every message and serves traffic. If even that fails, the stream stays quiesced with its backup, and the next pod to take the lock over finishes the job.
 - **Failure after the original is deleted.** The backup is the only copy of the data and is always preserved. Restoration resumes automatically on the next application startup.
-- **New limits too small.** If the new `max_msgs` or `max_bytes` cannot hold the messages already in the stream, the migration stops before deleting anything and throws a `JetstreamMigrationError` with reason `insufficient-capacity`. Raise the limits, or let consumers drain the stream, and restart. `max_msgs_per_subject` is not checked.
+- **New limits too small.** If the new `max_msgs` or `max_bytes` cannot hold the messages already in the stream, or a lowered `max_msgs_per_subject` cannot hold the messages on some subject, the migration stops before deleting anything and throws a `JetstreamMigrationError` with reason `insufficient-capacity` that names the fullest subjects. Raise the limits, or let consumers drain the stream, and restart. Without the check, a restore over a per-subject limit drops the oldest messages of the subject under `discard: Old`, and stalls for good under a per-subject `discard: New`.
 - **Sourcing stalls.** The copy may take as long as it needs; it fails with reason `sourcing-timeout` only after 30 seconds without progress. Before the delete, that rolls back as above; after it, the backup is preserved.
 - **Process killed mid-migration.** Its heartbeat stops, and the next pod to start, or one already waiting, takes the migration over 30 seconds later. If the original was never deleted, the backup is given back to it without duplicating what both hold; otherwise it is restored into the stream (recreating it first if the crash happened between delete and create), then cleaned up. The DLQ stream is recovered the same way.
 - **Instances migrating concurrently (rolling deploy).** Only the pod that created the backup migrates; see [the lock](#backup-stream-as-a-distributed-lock).
