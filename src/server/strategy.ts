@@ -15,6 +15,7 @@ import { StreamKind } from '../interfaces';
 import type { JetstreamModuleOptions } from '../interfaces';
 import { isCoreRpcMode, isJetStreamRpcMode } from '../jetstream.constants';
 import type { ScheduleReconciler } from '../schedule/schedule-reconciler';
+import type { Stoppable } from '../shutdown/shutdown.types';
 import { errorMessage } from '../utils';
 import { CoreRpcServer } from './core-rpc.server';
 import {
@@ -34,7 +35,7 @@ const RETRY_MAX_DELAY_MS = 30_000;
  * Registers handlers, provisions streams and consumers, then starts message
  * consumption and routing (Core or JetStream RPC based on configuration).
  */
-export class JetstreamStrategy extends Server implements CustomTransportStrategy {
+export class JetstreamStrategy extends Server implements CustomTransportStrategy, Stoppable {
   public readonly transportId: symbol = Symbol('jetstream-transport');
   // oxlint-disable-next-line typescript/no-unsafe-function-type
   private readonly listeners = new Map<string, Function[]>();

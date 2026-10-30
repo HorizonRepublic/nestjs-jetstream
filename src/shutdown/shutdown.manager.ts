@@ -5,17 +5,41 @@ import type { ConnectionScope } from '../connection/connection.types';
 import { EventBus } from '../hooks';
 import { TransportEvent } from '../interfaces';
 import { errorMessage } from '../utils';
+import type { Stoppable } from './shutdown.types';
 
 const IDLE = Symbol('idle');
 const DRAINED = Symbol('drained');
 const TIMED_OUT = Symbol('timed-out');
 
-/** Minimal interface for anything that can be stopped during shutdown. */
-export interface Stoppable {
-  close(): void;
-  /** Resolves once work that was already running when `close()` ran has settled. */
-  whenIdle(): Promise<void>;
+/**
+ * Most of the budget a drain is guaranteed when handlers outlast theirs. A
+ * drain flushes buffered publishes and waits one server round trip, so a
+ * healthy connection needs milliseconds; two seconds covers a slow or distant
+ * cluster without taking much from handlers under a typical budget.
+ */
+const DRAIN_RESERVE_MAX_MS = 2_000;
+
+/** A timer that resolves to {@link TIMED_OUT}, cancelled once its step is over. */
+interface Deadline {
+  readonly reached: Promise<typeof TIMED_OUT>;
+  cancel(): void;
 }
+
+const startDeadline = (ms: number): Deadline => {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const reached = new Promise<typeof TIMED_OUT>((resolve) => {
+    timeoutId = setTimeout(() => {
+      resolve(TIMED_OUT);
+    }, ms);
+  });
+
+  return {
+    reached,
+    cancel: () => {
+      clearTimeout(timeoutId);
+    },
+  };
+};
 
 /**
  * Orchestrates graceful transport shutdown across every connection.
@@ -68,8 +92,10 @@ export class ShutdownManager {
     // connections would never close, never drain, and the shared shutdown
     // promise would stay rejected for every later caller.
     for (const scope of scopes) {
+      const strategy: Stoppable | null = scope.strategy;
+
       try {
-        scope.strategy?.close();
+        strategy?.close();
       } catch (err) {
         this.logger.warn(
           `Connection "${scope.name}" failed to stop accepting messages: ${errorMessage(err)}`,
@@ -91,60 +117,56 @@ export class ShutdownManager {
    *
    * Handlers settle first: on a drained connection their acks and replies are
    * lost, so events run again elsewhere and JetStream RPC callers time out.
-   * NATS `drain()` then flushes what they published and closes the connection.
-   * The budget is a safety net for either step hanging.
+   * Handlers get the budget minus a reserve, so the drain that flushes what
+   * they published always gets time to run. A drain still running when the
+   * whole budget is spent is cut by closing the connection.
    */
   private async drainScope(scope: ConnectionScope): Promise<void> {
     const budget = scope.options.shutdownTimeout ?? this.timeout;
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    const deadline = new Promise<typeof TIMED_OUT>((resolve) => {
-      timeoutId = setTimeout(() => {
-        resolve(TIMED_OUT);
-      }, budget);
-    });
+    const handlerBudget = budget - Math.min(budget / 2, DRAIN_RESERVE_MAX_MS);
+    const handlersDeadline = startDeadline(handlerBudget);
+    const drainDeadline = startDeadline(budget);
 
     try {
       // Each race resolves to a marker rather than setting a flag, so which side
       // won is visible to the type checker as well as to us.
-      const settled = await Promise.race([this.settleInFlight(scope).then(() => IDLE), deadline]);
+      const settled = await Promise.race([
+        this.settleInFlight(scope.name, scope.strategy).then(() => IDLE),
+        handlersDeadline.reached,
+      ]);
 
       if (settled === TIMED_OUT) {
         this.logger.warn(
-          `Connection "${scope.name}" still had handlers running after ${budget}ms; closing anyway`,
+          `Connection "${scope.name}" still had handlers running after ${handlerBudget}ms; draining anyway`,
         );
-        scope.connection.shutdown().catch((err: unknown) => {
-          this.logger.warn(`Connection "${scope.name}" failed to drain: ${errorMessage(err)}`);
-        });
-
-        return;
       }
 
-      const outcome = await Promise.race([
+      const drained = await Promise.race([
         scope.connection.shutdown().then(() => DRAINED),
-        deadline,
+        drainDeadline.reached,
       ]);
 
-      if (outcome === TIMED_OUT) {
-        this.logger.warn(
-          `Connection "${scope.name}" did not drain within ${budget}ms; closing anyway`,
-        );
+      if (drained === TIMED_OUT) {
+        this.logger.warn(`Connection "${scope.name}" did not drain within ${budget}ms; closing it`);
+        await scope.connection.forceClose();
       }
     } catch (err) {
       this.logger.warn(`Connection "${scope.name}" failed to drain: ${errorMessage(err)}`);
     } finally {
-      clearTimeout(timeoutId);
+      handlersDeadline.cancel();
+      drainDeadline.cancel();
     }
   }
 
   /** Wait for the strategy's in-flight handlers; a failure here must not block the drain. */
-  private async settleInFlight(scope: ConnectionScope): Promise<void> {
-    if (!scope.strategy) return;
+  private async settleInFlight(name: string, strategy: Stoppable | null): Promise<void> {
+    if (!strategy) return;
 
     try {
-      await scope.strategy.whenIdle();
+      await strategy.whenIdle();
     } catch (err) {
       this.logger.warn(
-        `Connection "${scope.name}" failed to wait for in-flight handlers: ${errorMessage(err)}`,
+        `Connection "${name}" failed to wait for in-flight handlers: ${errorMessage(err)}`,
       );
     }
   }

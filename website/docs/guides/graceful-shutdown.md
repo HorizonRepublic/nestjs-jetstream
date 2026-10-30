@@ -37,7 +37,7 @@ The process dies on the signal without calling `onApplicationShutdown()`, and th
 2. **Stop consumers**: `strategy.close()` closes the consumer iterators and the Core RPC subscription, so no new messages are taken. Messages fetched but still waiting for a [concurrency](/docs/guides/performance) slot are handed back to the server with a `nak`, so another instance picks them up at once.
 3. **Wait for in-flight handlers**: handlers that were already running finish, and their outcome is settled as usual: the event is acked or retried, the JetStream RPC command is acked and the caller gets its reply, the Core RPC request is answered.
 4. **Drain the connection**: `nc.drain()` stops the subscriptions, flushes pending publishes and closes the connection.
-5. **Safety timeout**: steps 3 and 4 share one `shutdownTimeout` budget. When it runs out, shutdown completes without waiting further, so a hung handler or a stuck connection cannot block the process.
+5. **Safety timeout**: steps 3 and 4 share one `shutdownTimeout` budget. The drain always keeps the last part of it, half the budget but at most 2 seconds, so handlers wait at most `shutdownTimeout` minus that reserve. A drain still running when the whole budget is spent is cut short by closing the connection, so a hung handler or a stuck connection cannot block the process.
 6. **`ShutdownComplete` hook.**
 
 ```mermaid
@@ -53,7 +53,7 @@ flowchart LR
 ```
 
 :::warning Handlers that outlast the budget
-A handler still running when `shutdownTimeout` runs out is not awaited any further. Its message never gets an ack, and JetStream redelivers it once the consumer's `ack_wait` expires, so the handler runs again on another instance. If that was the message's final delivery, it goes to the [dead letter queue](/docs/guides/dead-letter-queue#deliveries-no-handler-settled) instead. A JetStream RPC command is delivered only once, so its caller gets no reply and times out.
+A handler still running when its share of the budget runs out is not awaited any further, and anything it publishes after the connection closes is lost. Its message never gets an ack, and JetStream redelivers it once the consumer's `ack_wait` expires, so the handler runs again on another instance. If that was the message's final delivery, it goes to the [dead letter queue](/docs/guides/dead-letter-queue#deliveries-no-handler-settled) instead. A JetStream RPC command is delivered only once, so its caller gets no reply and times out.
 
 A JetStream RPC handler that is already past its own `rpc.timeout` is not waited for: the command was terminated at the deadline.
 
@@ -74,7 +74,7 @@ JetstreamModule.forRoot({
 })
 ```
 
-Set it above your slowest handler, plus a margin for the drain. When it fires, shutdown completes without waiting further and JetStream redelivers anything unacked after `ack_wait`. Keep it below the grace period of your orchestrator (`terminationGracePeriodSeconds` in Kubernetes, 30 seconds by default), or the process is killed before shutdown completes.
+Set it above your slowest handler plus the drain reserve: 2 seconds, or half the budget below 4 seconds. When it runs out, the connection is closed and JetStream redelivers anything unacked after `ack_wait`. Keep it below the grace period of your orchestrator (`terminationGracePeriodSeconds` in Kubernetes, 30 seconds by default), or the process is killed before shutdown completes.
 
 During a rolling deploy, `ack_wait` (not this timeout) decides when a message cut off at SIGTERM becomes available to another instance.
 

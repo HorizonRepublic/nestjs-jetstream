@@ -352,6 +352,52 @@ describe(ConnectionProvider, () => {
     });
   });
 
+  describe('forceClose()', () => {
+    it('should close a connection whose drain is still running', async () => {
+      // Given a drain that hangs
+      mockNc.drain.mockReturnValue(new Promise<void>(() => {}));
+      mockNc.close.mockResolvedValue(undefined);
+      await sut.getConnection();
+      void sut.shutdown();
+      await new Promise(process.nextTick);
+
+      // When the connection is force-closed
+      await sut.forceClose();
+
+      // Then the socket is closed without waiting for the drain
+      expect(mockNc.close).toHaveBeenCalledOnce();
+    });
+
+    it('should no-op when not connected', async () => {
+      // When
+      await sut.forceClose();
+
+      // Then
+      expect(mockNc.close).not.toHaveBeenCalled();
+    });
+
+    it('should no-op when the connection is already closed', async () => {
+      // Given
+      await sut.getConnection();
+      mockNc.isClosed.mockReturnValue(true);
+
+      // When
+      await sut.forceClose();
+
+      // Then
+      expect(mockNc.close).not.toHaveBeenCalled();
+    });
+
+    it('should swallow a failing close', async () => {
+      // Given
+      mockNc.close.mockRejectedValue(new Error(faker.lorem.sentence()));
+      await sut.getConnection();
+
+      // When / Then
+      await expect(sut.forceClose()).resolves.toBeUndefined();
+    });
+  });
+
   describe('status monitoring', () => {
     it('should emit Disconnect event when server disconnects', async () => {
       // Given: status stream will yield Disconnect

@@ -109,7 +109,7 @@ The transport keeps reconnecting after a network failure. Override either value 
 
 The JetStream RPC timeout is longer on purpose: the message is persisted to a stream first, and the consumer may take a while to reach it.
 
-The shutdown value bounds, per NATS connection, the wait for handlers still running and the `drain()` that follows; when it runs out, the transport closes the connection anyway. Set it above your slowest handler. See [Graceful Shutdown](/docs/guides/graceful-shutdown).
+The shutdown value bounds, per NATS connection, the wait for handlers still running and the `drain()` that follows. The drain keeps the last part of the budget, half of it but at most 2 seconds, and when the budget runs out the transport closes the connection. Set it above your slowest handler plus that reserve. See [Graceful Shutdown](/docs/guides/graceful-shutdown).
 
 ## Replicas in production
 
