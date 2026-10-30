@@ -81,6 +81,14 @@ describe(JetstreamStrategy, () => {
   afterEach(vi.resetAllMocks);
 
   describe('listen()', () => {
+    it('should mark its connection as serving handlers', async () => {
+      // When
+      await sut.listen(vi.fn());
+
+      // Then: a terminal close of this connection now counts against health
+      expect(connection.bindServer).toHaveBeenCalledTimes(1);
+    });
+
     it('should ignore second call and not invoke callback', async () => {
       // Given: already started
       const firstCallback = vi.fn();

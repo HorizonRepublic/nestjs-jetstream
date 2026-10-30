@@ -8,7 +8,7 @@ schema:
   headline: "How to expose health checks for NATS JetStream"
   description: "Expose NATS connection status and RTT latency as a Kubernetes readiness/liveness probe using JetstreamHealthIndicator."
   datePublished: "2026-03-21"
-  dateModified: "2026-10-23"
+  dateModified: "2026-10-30"
 ---
 
 # How to expose health checks
@@ -53,6 +53,8 @@ interface JetstreamHealthStatus {
   connections?: Record<string, JetstreamConnectionHealth>; // multiple connections only
 }
 ```
+
+A connection that serves handlers stays `connected: false` for good once NATS gives up reconnecting it, even after a client call dials a new connection: the handlers stay bound to the closed one, so only a restart brings them back. See [connection failure behavior](/docs/reference/edge-cases#connection-failure-behavior).
 
 It needs no extra dependency. A standalone endpoint picks its own response shape and status code:
 

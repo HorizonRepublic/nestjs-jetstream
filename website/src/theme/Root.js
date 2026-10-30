@@ -129,7 +129,7 @@ export default function Root({ children }) {
   "headline": "How to expose health checks for NATS JetStream",
   "description": "Expose NATS connection status and RTT latency as a Kubernetes readiness/liveness probe using JetstreamHealthIndicator.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-10-23"
+  "dateModified": "2026-10-30"
 },
       
     '/docs/guides/lifecycle-hooks/': {

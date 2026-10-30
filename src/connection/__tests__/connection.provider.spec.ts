@@ -667,6 +667,67 @@ describe(ConnectionProvider, () => {
       expect((await sut.getCapabilities()).apiLevel).toBe(5);
     });
 
+    it('should remember that a connection serving handlers closed for good', async () => {
+      // Given a server bound to a connection
+      const feed = statusFeed();
+      const first = closableConnection(feed);
+      const second = closableConnection();
+
+      mockConnect.mockResolvedValueOnce(first.nc).mockResolvedValueOnce(second.nc);
+      await sut.getConnection();
+      sut.bindServer();
+
+      // When that connection closes for good and a client call dials a new one
+      first.close();
+      feed.end();
+      await vi.waitFor(() => {
+        expect(sut.hasLostServerConnection()).toBe(true);
+      });
+      await sut.getConnection();
+
+      // Then the loss sticks: the server side is still bound to the closed connection
+      expect(sut.hasLostServerConnection()).toBe(true);
+    });
+
+    it('should not flag a terminal close when no server is bound', async () => {
+      // Given a client-only connection
+      const feed = statusFeed();
+      const first = closableConnection(feed);
+
+      mockConnect.mockResolvedValueOnce(first.nc);
+      await sut.getConnection();
+
+      // When it closes for good
+      first.close();
+      feed.end();
+      await new Promise(process.nextTick);
+
+      // Then re-dialling is enough to recover
+      expect(sut.hasLostServerConnection()).toBe(false);
+    });
+
+    it('should not flag a deliberate shutdown', async () => {
+      // Given a server bound to a connection that ends its status feed when drained
+      const feed = statusFeed();
+      const nc = createNc({
+        status: vi.fn(() => feed.open()),
+        drain: vi.fn(async () => {
+          feed.end();
+        }),
+      });
+
+      mockConnect.mockResolvedValueOnce(nc);
+      await sut.getConnection();
+      sut.bindServer();
+
+      // When the application shuts down
+      await sut.shutdown();
+      await new Promise(process.nextTick);
+
+      // Then the close is not treated as a loss
+      expect(sut.hasLostServerConnection()).toBe(false);
+    });
+
     it('should keep status$ subscribers on the new connection', async () => {
       // Given a status$ subscriber on a connection that then closes for good
       const firstStatus = statusFeed();

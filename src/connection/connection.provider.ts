@@ -71,6 +71,9 @@ export class ConnectionProvider {
   private readonly otelServiceName: string;
   private readonly otelEndpoint: ServerEndpoint | null;
   private lifecycleSpan: ConnectionLifecycleSpanHandle | null = null;
+  private serverBound = false;
+  private serverConnectionLost = false;
+  private shuttingDown = false;
 
   public constructor(
     private readonly options: JetstreamModuleOptions,
@@ -156,6 +159,23 @@ export class ConnectionProvider {
     return this.jsClient;
   }
 
+  /**
+   * Record that a server (consumers, RPC subscriptions, advisories) runs on
+   * this connection. Those are not rebuilt on a re-dialled connection.
+   */
+  public bindServer(): void {
+    this.serverBound = true;
+  }
+
+  /**
+   * True once a connection that a server was bound to closed for good outside
+   * of {@link shutdown}. Sticky: re-dialling recovers clients only, so health
+   * keeps reporting the connection down until the process restarts.
+   */
+  public hasLostServerConnection(): boolean {
+    return this.serverConnectionLost;
+  }
+
   /** Direct access to the raw NATS connection, or `null` if not yet connected. */
   public get unwrap(): NatsConnection | null {
     return this.connection;
@@ -167,6 +187,8 @@ export class ConnectionProvider {
    * Sequence: drain -> wait for close. Falls back to force-close on error.
    */
   public async shutdown(): Promise<void> {
+    this.shuttingDown = true;
+
     // Wait for in-flight connection to settle so it doesn't escape shutdown
     if (this.connectionPromise) {
       try {
@@ -254,6 +276,7 @@ export class ConnectionProvider {
       const previous = this.connection;
 
       this.connection = nc;
+      this.shuttingDown = false;
       // Replacing a closed connection; a first dial keeps lookups already waiting on it.
       if (previous) this.resetConnectionCaches();
       this.logger.log(`NATS connection established: ${nc.getServer()}`);
@@ -346,6 +369,14 @@ export class ConnectionProvider {
         if (this.connection === nc) {
           this.lifecycleSpan?.finish();
           this.lifecycleSpan = null;
+        }
+
+        if (this.serverBound && !this.shuttingDown && !this.serverConnectionLost) {
+          this.serverConnectionLost = true;
+          this.logger.error(
+            'NATS connection closed for good while serving handlers; ' +
+              'health reports it down until the process restarts',
+          );
         }
       }
     })().catch((err) => {

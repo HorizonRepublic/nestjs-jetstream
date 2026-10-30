@@ -56,7 +56,7 @@ A critical connection (the default) **throws on startup**, so the application fa
 
 After the first successful connection the NATS client reconnects on its own, and the transport emits the `Disconnect` and `Reconnect` [lifecycle hooks](/docs/guides/lifecycle-hooks).
 
-With a capped `maxReconnectAttempts`, the NATS client eventually gives up and closes the connection. The next client call dials a new one, and the transport rebuilds its JetStream client, manager and status tracking on it instead of reusing objects bound to the closed connection.
+With a capped `maxReconnectAttempts`, the NATS client eventually gives up and closes the connection. Only clients recover from that: the next `emit()` or `send()` dials a new connection and the transport rebuilds its JetStream client and manager on it. Handlers do not move over. Consumers, Core RPC subscriptions, reply publishing and dead-letter advisories stay on the closed connection, so a connection that serves handlers reports `connected: false` in the [health check](/docs/guides/health-checks) from then on, even after a client dialled a new one. Let your orchestrator restart the process. A publish-only connection keeps reporting healthy once it has re-dialled.
 
 ## Observable Return Values in Handlers
 

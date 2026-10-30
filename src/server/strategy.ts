@@ -273,6 +273,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     }
 
     this.started = true;
+    this.connection.bindServer();
 
     try {
       this.patternRegistry.registerHandlers(this.getHandlers());
