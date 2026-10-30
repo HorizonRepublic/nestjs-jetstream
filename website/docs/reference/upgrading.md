@@ -83,6 +83,8 @@ nats stream edit <stream> --no-discard-per-subject
 
 **DLQ filters reject invalid bounds.** A `fromSeq` or `toSeq` that is not a non-negative integer, or an invalid date, now throws `JetstreamConfigError` with reason `dlq-filter-invalid` instead of matching every dead letter.
 
+**Schedule handler errors count as `handler`.** `jetstream_errors_total` used to file an error thrown by a schedule handler under `context="other"`.
+
 ### Additive changes
 
 **Dead letters can go back.** `JetstreamDlq` lists, redrives and purges the DLQ stream, or empties it with `purgeAll()`, with filters, a dry run and a cap on how many times one message is redriven. Broadcasts and recurring schedule ticks are never redriven. `x-redrive-count` joins the reserved headers `setHeader()` refuses. See [Redriving dead letters](/docs/guides/dead-letter-queue#redriving-dead-letters).
