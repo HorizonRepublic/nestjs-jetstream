@@ -169,7 +169,7 @@ export default function Root({ children }) {
   "headline": "Performance Tuning",
   "description": "Tune ackWait, maxAckPending, batch sizes, and ack extension for high-throughput workloads.",
   "datePublished": "2026-03-26",
-  "dateModified": "2026-10-23"
+  "dateModified": "2026-10-30"
 },
       
     '/docs/guides/record-builder/': {
