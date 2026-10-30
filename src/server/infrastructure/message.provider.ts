@@ -26,7 +26,8 @@ import { ConnectionProvider } from '../../connection';
 import { EventBus } from '../../hooks';
 import type { OrderedEventOverrides } from '../../interfaces';
 import { StreamKind, TransportEvent } from '../../interfaces';
-import { toError } from '../../utils';
+import { errorMessage, toError } from '../../utils';
+import type { ConsumerFlowState } from './consumer-flow.types';
 import { NatsErrorCode } from './nats-error-codes';
 
 /** Callback to recreate a consumer when it disappears. */
@@ -44,6 +45,7 @@ export type ConsumerRecoveryFn = (kind: StreamKind) => Promise<ConsumerInfo>;
 export class MessageProvider {
   private readonly logger = new Logger('Jetstream:Message');
   private readonly activeIterators = new Set<ConsumerMessages>();
+  private readonly flowStates = new Map<StreamKind, ConsumerFlowState>();
   private orderedReadyResolve: (() => void) | null = null;
   private orderedReadyReject: ((err: unknown) => void) | null = null;
 
@@ -149,6 +151,11 @@ export class MessageProvider {
     return ready;
   }
 
+  /** A copy of every running flow's state, for health reporting. */
+  public getFlowStates(): ConsumerFlowState[] {
+    return [...this.flowStates.values()].map((state) => ({ ...state }));
+  }
+
   /** Stop all consumer flows and reinitialize subjects for potential restart. */
   public destroy(): void {
     // Reject pending ordered consumer ready promise to unblock listen()
@@ -166,6 +173,7 @@ export class MessageProvider {
     }
 
     this.activeIterators.clear();
+    this.flowStates.clear();
 
     this.eventMessages$.complete();
     this.commandMessages$.complete();
@@ -189,6 +197,7 @@ export class MessageProvider {
     return this.createSelfHealingFlow(
       (onConnected) => this.consumeOnce(kind, info, target$, onConnected),
       info.name,
+      this.trackFlow(kind, info.name),
     );
   }
 
@@ -316,6 +325,7 @@ export class MessageProvider {
     return this.createSelfHealingFlow(
       (onConnected) => this.consumeOrderedOnce(streamName, consumerOpts, onConnected),
       StreamKind.Ordered,
+      this.trackFlow(StreamKind.Ordered, null),
       (err) => {
         // Fail fast on first error so listen() propagates the failure.
         // Subsequent errors (after retry) are handled by the self-healing loop.
@@ -328,10 +338,28 @@ export class MessageProvider {
     );
   }
 
+  /** Register a flow as down until its first consume() succeeds. */
+  private trackFlow(kind: StreamKind, consumer: string | null): ConsumerFlowState {
+    const state: ConsumerFlowState = {
+      kind,
+      consumer,
+      active: false,
+      connectedOnce: false,
+      failures: 0,
+      downSince: Date.now(),
+      lastError: null,
+    };
+
+    this.flowStates.set(kind, state);
+
+    return state;
+  }
+
   /** Shared self-healing flow: defer -> retry with exponential backoff on error/completion. */
   private createSelfHealingFlow(
     source: (onConnected: () => void) => Promise<void>,
     label: string,
+    state: ConsumerFlowState,
     onFirstError?: (err: unknown) => void,
   ): Observable<void> {
     let consecutiveFailures = 0;
@@ -349,11 +377,26 @@ export class MessageProvider {
       }
 
       consecutiveFailures = 0;
+      Object.assign(state, {
+        active: true,
+        connectedOnce: true,
+        failures: 0,
+        downSince: null,
+        lastError: null,
+      });
+    };
+
+    const markDown = (): void => {
+      state.active = false;
+      state.downSince ??= Date.now();
     };
 
     return defer(() => source(onConnected)).pipe(
       catchError((err) => {
         consecutiveFailures++;
+        markDown();
+        state.failures = consecutiveFailures;
+        state.lastError = errorMessage(err);
         this.logger.error(`Consumer ${label} error, will restart:`, err);
         this.eventBus.emit(TransportEvent.Error, toError(err), 'message-provider');
         onFirstError?.(err);
@@ -362,6 +405,7 @@ export class MessageProvider {
       }),
       repeat({
         delay: () => {
+          markDown();
           const delay = Math.min(100 * Math.pow(2, consecutiveFailures), 30_000);
 
           this.logger.warn(`Consumer ${label} stream ended, restarting in ${delay}ms...`);

@@ -156,6 +156,31 @@ describe('JetstreamStrategy criticality', () => {
     // Then the boot chain ran again and succeeded
     expect(registerHandlers).toHaveBeenCalledTimes(2);
     expect(sut.isStarted).toBe(true);
+    expect(sut.isListening).toBe(true);
+  });
+
+  it('should report listening only once the boot chain finished, until closed', async () => {
+    // Given stream provisioning that is still in flight
+    const { promise: provisioned, resolve: finishProvisioning } = Promise.withResolvers<void>();
+    const patterns = createMock<PatternRegistry>({
+      registerHandlers: vi.fn(),
+      hasEventHandlers: () => true,
+      hasBroadcastHandlers: () => false,
+      hasOrderedHandlers: () => false,
+      hasRpcHandlers: () => false,
+      hasMetadata: () => false,
+    });
+    const streams = createMock<StreamProvider>({ ensureStreams: () => provisioned });
+    const sut = createSut(true, patterns, { streams });
+    const listening = sut.listen(vi.fn());
+
+    // When / Then: not listening while provisioning, listening after, not after close
+    expect(sut.isListening).toBe(false);
+    finishProvisioning();
+    await listening;
+    expect(sut.isListening).toBe(true);
+    sut.close();
+    expect(sut.isListening).toBe(false);
   });
 
   it('should tear down when closed while the boot chain is still running', async () => {

@@ -117,8 +117,14 @@ describe('v2 configuration compatibility', () => {
     // When health is checked
     const status = await app.get(JetstreamHealthIndicator).check();
 
-    // Then the response carries exactly the pre-3.0 keys
-    expect(Object.keys(status).toSorted()).toEqual(['connected', 'latency', 'server']);
+    // Then the response carries the pre-3.0 keys plus consumption, and no multi-connection fields
+    expect(Object.keys(status).toSorted()).toEqual([
+      'connected',
+      'consumers',
+      'consuming',
+      'latency',
+      'server',
+    ]);
     expect(status.connected).toBe(true);
   });
 

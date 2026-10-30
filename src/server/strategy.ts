@@ -40,6 +40,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
   // oxlint-disable-next-line typescript/no-unsafe-function-type
   private readonly listeners = new Map<string, Function[]>();
   private started = false;
+  private listening = false;
   private attached = false;
   private closed = false;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -196,6 +197,11 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     return this.started;
   }
 
+  /** Whether the boot chain finished, so every consumer it needs was started. */
+  public get isListening(): boolean {
+    return this.listening;
+  }
+
   /** Whether the bootstrap called `listen()` on this connection at all. */
   public get isAttached(): boolean {
     return this.attached;
@@ -248,6 +254,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
     this.coreRpcServer.stop();
     this.messageProvider.destroy();
     this.started = false;
+    this.listening = false;
   }
 
   private scheduleRetry(delay: number): void {
@@ -355,6 +362,7 @@ export class JetstreamStrategy extends Server implements CustomTransportStrategy
       throw err;
     }
 
+    this.listening = true;
     callback();
   }
 

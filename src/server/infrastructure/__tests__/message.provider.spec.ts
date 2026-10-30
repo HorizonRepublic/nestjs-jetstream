@@ -331,6 +331,158 @@ describe(MessageProvider, () => {
     });
   });
 
+  describe('getFlowStates()', () => {
+    const eventConsumers = (name: string): Map<StreamKind, ConsumerInfo> =>
+      new Map([
+        [StreamKind.Event, createMock<ConsumerInfo>({ name, stream_name: faker.lorem.word() })],
+      ]);
+
+    afterEach(() => {
+      sut.destroy();
+      vi.useRealTimers();
+    });
+
+    describe('happy path', () => {
+      it('should report a live flow', async () => {
+        // Given: a consumer that connects at once
+        const name = faker.lorem.word();
+        const js = {
+          consumers: { get: vi.fn().mockResolvedValue(makeConsumer(createMockMessages())) },
+        };
+
+        connection.getJetStreamClient.mockReturnValue(js as never);
+
+        // When
+        sut.start(eventConsumers(name));
+        await new Promise(process.nextTick);
+
+        // Then
+        expect(sut.getFlowStates()).toEqual([
+          {
+            kind: StreamKind.Event,
+            consumer: name,
+            active: true,
+            connectedOnce: true,
+            failures: 0,
+            downSince: null,
+            lastError: null,
+          },
+        ]);
+      });
+
+      it('should clear the failure streak once the flow recovers', async () => {
+        // Given: one failed attempt, then a live consumer
+        vi.useFakeTimers();
+        const js = {
+          consumers: {
+            get: vi
+              .fn()
+              .mockRejectedValueOnce(new Error(faker.lorem.sentence()))
+              .mockResolvedValue(makeConsumer(createMockMessages())),
+          },
+        };
+
+        connection.getJetStreamClient.mockReturnValue(js as never);
+        sut.start(eventConsumers(faker.lorem.word()));
+        await vi.advanceTimersByTimeAsync(0);
+
+        // When: the retry after the backoff succeeds
+        await vi.advanceTimersByTimeAsync(300);
+
+        // Then
+        expect(sut.getFlowStates()[0]).toEqual(
+          expect.objectContaining({ active: true, failures: 0, downSince: null, lastError: null }),
+        );
+      });
+    });
+
+    describe('edge cases', () => {
+      it('should mark a flow down from the moment its live iterator ends', async () => {
+        // Given: a live consumer
+        vi.useFakeTimers();
+        const messages = createMockMessages();
+        const js = { consumers: { get: vi.fn().mockResolvedValue(makeConsumer(messages)) } };
+
+        connection.getJetStreamClient.mockReturnValue(js as never);
+        sut.start(eventConsumers(faker.lorem.word()));
+        await vi.advanceTimersByTimeAsync(0);
+        js.consumers.get.mockReturnValue(new Promise(() => {}));
+
+        // When: the iterator closes and the restart has not connected yet
+        const closedAt = Date.now();
+
+        messages.stop();
+        await vi.advanceTimersByTimeAsync(0);
+
+        // Then
+        expect(sut.getFlowStates()[0]).toEqual(
+          expect.objectContaining({ active: false, connectedOnce: true, downSince: closedAt }),
+        );
+      });
+
+      it('should forget every flow on destroy()', async () => {
+        // Given
+        const js = {
+          consumers: { get: vi.fn().mockResolvedValue(makeConsumer(createMockMessages())) },
+        };
+
+        connection.getJetStreamClient.mockReturnValue(js as never);
+        sut.start(eventConsumers(faker.lorem.word()));
+        await new Promise(process.nextTick);
+
+        // When
+        sut.destroy();
+
+        // Then
+        expect(sut.getFlowStates()).toEqual([]);
+      });
+    });
+
+    describe('error paths', () => {
+      it('should count failures since start for a flow that never connected', async () => {
+        // Given: an externally managed consumer that stays absent
+        vi.useFakeTimers();
+        const startedAt = Date.now();
+        const reason = faker.lorem.sentence();
+        const js = { consumers: { get: vi.fn().mockRejectedValue(new Error(reason)) } };
+
+        connection.getJetStreamClient.mockReturnValue(js as never);
+
+        // When: three attempts fail
+        sut.start(eventConsumers(faker.lorem.word()));
+        await vi.advanceTimersByTimeAsync(0);
+        await vi.advanceTimersByTimeAsync(200);
+        await vi.advanceTimersByTimeAsync(400);
+
+        // Then: still down since the start
+        expect(sut.getFlowStates()[0]).toEqual(
+          expect.objectContaining({
+            active: false,
+            connectedOnce: false,
+            failures: 3,
+            downSince: startedAt,
+            lastError: reason,
+          }),
+        );
+      });
+
+      it('should track the ordered flow without a durable name', async () => {
+        // Given: an ordered consumer that fails at once
+        const js = { consumers: { get: vi.fn().mockRejectedValue(new Error('boom')) } };
+
+        connection.getJetStreamClient.mockReturnValue(js as never);
+
+        // When
+        await expect(sut.startOrdered(faker.lorem.word(), ['a.>'])).rejects.toThrow('boom');
+
+        // Then
+        expect(sut.getFlowStates()).toEqual([
+          expect.objectContaining({ kind: StreamKind.Ordered, consumer: null, failures: 1 }),
+        ]);
+      });
+    });
+  });
+
   describe('monitorConsumerHealth', () => {
     describe('when 2+ heartbeats are missed', () => {
       it('should stop the consumer messages iterator', async () => {

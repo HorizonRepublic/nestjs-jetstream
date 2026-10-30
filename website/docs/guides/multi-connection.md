@@ -194,11 +194,11 @@ A connection with no handlers never touches NATS on its own, so bootstrap opens 
 }
 ```
 
-- `connected` means **every critical connection is alive**. `isHealthy()` throws only when this is false.
-- `degraded` means **at least one non-critical connection is down**. It is orthogonal to `connected`.
+- `connected` means **every critical connection is alive**. `isHealthy()` throws when this is false, or when a critical connection that consumes reports `consuming: false`.
+- `degraded` means **at least one non-critical connection is down or not consuming**. It is orthogonal to `connected`.
 - `server` and `latency` describe the default connection, so the old fields keep their meaning.
 
-With a single connection, `degraded` and `connections` are absent and the response is byte-for-byte what it was before.
+A connection that consumes also reports `consuming` and its `consumers`; see [Consumption](/docs/guides/health-checks#consumption). With a single connection, `degraded` and `connections` are absent.
 
 **Readiness watches critical connections. Liveness watches the process.** Do not wire a liveness probe to NATS. A network blip then restarts the pod at exactly the moment the transport is recovering, turning a hiccup into a cascade.
 

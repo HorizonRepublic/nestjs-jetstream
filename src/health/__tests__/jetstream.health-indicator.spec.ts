@@ -2,11 +2,14 @@ import type { NatsConnection } from '@nats-io/transport-node';
 
 import { faker } from '@faker-js/faker';
 import { createMock } from '@golevelup/ts-vitest';
-import { afterEach, describe, expect, it, vi, type Mocked } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 
 import { ConnectionProvider } from '../../connection';
 import { ConnectionRegistry } from '../../connection/connection-registry';
 import type { ConnectionScope } from '../../connection/connection.types';
+import { StreamKind } from '../../interfaces';
+import { JetstreamStrategy, MessageProvider } from '../../server';
+import type { ConsumerFlowState } from '../../server/infrastructure/consumer-flow.types';
 import { JetstreamHealthIndicator } from '../jetstream.health-indicator';
 
 describe(JetstreamHealthIndicator, () => {
@@ -19,7 +22,16 @@ describe(JetstreamHealthIndicator, () => {
   const registryOf = (connection: ConnectionProvider): ConnectionRegistry =>
     new ConnectionRegistry(
       new Map([
-        ['default', createMock<ConnectionScope>({ name: 'default', critical: true, connection })],
+        [
+          'default',
+          createMock<ConnectionScope>({
+            name: 'default',
+            critical: true,
+            connection,
+            strategy: null,
+            messages: null,
+          }),
+        ],
       ]),
       'default',
     );
@@ -241,6 +253,8 @@ describe(JetstreamHealthIndicator, () => {
       createMock<ConnectionScope>({
         name,
         critical,
+        strategy: null,
+        messages: null,
         connection: createMock<ConnectionProvider>({
           unwrap: up
             ? createMock<NatsConnection>({
@@ -335,6 +349,232 @@ describe(JetstreamHealthIndicator, () => {
 
       // When the Terminus entry point runs, Then it rejects
       await expect(sut.isHealthy()).rejects.toThrow(/health check failed/i);
+    });
+  });
+
+  describe('consumer flows', () => {
+    const STALL_MS = 30_000;
+
+    const flow = (overrides: Partial<ConsumerFlowState> = {}): ConsumerFlowState => ({
+      kind: StreamKind.Event,
+      consumer: faker.lorem.word(),
+      active: true,
+      connectedOnce: true,
+      failures: 0,
+      downSince: null,
+      lastError: null,
+      ...overrides,
+    });
+
+    const consumingScope = (
+      name: string,
+      critical: boolean,
+      flows: ConsumerFlowState[],
+      listening = true,
+    ): ConnectionScope =>
+      createMock<ConnectionScope>({
+        name,
+        critical,
+        connection: createMock<ConnectionProvider>({
+          unwrap: createMock<NatsConnection>({
+            isClosed: () => false,
+            rtt: vi.fn().mockResolvedValue(1),
+            getServer: () => `nats://${name}:4222`,
+          }),
+          hasLostServerConnection: vi.fn().mockReturnValue(false),
+        }),
+        strategy: createMock<JetstreamStrategy>({ isAttached: true, isListening: listening }),
+        messages: createMock<MessageProvider>({ getFlowStates: vi.fn().mockReturnValue(flows) }),
+      });
+
+    const registryWith = (...scopes: ConnectionScope[]): ConnectionRegistry =>
+      new ConnectionRegistry(new Map(scopes.map((s) => [s.name, s])), scopes[0]!.name);
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    describe('happy path', () => {
+      it('should report live consumers next to the connection', async () => {
+        // Given
+        const live = flow();
+
+        sut = new JetstreamHealthIndicator(registryWith(consumingScope('default', true, [live])));
+
+        // When
+        const status = await sut.check();
+
+        // Then
+        expect(status.connected).toBe(true);
+        expect(status.consuming).toBe(true);
+        expect(status.consumers).toEqual({
+          event: {
+            healthy: true,
+            state: 'active',
+            consumer: live.consumer,
+            failures: 0,
+            downForMs: null,
+            lastError: null,
+          },
+        });
+      });
+
+      it('should pass consumer details through isHealthy()', async () => {
+        // Given
+        sut = new JetstreamHealthIndicator(registryWith(consumingScope('default', true, [flow()])));
+
+        // When
+        const result = await sut.isHealthy();
+
+        // Then
+        expect(result.jetstream).toEqual(
+          expect.objectContaining({
+            status: 'up',
+            consuming: true,
+            consumers: expect.objectContaining({ event: expect.anything() }),
+          }),
+        );
+      });
+    });
+
+    describe('edge cases', () => {
+      it('should stay healthy while a flow recovers within the threshold', async () => {
+        // Given: a consumer down for a moment
+        const recovering = flow({
+          active: false,
+          failures: 2,
+          downSince: Date.now() - (STALL_MS - 1),
+          lastError: faker.lorem.sentence(),
+        });
+
+        sut = new JetstreamHealthIndicator(
+          registryWith(consumingScope('default', true, [recovering])),
+        );
+
+        // When
+        const status = await sut.check();
+
+        // Then: a brief outage does not flip readiness
+        expect(status.consuming).toBe(true);
+        expect(status.consumers?.event).toEqual(
+          expect.objectContaining({ healthy: true, state: 'recovering', downForMs: STALL_MS - 1 }),
+        );
+      });
+
+      it('should leave the shape unchanged when the connection does not consume', async () => {
+        // Given: a strategy the application never attached
+        const scope = consumingScope('default', true, [flow()]);
+
+        sut = new JetstreamHealthIndicator(
+          registryWith(
+            createMock<ConnectionScope>({
+              ...scope,
+              strategy: createMock<JetstreamStrategy>({ isAttached: false }),
+            }),
+          ),
+        );
+
+        // When
+        const status = await sut.check();
+
+        // Then
+        expect(Object.keys(status).toSorted()).toEqual(['connected', 'latency', 'server']);
+      });
+
+      it('should degrade, not fail, when a non-critical connection stops consuming', async () => {
+        // Given
+        const stuck = flow({ active: false, downSince: Date.now() - STALL_MS });
+
+        sut = new JetstreamHealthIndicator(
+          registryWith(
+            consumingScope('primary', true, [flow()]),
+            consumingScope('analytics', false, [stuck]),
+          ),
+        );
+
+        // When
+        const result = await sut.isHealthy();
+
+        // Then
+        expect(result.jetstream).toEqual(
+          expect.objectContaining({ status: 'up', consuming: true, degraded: true }),
+        );
+      });
+    });
+
+    describe('error paths', () => {
+      it('should fail readiness once a flow has been down past the threshold', async () => {
+        // Given: an externally managed consumer that has been absent for 30s
+        const reason = faker.lorem.sentence();
+        const stuck = flow({
+          active: false,
+          connectedOnce: false,
+          failures: 7,
+          downSince: Date.now() - STALL_MS,
+          lastError: reason,
+        });
+
+        sut = new JetstreamHealthIndicator(registryWith(consumingScope('default', true, [stuck])));
+
+        // When
+        const status = await sut.check();
+
+        // Then: the connection is fine, consumption is not
+        expect(status.connected).toBe(true);
+        expect(status.consuming).toBe(false);
+        expect(status.consumers?.event).toEqual(
+          expect.objectContaining({
+            healthy: false,
+            state: 'starting',
+            failures: 7,
+            downForMs: STALL_MS,
+            lastError: reason,
+          }),
+        );
+        await expect(sut.isHealthy()).rejects.toMatchObject({
+          causes: { jetstream: { status: 'down', consuming: false } },
+        });
+      });
+
+      it('should fail readiness while the consumers have not started', async () => {
+        // Given: a boot chain still provisioning, or retrying in the background
+        sut = new JetstreamHealthIndicator(
+          registryWith(consumingScope('default', true, [], false)),
+        );
+
+        // When
+        const status = await sut.check();
+
+        // Then
+        expect(status.consuming).toBe(false);
+        await expect(sut.isHealthy()).rejects.toThrow(/health check failed/i);
+      });
+
+      it('should fail when a critical connection stops consuming', async () => {
+        // Given
+        const stuck = flow({ active: false, downSince: Date.now() - STALL_MS });
+
+        sut = new JetstreamHealthIndicator(
+          registryWith(
+            consumingScope('primary', true, [stuck]),
+            consumingScope('analytics', false, [flow()]),
+          ),
+        );
+
+        // When
+        const status = await sut.check();
+
+        // Then
+        expect(status.connected).toBe(true);
+        expect(status.consuming).toBe(false);
+        expect(status.degraded).toBe(false);
+        expect(status.connections?.primary?.consuming).toBe(false);
+        await expect(sut.isHealthy()).rejects.toThrow(/health check failed/i);
+      });
     });
   });
 });

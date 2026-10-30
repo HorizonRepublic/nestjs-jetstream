@@ -67,6 +67,8 @@ nats stream edit <stream> --no-discard-per-subject
 
 **Health stays down after a connection that serves handlers closes for good.** A client may dial a fresh connection, but handlers do not move to it, so the health indicator keeps reporting that connection as down until the process restarts.
 
+**Health checks consumption, not only the connection.** A consumer stuck in self-healing, for example a deleted stream or a missing externally managed consumer, used to leave the indicator reporting `up`. `check()` now adds `consuming` and a `consumers` breakdown, and `isHealthy()` reports `down` once a consumer has not been live for 30 seconds or the connection has not finished starting. `connected` keeps its meaning, so a custom endpoint built on `check()` should also test `consuming === false`. See [Consumption](/docs/guides/health-checks#consumption).
+
 **An RPC handler timeout frees its concurrency slot.** A handler still running past `rpc.timeout` no longer blocks new commands, so stuck handlers can exceed `concurrency`.
 
 **`connection_up` follows each named connection.** With several connections, one disconnecting no longer drops every server to `0` until the others reconnect.

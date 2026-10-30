@@ -17,6 +17,8 @@ export type {
   EntityManagement,
   JetstreamConnectionHealth,
   JetstreamConnectionOptions,
+  JetstreamConsumerHealth,
+  JetstreamConsumerState,
   JetstreamFeatureOptions,
   JetstreamHealthIndicatorResult,
   JetstreamHealthStatus,

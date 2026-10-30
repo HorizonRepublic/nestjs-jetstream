@@ -206,7 +206,13 @@ describe('forRootAsync', () => {
     const status = await app.get(JetstreamHealthIndicator).check();
 
     // Then the async path reports the same shape as the sync one
-    expect(Object.keys(status).toSorted()).toEqual(['connected', 'latency', 'server']);
+    expect(Object.keys(status).toSorted()).toEqual([
+      'connected',
+      'consumers',
+      'consuming',
+      'latency',
+      'server',
+    ]);
     expect(status.connected).toBe(true);
   });
 
