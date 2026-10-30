@@ -42,8 +42,9 @@ const config: Config = {
           priority: 0.5,
           filename: 'sitemap.xml',
           // The generated API reference carries `noindex` and the plugin drops
-          // those on its own; /404 has no such tag and has to be named.
-          ignorePatterns: ['/404'],
+          // those on its own; /404 has no such tag and has to be named. Category
+          // indexes are link lists, and development pages are for contributors.
+          ignorePatterns: ['/404', '/docs/category/**', '/docs/development/**'],
         },
       } satisfies Preset.Options,
     ],

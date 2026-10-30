@@ -49,7 +49,7 @@ export default function Root({ children }) {
   "headline": "Contributing",
   "description": "How to contribute to the project.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-10-23"
+  "dateModified": "2026-10-30"
 },
       
     '/docs/development/testing/': {
@@ -57,7 +57,7 @@ export default function Root({ children }) {
   "headline": "Testing",
   "description": "Running unit and integration tests with Vitest and Testcontainers.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-10-23"
+  "dateModified": "2026-10-30"
 },
       
     '/docs/getting-started/installation/': {
