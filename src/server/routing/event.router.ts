@@ -258,7 +258,14 @@ export class EventRouter {
         ? null
         : (msg): (() => void) | null => startAckExtensionTimer(msg, parkExtension);
 
-    const gate = new ConcurrencyGate(maxActive, route, parkTimer, this.logger, kind);
+    const gate = new ConcurrencyGate(
+      maxActive,
+      route,
+      parkTimer,
+      this.logger,
+      kind,
+      isOrdered ? Number.POSITIVE_INFINITY : runLimit,
+    );
 
     const subscription = stream$.subscribe({
       next: (msg: JsMsg): void => {

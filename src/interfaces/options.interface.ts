@@ -151,6 +151,8 @@ export interface StreamConsumerOverrides {
    *
    * A queued message is kept alive with `msg.working()` until a slot frees,
    * whatever `ackExtension` says, so the wait never triggers a redelivery.
+   * When no handler starts or finishes for `ackExtension.maxDuration`
+   * (5 minutes by default), the queue is handed back to the server.
    */
   concurrency?: number;
 

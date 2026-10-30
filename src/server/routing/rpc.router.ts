@@ -134,7 +134,7 @@ export class RpcRouter {
       this.ackWaitMap?.get(StreamKind.Command),
     );
     const parkTimer: ParkTimerFn = (msg) => startAckExtensionTimer(msg, parkExtension);
-    const gate = new ConcurrencyGate(maxActive, handleSafe, parkTimer, logger, 'RPC');
+    const gate = new ConcurrencyGate(maxActive, handleSafe, parkTimer, logger, 'RPC', runLimit);
 
     this.subscription = this.messageProvider.commands$.subscribe({
       next: (msg: JsMsg): void => {

@@ -4,6 +4,7 @@ import type { JsMsg } from '@nats-io/jetstream';
 
 import { createMock } from '@golevelup/ts-vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { Mock } from 'vitest';
 
 import { ConcurrencyGate } from '../concurrency-gate';
 
@@ -22,6 +23,13 @@ const deferred = (): Deferred => {
 
   return { promise, resolve };
 };
+
+/** A gate whose only slot is held by a handler that settles on `release()`. */
+interface HungGate {
+  readonly sut: ConcurrencyGate;
+  readonly stopTimer: Mock;
+  release(): void;
+}
 
 describe(ConcurrencyGate, () => {
   afterEach(vi.resetAllMocks);
@@ -143,6 +151,89 @@ describe(ConcurrencyGate, () => {
       expect(stopTimer).toHaveBeenCalledTimes(2);
 
       expect(route).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('stalled handlers', () => {
+    const STALL_MS = 60_000;
+
+    const hungGate = (): HungGate => {
+      const hung = deferred();
+      const stopTimer = vi.fn();
+      const route = vi.fn().mockReturnValue(hung.promise);
+      const sut = new ConcurrencyGate(
+        1,
+        route,
+        vi.fn().mockReturnValue(stopTimer),
+        createMock<Logger>(),
+        'ev',
+        STALL_MS,
+      );
+
+      return { sut, stopTimer, release: hung.resolve };
+    };
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('should hand the backlog back once no slot frees within the stall limit', async () => {
+      // Given a hung handler holding the only slot and two parked messages
+      vi.useFakeTimers();
+      const { sut, stopTimer } = hungGate();
+      const parked = [makeMsg('b'), makeMsg('c')];
+
+      sut.push(makeMsg('a'));
+      for (const msg of parked) sut.push(msg);
+
+      // When the stall limit passes
+      await vi.advanceTimersByTimeAsync(STALL_MS);
+
+      // Then the parked messages stop being extended and go back to the server
+      expect(stopTimer).toHaveBeenCalledTimes(2);
+      for (const msg of parked) expect(msg.nak).toHaveBeenCalledOnce();
+    });
+
+    it('should hand back messages arriving while stalled, until a slot frees', async () => {
+      // Given a gate already stalled
+      vi.useFakeTimers();
+      const { sut, release } = hungGate();
+
+      sut.push(makeMsg('a'));
+      await vi.advanceTimersByTimeAsync(STALL_MS);
+
+      // When a message arrives during the stall
+      const during = makeMsg('during');
+
+      sut.push(during);
+
+      // Then it goes straight back
+      expect(during.nak).toHaveBeenCalledOnce();
+
+      // And once the slot frees, new messages park again
+      release();
+      await vi.advanceTimersByTimeAsync(0);
+      sut.push(makeMsg('busy'));
+      const after = makeMsg('after');
+
+      sut.push(after);
+      expect(after.nak).not.toHaveBeenCalled();
+    });
+
+    it('should keep the backlog while handlers make progress', async () => {
+      // Given a backlog behind a handler that is not hung yet
+      vi.useFakeTimers();
+      const { sut } = hungGate();
+      const parked = makeMsg('b');
+
+      sut.push(makeMsg('a'));
+      sut.push(parked);
+
+      // When less than the stall limit passes
+      await vi.advanceTimersByTimeAsync(STALL_MS - 1);
+
+      // Then it is still waiting for the slot
+      expect(parked.nak).not.toHaveBeenCalled();
     });
   });
 });

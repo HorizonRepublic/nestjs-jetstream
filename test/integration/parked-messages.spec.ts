@@ -53,6 +53,27 @@ class QueueController {
   }
 }
 
+/** Lets the hung handler return once a test is done with it. */
+const hang = Promise.withResolvers<void>();
+const handled = new Set<number>();
+let hungStarted = false;
+
+/** The first message ever delivered hangs; the rest are recorded. */
+@Controller()
+class HangingFirstController {
+  @EventPattern<string>('job.hang')
+  public async onEvent(@Payload() job: Job): Promise<void> {
+    if (!hungStarted) {
+      hungStarted = true;
+      await hang.promise;
+
+      return;
+    }
+
+    handled.add(job.id);
+  }
+}
+
 describe('Messages parked behind the concurrency limit', () => {
   let nc: NatsConnection;
   let container: StartedTestContainer;
@@ -177,5 +198,45 @@ describe('Messages parked behind the concurrency limit', () => {
     expect(replies).toEqual(ids);
     expect(sut.deliveries).toHaveLength(MESSAGES);
     expect(deadLetters).toHaveLength(0);
+  }, 40_000);
+
+  it('hands the backlog of a pod whose handlers hang to a healthy pod', async () => {
+    // Given a pod whose only slot is held by a hung handler, with a backlog parked behind it
+    const options = {
+      name: serviceName,
+      port,
+      events: {
+        consumer: { ...consumer, max_deliver: 5 },
+        concurrency: 1,
+        ackExtension: { maxDuration: ACK_WAIT_MS * 2 },
+      },
+    };
+    const wedged = await createTestApp(options, [HangingFirstController], [serviceName]);
+
+    app = wedged.app;
+    const client = wedged.module.get<ClientProxy>(getClientToken(serviceName));
+    const backlog = [1, 2, 3];
+
+    await firstValueFrom(client.emit('job.hang', { id: 0 }));
+    await waitForCondition(() => hungStarted, 10_000);
+
+    for (const id of backlog) {
+      await firstValueFrom(client.emit('job.hang', { id }));
+    }
+
+    await sleep(ACK_WAIT_MS);
+
+    // When a healthy pod joins
+    const healthy = await createTestApp(options, [HangingFirstController], [serviceName]);
+
+    try {
+      // Then the wedged pod hands its backlog over once its handler counts as hung
+      await waitForCondition(() => backlog.every((id) => handled.has(id)), 20_000);
+
+      expect([...handled]).toEqual(expect.arrayContaining(backlog));
+    } finally {
+      hang.resolve();
+      await healthy.app.close();
+    }
   }, 40_000);
 });
