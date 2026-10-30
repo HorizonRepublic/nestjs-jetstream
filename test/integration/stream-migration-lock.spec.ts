@@ -28,6 +28,7 @@ import {
 import {
   MIGRATION_BACKUP_SUFFIX,
   MIGRATION_HEARTBEAT_KEY,
+  MIGRATION_PAUSED_CONSUMERS_KEY,
   MIGRATION_PHASE_KEY,
   MigrationPhase,
   StreamMigration,
@@ -393,6 +394,106 @@ describe('Stream migration lock', () => {
 
     expect(info.config.storage).toBe(StorageType.Memory);
     expect(info.state.messages).toBe(10);
+  });
+
+  it('should migrate a work-queue stream that another replica keeps consuming, without duplicates', async () => {
+    // Given: an old replica consumes the stream while the migration runs
+    const total = 60;
+    const desired = await seedStream(total);
+    const durable = 'old-replica';
+
+    await jsm.consumers.add(stream, {
+      durable_name: durable,
+      ack_policy: AckPolicy.Explicit,
+      filter_subject: `${stream}.>`,
+    });
+
+    const processed: string[] = [];
+    const stop = new AbortController();
+    const oldReplica = (async (): Promise<void> => {
+      const consumer = await js.consumers.get(stream, durable);
+
+      while (!stop.signal.aborted) {
+        const msg = await consumer.next({ expires: 1_000 }).catch(() => null);
+
+        if (msg === null) continue;
+
+        await new Promise((r) => setTimeout(r, 30));
+        processed.push(msg.string());
+        await msg.ackAck().catch(() => undefined);
+      }
+    })();
+
+    await waitForCondition(() => processed.length >= 3, 5_000);
+
+    // When
+    const outcome = await new StreamMigration(FAST)
+      .migrate(jsm, stream, desired)
+      .then(() => null)
+      .catch((err: unknown) => err);
+
+    stop.abort();
+    await oldReplica;
+
+    // Then: every message is either processed or restored, never both
+    expect(outcome).toBeNull();
+
+    const info = await jsm.streams.info(stream);
+    const restored: string[] = [];
+
+    for (let seq = info.state.first_seq; seq <= info.state.last_seq; seq++) {
+      const stored = await jsm.streams.getMessage(stream, { seq });
+
+      if (stored !== null) restored.push(stored.string());
+    }
+
+    expect(info.config.storage).toBe(StorageType.Memory);
+    expect(restored.filter((m) => processed.includes(m))).toEqual([]);
+    expect(new Set([...processed, ...restored]).size).toBe(total);
+  }, 30_000);
+
+  it('should resume the consumers it paused when the migration is refused', async () => {
+    // Given
+    const desired = await seedStream(20);
+
+    await jsm.consumers.add(stream, {
+      durable_name: 'worker',
+      ack_policy: AckPolicy.Explicit,
+      filter_subject: `${stream}.>`,
+    });
+
+    // When
+    await new StreamMigration(FAST)
+      .migrate(jsm, stream, { ...desired, max_msgs: 10 })
+      .catch(() => undefined);
+
+    // Then
+    expect((await jsm.consumers.info(stream, 'worker')).paused).toBeFalsy();
+  });
+
+  it('should resume consumers an abandoned migration paused', async () => {
+    // Given: the migrating instance paused a consumer and died before deleting the original
+    await seedStream(5);
+    await jsm.consumers.add(stream, {
+      durable_name: 'worker',
+      ack_policy: AckPolicy.Explicit,
+      filter_subject: `${stream}.>`,
+    });
+    await jsm.consumers.pause(stream, 'worker', new Date(Date.now() + 3_600_000));
+    await createBackup(0, {
+      ...live(MigrationPhase.Backup),
+      [MIGRATION_PAUSED_CONSUMERS_KEY]: JSON.stringify(['worker']),
+    });
+
+    // When
+    await new StreamMigration(FAST).settle(jsm, stream, {
+      name: stream,
+      subjects: [`${stream}.>`],
+    });
+
+    // Then
+    expect((await jsm.consumers.info(stream, 'worker')).paused).toBeFalsy();
+    expect((await jsm.streams.info(stream)).state.messages).toBe(5);
   });
 
   it('should refuse to migrate a stream that allows message schedules and holds messages', async () => {

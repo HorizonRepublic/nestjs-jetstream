@@ -19,6 +19,7 @@ export {
 export {
   MIGRATION_BACKUP_SUFFIX,
   MIGRATION_HEARTBEAT_KEY,
+  MIGRATION_PAUSED_CONSUMERS_KEY,
   MIGRATION_PHASE_KEY,
   StreamMigration,
 } from './stream-migration';

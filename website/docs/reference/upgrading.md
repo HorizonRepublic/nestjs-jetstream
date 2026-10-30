@@ -83,6 +83,8 @@ nats stream edit <stream> --no-discard-per-subject
 
 **A recreated broadcast consumer no longer replays history.** When self-healing recreates a broadcast consumer that disappeared, it resumes after the last ack floor it read, refreshed every 10 seconds, instead of receiving everything the broadcast stream retains. A recreated consumer of any kind also brings its `ack_wait` and `max_deliver` into ack extension and dead-letter detection. See [Broadcast Events](/docs/patterns/broadcast#a-recreated-consumer-resumes-where-it-stopped).
 
+**A destructive migration pauses the stream's consumers.** Before it copies a work-queue stream, the migration pauses that stream's durable consumers on NATS 2.11 and newer, waits up to 30 seconds for the messages they already took, and resumes them if it rolls back. Replicas still consuming during the copy no longer stall it into a `sourcing-timeout` that closes the stream to publishes on every retry, nor get messages they processed delivered again after the restore. See [Stream Migration](/docs/guides/stream-migration#consumers-are-paused-during-the-copy).
+
 **A migration checks per-subject limits.** A lowered `max_msgs_per_subject` that cannot hold the messages on some subject now stops the migration with `insufficient-capacity` before anything is deleted, instead of evicting the oldest messages of that subject or stalling the restore.
 
 **Streams that allow message schedules are not migrated while they hold messages.** NATS refuses to source into such a stream, so the restore could never finish and every boot failed. The boot now throws `JetstreamMigrationError` with reason `message-schedules` before the stream is quiesced, and a restore left stuck this way by 3.0 is finished on the next boot.

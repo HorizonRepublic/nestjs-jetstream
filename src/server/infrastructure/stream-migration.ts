@@ -12,6 +12,7 @@ import { nuid } from '@nats-io/nuid';
 import { headers as natsHeaders, type MsgHdrs } from '@nats-io/transport-node';
 
 import { JetstreamMigrationError, MigrationErrorReason } from '../../errors';
+import { MigrationConsumerPause } from './migration-consumer-pause';
 import { isNatsError, NatsErrorCode } from './nats-error-codes';
 import { compareStreamConfig } from './stream-config-diff';
 import { MigrationPhase, type MigrationTiming } from './stream-migration.types';
@@ -21,6 +22,9 @@ export const MIGRATION_BACKUP_SUFFIX = '__migration_backup';
 export const MIGRATION_HEARTBEAT_KEY = 'nestjs-jetstream-migration-heartbeat';
 
 export const MIGRATION_PHASE_KEY = 'nestjs-jetstream-migration-phase';
+
+/** Durable consumers of the original the migration paused, as a JSON array of names. */
+export const MIGRATION_PAUSED_CONSUMERS_KEY = 'nestjs-jetstream-migration-paused-consumers';
 
 const MIGRATION_OWNER_KEY = 'nestjs-jetstream-migration-owner';
 const MIGRATION_STARTED_AT_KEY = 'nestjs-jetstream-migration-started-at';
@@ -84,6 +88,20 @@ const withoutSource = (sources: StreamSource[] | undefined, name: string): Strea
 /** NATS refuses to source into a stream that allows message schedules. */
 const allowsSchedules = (config: Partial<StreamConfig>): boolean =>
   config.allow_msg_schedules === true;
+
+const pausedConsumersOf = (metadata: StreamMetadata | undefined): string[] => {
+  const raw = metadata?.[MIGRATION_PAUSED_CONSUMERS_KEY];
+
+  if (raw === undefined) return [];
+
+  try {
+    const names: unknown = JSON.parse(raw);
+
+    return Array.isArray(names) ? names.filter((n): n is string => typeof n === 'string') : [];
+  } catch {
+    return [];
+  }
+};
 
 /** Copy a stored message's headers, minus those a publish may not carry. */
 const republishHeaders = (stored: MsgHdrs | undefined): MsgHdrs => {
@@ -170,6 +188,7 @@ class MigrationLease {
         ...patch,
         metadata: {
           ...config.metadata,
+          ...patch.metadata,
           ...(phase === undefined ? {} : { [MIGRATION_PHASE_KEY]: phase }),
           [MIGRATION_OWNER_KEY]: this.owner,
           [MIGRATION_HEARTBEAT_KEY]: String(this.beats),
@@ -403,10 +422,17 @@ export class StreamMigration {
       sources: withoutSource(currentInfo.config.sources, backupName),
     };
     let originalDeleted = false;
+    // Consumers acking out of a work queue would race the copy, and a message
+    // copied before it was processed would be delivered again after the restore.
+    const pause = sourcingMoves(currentInfo.config)
+      ? new MigrationConsumerPause(jsm, streamName, this.timing, this.logger)
+      : null;
 
     this.logger.log(`Stream ${streamName}: destructive migration started`);
 
     try {
+      if (pause !== null) await this.pauseConsumers(pause, lease);
+
       // Phase 1: Quiesce; an acked publish after this point cannot be lost.
       this.logger.log(`  Phase 1/4: Quiescing ${streamName} (publishes rejected during migration)`);
       await jsm.streams.update(streamName, { ...openConfig, subjects: [] });
@@ -421,7 +447,7 @@ export class StreamMigration {
         // Phase 2: Backup via sourcing
         this.logger.log(`  Phase 2/4: Backing up ${drainedCount} messages -> ${backupName}`);
         await lease.update({ sources: [{ name: streamName }] });
-        await this.waitForSourceDrained(jsm, backupName, streamName, drainedCount, true, lease);
+        await this.waitForBackupDrained(jsm, streamName, lease);
       }
 
       // Phase 3: Delete + recreate. The backup's source names the stream about
@@ -430,6 +456,7 @@ export class StreamMigration {
       await lease.assertHeld();
       await jsm.streams.delete(streamName);
       originalDeleted = true;
+      pause?.stop();
       await lease.update({ sources: [] }, MigrationPhase.Restore);
       await jsm.streams.add(newConfig as StreamConfig);
 
@@ -451,10 +478,30 @@ export class StreamMigration {
         );
       } else {
         await this.rollbackBeforeDelete(jsm, streamName, openConfig, lease);
+        await pause?.resume();
       }
 
       throw err;
+    } finally {
+      pause?.stop();
     }
+  }
+
+  /** Record which consumers get paused, pause them, and let their in-flight messages settle. */
+  private async pauseConsumers(
+    pause: MigrationConsumerPause,
+    lease: MigrationLease,
+  ): Promise<void> {
+    const names = await pause.listDurables();
+
+    if (names.length === 0) return;
+
+    // Recorded first, so an instance that takes the migration over resumes them.
+    await lease.update({ metadata: { [MIGRATION_PAUSED_CONSUMERS_KEY]: JSON.stringify(names) } });
+    await pause.pause(names, () => lease.lossReason === undefined);
+    await pause.waitIdle(() => {
+      lease.throwIfLost();
+    });
   }
 
   /** Take the lock by creating the backup; wait for any other holder first. */
@@ -550,6 +597,12 @@ export class StreamMigration {
         sources: withoutSource(streamInfo.config.sources, backupName),
       });
       await this.returnBackup(jsm, streamName, streamInfo.config, lease);
+      await MigrationConsumerPause.resumeAll(
+        jsm,
+        streamName,
+        pausedConsumersOf(backupInfo.config.metadata),
+        this.logger,
+      );
 
       return;
     }
@@ -576,14 +629,7 @@ export class StreamMigration {
     if (hasBackupSource) {
       // Died mid-restore: the source keeps its position, let it finish.
       this.logger.warn(`Stream ${streamName}: finishing interrupted restore from ${backupName}`);
-      await this.waitForSourceDrained(
-        jsm,
-        streamName,
-        backupName,
-        backupInfo.state.messages,
-        false,
-        lease,
-      );
+      await this.waitForRestoreDrained(jsm, streamName, backupInfo.state.messages, lease);
       await this.dropBackup(jsm, backupName, lease);
       await jsm.streams.update(streamName, {
         ...streamInfo.config,
@@ -635,7 +681,7 @@ export class StreamMigration {
     }
 
     await lease.update({ sources: [{ name: streamName }] });
-    await this.waitForSourceDrained(jsm, backupName, streamName, 0, true, lease);
+    await this.waitForBackupDrained(jsm, streamName, lease);
     await lease.assertHeld();
     await lease.update({ sources: [] }, MigrationPhase.Restore);
     await jsm.streams.purge(streamName);
@@ -673,14 +719,7 @@ export class StreamMigration {
       ...streamConfig,
       sources: [...otherSources, { name: backupName }],
     });
-    await this.waitForSourceDrained(
-      jsm,
-      streamName,
-      backupName,
-      backupInfo.state.messages,
-      false,
-      lease,
-    );
+    await this.waitForRestoreDrained(jsm, streamName, backupInfo.state.messages, lease);
 
     // Backup deleted before the source detaches: the order recovery relies on.
     await this.dropBackup(jsm, backupName, lease);
@@ -827,6 +866,40 @@ export class StreamMigration {
   }
 
   /**
+   * Into the backup, which must hold at least what the original still has.
+   * A consumer acking out of a work queue shrinks that count instead of
+   * stalling the drain on a snapshot taken before it did.
+   */
+  private waitForBackupDrained(
+    jsm: JetStreamManager,
+    streamName: string,
+    lease: MigrationLease,
+  ): Promise<void> {
+    const floor = async (): Promise<number> => (await jsm.streams.info(streamName)).state.messages;
+
+    return this.waitForSourceDrained(jsm, backupNameOf(streamName), streamName, floor, true, lease);
+  }
+
+  /** Into the recreated stream: nothing consumes it yet, so it ends up with all the backup held. */
+  private waitForRestoreDrained(
+    jsm: JetStreamManager,
+    streamName: string,
+    backupMessages: number,
+    lease: MigrationLease,
+  ): Promise<void> {
+    const floor = async (): Promise<number> => backupMessages;
+
+    return this.waitForSourceDrained(
+      jsm,
+      streamName,
+      backupNameOf(streamName),
+      floor,
+      false,
+      lease,
+    );
+  }
+
+  /**
    * Lag-based drain check: live publishes cannot fake completion. A fresh
    * source reports lag 0 / active -1 before its first sync (NATS 2.12.6), so
    * the active guard covers that window. It fails only once sourcing stops
@@ -837,7 +910,7 @@ export class StreamMigration {
     jsm: JetStreamManager,
     streamName: string,
     sourceName: string,
-    minimumMessages: number,
+    minimumMessages: () => Promise<number>,
     countsMessages: boolean,
     lease: MigrationLease,
   ): Promise<void> {
@@ -855,7 +928,7 @@ export class StreamMigration {
         source !== undefined &&
         source.active >= 0 &&
         source.lag === 0 &&
-        info.state.messages >= minimumMessages
+        info.state.messages >= (await minimumMessages())
       ) {
         return;
       }

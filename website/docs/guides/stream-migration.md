@@ -51,6 +51,9 @@ The transport recreates the stream blue-green via [NATS stream sourcing](https:/
 ```text
 Lock       Create the backup stream; only one pod can, the others wait
 
+Pause      Work-queue streams only: pause the stream's durable consumers
+           and let the messages they already took settle
+
 Phase 1/4  Quiesce: remove the original's subjects
            (new publishes are rejected loudly instead of being acked
             into a stream that is about to be deleted; aborts here if
@@ -70,6 +73,14 @@ The stream keeps its name. Each pod's startup or self-healing recreates the cons
 Sourcing out of a work-queue stream, such as the event or command stream, acknowledges what it copies. Messages a consumer's filter covers stay in the original as well; any others, for example on a subject whose handler was removed, move into the backup. From Phase 2 on, the backup is therefore the copy that counts, and every failure path below gives it back rather than throwing it away.
 
 A producer either gets an ack (the message survives the migration) or a rejection it can retry, never an ack for a message that later disappears.
+
+### Consumers are paused during the copy
+
+Pods that still run the old release keep consuming a work-queue stream while it is copied. A message they take out after the copy began would leave the backup short, and one they process after it was copied would be delivered again after the restore. So before Phase 1 the migrating pod pauses every durable consumer of the stream (NATS 2.11+ consumer pause), then waits up to 30 seconds for the messages those consumers already took to be acknowledged. Messages still unacknowledged after that are migrated anyway, with a warning that they may be processed twice.
+
+Each pause runs out 30 seconds after its last renewal, and the migrating pod renews it with its heartbeat, so a pod that dies never leaves a consumer paused for long. A rollback resumes the consumers at once, and so does a pod that takes over a migration that died before deleting the original. A consumer someone else paused is left alone. Deleting the stream in Phase 3 removes the paused consumers anyway.
+
+On NATS 2.10, which cannot pause consumers, the migration logs a warning and copies while they consume. It still completes, since it waits for what the original holds now rather than what it held when the copy began, but messages processed during the copy may be processed again.
 
 ### Backup stream as a distributed lock
 
