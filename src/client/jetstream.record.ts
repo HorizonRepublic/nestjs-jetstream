@@ -11,6 +11,34 @@ import { NATS_CONTROL_HEADER_PREFIX, RESERVED_HEADERS } from '../jetstream.const
 const RECORD_BRAND = Symbol.for('@horizon-republic/nestjs-jetstream/JetstreamRecord');
 
 /**
+ * Reject a custom header the transport or the NATS server reserves. NATS
+ * treats header names case-insensitively, so the check runs on the lowercase
+ * form; `RESERVED_HEADERS` is all-lowercase.
+ *
+ * @throws JetstreamRecordError with reason `reserved-nats-header` or `reserved-transport-header`.
+ */
+export const assertHeaderAllowed = (key: string): void => {
+  const normalized = key.toLowerCase();
+
+  if (normalized.startsWith(NATS_CONTROL_HEADER_PREFIX)) {
+    throw new JetstreamRecordError(
+      RecordErrorReason.ReservedNatsHeader,
+      `Header "${key}" is reserved for the NATS server and cannot be set manually. ` +
+        'Use setMessageId() for deduplication, ttl() for per-message expiry, ' +
+        'and scheduleAt() for delayed delivery.',
+    );
+  }
+
+  if (RESERVED_HEADERS.has(normalized)) {
+    throw new JetstreamRecordError(
+      RecordErrorReason.ReservedTransportHeader,
+      `Header "${key}" is reserved by the JetStream transport and cannot be set manually. ` +
+        `Reserved headers: ${[...RESERVED_HEADERS].join(', ')}`,
+    );
+  }
+};
+
+/**
  * Immutable message record for JetStream transport.
  *
  * Compatible with NestJS record builder pattern (like RmqRecord, NatsRecord).
@@ -30,7 +58,10 @@ export class JetstreamRecord<TData = unknown> {
   public constructor(
     /** Message payload. */
     public readonly data: TData,
-    /** Custom headers set via {@link JetstreamRecordBuilder.setHeader}. */
+    /**
+     * Custom headers set via {@link JetstreamRecordBuilder.setHeader}. A reserved
+     * one passed here directly makes the publish reject with `JetstreamRecordError`.
+     */
     public readonly headers: ReadonlyMap<string, string>,
     /** Per-request RPC timeout override in ms. */
     public readonly timeout?: number | undefined,
@@ -88,7 +119,7 @@ export class JetstreamRecordBuilder<TData = unknown> {
    * @throws Error if the header name is reserved by the transport.
    */
   public setHeader(key: string, value: string): this {
-    this.validateHeaderKey(key);
+    assertHeaderAllowed(key);
     this.headers.set(key, value);
     return this;
   }
@@ -226,33 +257,6 @@ export class JetstreamRecordBuilder<TData = unknown> {
       schedule,
       this.ttlDuration,
     );
-  }
-
-  /**
-   * Validate that a header key is not reserved. NATS treats header names
-   * case-insensitively, so the check is against the lowercase form to keep
-   * `'X-Correlation-ID'`, `'x-correlation-id'`, and any other casing in
-   * lockstep. `RESERVED_HEADERS` is defined as an all-lowercase set.
-   */
-  private validateHeaderKey(key: string): void {
-    const normalized = key.toLowerCase();
-
-    if (normalized.startsWith(NATS_CONTROL_HEADER_PREFIX)) {
-      throw new JetstreamRecordError(
-        RecordErrorReason.ReservedNatsHeader,
-        `Header "${key}" is reserved for the NATS server and cannot be set manually. ` +
-          'Use setMessageId() for deduplication, ttl() for per-message expiry, ' +
-          'and scheduleAt() for delayed delivery.',
-      );
-    }
-
-    if (RESERVED_HEADERS.has(normalized)) {
-      throw new JetstreamRecordError(
-        RecordErrorReason.ReservedTransportHeader,
-        `Header "${key}" is reserved by the JetStream transport and cannot be set manually. ` +
-          `Reserved headers: ${[...RESERVED_HEADERS].join(', ')}`,
-      );
-    }
   }
 }
 

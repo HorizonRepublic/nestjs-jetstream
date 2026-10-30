@@ -93,14 +93,14 @@ An error your handler throws reaches `onDeadLetter` as is.
 
 ## `JetstreamRecordError`
 
-| Reason                             | When                                                              |
-| ---------------------------------- | ----------------------------------------------------------------- |
-| `invalid-schedule-date`            | `scheduleAt()` got an invalid `Date`                              |
-| `schedule-in-past`                 | `scheduleAt()` got a date that is not in the future               |
-| `invalid-ttl`                      | `ttl()` got a value that is not a positive finite number          |
-| `reserved-nats-header`             | `setHeader()` targeted a `Nats-*` header the server interprets    |
-| `reserved-transport-header`        | `setHeader()` targeted a header the transport owns                |
-| `schedule-unsupported-for-ordered` | A record with `scheduleAt()` was emitted to an `ordered:` pattern |
+| Reason                             | When                                                                                                          |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `invalid-schedule-date`            | `scheduleAt()` got an invalid `Date`                                                                          |
+| `schedule-in-past`                 | `scheduleAt()` got a date that is not in the future                                                           |
+| `invalid-ttl`                      | `ttl()` got a value that is not a positive finite number                                                      |
+| `reserved-nats-header`             | `setHeader()` targeted a `Nats-*` header the server interprets, or a record passed one to `emit()` / `send()` |
+| `reserved-transport-header`        | `setHeader()` targeted a header the transport owns, or a record passed one to `emit()` / `send()`             |
+| `schedule-unsupported-for-ordered` | A record with `scheduleAt()` was emitted to an `ordered:` pattern                                             |
 
 ## `JetstreamConfigError`
 

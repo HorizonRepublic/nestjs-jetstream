@@ -75,6 +75,8 @@ nats stream edit <stream> --no-discard-per-subject
 
 **Calls made after shutdown fail instead of reconnecting.** An `emit()` or `send()` from a handler still running at the end of shutdown, or from any code after it, used to dial a fresh connection that nothing closed, which could keep the process alive. It now fails with `JetstreamConnectionError` and reason `shutting-down`.
 
+**Records built without the builder follow the header rules.** `new JetstreamRecord(data, headers)` skipped the check `setHeader()` makes, so a reserved transport header could redirect an RPC reply and a `Nats-*` header reached the server, where a stray `Nats-Rollup` purges the subject. `emit()` and `send()` now fail with `JetstreamRecordError` for such a record and send nothing. Move message IDs, TTLs and schedules to the record's own fields or the builder methods.
+
 **DLQ filters reject invalid bounds.** A `fromSeq` or `toSeq` that is not a non-negative integer, or an invalid date, now throws `JetstreamConfigError` with reason `dlq-filter-invalid` instead of matching every dead letter.
 
 ### Additive changes

@@ -329,7 +329,7 @@ export default function Root({ children }) {
   "headline": "Header Contract: NATS Message Headers Used by the Transport",
   "description": "Stable contract for NATS message headers the transport reads and writes.",
   "datePublished": "2026-04-24",
-  "dateModified": "2026-10-29"
+  "dateModified": "2026-10-30"
 },
       
     '/docs/reference/module-configuration/': {

@@ -30,7 +30,7 @@ import { ScheduleErrorReason } from '../../schedule';
 import { NameResolver } from '../../server/infrastructure/name-resolver';
 import { NatsErrorCode } from '../../server/infrastructure/nats-error-codes';
 import { JetstreamClient } from '../jetstream.client';
-import { JetstreamRecordBuilder } from '../jetstream.record';
+import { JetstreamRecord, JetstreamRecordBuilder } from '../jetstream.record';
 import { RpcReplyInbox } from '../rpc-reply-inbox';
 
 describe(JetstreamClient, () => {
@@ -270,6 +270,34 @@ describe(JetstreamClient, () => {
         const publishedHeaders: MsgHdrs = mockJs.publish.mock.calls[0]![2]!.headers!;
 
         expect(publishedHeaders.get('x-trace-id')).toBe(traceId);
+      });
+
+      it('should reject a constructed record that carries a transport header', async () => {
+        // Given: a record built without the builder, overriding the correlation id
+        const record = new JetstreamRecord(
+          { key: faker.lorem.word() },
+          new Map([['X-Correlation-Id', faker.string.uuid()]]),
+        );
+
+        // When/Then: nothing reaches the wire
+        await expect(firstValueFrom(sut.emit('user.updated', record))).rejects.toThrow(
+          expect.objectContaining({
+            name: 'JetstreamRecordError',
+            reason: RecordErrorReason.ReservedTransportHeader,
+          }),
+        );
+        expect(mockJs.publish).not.toHaveBeenCalled();
+      });
+
+      it('should reject a constructed record that carries a NATS control header', async () => {
+        // Given: a stray Nats-Rollup would purge the subject on the server
+        const record = new JetstreamRecord({}, new Map([['Nats-Rollup', 'sub']]));
+
+        // When/Then
+        await expect(firstValueFrom(sut.emit('user.updated', record))).rejects.toThrow(
+          expect.objectContaining({ reason: RecordErrorReason.ReservedNatsHeader }),
+        );
+        expect(mockJs.publish).not.toHaveBeenCalled();
       });
     });
 
@@ -784,6 +812,22 @@ describe(JetstreamClient, () => {
 
         // Then: result decoded
         expect(result).toEqual({ ok: true });
+      });
+    });
+
+    describe('when a constructed record carries a reserved header', () => {
+      it('should fail the call without sending it', async () => {
+        // Given: a record that would redirect the reply
+        const record = new JetstreamRecord({}, new Map([['x-reply-to', faker.lorem.word()]]));
+
+        // When/Then
+        await expect(firstValueFrom(sut.send('get.user', record))).rejects.toThrow(
+          expect.objectContaining({
+            name: 'JetstreamRecordError',
+            reason: RecordErrorReason.ReservedTransportHeader,
+          }),
+        );
+        expect(mockNc.request).not.toHaveBeenCalled();
       });
     });
 

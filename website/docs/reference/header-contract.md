@@ -8,7 +8,7 @@ schema:
   headline: "Header Contract: NATS Message Headers Used by the Transport"
   description: "Stable contract for NATS message headers the transport reads and writes."
   datePublished: "2026-04-24"
-  dateModified: "2026-10-29"
+  dateModified: "2026-10-30"
 ---
 
 # Header Contract
@@ -48,7 +48,7 @@ A schedule holder is the message on the `_cron.` subject that defines a [recurri
 
 ## Reserved (you can't set these)
 
-`JetstreamRecordBuilder.setHeader()` throws on these, because the library populates them:
+`JetstreamRecordBuilder.setHeader()` throws on these, because the library populates them. A record created with `new JetstreamRecord(data, headers)` is checked when it is published: `emit()` and `send()` fail with the same `JetstreamRecordError` and nothing is sent.
 
 - `x-correlation-id` · `x-reply-to` · `x-error` · `x-schedule-hash` · `x-schedule-pattern` · `x-redrive-count`
 
@@ -58,7 +58,7 @@ Give your own headers distinct names (`x-tenant-id`, `x-request-id`).
 
 ## NATS server-interpreted (`Nats-*` prefix)
 
-`setHeader()` rejects **every** header starting with `nats-`, whatever the casing. These drive server-side behaviour: a stray `Nats-Rollup` purges every pending message on the subject. Reach them through the builder methods instead:
+`setHeader()` rejects **every** header starting with `nats-`, whatever the casing, and so does publishing a record that carries one. These drive server-side behaviour: a stray `Nats-Rollup` purges every pending message on the subject. Reach them through the builder methods instead:
 
 | Header          | Builder method     | Guide                                           |
 | --------------- | ------------------ | ----------------------------------------------- |
