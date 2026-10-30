@@ -7,7 +7,7 @@ import rehypeJetstream from './src/plugins/rehype-jetstream.mjs';
 const config: Config = {
   title: '@horizon-republic/nestjs-jetstream',
   tagline: 'Durable events, broadcast, ordered delivery and RPC for NestJS, backed by NATS JetStream',
-  favicon: 'img/favicon.svg',
+  favicon: 'favicon.ico',
   url: 'https://nestjs-jetstream.horizon-republic.dev',
   baseUrl: '/',
   organizationName: 'HorizonRepublic',
@@ -98,6 +98,7 @@ const config: Config = {
         href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap',
       },
     },
+    { tagName: 'link', attributes: { rel: 'icon', type: 'image/svg+xml', sizes: 'any', href: '/img/favicon.svg' } },
     { tagName: 'link', attributes: { rel: 'icon', type: 'image/png', sizes: '48x48', href: '/img/favicon-48.png' } },
     { tagName: 'link', attributes: { rel: 'icon', type: 'image/png', sizes: '96x96', href: '/img/favicon-96.png' } },
     { tagName: 'link', attributes: { rel: 'icon', type: 'image/png', sizes: '192x192', href: '/img/favicon-192.png' } },
