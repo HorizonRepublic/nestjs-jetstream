@@ -8,6 +8,7 @@ import {
   _ackExtensionPoolForTest,
   DEFAULT_MAX_ACK_EXTENSION_MS,
   resolveAckExtension,
+  resolveParkExtension,
   startAckExtensionTimer,
 } from '../ack-extension';
 import type { AckExtension } from '../ack-extension.types';
@@ -127,6 +128,31 @@ describe('resolveAckExtension', () => {
           message: expect.stringMatching(/ackExtension\.maxDuration/),
         }),
       );
+    });
+  });
+});
+
+describe('resolveParkExtension', () => {
+  describe('happy path', () => {
+    it('should reuse the handler extension interval without its limit', () => {
+      // Given a handler extension with a finite limit
+      const handler = extension(faker.number.int({ min: 500, max: 5_000 }), 1_000);
+
+      // When
+      const sut = resolveParkExtension(handler, undefined);
+
+      // Then
+      expect(sut).toEqual({ intervalMs: handler.intervalMs, maxDurationMs: Infinity });
+    });
+  });
+
+  describe('edge cases', () => {
+    it('should extend at half of ack_wait when the handler extension is off', () => {
+      // Given / When
+      const sut = resolveParkExtension(null, 10_000_000_000);
+
+      // Then
+      expect(sut).toEqual({ intervalMs: 5_000, maxDurationMs: Infinity });
     });
   });
 });

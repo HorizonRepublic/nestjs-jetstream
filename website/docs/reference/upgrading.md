@@ -83,6 +83,8 @@ nats stream edit <stream> --no-discard-per-subject
 
 **DLQ filters reject invalid bounds.** A `fromSeq` or `toSeq` that is not a non-negative integer, or an invalid date, now throws `JetstreamConfigError` with reason `dlq-filter-invalid` instead of matching every dead letter.
 
+**Messages queued behind `concurrency` are no longer redelivered.** A message waiting for a free slot is now kept alive with `msg.working()`, whether or not `ackExtension` is on, and its wait no longer counts against `ackExtension.maxDuration`. Before, a backlog that took longer than `ack_wait` to drain was redelivered and handled twice, and could reach `max_deliver` and the DLQ without a handler ever failing. See [Concurrency control](/docs/guides/performance#concurrency-control).
+
 **Schedule handler errors count as `handler`.** `jetstream_errors_total` used to file an error thrown by a schedule handler under `context="other"`.
 
 ### Additive changes

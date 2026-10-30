@@ -1,4 +1,4 @@
-export { resolveAckExtension, startAckExtensionTimer } from './ack-extension';
+export { resolveAckExtension, resolveParkExtension, startAckExtensionTimer } from './ack-extension';
 
 export type { AckExtension } from './ack-extension.types';
 

@@ -77,6 +77,20 @@ export const resolveAckExtension = (
   };
 };
 
+/**
+ * Keep-alive for a message parked behind the concurrency limit. The server's
+ * ack_wait clock runs from delivery, so a parked message is extended whether or
+ * not `ackExtension` is on, and without its limit: that limit bounds handler
+ * run time, while a parked message only waits for a slot.
+ */
+export const resolveParkExtension = (
+  handlerExtension: AckExtension | null,
+  ackWaitNanos: number | undefined,
+): AckExtension => ({
+  intervalMs: handlerExtension?.intervalMs ?? intervalFromAckWait(ackWaitNanos),
+  maxDurationMs: Number.POSITIVE_INFINITY,
+});
+
 interface AckEntry {
   msg: AckExtensionTarget;
   interval: number;

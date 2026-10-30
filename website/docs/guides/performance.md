@@ -38,7 +38,7 @@ The primary knob is the consumer's `max_ack_pending`: the cap on messages delive
 ### How these interact
 
 - **`max_ack_pending`** is the ceiling on unacked messages.
-- **`concurrency`** caps parallel handlers. Below `max_ack_pending`, the excess waits in the internal buffer.
+- **`concurrency`** caps parallel handlers. Below `max_ack_pending`, the excess waits in the internal buffer, kept alive until a slot frees.
 - **`consume.max_messages`** and **`consume.threshold_messages`** size the prefetch batch the client requests and decide when it asks for more.
 
 For most workloads, `max_ack_pending` and `concurrency` are enough.
@@ -70,6 +70,10 @@ events: {
 ```
 
 Set `concurrency` at or below `max_ack_pending`; above it, the server-side cap is the bottleneck anyway. The cap protects downstream resources (databases, external APIs) while the prefetch buffer stays full.
+
+A queued message is kept alive with `msg.working()` until a slot frees, whether or not `ackExtension` is on, so a backlog that takes longer than `ack_wait` to drain is not redelivered. The time in the queue does not count against `ackExtension.maxDuration`, which bounds the handler alone.
+
+The client refills its prefetch as messages arrive, not as handlers finish, so `consume.max_messages` does not bound the queue; `max_ack_pending` does. It is shared by every replica of the service, so a busy replica can hold messages an idle one could take. With several replicas, keep `max_ack_pending` near `concurrency` times the replica count.
 
 In [JetStream RPC](/docs/patterns/rpc) mode, `rpc.concurrency` counts commands awaiting a reply. A command whose handler outlives `rpc.timeout` is terminated and gives its slot back at the deadline, so hung handlers cannot stall the command consumer. The handler itself keeps running, so while handlers are stuck past the timeout, more than `concurrency` of them run at once. Bound the work inside the handler if that matters downstream.
 

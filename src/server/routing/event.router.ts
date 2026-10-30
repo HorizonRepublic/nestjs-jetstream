@@ -24,7 +24,12 @@ import {
   type ServerEndpoint,
 } from '../../otel';
 import type { ScheduleStore } from '../../schedule/schedule-store';
-import { resolveAckExtension, resolveRetryDelays, startAckExtensionTimer } from '../../utils';
+import {
+  resolveAckExtension,
+  resolveParkExtension,
+  resolveRetryDelays,
+  startAckExtensionTimer,
+} from '../../utils';
 import { MessageProvider } from '../infrastructure';
 import { NameResolver } from '../infrastructure/name-resolver';
 import { ConcurrencyGate } from './concurrency-gate';
@@ -230,10 +235,14 @@ export class EventRouter {
     };
 
     const maxActive = isOrdered ? 1 : (this.getConcurrency(kind) ?? Number.POSITIVE_INFINITY);
+    // Ordered consumers acknowledge nothing, so a parked message has no deadline.
+    const parkExtension = isOrdered
+      ? null
+      : resolveParkExtension(ackExtension, this.ackWaitMap?.get(kind));
     const parkTimer: ParkTimerFn | null =
-      ackExtension === null
+      parkExtension === null
         ? null
-        : (msg): (() => void) | null => startAckExtensionTimer(msg, ackExtension);
+        : (msg): (() => void) | null => startAckExtensionTimer(msg, parkExtension);
 
     const gate = new ConcurrencyGate(maxActive, route, parkTimer, this.logger, kind);
 

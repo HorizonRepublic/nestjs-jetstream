@@ -16,7 +16,12 @@ import {
   type ResolvedOtelOptions,
   type ServerEndpoint,
 } from '../../otel';
-import { resolveAckExtension, startAckExtensionTimer, type AckExtension } from '../../utils';
+import {
+  resolveAckExtension,
+  resolveParkExtension,
+  startAckExtensionTimer,
+  type AckExtension,
+} from '../../utils';
 import { MessageProvider } from '../infrastructure';
 import { ConcurrencyGate } from './concurrency-gate';
 import { InFlightTracker } from './in-flight-tracker';
@@ -117,10 +122,11 @@ export class RpcRouter {
       return pending;
     };
 
-    const parkTimer: ParkTimerFn | null =
-      ackExtension === null
-        ? null
-        : (msg): (() => void) | null => startAckExtensionTimer(msg, ackExtension);
+    const parkExtension = resolveParkExtension(
+      ackExtension,
+      this.ackWaitMap?.get(StreamKind.Command),
+    );
+    const parkTimer: ParkTimerFn = (msg) => startAckExtensionTimer(msg, parkExtension);
     const gate = new ConcurrencyGate(maxActive, handleSafe, parkTimer, logger, 'RPC');
 
     this.subscription = this.messageProvider.commands$.subscribe({

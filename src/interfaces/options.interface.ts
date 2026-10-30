@@ -148,9 +148,8 @@ export interface StreamConsumerOverrides {
    * Default: `undefined` (unlimited, naturally bounded by `max_ack_pending`).
    * Set this to protect downstream systems from overload.
    *
-   * If `concurrency < max_ack_pending`, messages buffer in RxJS
-   * while their NATS ack timer ticks. Increase `ack_wait` proportionally to
-   * prevent unnecessary redeliveries.
+   * A queued message is kept alive with `msg.working()` until a slot frees,
+   * whatever `ackExtension` says, so the wait never triggers a redelivery.
    */
   concurrency?: number;
 
