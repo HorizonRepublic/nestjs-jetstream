@@ -21,6 +21,7 @@ export type {
 export type {
   JetstreamConsumerHealth,
   JetstreamConsumerState,
+  JetstreamHealthCheckOptions,
   JetstreamHealthIndicatorResult,
   JetstreamHealthStatus,
 } from './health.interface';

@@ -112,7 +112,7 @@ describe('Health: consumer flows', () => {
   });
 
   it(
-    'should report a missing external consumer as down once it stays gone past the threshold',
+    'should degrade on a missing external consumer and fail only the opt-in check',
     { timeout: 60_000 },
     async () => {
       // Given: a service consuming from an externally managed consumer
@@ -157,13 +157,17 @@ describe('Health: consumer flows', () => {
 
       vi.spyOn(Date, 'now').mockReturnValue(now + PAST_STALL_THRESHOLD_MS);
 
-      // Then: readiness fails while the connection itself is fine
+      // Then: the default check degrades, the opt-in readiness check fails
       const stalled = await sut.check();
 
       expect(stalled.connected).toBe(true);
       expect(stalled.consuming).toBe(false);
+      expect(stalled.degraded).toBe(true);
       expect(stalled.consumers?.event?.healthy).toBe(false);
-      await expect(sut.isHealthy()).rejects.toMatchObject({
+      await expect(sut.isHealthy()).resolves.toEqual({
+        jetstream: expect.objectContaining({ status: 'up', consuming: false, degraded: true }),
+      });
+      await expect(sut.isHealthy('jetstream', { requireConsumers: true })).rejects.toMatchObject({
         causes: { jetstream: { status: 'down', consuming: false } },
       });
 
@@ -177,8 +181,8 @@ describe('Health: consumer flows', () => {
         async () => (await sut.check()).consumers?.event?.state === 'active',
         20_000,
       );
-      await expect(sut.isHealthy()).resolves.toEqual({
-        jetstream: expect.objectContaining({ status: 'up', consuming: true }),
+      await expect(sut.isHealthy('jetstream', { requireConsumers: true })).resolves.toEqual({
+        jetstream: expect.objectContaining({ status: 'up', consuming: true, degraded: false }),
       });
     },
   );

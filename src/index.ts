@@ -20,6 +20,7 @@ export type {
   JetstreamConsumerHealth,
   JetstreamConsumerState,
   JetstreamFeatureOptions,
+  JetstreamHealthCheckOptions,
   JetstreamHealthIndicatorResult,
   JetstreamHealthStatus,
   JetstreamModuleAsyncOptions,

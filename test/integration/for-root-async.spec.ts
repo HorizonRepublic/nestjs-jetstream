@@ -210,6 +210,7 @@ describe('forRootAsync', () => {
       'connected',
       'consumers',
       'consuming',
+      'degraded',
       'latency',
       'server',
     ]);

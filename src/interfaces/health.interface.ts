@@ -33,7 +33,8 @@ export interface JetstreamHealthStatus {
   /**
    * Whether every critical connection that consumes has started and keeps its
    * consumers live. Orthogonal to `connected`, and absent when no connection
-   * consumes (publisher-only, or no microservice attached).
+   * consumes (publisher-only, or no microservice attached). Only fails
+   * `isHealthy()` with `requireConsumers`.
    */
   consuming?: boolean;
   /**
@@ -42,7 +43,7 @@ export interface JetstreamHealthStatus {
    */
   consumers?: Record<string, JetstreamConsumerHealth>;
   /**
-   * Whether at least one non-critical connection is down or not consuming.
+   * Whether a non-critical connection is down, or any connection is not consuming.
    *
    * Orthogonal to `connected`, and absent when only one connection is configured.
    */
@@ -54,6 +55,16 @@ export interface JetstreamHealthStatus {
    * response is byte-for-byte what it was before named connections existed.
    */
   connections?: Record<string, JetstreamConnectionHealth>;
+}
+
+/** Options for `JetstreamHealthIndicator.isHealthy()`. */
+export interface JetstreamHealthCheckOptions {
+  /**
+   * Also report `down` while a critical connection is not consuming: its
+   * boot has not finished, or a consumer has not been live for 30 seconds.
+   * Off by default. Use it on readiness only, never on liveness.
+   */
+  requireConsumers?: boolean;
 }
 
 /**

@@ -6,14 +6,14 @@ description: "Expose NATS connection status, RTT latency and consumer health as 
 schema:
   type: Article
   headline: "How to expose health checks for NATS JetStream"
-  description: "Expose NATS connection status and RTT latency as a Kubernetes readiness/liveness probe using JetstreamHealthIndicator."
+  description: "Expose NATS connection status, RTT latency and consumer health as a Kubernetes readiness probe using JetstreamHealthIndicator."
   datePublished: "2026-03-21"
   dateModified: "2026-10-30"
 ---
 
 # How to expose health checks
 
-> **Use when:** you are wiring Kubernetes readiness and liveness probes.
+> **Use when:** you are wiring a Kubernetes readiness probe.
 > **You get:** `JetstreamHealthIndicator`, the shape it returns, and which probe should watch what.
 
 `JetstreamHealthIndicator` reports the NATS connection status, its round-trip latency, and whether the consumers behind your handlers are actually consuming. [`forRoot()`](/docs/reference/module-configuration#forroot) registers the module globally, so the indicator can be injected in any module without importing `JetstreamModule` again or adding it to `providers`.
@@ -46,23 +46,24 @@ A live connection does not mean messages are flowing. A consumer can be stuck in
 ```
 
 - `state` is `active` while consuming, `starting` until the flow is live for the first time, and `recovering` once a live flow went down and is restarting.
-- A flow turns `healthy: false` only after it has not been live for **30 seconds**. A NATS restart or a consumer that self-healing recreates within that window does not flip readiness, so the probe does not flap.
+- A flow turns `healthy: false` only after it has not been live for **30 seconds**. A NATS restart or a consumer that self-healing recreates within that window does not count, and once the connection comes back every flow retries at once instead of waiting out its backoff.
 - `consuming` is `false` when any flow is unhealthy, and also while the connection has not finished starting: still provisioning, waiting for a migration, or a non-critical connection retrying its start in the background.
+- `consuming: false` sets `degraded: true`. By default it **does not** fail `isHealthy()`: a missing stream, a missing externally managed consumer or another pod's migration affects every replica at once, so failing readiness on them would take the whole fleet out of rotation, HTTP traffic included. Alert on `degraded`, or opt in with [`requireConsumers`](#requireconsumers-fail-readiness-on-stalled-consumers).
 
 `consuming` and `consumers` are absent for a connection that does not consume: a `publisherOnly` connection, or an application that never attached the microservice.
 
 ## Readiness versus liveness
 
-Wire the indicator to your **readiness** probe, never to liveness.
+Wire the indicator to your **readiness** probe, never to liveness, and that holds with or without `requireConsumers`.
 
-A liveness probe that touches NATS turns a network blip into a pod restart at exactly the moment the transport is recovering, and since every replica sees the same blip, they restart together. Readiness watches the transport. Liveness watches the process.
+A liveness probe that touches NATS turns a network blip into a pod restart at exactly the moment the transport is recovering, and since every replica sees the same blip, they restart together. A stalled consumer is worse: its cause usually outlives a restart, so liveness would put every pod into a restart loop. Readiness watches the transport. Liveness watches the process.
 
 ## Two APIs
 
-| Method            | Throws on unhealthy? | Use case                                     |
-| ----------------- | -------------------- | -------------------------------------------- |
-| `check()`         | No                   | Custom health endpoints, metrics, monitoring |
-| `isHealthy(key?)` | Yes                  | `@nestjs/terminus`                           |
+| Method                      | Throws on unhealthy? | Use case                                     |
+| --------------------------- | -------------------- | -------------------------------------------- |
+| `check()`                   | No                   | Custom health endpoints, metrics, monitoring |
+| `isHealthy(key?, options?)` | Yes                  | `@nestjs/terminus`                           |
 
 ### check(): plain status object
 
@@ -75,12 +76,12 @@ interface JetstreamHealthStatus {
   latency: number | null;  // RTT in ms, or null if disconnected
   consuming?: boolean;     // absent when nothing consumes
   consumers?: Record<string, JetstreamConsumerHealth>; // default connection's flows
-  degraded?: boolean;      // multiple connections only
+  degraded?: boolean;      // with consumers, or with multiple connections
   connections?: Record<string, JetstreamConnectionHealth>; // multiple connections only
 }
 ```
 
-`connected` describes the connection alone. A custom endpoint that should fail when consumption stalls checks `consuming === false` as well, the way `isHealthy()` does.
+`connected` describes the connection alone. A custom endpoint decides for itself whether `consuming === false` should fail it; the same fleet-wide caution applies as for [`requireConsumers`](#requireconsumers-fail-readiness-on-stalled-consumers).
 
 A connection that serves handlers stays `connected: false` for good once NATS gives up reconnecting it, even after a client call dials a new connection: the handlers stay bound to the closed one, so only a restart brings them back. See [connection failure behavior](/docs/reference/edge-cases#connection-failure-behavior).
 
@@ -98,7 +99,7 @@ export class HealthController {
   async check() {
     const status = await this.jetstream.check();
 
-    if (!status.connected || status.consuming === false) {
+    if (!status.connected) {
       throw new ServiceUnavailableException({ status: 'error', nats: status });
     }
 
@@ -107,9 +108,9 @@ export class HealthController {
 }
 ```
 
-### isHealthy(key?): Terminus-compatible
+### isHealthy(key?, options?): Terminus-compatible
 
-`isHealthy()` follows the [@nestjs/terminus](https://docs.nestjs.com/recipes/terminus) convention. It returns `{ [key]: { status: 'up', ... } }` on success and **throws** on failure. `key` defaults to `'jetstream'`. The status is `down` when a critical connection is down or `consuming` is `false`.
+`isHealthy()` follows the [@nestjs/terminus](https://docs.nestjs.com/recipes/terminus) convention. It returns `{ [key]: { status: 'up', ... } }` on success and **throws** on failure. `key` defaults to `'jetstream'`. The status is `down` when a critical connection is down; stalled consumers only set `degraded` unless you pass `requireConsumers`.
 
 ```json
 {
@@ -118,6 +119,7 @@ export class HealthController {
     "server": "nats://localhost:4222",
     "latency": 2,
     "consuming": true,
+    "degraded": false,
     "consumers": {
       "event": { "healthy": true, "state": "active", "consumer": "orders__microservice_ev-consumer", "failures": 0, "downForMs": null, "lastError": null }
     }
@@ -151,6 +153,16 @@ export class HealthController {
 }
 ```
 
+### requireConsumers: fail readiness on stalled consumers
+
+```typescript
+this.jetstream.isHealthy('nats', { requireConsumers: true });
+```
+
+With `requireConsumers: true`, `isHealthy()` also reports `down` while a critical connection has `consuming: false`: a consumer has not been live for 30 seconds, or the connection has not finished starting. A non-critical connection still only sets `degraded`.
+
+Use it on a **readiness** probe, and only for a service that does nothing but consume, where a pod that cannot consume has no reason to receive traffic. Leave it off for a service that also serves HTTP: when the cause is shared, every replica drops out of rotation together. Never use it on liveness.
+
 ## Multiple connections
 
 With [connections](/docs/guides/multi-connection) the status gains two fields:
@@ -169,11 +181,11 @@ With [connections](/docs/guides/multi-connection) the status gains two fields:
 ```
 
 - `connected` means every **critical** connection is alive.
-- `consuming` means every **critical** connection that consumes has started and keeps its consumers live. `isHealthy()` throws when `connected` or `consuming` is false.
-- `degraded` means at least one **non-critical** connection is down or not consuming. It is orthogonal to `connected`, so a dead analytics cluster degrades the report without failing readiness.
+- `consuming` means every **critical** connection that consumes has started and keeps its consumers live. `isHealthy()` throws when `connected` is false, or when `consuming` is false and `requireConsumers` is set.
+- `degraded` means at least one **non-critical** connection is down, or any connection is not consuming. It is orthogonal to `connected`, so a dead analytics cluster degrades the report without failing readiness.
 - `server`, `latency` and `consumers` describe the default connection. Each entry in `connections` carries its own `consuming` and `consumers`.
 
-`isHealthy()` adds `degraded` and `connections` to its details too. With a single connection both fields are absent.
+`isHealthy()` adds `degraded` and `connections` to its details too. With a single connection `connections` is absent, and `degraded` appears only when the connection consumes.
 
 ## See also
 

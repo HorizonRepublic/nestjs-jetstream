@@ -435,6 +435,7 @@ describe(JetstreamHealthIndicator, () => {
           expect.objectContaining({
             status: 'up',
             consuming: true,
+            degraded: false,
             consumers: expect.objectContaining({ event: expect.anything() }),
           }),
         );
@@ -497,17 +498,17 @@ describe(JetstreamHealthIndicator, () => {
         );
 
         // When
-        const result = await sut.isHealthy();
+        const result = await sut.isHealthy('jetstream', { requireConsumers: true });
 
-        // Then
+        // Then: even the strict check holds, since readiness does not depend on it
         expect(result.jetstream).toEqual(
           expect.objectContaining({ status: 'up', consuming: true, degraded: true }),
         );
       });
     });
 
-    describe('error paths', () => {
-      it('should fail readiness once a flow has been down past the threshold', async () => {
+    describe('default check', () => {
+      it('should report a stalled flow as degraded without failing', async () => {
         // Given: an externally managed consumer that has been absent for 30s
         const reason = faker.lorem.sentence();
         const stuck = flow({
@@ -522,10 +523,12 @@ describe(JetstreamHealthIndicator, () => {
 
         // When
         const status = await sut.check();
+        const result = await sut.isHealthy();
 
-        // Then: the connection is fine, consumption is not
+        // Then: every replica shares the cause, so readiness stays up by default
         expect(status.connected).toBe(true);
         expect(status.consuming).toBe(false);
+        expect(status.degraded).toBe(true);
         expect(status.consumers?.event).toEqual(
           expect.objectContaining({
             healthy: false,
@@ -535,26 +538,27 @@ describe(JetstreamHealthIndicator, () => {
             lastError: reason,
           }),
         );
-        await expect(sut.isHealthy()).rejects.toMatchObject({
-          causes: { jetstream: { status: 'down', consuming: false } },
-        });
+        expect(result.jetstream).toEqual(
+          expect.objectContaining({ status: 'up', consuming: false, degraded: true }),
+        );
       });
 
-      it('should fail readiness while the consumers have not started', async () => {
-        // Given: a boot chain still provisioning, or retrying in the background
+      it('should stay up while the consumers have not started', async () => {
+        // Given: a boot chain still provisioning
         sut = new JetstreamHealthIndicator(
           registryWith(consumingScope('default', true, [], false)),
         );
 
         // When
-        const status = await sut.check();
+        const result = await sut.isHealthy();
 
         // Then
-        expect(status.consuming).toBe(false);
-        await expect(sut.isHealthy()).rejects.toThrow(/health check failed/i);
+        expect(result.jetstream).toEqual(
+          expect.objectContaining({ status: 'up', consuming: false }),
+        );
       });
 
-      it('should fail when a critical connection stops consuming', async () => {
+      it('should mark a stalled critical connection as degraded', async () => {
         // Given
         const stuck = flow({ active: false, downSince: Date.now() - STALL_MS });
 
@@ -571,9 +575,54 @@ describe(JetstreamHealthIndicator, () => {
         // Then
         expect(status.connected).toBe(true);
         expect(status.consuming).toBe(false);
-        expect(status.degraded).toBe(false);
+        expect(status.degraded).toBe(true);
         expect(status.connections?.primary?.consuming).toBe(false);
-        await expect(sut.isHealthy()).rejects.toThrow(/health check failed/i);
+        await expect(sut.isHealthy()).resolves.toEqual({
+          jetstream: expect.objectContaining({ status: 'up' }),
+        });
+      });
+    });
+
+    describe('with requireConsumers', () => {
+      it('should fail once a flow has been down past the threshold', async () => {
+        // Given
+        const stuck = flow({ active: false, downSince: Date.now() - STALL_MS });
+
+        sut = new JetstreamHealthIndicator(registryWith(consumingScope('default', true, [stuck])));
+
+        // When/Then
+        await expect(sut.isHealthy('jetstream', { requireConsumers: true })).rejects.toMatchObject({
+          causes: { jetstream: { status: 'down', consuming: false } },
+        });
+      });
+
+      it('should fail while the consumers have not started', async () => {
+        // Given
+        sut = new JetstreamHealthIndicator(
+          registryWith(consumingScope('default', true, [], false)),
+        );
+
+        // When/Then
+        await expect(sut.isHealthy('jetstream', { requireConsumers: true })).rejects.toThrow(
+          /health check failed/i,
+        );
+      });
+
+      it('should fail when a critical connection stops consuming', async () => {
+        // Given
+        const stuck = flow({ active: false, downSince: Date.now() - STALL_MS });
+
+        sut = new JetstreamHealthIndicator(
+          registryWith(
+            consumingScope('primary', true, [stuck]),
+            consumingScope('analytics', false, [flow()]),
+          ),
+        );
+
+        // When/Then
+        await expect(sut.isHealthy('jetstream', { requireConsumers: true })).rejects.toThrow(
+          /health check failed/i,
+        );
       });
     });
   });

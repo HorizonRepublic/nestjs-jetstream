@@ -6,6 +6,7 @@ import type {
   JetstreamConnectionHealth,
   JetstreamConsumerHealth,
   JetstreamConsumerState,
+  JetstreamHealthCheckOptions,
   JetstreamHealthIndicatorResult,
   JetstreamHealthStatus,
 } from '../interfaces';
@@ -81,6 +82,7 @@ export class JetstreamHealthIndicator {
       if (defaultHealth.consuming !== undefined) {
         single.consuming = defaultHealth.consuming;
         single.consumers = defaultHealth.consumers;
+        single.degraded = !defaultHealth.consuming;
       }
 
       return single;
@@ -92,7 +94,7 @@ export class JetstreamHealthIndicator {
       server: defaultHealth.server,
       latency: defaultHealth.latency,
       degraded: entries.some(
-        ([, health]) => !health.critical && (!health.connected || health.consuming === false),
+        ([, health]) => (!health.critical && !health.connected) || health.consuming === false,
       ),
       connections: Object.fromEntries(entries),
     };
@@ -204,14 +206,25 @@ export class JetstreamHealthIndicator {
    * health failures from unexpected exceptions. Works with both Terminus v10
    * (`instanceof HealthCheckError`) and v11+ (`error?.isHealthCheckError`).
    *
+   * Stalled consumers only mark the result `degraded` unless
+   * `options.requireConsumers` is set: their usual causes (a missing stream or
+   * consumer, another pod's migration) hit every replica at once, so failing
+   * on them by default would take the whole fleet out of rotation.
+   *
    * @param key - Health indicator key (default: `'jetstream'`).
+   * @param options - Set `requireConsumers` to also fail while a critical
+   *   connection is not consuming. Use it for readiness only, never liveness.
    * @returns Object with status, server, and latency under the given key.
    * @throws Error with `isHealthCheckError`, `causes`, and `{ [key]: { status: 'down' } }`.
    */
-  public async isHealthy(key = 'jetstream'): Promise<JetstreamHealthIndicatorResult> {
+  public async isHealthy(
+    key = 'jetstream',
+    options: JetstreamHealthCheckOptions = {},
+  ): Promise<JetstreamHealthIndicatorResult> {
     const status = await this.check();
 
-    const healthy = status.connected && status.consuming !== false;
+    const healthy =
+      status.connected && (options.requireConsumers !== true || status.consuming !== false);
     const details: Record<string, unknown> = {
       status: healthy ? 'up' : 'down',
       server: status.server,
