@@ -85,6 +85,91 @@ describe(RpcRouter, () => {
       });
     });
 
+    describe('when destroyed with a command still running', () => {
+      it('should ack and reply before reporting idle', async () => {
+        // Given a handler that is mid-execution
+        const { promise: result, resolve: finish } = Promise.withResolvers<unknown>();
+        const responseData = { id: faker.number.int() };
+
+        patternRegistry.getHandler.mockReturnValue(vi.fn().mockReturnValue(result));
+        await sut.start();
+
+        const replyTo = faker.string.uuid();
+        const msg = createRpcMsg(faker.lorem.slug(), {}, replyTo, faker.string.uuid());
+
+        commands$.next(msg);
+
+        // When routing stops and the handler finishes afterwards
+        sut.destroy();
+
+        let idle = false;
+        const waiting = sut.whenIdle().then(() => {
+          idle = true;
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(idle).toBe(false);
+        finish(responseData);
+        await waiting;
+
+        // Then the command was settled and answered
+        expect(msg.ack).toHaveBeenCalledOnce();
+        expect(mockNc.publish).toHaveBeenCalledWith(
+          replyTo,
+          codec.encode(responseData),
+          expect.objectContaining({ headers: expect.anything() }),
+        );
+      });
+
+      it('should report idle at the deadline of a handler that never settles', async () => {
+        vi.useFakeTimers();
+
+        // Given a hung handler
+        const timeout = faker.number.int({ min: 50, max: 500 });
+
+        sut = new RpcRouter(messageProvider, patternRegistry, connection, codec, eventBus, {
+          timeout,
+        });
+        patternRegistry.getHandler.mockReturnValue(vi.fn().mockReturnValue(new Promise(() => {})));
+        await sut.start();
+        commands$.next(
+          createRpcMsg(faker.lorem.slug(), {}, faker.string.uuid(), faker.string.uuid()),
+        );
+        sut.destroy();
+
+        // When the deadline passes
+        const waiting = sut.whenIdle();
+
+        await vi.advanceTimersByTimeAsync(timeout);
+
+        // Then shutdown is not held by the abandoned handler
+        await expect(waiting).resolves.toBeUndefined();
+
+        vi.useRealTimers();
+      });
+    });
+
+    describe('when started twice', () => {
+      it('should route each command to its handler once', async () => {
+        // Given a router started a second time
+        const handler = vi.fn().mockResolvedValue({ ok: true });
+
+        patternRegistry.getHandler.mockReturnValue(handler);
+        await sut.start();
+        await sut.start();
+
+        const msg = createRpcMsg(faker.lorem.slug(), {}, faker.string.uuid(), faker.string.uuid());
+
+        // When
+        commands$.next(msg);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // Then
+        expect(handler).toHaveBeenCalledOnce();
+        expect(msg.ack).toHaveBeenCalledOnce();
+      });
+    });
+
     describe('when destroyed', () => {
       it('should unsubscribe from commands stream', async () => {
         await sut.start();
@@ -693,6 +778,43 @@ describe(RpcRouter, () => {
 
       expect(maxConcurrent).toBe(2);
       expect(handler).toHaveBeenCalledTimes(2);
+    });
+
+    it('should free the slot of a handler that timed out and never settles', async () => {
+      vi.useFakeTimers();
+
+      // Given: concurrency 1, a short timeout, and a first handler that hangs forever
+      const timeout = faker.number.int({ min: 50, max: 500 });
+
+      sut = new RpcRouter(messageProvider, patternRegistry, connection, codec, eventBus, {
+        concurrency: 1,
+        timeout,
+      });
+      await sut.start();
+
+      const handler = vi
+        .fn()
+        .mockReturnValueOnce(new Promise(() => {}))
+        .mockResolvedValueOnce({ ok: true });
+
+      patternRegistry.getHandler.mockReturnValue(handler);
+
+      const hung = createRpcMsg('cmd.hung', {}, faker.string.uuid(), faker.string.uuid());
+      const next = createRpcMsg('cmd.next', {}, faker.string.uuid(), faker.string.uuid());
+
+      commands$.next(hung);
+      commands$.next(next);
+
+      // When: the first handler's deadline passes
+      await vi.advanceTimersByTimeAsync(timeout);
+
+      // Then: the hung command is terminated and the parked one runs and settles
+      expect(hung.term).toHaveBeenCalledWith('Handler timeout');
+      expect(handler).toHaveBeenCalledTimes(2);
+      expect(next.ack).toHaveBeenCalled();
+
+      sut.destroy();
+      vi.useRealTimers();
     });
   });
 

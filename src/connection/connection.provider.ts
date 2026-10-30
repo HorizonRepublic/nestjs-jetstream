@@ -226,6 +226,22 @@ export class ConnectionProvider {
     }
   }
 
+  /**
+   * Close the connection at once, without draining. Ends a {@link shutdown}
+   * whose drain outlived the shutdown budget; unflushed publishes are lost.
+   */
+  public async forceClose(): Promise<void> {
+    const nc = this.connection;
+
+    if (!nc || nc.isClosed()) return;
+
+    try {
+      await nc.close();
+    } catch {
+      // Best-effort; the connection may already be gone
+    }
+  }
+
   /** Drop everything bound to a particular connection or server. */
   private resetConnectionCaches(): void {
     this.jsClient = null;

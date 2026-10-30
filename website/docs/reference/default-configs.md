@@ -8,7 +8,7 @@ schema:
   headline: "Default Stream & Consumer Configs for NATS JetStream"
   description: "Default stream, consumer, and connection settings for every NestJS JetStream StreamKind (event, broadcast, ordered, command, schedule, DLQ)."
   datePublished: "2026-03-21"
-  dateModified: "2026-10-29"
+  dateModified: "2026-10-30"
 ---
 
 # Default Configs
@@ -105,11 +105,11 @@ The transport keeps reconnecting after a network failure. Override either value 
 | --------------------------------- | ------------ | ------------------------------- |
 | Core RPC (standard request-reply) | `30 seconds` | `DEFAULT_RPC_TIMEOUT`           |
 | JetStream RPC (persistent)        | `3 minutes`  | `DEFAULT_JETSTREAM_RPC_TIMEOUT` |
-| Graceful shutdown drain           | `10 seconds` | `DEFAULT_SHUTDOWN_TIMEOUT`      |
+| Graceful shutdown                 | `10 seconds` | `DEFAULT_SHUTDOWN_TIMEOUT`      |
 
 The JetStream RPC timeout is longer on purpose: the message is persisted to a stream first, and the consumer may take a while to reach it.
 
-The shutdown value bounds `drain()` on each NATS connection, which waits for in-flight messages; when it runs out, the transport closes the connection anyway. Raise it only if drains hit the ceiling. See [Graceful Shutdown](/docs/guides/graceful-shutdown).
+The shutdown value bounds, per NATS connection, the wait for handlers still running and the `drain()` that follows. The drain keeps the last part of the budget, half of it but at most 2 seconds, and when the budget runs out the transport closes the connection. Set it above your slowest handler plus that reserve. See [Graceful Shutdown](/docs/guides/graceful-shutdown).
 
 ## Replicas in production
 

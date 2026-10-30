@@ -7,7 +7,7 @@ schema:
   headline: "Performance Tuning"
   description: "Tune ackWait, maxAckPending, batch sizes, and ack extension for high-throughput workloads."
   datePublished: "2026-03-26"
-  dateModified: "2026-10-23"
+  dateModified: "2026-10-30"
 ---
 
 # Performance Tuning
@@ -70,6 +70,8 @@ events: {
 ```
 
 Set `concurrency` at or below `max_ack_pending`; above it, the server-side cap is the bottleneck anyway. The cap protects downstream resources (databases, external APIs) while the prefetch buffer stays full.
+
+In [JetStream RPC](/docs/patterns/rpc) mode, `rpc.concurrency` counts commands awaiting a reply. A command whose handler outlives `rpc.timeout` is terminated and gives its slot back at the deadline, so hung handlers cannot stall the command consumer. The handler itself keeps running, so while handlers are stuck past the timeout, more than `concurrency` of them run at once. Bound the work inside the handler if that matters downstream.
 
 ## Ack extension
 

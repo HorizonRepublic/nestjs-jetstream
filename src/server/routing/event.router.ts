@@ -31,6 +31,7 @@ import { ConcurrencyGate } from './concurrency-gate';
 import { DeadLetterAdvisoryListener } from './dead-letter-advisory';
 import { DeadLetterCapture } from './dead-letter-capture';
 import { createOrderedPipeline, createWorkqueuePipeline } from './event-pipeline';
+import { InFlightTracker } from './in-flight-tracker';
 import { PatternRegistry } from './pattern-registry';
 import { OrphanOutcome } from './routing.types';
 import type {
@@ -38,6 +39,7 @@ import type {
   EventConsumeKind,
   OrphanTickPolicy,
   ParkTimerFn,
+  RouteFn,
   RoutePipelineContext,
 } from './routing.types';
 
@@ -74,6 +76,7 @@ const eventConsumeKindFor = (kind: StreamKind): EventConsumeKind => {
 export class EventRouter {
   private readonly logger = new Logger('Jetstream:EventRouter');
   private readonly subscriptions: Subscription[] = [];
+  private readonly inFlight = new InFlightTracker();
 
   private readonly otel: ResolvedOtelOptions;
   private readonly serviceName: string;
@@ -142,6 +145,9 @@ export class EventRouter {
 
   /** Start routing event, broadcast, and ordered messages to handlers. */
   public start(): void {
+    // A second start replaces the pipeline instead of routing every message twice.
+    if (this.subscriptions.length > 0) this.destroy();
+
     this.subscribeToStream(this.messageProvider.events$, StreamKind.Event);
     this.subscribeToStream(this.messageProvider.broadcasts$, StreamKind.Broadcast);
 
@@ -173,7 +179,15 @@ export class EventRouter {
     await this.advisories.watch(targets);
   }
 
-  /** Stop routing and unsubscribe from all streams. */
+  /** Resolve once every handler already routed, and every dead-letter capture, has settled. */
+  public async whenIdle(): Promise<void> {
+    await Promise.all([this.inFlight.whenIdle(), this.advisories?.whenIdle()]);
+  }
+
+  /**
+   * Stop routing and unsubscribe from all streams. Handlers already running
+   * keep their settlement path; parked messages are handed back to the server.
+   */
   public destroy(): void {
     this.advisories?.stop();
     for (const sub of this.subscriptions) {
@@ -206,7 +220,15 @@ export class EventRouter {
       orphans: kind === StreamKind.Schedule ? this.orphanPolicy() : null,
     };
 
-    const route = isOrdered ? createOrderedPipeline(rctx) : createWorkqueuePipeline(rctx);
+    const pipeline = isOrdered ? createOrderedPipeline(rctx) : createWorkqueuePipeline(rctx);
+    const route: RouteFn = (msg) => {
+      const pending = pipeline(msg);
+
+      if (pending !== undefined) this.inFlight.track(pending);
+
+      return pending;
+    };
+
     const maxActive = isOrdered ? 1 : (this.getConcurrency(kind) ?? Number.POSITIVE_INFINITY);
     const parkTimer: ParkTimerFn | null =
       ackExtension === null

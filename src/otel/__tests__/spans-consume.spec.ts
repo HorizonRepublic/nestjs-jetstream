@@ -90,6 +90,24 @@ describe('withConsumeSpan', () => {
       // Then
       expect(exporter.getFinishedSpans()).toHaveLength(0);
     });
+
+    it('should fail-open, run the handler and create a span when shouldTraceConsume throws', async () => {
+      // Given
+      const config = resolveOtelOptions({
+        shouldTraceConsume: () => {
+          throw new Error(faker.lorem.sentence());
+        },
+      });
+      const fn = vi.fn().mockReturnValue('ok');
+
+      // When
+      const result = await withConsumeSpan(baseCtx(), config, fn);
+
+      // Then
+      expect(result).toBe('ok');
+      expect(fn).toHaveBeenCalledOnce();
+      expect(exporter.getFinishedSpans()).toHaveLength(1);
+    });
   });
 
   describe('happy path', () => {

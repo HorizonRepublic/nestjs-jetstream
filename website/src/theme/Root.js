@@ -111,9 +111,9 @@ export default function Root({ children }) {
     '/docs/guides/graceful-shutdown/': {
   "@type": "Article",
   "headline": "Graceful Shutdown",
-  "description": "Automatic shutdown handling: consumption stops, the NATS connection drains, and unfinished work is redelivered.",
+  "description": "Automatic shutdown handling: consumption stops, handlers already running finish and settle, then the NATS connection drains.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-10-23"
+  "dateModified": "2026-10-30"
 },
       
     '/docs/guides/handler-context/': {
@@ -169,7 +169,7 @@ export default function Root({ children }) {
   "headline": "Performance Tuning",
   "description": "Tune ackWait, maxAckPending, batch sizes, and ack extension for high-throughput workloads.",
   "datePublished": "2026-03-26",
-  "dateModified": "2026-10-23"
+  "dateModified": "2026-10-30"
 },
       
     '/docs/guides/record-builder/': {
@@ -305,7 +305,7 @@ export default function Root({ children }) {
   "headline": "Default Stream & Consumer Configs for NATS JetStream",
   "description": "Default stream, consumer, and connection settings for every NestJS JetStream StreamKind (event, broadcast, ordered, command, schedule, DLQ).",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-10-29"
+  "dateModified": "2026-10-30"
 },
       
     '/docs/reference/edge-cases/': {
@@ -337,7 +337,7 @@ export default function Root({ children }) {
   "headline": "Module Configuration Reference",
   "description": "Reference for forRoot(), forRootAsync(), and forFeature() registration methods with stream, consumer, and connection options.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-10-29"
+  "dateModified": "2026-10-30"
 },
       
     '/docs/reference/naming-conventions/': {

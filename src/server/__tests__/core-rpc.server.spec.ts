@@ -63,6 +63,23 @@ describe(CoreRpcServer, () => {
           );
         });
       });
+
+      describe('when started twice', () => {
+        it('should replace the first subscription', async () => {
+          // Given a server that is already listening
+          const first = createMock<Subscription>();
+
+          mockNc.subscribe.mockReturnValueOnce(first);
+          await sut.start();
+
+          // When it starts again
+          await sut.start();
+
+          // Then the first subscription no longer answers requests
+          expect(first.unsubscribe).toHaveBeenCalledOnce();
+          expect(mockNc.subscribe).toHaveBeenCalledTimes(2);
+        });
+      });
     });
   });
 
@@ -133,6 +150,43 @@ describe(CoreRpcServer, () => {
           expect(msg.respond).toHaveBeenCalledWith(codec.encode(responseData));
           expect(eventBus.emitMessageRouted).toHaveBeenCalledWith(msg.subject, 'rpc');
         });
+      });
+    });
+
+    describe('in-flight requests', () => {
+      it('should answer a request that was running when the server stopped', async () => {
+        // Given a handler still running
+        const { promise: result, resolve: finish } = Promise.withResolvers<unknown>();
+        const responseData = { id: faker.number.int() };
+
+        patternRegistry.getHandler.mockReturnValue(vi.fn().mockReturnValue(result));
+
+        const msg = createMock<Msg>({
+          subject: `${serviceName}__microservice.cmd.get.user`,
+          data: codec.encode({}),
+        });
+
+        subscriptionCallback(null, msg);
+
+        // When the server stops and the handler finishes afterwards
+        sut.stop();
+
+        let idle = false;
+        const waiting = sut.whenIdle().then(() => {
+          idle = true;
+        });
+
+        await new Promise(process.nextTick);
+        expect(idle).toBe(false);
+        finish(responseData);
+        await waiting;
+
+        // Then the reply still went out before the server reported idle
+        expect(msg.respond).toHaveBeenCalledWith(codec.encode(responseData));
+      });
+
+      it('should report idle at once when nothing is running', async () => {
+        await expect(sut.whenIdle()).resolves.toBeUndefined();
       });
     });
 

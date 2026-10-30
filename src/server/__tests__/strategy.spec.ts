@@ -426,6 +426,33 @@ describe(JetstreamStrategy, () => {
     });
   });
 
+  describe('whenIdle()', () => {
+    it('should wait for in-flight work in every router and the core RPC server', async () => {
+      // Given the core RPC server still answering a request
+      const { promise: coreBusy, resolve: finishCore } = Promise.withResolvers<void>();
+
+      eventRouter.whenIdle.mockResolvedValue(undefined);
+      rpcRouter.whenIdle.mockResolvedValue(undefined);
+      coreRpcServer.whenIdle.mockReturnValue(coreBusy);
+
+      // When waiting for idle
+      let idle = false;
+      const waiting = sut.whenIdle().then(() => {
+        idle = true;
+      });
+
+      await new Promise(process.nextTick);
+      expect(idle).toBe(false);
+      finishCore();
+      await waiting;
+
+      // Then every source of in-flight work was consulted
+      expect(idle).toBe(true);
+      expect(eventRouter.whenIdle).toHaveBeenCalledOnce();
+      expect(rpcRouter.whenIdle).toHaveBeenCalledOnce();
+    });
+  });
+
   describe('unwrap()', () => {
     it('should return connection when established', () => {
       // Given: connection exists

@@ -1,13 +1,18 @@
-import type { ConsumerInfo } from '@nats-io/jetstream';
+import type { ConsumerInfo, JsMsg } from '@nats-io/jetstream';
+import type { NatsConnection } from '@nats-io/transport-node';
 
+import { faker } from '@faker-js/faker';
 import { createMock } from '@golevelup/ts-vitest';
+import { Observable } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ConnectionProvider } from '../../connection/connection.provider';
-import type { ResolvedConnectionOptions } from '../../interfaces';
-import type { StreamKind } from '../../interfaces';
+import type { EventBus } from '../../hooks';
+import type { Codec, ResolvedConnectionOptions, RpcConfig } from '../../interfaces';
+import { StreamKind } from '../../interfaces';
 import type { ConsumerProvider, MessageProvider, StreamProvider } from '../infrastructure';
-import type { EventRouter, PatternRegistry, RpcRouter } from '../routing';
+import { EventRouter, RpcRouter } from '../routing';
+import type { PatternRegistry } from '../routing';
 import { JetstreamStrategy } from '../strategy';
 
 const quietRegistry = (registerHandlers: () => void): PatternRegistry =>
@@ -26,7 +31,29 @@ interface SutOverrides {
   consumers?: ConsumerProvider;
   eventRouter?: EventRouter;
   rpcRouter?: RpcRouter;
+  rpc?: RpcConfig;
 }
+
+/** A message stream that counts the subscribers currently attached to it. */
+interface CountedStream {
+  readonly stream$: Observable<JsMsg>;
+  subscribers(): number;
+}
+
+const countedStream = (): CountedStream => {
+  let active = 0;
+
+  return {
+    stream$: new Observable<JsMsg>(() => {
+      active += 1;
+
+      return (): void => {
+        active -= 1;
+      };
+    }),
+    subscribers: () => active,
+  };
+};
 
 const createSut = (
   critical: boolean,
@@ -38,6 +65,7 @@ const createSut = (
     name: 'orders',
     connectionName,
     critical,
+    rpc: overrides.rpc,
   });
 
   return new JetstreamStrategy(
@@ -224,5 +252,80 @@ describe('JetstreamStrategy criticality', () => {
 
     // Then no further attempts are made
     expect(registerHandlers).toHaveBeenCalledTimes(attemptsAfterClose);
+  });
+
+  it('should tear down a partially started boot before retrying it', async () => {
+    // Given a non-critical JetStream-mode connection whose first boot fails
+    // after the routers subscribed and durable consumption began
+    vi.useFakeTimers();
+
+    const events = countedStream();
+    const commands = countedStream();
+    const ordered = countedStream();
+    const messages = createMock<MessageProvider>({
+      events$: events.stream$,
+      commands$: commands.stream$,
+      ordered$: ordered.stream$,
+      startOrdered: vi
+        .fn()
+        .mockRejectedValueOnce(new Error(faker.lorem.sentence()))
+        .mockResolvedValue(undefined),
+    });
+    const patterns = createMock<PatternRegistry>({
+      registerHandlers: vi.fn(),
+      hasEventHandlers: () => true,
+      hasBroadcastHandlers: () => false,
+      hasOrderedHandlers: () => true,
+      hasScheduleHandlers: () => false,
+      hasRpcHandlers: () => true,
+      hasMetadata: () => false,
+      getOrderedSubjects: () => [faker.lorem.slug()],
+    });
+    const consumerInfo = createMock<ConsumerInfo>({ config: {}, stream_name: faker.lorem.slug() });
+    const consumers = createMock<ConsumerProvider>({
+      ensureConsumers: vi.fn().mockResolvedValue(
+        new Map([
+          [StreamKind.Event, consumerInfo],
+          [StreamKind.Command, consumerInfo],
+        ]),
+      ),
+    });
+    const connection = createMock<ConnectionProvider>({
+      getConnection: vi.fn().mockResolvedValue(createMock<NatsConnection>()),
+    });
+    const eventRouter = new EventRouter(
+      messages,
+      patterns,
+      createMock<Codec>(),
+      createMock<EventBus>(),
+    );
+    const rpcRouter = new RpcRouter(
+      messages,
+      patterns,
+      connection,
+      createMock<Codec>(),
+      createMock<EventBus>(),
+    );
+    const sut = createSut(false, patterns, {
+      messages,
+      consumers,
+      eventRouter,
+      rpcRouter,
+      rpc: { mode: 'jetstream' },
+    });
+
+    // When the first attempt fails and the retry succeeds
+    await sut.listen(vi.fn());
+    await vi.advanceTimersByTimeAsync(2_000);
+
+    // Then every stream has exactly one subscriber and consumption restarted from scratch
+    expect(sut.isStarted).toBe(true);
+    expect(messages.destroy).toHaveBeenCalledOnce();
+    expect(messages.start).toHaveBeenCalledTimes(2);
+    expect(events.subscribers()).toBe(1);
+    expect(ordered.subscribers()).toBe(1);
+    expect(commands.subscribers()).toBe(1);
+
+    sut.close();
   });
 });

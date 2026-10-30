@@ -21,7 +21,7 @@ import type {
   ResolvedOtelOptions,
   ServerEndpoint,
 } from '../config';
-import { safelyInvokeHook } from '../internal-utils';
+import { safelyInvokeHook, shouldTraceSafely } from '../internal-utils';
 import { extractContext } from '../propagator';
 import { JetstreamTrace } from '../trace-kinds';
 import { getTracer } from '../tracer';
@@ -105,7 +105,7 @@ export const withConsumeSpan = <T>(
 
   const shouldCreateSpan =
     config.traces.has(JetstreamTrace.Consume) &&
-    (config.shouldTraceConsume?.(ctx.subject, ctx.msg) ?? true);
+    shouldTraceSafely('shouldTraceConsume', config.shouldTraceConsume, ctx.subject, ctx.msg);
 
   if (!shouldCreateSpan) {
     return context.with(parentCtx, fn);
