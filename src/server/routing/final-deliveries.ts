@@ -9,7 +9,8 @@ interface RunningDelivery {
   readonly hungAt: number;
 }
 
-const keyOf = (stream: string, streamSequence: number): string => `${stream}:${streamSequence}`;
+const keyOf = (stream: string, streamSequence: number, deliveryCount: number): string =>
+  `${stream}:${streamSequence}:${deliveryCount}`;
 
 /**
  * Final deliveries whose handler is running in this process. The server gives
@@ -20,6 +21,8 @@ const keyOf = (stream: string, streamSequence: number): string => `${stream}:${s
  */
 export class FinalDeliveries {
   private readonly running = new Map<string, RunningDelivery>();
+  /** Resolvers of the waits in progress; abandoning resolves them as hung. */
+  private readonly waits = new Set<(settled: boolean) => void>();
 
   public constructor(private readonly isFinal: FinalDeliveryCheck) {}
 
@@ -30,7 +33,8 @@ export class FinalDeliveries {
   public track(msg: JsMsg, pending: Promise<void>, hungAfterMs: number): void {
     if (!this.isFinal(msg)) return;
 
-    const key = keyOf(msg.info.stream, msg.info.streamSequence);
+    const { stream, streamSequence, deliveryCount } = msg.info;
+    const key = keyOf(stream, streamSequence, deliveryCount);
     const settled = pending.then(
       () => undefined,
       () => undefined,
@@ -44,29 +48,50 @@ export class FinalDeliveries {
   }
 
   /**
-   * Wait for the handler of this message, if it runs here. Resolves `true`
-   * once it settled, `false` once it counts as hung, and is `null` when no
-   * handler of this message runs in this process.
+   * Wait for the handler of this delivery, if it runs here. Resolves `true`
+   * once it settled, `false` once it counts as hung or the wait is abandoned,
+   * and is `null` when no handler of this delivery runs in this process.
    */
-  public waitFor(stream: string, streamSequence: number): Promise<boolean> | null {
-    const entry = this.running.get(keyOf(stream, streamSequence));
+  public waitFor(
+    stream: string,
+    streamSequence: number,
+    deliveryCount: number,
+  ): Promise<boolean> | null {
+    const entry = this.running.get(keyOf(stream, streamSequence, deliveryCount));
 
     if (entry === undefined) return null;
 
     const remaining = entry.hungAt - Date.now();
 
     if (remaining <= 0) return Promise.resolve(false);
-    if (!Number.isFinite(remaining)) return entry.settled.then(() => true);
 
+    const { promise, resolve } = Promise.withResolvers<boolean>();
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const hung = new Promise<boolean>((resolve) => {
+
+    if (Number.isFinite(remaining)) {
       timer = setTimeout(() => {
         resolve(false);
       }, remaining);
-    });
+      if (typeof timer.unref === 'function') timer.unref();
+    }
 
-    return Promise.race([entry.settled.then(() => true), hung]).finally(() => {
-      clearTimeout(timer);
+    void entry.settled.then(() => {
+      resolve(true);
     });
+    this.waits.add(resolve);
+
+    return promise.finally(() => {
+      clearTimeout(timer);
+      this.waits.delete(resolve);
+    });
+  }
+
+  /**
+   * Resolve every wait in progress as hung. The server sends each advisory
+   * once, so a capture still waiting when the process stops would be lost.
+   */
+  public abandonWaits(): void {
+    for (const resolve of this.waits) resolve(false);
+    this.waits.clear();
   }
 }

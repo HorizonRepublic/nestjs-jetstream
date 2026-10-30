@@ -279,7 +279,39 @@ describe('Dead letters from unsettled deliveries', () => {
       expect(await streamMessages(dlqStreamName(serviceName))).toBe(1);
       expect(await streamMessages(streamName(serviceName, StreamKind.Event))).toBe(0);
     }, 30_000);
+
+    it('captures the message on shutdown instead of losing it with the waiting capture', async () => {
+      // Given a hung handler on the only delivery, whose advisory is waiting on it
+      const { app, module } = await createTestApp(
+        {
+          ...options(),
+          shutdownTimeout: 3_000,
+          events: {
+            consumer: { max_deliver: 1, ack_wait: toNanos(ACK_WAIT_MS / 1_000, 'seconds') },
+          },
+        },
+        [HangingController],
+        [serviceName],
+      );
+      const client = module.get<ClientProxy>(getClientToken(serviceName));
+      const controller = module.get(HangingController);
+
+      await firstValueFrom(client.emit('order.stuck', { id: 13 }));
+      await waitForCondition(() => controller.attempts === 1, 5_000);
+      await new Promise((resolve) => setTimeout(resolve, ACK_WAIT_MS * 3));
+
+      expect(deadLetters).toHaveLength(0);
+
+      // When the service shuts down while the handler still hangs
+      await app.close();
+
+      // Then the message is dead-lettered before the connection drains
+      expect(deadLetters).toHaveLength(1);
+      expect(await streamMessages(streamName(serviceName, StreamKind.Event))).toBe(0);
+      expect(await streamMessages(dlqStreamName(serviceName))).toBe(1);
+    }, 30_000);
   });
+
   describe('commands', () => {
     const rpc = {
       mode: 'jetstream',

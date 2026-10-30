@@ -150,7 +150,10 @@ export class DeadLetterAdvisoryListener {
       return;
     }
 
-    const local = this.finalDeliveries?.waitFor(target.stream, advisory.stream_seq);
+    const local =
+      advisory.deliveries === undefined
+        ? null
+        : this.finalDeliveries?.waitFor(target.stream, advisory.stream_seq, advisory.deliveries);
 
     if (local === null || local === undefined) {
       this.enqueue(() => this.handle(target, advisory));

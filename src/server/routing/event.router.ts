@@ -202,9 +202,12 @@ export class EventRouter {
   /**
    * Stop routing and unsubscribe from all streams. Handlers already running
    * keep their settlement path; parked messages are handed back to the server.
+   * Captures waiting on a running handler proceed now, before the connection
+   * drains: their advisory is not sent again.
    */
   public destroy(): void {
     this.advisories?.stop();
+    this.finalDeliveries?.abandonWaits();
     for (const sub of this.subscriptions) {
       sub.unsubscribe();
     }
