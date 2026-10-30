@@ -2,6 +2,7 @@ import type { Consumer, ConsumerInfo, ConsumerMessages, JsMsg } from '@nats-io/j
 
 import { faker } from '@faker-js/faker';
 import { createMock } from '@golevelup/ts-vitest';
+import { Subject } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mocked } from 'vitest';
 
 import { ConnectionProvider } from '../../../connection';
@@ -140,9 +141,11 @@ describe(MessageProvider, () => {
 
   let connection: Mocked<ConnectionProvider>;
   let eventBus: Mocked<EventBus>;
+  let reconnects: Subject<void>;
 
   beforeEach(() => {
-    connection = createMock<ConnectionProvider>();
+    reconnects = new Subject<void>();
+    connection = createMock<ConnectionProvider>({ reconnects$: reconnects.asObservable() });
     eventBus = createMock<EventBus>();
 
     sut = new MessageProvider(connection, eventBus);
@@ -283,6 +286,49 @@ describe(MessageProvider, () => {
 
         // Then: retry happened (consumers.get called at least twice)
         expect(js.consumers.get.mock.calls.length).toBeGreaterThanOrEqual(2);
+
+        sut.destroy();
+        vi.useRealTimers();
+      });
+    });
+
+    describe('when the connection reconnects during a long backoff', () => {
+      it('should retry at once instead of waiting out the delay', async () => {
+        vi.useFakeTimers();
+
+        // Given: a flow that failed long enough to back off for 30 seconds
+        const js = {
+          consumers: { get: vi.fn().mockRejectedValue(new Error('no responders')) },
+        };
+
+        connection.getJetStreamClient.mockReturnValue(js as never);
+        sut.start(
+          new Map([
+            [
+              StreamKind.Event,
+              createMock<ConsumerInfo>({
+                name: faker.lorem.word(),
+                stream_name: faker.lorem.word(),
+              }),
+            ],
+          ]),
+        );
+
+        for (let i = 0; i < 10; i++) {
+          await vi.advanceTimersByTimeAsync(31_000);
+        }
+
+        const attempts = js.consumers.get.mock.calls.length;
+
+        js.consumers.get.mockResolvedValue(makeConsumer(createMockMessages()));
+
+        // When: NATS comes back
+        reconnects.next();
+        await vi.advanceTimersByTimeAsync(0);
+
+        // Then: the flow is live again without waiting for the timer
+        expect(js.consumers.get.mock.calls.length).toBe(attempts + 1);
+        expect(sut.getFlowStates()[0]?.active).toBe(true);
 
         sut.destroy();
         vi.useRealTimers();

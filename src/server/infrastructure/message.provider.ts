@@ -16,9 +16,12 @@ import {
   EMPTY,
   merge,
   Observable,
+  race,
   repeat,
   Subject,
+  take,
   takeUntil,
+  tap,
   timer,
 } from 'rxjs';
 
@@ -363,6 +366,8 @@ export class MessageProvider {
     onFirstError?: (err: unknown) => void,
   ): Observable<void> {
     let consecutiveFailures = 0;
+    // Backoff level, kept apart from the failure count: a reconnect resets it.
+    let backoffLevel = 0;
 
     // Called from inside `source()` once the consumer is actually live
     // (right after `consumer.consume()` resolves, before `messages.closed()`).
@@ -377,6 +382,7 @@ export class MessageProvider {
       }
 
       consecutiveFailures = 0;
+      backoffLevel = 0;
       Object.assign(state, {
         active: true,
         connectedOnce: true,
@@ -394,6 +400,7 @@ export class MessageProvider {
     return defer(() => source(onConnected)).pipe(
       catchError((err) => {
         consecutiveFailures++;
+        backoffLevel++;
         markDown();
         state.failures = consecutiveFailures;
         state.lastError = errorMessage(err);
@@ -406,10 +413,21 @@ export class MessageProvider {
       repeat({
         delay: () => {
           markDown();
-          const delay = Math.min(100 * Math.pow(2, consecutiveFailures), 30_000);
+          const delay = Math.min(100 * Math.pow(2, backoffLevel), 30_000);
 
           this.logger.warn(`Consumer ${label} stream ended, restarting in ${delay}ms...`);
-          return timer(delay);
+
+          // A long outage leaves the backoff at its cap; once NATS is back,
+          // retry at once instead of waiting it out.
+          return race(
+            timer(delay),
+            this.connection.reconnects$.pipe(
+              take(1),
+              tap(() => {
+                backoffLevel = 0;
+              }),
+            ),
+          );
         },
       }),
     );

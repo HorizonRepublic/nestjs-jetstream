@@ -488,6 +488,29 @@ describe(ConnectionProvider, () => {
       expect(eventBus.emit).toHaveBeenCalledWith(TransportEvent.Reconnect, nc.getServer());
     });
 
+    it('should signal reconnects to in-process listeners', async () => {
+      // Given: a status stream that reconnects once
+      mockConnect.mockResolvedValue(
+        createNc({
+          status: vi.fn().mockReturnValue(
+            (async function* (): AsyncGenerator<Status> {
+              yield { type: 'reconnect', server: '' } as Status;
+            })(),
+          ),
+        }),
+      );
+      const listener = vi.fn();
+
+      sut.reconnects$.subscribe(listener);
+
+      // When
+      await sut.getConnection();
+      await new Promise(process.nextTick);
+
+      // Then
+      expect(listener).toHaveBeenCalledOnce();
+    });
+
     it('should emit Error event on connection error status', async () => {
       // Given: status stream will yield Error
       const nc = createNc({
