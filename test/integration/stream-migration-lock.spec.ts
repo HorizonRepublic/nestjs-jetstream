@@ -590,6 +590,73 @@ describe('Stream migration lock', () => {
     await expect(jsm.streams.info(backupOf(stream))).rejects.toThrow(/not found/);
   });
 
+  it('should republish distinct messages that share a message id', async () => {
+    // Given: two backed-up messages published with the same id outside the dedup window
+    stream = `mig-${faker.string.alphanumeric(8).toLowerCase()}`;
+
+    const desired: DesiredStream = {
+      name: stream,
+      subjects: [`${stream}.>`],
+      retention: RetentionPolicy.Workqueue,
+      allow_msg_schedules: true,
+    };
+
+    await jsm.streams.add({
+      name: backupOf(stream),
+      subjects: [`${stream}.order`],
+      retention: RetentionPolicy.Workqueue,
+      duplicate_window: 100_000_000,
+      metadata: live(MigrationPhase.Restore),
+    });
+    await js.publish(`${stream}.order`, 'first', { msgID: 'order-1' });
+    await new Promise((r) => setTimeout(r, 300));
+    await js.publish(`${stream}.order`, 'second', { msgID: 'order-1' });
+
+    const { config } = await jsm.streams.info(backupOf(stream));
+
+    await jsm.streams.update(backupOf(stream), { ...config, subjects: [] });
+    await jsm.streams.add(desired);
+
+    // When
+    await new StreamMigration(FAST).settle(jsm, stream, desired);
+
+    // Then
+    expect((await jsm.streams.info(stream)).state.messages).toBe(2);
+  });
+
+  it('should not republish what it already did when a stuck restore is resumed after a crash', async () => {
+    // Given: a stuck restore into a stream whose dedup window is long gone
+    stream = `mig-${faker.string.alphanumeric(8).toLowerCase()}`;
+
+    const desired: DesiredStream = {
+      name: stream,
+      subjects: [`${stream}.>`],
+      retention: RetentionPolicy.Workqueue,
+      allow_msg_schedules: true,
+      duplicate_window: 100_000_000,
+    };
+
+    await createBackup(10, live(MigrationPhase.Restore), `${stream}.order`);
+    await jsm.streams.add(desired);
+
+    let reads = 0;
+    const crashing = intercepted(jsm, async (method, _args, call) => {
+      if (method === 'getMessage' && ++reads > 4) throw new Error('process killed');
+
+      return call();
+    });
+
+    await new StreamMigration(FAST).settle(crashing, stream, desired).catch(() => undefined);
+    await new Promise((r) => setTimeout(r, 300));
+
+    // When
+    await new StreamMigration(FAST).settle(jsm, stream, desired);
+
+    // Then
+    expect((await jsm.streams.info(stream)).state.messages).toBe(10);
+    await expect(jsm.streams.info(backupOf(stream))).rejects.toThrow(/not found/);
+  });
+
   it('should resume an interrupted migration of the DLQ stream on boot', async () => {
     // Given: a DLQ migration by an older release died between deleting and
     // recreating the stream, long enough ago to count as abandoned

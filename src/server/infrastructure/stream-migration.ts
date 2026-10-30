@@ -37,8 +37,11 @@ const DEFAULT_TIMING: MigrationTiming = {
 const SOURCING_POLL_INTERVAL_MS = 100;
 /** Subjects named in a per-subject capacity error. */
 const OVERFULL_SUBJECTS_SHOWN = 3;
-/** Headers a republished message must not carry: the server refuses or re-checks them. */
-const REPUBLISH_DROPPED_HEADER = /^Nats-(Expected-|Stream-Source$)/i;
+/**
+ * Headers a republished message must not carry: the server refuses or
+ * re-checks them, and a reused message id would drop a distinct message.
+ */
+const REPUBLISH_DROPPED_HEADER = /^Nats-(Expected-|Stream-Source$|Msg-Id$)/i;
 /** Backups written before the heartbeat existed: younger ones belong to a live migration. */
 const LEGACY_ACTIVE_GRACE_MS = 90_000;
 
@@ -478,7 +481,8 @@ export class StreamMigration {
         );
       } else {
         await this.rollbackBeforeDelete(jsm, streamName, openConfig, lease);
-        await pause?.resume();
+        // A lost lock leaves them to the new owner, which may have paused them again.
+        if (lease.lossReason === undefined) await pause?.resume();
       }
 
       throw err;
@@ -727,9 +731,10 @@ export class StreamMigration {
   }
 
   /**
-   * Publish every message of the backup into the stream, oldest first. One
-   * published again after a crash is dropped as a duplicate within the
-   * stream's duplicate window.
+   * Publish every message of the backup into the stream, oldest first, and
+   * delete it from the backup once published, so a resumed run continues
+   * where a crashed one stopped. Only the message in flight at the crash can
+   * be published twice, and its id makes the stream drop the second copy.
    */
   private async republishBackup(
     jsm: JetStreamManager,
@@ -755,13 +760,12 @@ export class StreamMigration {
 
       if (stored === null) continue;
 
-      const hdrs = republishHeaders(stored.header);
-
       await js.publish(stored.subject, stored.data, {
-        headers: hdrs,
-        msgID: hdrs.get('Nats-Msg-Id') || `${backupName}:${seq}`,
+        headers: republishHeaders(stored.header),
+        msgID: `${backupName}:${seq}`,
         expect: { streamName },
       });
+      await jsm.streams.deleteMessage(backupName, seq, false);
     }
   }
 
