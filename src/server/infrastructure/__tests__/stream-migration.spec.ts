@@ -440,6 +440,51 @@ describe(StreamMigration, () => {
       expect(streams.get(backupName)?.messages).toBe(6);
     });
 
+    it('should neither reclaim nor act on a lock another instance took over while it stalled', async () => {
+      // Given: slow sourcing spans several heartbeats, and a rival claims the
+      // backup as soon as this instance attaches the source
+      const streams = new Map([[streamName, original(6)]]);
+      const startedAt = Date.now();
+      const jsm = createFakeJsm(streams, (name) =>
+        name === backupName && Date.now() - startedAt < 150 ? 6 : 0,
+      );
+      const fakeUpdate = vi.mocked(jsm.streams.update).getMockImplementation()!;
+      let rivalClaimed = false;
+      let writesAfterClaim = 0;
+
+      vi.mocked(jsm.streams.update).mockImplementation(async (name, config) => {
+        if (name === backupName && rivalClaimed) writesAfterClaim += 1;
+
+        const result = await fakeUpdate(name, config);
+        const lock = streams.get(backupName);
+
+        if (name === backupName && !rivalClaimed && config.sources?.length && lock) {
+          lock.config.metadata = {
+            ...lock.config.metadata,
+            'nestjs-jetstream-migration-owner': 'rival',
+          };
+          rivalClaimed = true;
+        }
+
+        return result;
+      });
+
+      // When
+      await expect(
+        new StreamMigration(FAST).migrate(jsm, streamName, desired),
+      ).rejects.toMatchObject({
+        reason: MigrationErrorReason.LockLost,
+      });
+
+      // Then: the rival keeps the lock and the original is never deleted
+      expect(writesAfterClaim).toBe(0);
+      expect(streams.get(backupName)?.config.metadata).toMatchObject({
+        'nestjs-jetstream-migration-owner': 'rival',
+      });
+      expect(jsm.streams.delete).not.toHaveBeenCalled();
+      expect(streams.has(streamName)).toBe(true);
+    });
+
     it('should keep migrating when a single heartbeat fails', async () => {
       // Given: slow sourcing, and the first heartbeat after it starts is rejected
       const streams = new Map([[streamName, original(10)]]);
