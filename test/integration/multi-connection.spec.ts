@@ -1,11 +1,12 @@
 import { Controller } from '@nestjs/common';
 import type { INestApplication } from '@nestjs/common';
-import { EventPattern, Payload } from '@nestjs/microservices';
+import { EventPattern, MessagePattern, Payload } from '@nestjs/microservices';
 import type { ClientProxy } from '@nestjs/microservices';
 
 import { jetstreamManager } from '@nats-io/jetstream';
 import { connect } from '@nats-io/transport-node';
 
+import { firstValueFrom } from 'rxjs';
 import type { StartedTestContainer } from 'testcontainers';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
@@ -20,6 +21,24 @@ import { createMultiConnectionApp, uniqueServiceName, waitForCondition } from '.
 import { startNatsContainer } from './nats-container';
 
 const received: string[] = [];
+
+interface StatsQuery {
+  id: string;
+}
+
+interface StatsReply {
+  id: string;
+  handledBy: string;
+}
+
+@JetstreamConnection('analytics')
+@Controller()
+class AnalyticsRpcController {
+  @MessagePattern('stats.get')
+  public getStats(@Payload() data: StatsQuery): StatsReply {
+    return { id: data.id, handledBy: 'analytics' };
+  }
+}
 
 @Controller()
 class PrimaryController {
@@ -179,6 +198,36 @@ describe('multi-connection routing', () => {
       expect(routed).toContain('analytics');
     } finally {
       await hookApp.close();
+    }
+  });
+
+  it('should send RPC in the mode its connection declares, not the root mode', async () => {
+    // Given a Core-mode root and a named connection switched to JetStream RPC
+    const rpcServiceName = uniqueServiceName();
+    const { app: rpcApp } = await createMultiConnectionApp({
+      name: rpcServiceName,
+      connections: {
+        primary: { servers: [`nats://localhost:${primaryPort}`] },
+        analytics: {
+          servers: [`nats://localhost:${analyticsPort}`],
+          rpc: { mode: 'jetstream', timeout: 10_000 },
+        },
+      },
+      defaultConnection: 'primary',
+      controllers: [AnalyticsRpcController],
+      clients: [{ name: rpcServiceName, connection: 'analytics' }],
+    });
+
+    try {
+      const client = rpcApp.get<ClientProxy>(getClientToken(rpcServiceName, 'analytics'));
+
+      // When a command is sent on that connection
+      const reply = await firstValueFrom(client.send<StatsReply>('stats.get', { id: 's-1' }));
+
+      // Then the handler answers instead of the command stream's publish ack
+      expect(reply).toEqual({ id: 's-1', handledBy: 'analytics' });
+    } finally {
+      await rpcApp.close();
     }
   });
 
