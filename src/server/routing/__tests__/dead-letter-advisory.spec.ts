@@ -15,6 +15,7 @@ import type { ConnectionProvider } from '../../../connection';
 import { DeliveryErrorReason } from '../../../errors';
 import { DeadLetterAdvisoryListener } from '../dead-letter-advisory';
 import type { DeadLetterCapture } from '../dead-letter-capture';
+import type { FinalDeliveries } from '../final-deliveries';
 import type { DeadLetterSource, DeadLetterWatchTarget } from '../routing.types';
 
 const codec = new JsonCodec();
@@ -28,6 +29,7 @@ describe(DeadLetterAdvisoryListener, () => {
   let streamInfo: Mock;
   let captureSource: Mock;
   let target: DeadLetterWatchTarget;
+  let connection: ConnectionProvider;
 
   const advisory = (body: unknown): Msg =>
     createMock<Msg>({
@@ -83,7 +85,7 @@ describe(DeadLetterAdvisoryListener, () => {
     warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined) as Mock;
     error = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined) as Mock;
 
-    const connection = createMock<ConnectionProvider>({
+    connection = createMock<ConnectionProvider>({
       getConnection: vi.fn().mockResolvedValue(createMock<NatsConnection>({ subscribe })),
       getJetStreamManager: vi.fn().mockResolvedValue(
         createMock<JetStreamManager>({
@@ -336,6 +338,56 @@ describe(DeadLetterAdvisoryListener, () => {
 
       // Then
       expect(unsubscribe).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('edge cases with the handler still running here', () => {
+    const watchWithLocalHandler = async (settled: boolean): Promise<void> => {
+      sut = new DeadLetterAdvisoryListener(
+        connection,
+        createMock<DeadLetterCapture>({ captureSource }),
+        codec,
+        createMock<FinalDeliveries>({ waitFor: vi.fn().mockResolvedValue(settled) }),
+      );
+      await sut.watch([target]);
+    };
+
+    const deliver = (seq: number): void => {
+      const callback = callbacks.get(
+        `$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.${target.stream}.${target.consumer}`,
+      );
+
+      void callback?.(null, advisory({ stream_seq: seq, deliveries: 1 }));
+    };
+
+    it('should leave the message to a handler that settles it', async () => {
+      // Given a handler of that delivery that settles while the advisory waits
+      const seq = faker.number.int({ min: 1, max: 10_000 });
+
+      await watchWithLocalHandler(true);
+
+      // When the advisory arrives
+      deliver(seq);
+      await sut.whenIdle();
+
+      // Then nothing is read back or captured
+      expect(getMessage).not.toHaveBeenCalled();
+      expect(captureSource).not.toHaveBeenCalled();
+    });
+
+    it('should capture the message once the handler counts as hung', async () => {
+      // Given a handler of that delivery that outlives its run limit
+      const seq = faker.number.int({ min: 1, max: 10_000 });
+
+      getMessage.mockResolvedValue(stored(seq, { id: faker.string.uuid() }));
+      await watchWithLocalHandler(false);
+
+      // When the advisory arrives
+      deliver(seq);
+      await sut.whenIdle();
+
+      // Then it is captured as usual
+      expect(captureSource).toHaveBeenCalledOnce();
     });
   });
 

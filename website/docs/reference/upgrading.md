@@ -83,6 +83,16 @@ nats stream edit <stream> --no-discard-per-subject
 
 **DLQ filters reject invalid bounds.** A `fromSeq` or `toSeq` that is not a non-negative integer, or an invalid date, now throws `JetstreamConfigError` with reason `dlq-filter-invalid` instead of matching every dead letter.
 
+**Messages queued behind `concurrency` are no longer redelivered.** A message waiting for a free slot is now kept alive with `msg.working()`, whether or not `ackExtension` is on, and its wait no longer counts against `ackExtension.maxDuration`. Before, a backlog that took longer than `ack_wait` to drain was redelivered and handled twice, and could reach `max_deliver` and the DLQ without a handler ever failing. If no handler starts or finishes for `ackExtension.maxDuration` (5 minutes by default), the pod hands its queue back to other pods. See [Concurrency control](/docs/guides/performance#concurrency-control).
+
+**A handler that outlives `ack_wait` on the last delivery keeps its message.** Its late ack now settles the message, and a late failure reaches the DLQ with the handler's own error. Before, the replica that got the server's `MAX_DELIVERIES` advisory dead-lettered the message while the handler was still running, so a handler that then succeeded left a copy in the DLQ that a redrive would run again. A handler counts as hung after `ackExtension.maxDuration`, 5 minutes by default. This holds when the advisory reaches the replica running the handler; see [Deliveries no handler settled](/docs/guides/dead-letter-queue#deliveries-no-handler-settled) for several replicas.
+
+**Commands stay alive until the RPC timeout.** With `ackExtension` off on `rpc`, a JetStream-mode command is now extended with `msg.working()` until `rpc.timeout`. Before, a handler slower than the command `ack_wait` let the server give up on the command, and with the fix below another replica could dead-letter a command its handler then answered.
+
+**Abandoned commands go to the DLQ.** A JetStream-mode command whose only delivery was never settled, because its pod crashed or was stopped mid-handler, used to stay in the command stream until `max_age`, and with `discard_new_per_subject` could make publishes to its subject fail. With dead letters enabled it now goes to the DLQ and `onDeadLetter` once its `ack_wait` runs out, and is removed from the command stream. A redrive skips it with the new reason `command`, and `inspect()` reports its origin as `command`. With restricted permissions, the advisory and stream permissions listed in [Deliveries no handler settled](/docs/guides/dead-letter-queue#deliveries-no-handler-settled) now also apply to the command stream.
+
+**Schedule handler errors count as `handler`.** `jetstream_errors_total` used to file an error thrown by a schedule handler under `context="other"`.
+
 ### Additive changes
 
 **Dead letters can go back.** `JetstreamDlq` lists, redrives and purges the DLQ stream, or empties it with `purgeAll()`, with filters, a dry run and a cap on how many times one message is redriven. Broadcasts and recurring schedule ticks are never redriven. `x-redrive-count` joins the reserved headers `setHeader()` refuses. See [Redriving dead letters](/docs/guides/dead-letter-queue#redriving-dead-letters).

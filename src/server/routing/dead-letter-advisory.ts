@@ -8,11 +8,13 @@ import { ConnectionProvider } from '../../connection';
 import { DeliveryErrorReason, JetstreamDeliveryError } from '../../errors';
 import type { Codec } from '../../interfaces';
 import { DeadLetterCapture } from './dead-letter-capture';
+import type { FinalDeliveries } from './final-deliveries';
 import { InFlightTracker } from './in-flight-tracker';
 import type {
   DeadLetterSource,
   DeadLetterWatchTarget,
   MaxDeliveriesAdvisory,
+  ParsedMaxDeliveriesAdvisory,
 } from './routing.types';
 
 const MAX_DELIVERIES_ADVISORY = '$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES';
@@ -48,6 +50,7 @@ export class DeadLetterAdvisoryListener {
     private readonly connection: ConnectionProvider,
     private readonly capture: DeadLetterCapture,
     private readonly codec: Codec,
+    private readonly finalDeliveries?: FinalDeliveries | null | undefined,
   ) {}
 
   /** Start listening for exhausted deliveries on each target consumer. */
@@ -73,7 +76,7 @@ export class DeadLetterAdvisoryListener {
               return;
             }
 
-            this.enqueue(() => this.handle(target, msg));
+            this.accept(target, msg);
           },
         },
       );
@@ -138,15 +141,39 @@ export class DeadLetterAdvisoryListener {
     }
   }
 
-  private async handle(target: DeadLetterWatchTarget, msg: Msg): Promise<void> {
+  private accept(target: DeadLetterWatchTarget, msg: Msg): void {
     const advisory = this.parse(msg);
 
-    if (advisory?.stream_seq === undefined) {
+    if (advisory === null) {
       this.logger.warn(`Ignoring a malformed MAX_DELIVERIES advisory for ${target.consumer}`);
 
       return;
     }
 
+    const local =
+      advisory.deliveries === undefined
+        ? null
+        : this.finalDeliveries?.waitFor(target.stream, advisory.stream_seq, advisory.deliveries);
+
+    if (local === null || local === undefined) {
+      this.enqueue(() => this.handle(target, advisory));
+
+      return;
+    }
+
+    // The handler of this delivery still runs here and settles the message
+    // itself; only one that counts as hung is captured.
+    this.inFlight.track(
+      local.then((settled) => {
+        if (!settled) this.enqueue(() => this.handle(target, advisory));
+      }),
+    );
+  }
+
+  private async handle(
+    target: DeadLetterWatchTarget,
+    advisory: ParsedMaxDeliveriesAdvisory,
+  ): Promise<void> {
     const seq = advisory.stream_seq;
 
     try {
@@ -201,11 +228,13 @@ export class DeadLetterAdvisoryListener {
     };
   }
 
-  private parse(msg: Msg): MaxDeliveriesAdvisory | null {
+  private parse(msg: Msg): ParsedMaxDeliveriesAdvisory | null {
     try {
       const advisory = msg.json<MaxDeliveriesAdvisory>();
 
-      return typeof advisory.stream_seq === 'number' ? advisory : null;
+      return typeof advisory.stream_seq === 'number'
+        ? { ...advisory, stream_seq: advisory.stream_seq }
+        : null;
     } catch {
       return null;
     }

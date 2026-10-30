@@ -46,6 +46,7 @@ const TRACKING_HEADERS: ReadonlySet<string> = new Set(
 
 const STREAM_KIND_OF: ReadonlyMap<DeadLetterOrigin, StreamKind> = new Map([
   [DeadLetterOrigin.Event, StreamKind.Event],
+  [DeadLetterOrigin.Command, StreamKind.Command],
   [DeadLetterOrigin.Broadcast, StreamKind.Broadcast],
   [DeadLetterOrigin.Schedule, StreamKind.Schedule],
 ]);
@@ -241,6 +242,7 @@ export class JetstreamDlq {
   ): Promise<DlqRedriveSkipReason | null> {
     if (record.origin === DeadLetterOrigin.Broadcast) return DlqRedriveSkipReason.Broadcast;
     if (record.origin === DeadLetterOrigin.Schedule) return DlqRedriveSkipReason.ScheduleTick;
+    if (record.origin === DeadLetterOrigin.Command) return DlqRedriveSkipReason.Command;
     if (record.redriveCount >= maxRedrives) return DlqRedriveSkipReason.RedriveLimit;
 
     const kind = STREAM_KIND_OF.get(record.origin);

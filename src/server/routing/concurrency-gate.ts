@@ -17,11 +17,20 @@ const BACKLOG_WARN_THRESHOLD = 1_000;
  * are routed in parallel, anything beyond queues FIFO and drains as each
  * in-flight message completes. Ordered streams pin the limit to 1 so
  * delivery stays strictly sequential.
+ *
+ * Parked messages are kept alive only while handlers make progress. Once no
+ * slot has freed for `stallLimitMs`, every slot is held by a hung handler:
+ * the backlog goes back to the server, and so does every message arriving
+ * until a slot frees, so other pods can take them.
  */
 export class ConcurrencyGate {
   private active = 0;
   private backlogWarned = false;
   private readonly backlog: QueuedMessage[] = [];
+  /** When a handler last started or finished. */
+  private lastProgressAt = Date.now();
+  private stallTimer: ReturnType<typeof setTimeout> | null = null;
+  private stalled = false;
 
   public constructor(
     private readonly maxActive: number,
@@ -29,11 +38,19 @@ export class ConcurrencyGate {
     private readonly parkTimer: ParkTimerFn | null,
     private readonly logger: Logger,
     private readonly label: string,
+    private readonly stallLimitMs: number = Number.POSITIVE_INFINITY,
   ) {}
 
   /** Entry point for each incoming message. */
   public push(msg: JsMsg): void {
     if (this.active >= this.maxActive) {
+      if (this.stalled || Date.now() - this.lastProgressAt >= this.stallLimitMs) {
+        this.stalled = true;
+        this.handBack(msg);
+
+        return;
+      }
+
       // A parked message's ack_wait clock is already running on the server.
       this.backlog.push({
         msg,
@@ -47,10 +64,51 @@ export class ConcurrencyGate {
         );
       }
 
+      this.armStallTimer();
+
       return;
     }
 
+    this.start(msg);
+  }
+
+  /**
+   * Stop parked timers and hand the backlog back to the server. Dropping it
+   * silently left every parked message waiting out ack_wait before another
+   * pod could pick it up, which is the whole cost of a rolling deploy.
+   */
+  public dispose(): void {
+    this.clearStallTimer();
+    this.releaseBacklog();
+  }
+
+  private readonly onAsyncDone = (): void => {
+    this.active--;
+    this.markProgress();
+    this.drainBacklog();
+  };
+
+  private readonly onStallCheck = (): void => {
+    this.stallTimer = null;
+
+    if (this.backlog.length === 0) return;
+
+    if (Date.now() - this.lastProgressAt < this.stallLimitMs) {
+      this.armStallTimer();
+
+      return;
+    }
+
+    this.stalled = true;
+    this.logger.warn(
+      `${this.label}: no handler finished in ${this.stallLimitMs}ms; handing ${this.backlog.length} queued messages back to the server`,
+    );
+    this.releaseBacklog();
+  };
+
+  private start(msg: JsMsg): void {
     this.active++;
+    this.markProgress();
     const result = this.routeSafely(msg);
 
     if (result !== undefined) {
@@ -61,30 +119,45 @@ export class ConcurrencyGate {
     }
   }
 
-  /**
-   * Stop parked timers and hand the backlog back to the server. Dropping it
-   * silently left every parked message waiting out ack_wait before another
-   * pod could pick it up, which is the whole cost of a rolling deploy.
-   */
-  public dispose(): void {
+  private markProgress(): void {
+    this.lastProgressAt = Date.now();
+    this.stalled = false;
+  }
+
+  private armStallTimer(): void {
+    if (this.stallTimer !== null || !Number.isFinite(this.stallLimitMs)) return;
+
+    const delay = Math.max(0, this.lastProgressAt + this.stallLimitMs - Date.now());
+    const timer = setTimeout(this.onStallCheck, delay);
+
+    if (typeof timer.unref === 'function') timer.unref();
+    this.stallTimer = timer;
+  }
+
+  private clearStallTimer(): void {
+    if (this.stallTimer === null) return;
+    clearTimeout(this.stallTimer);
+    this.stallTimer = null;
+  }
+
+  private releaseBacklog(): void {
     for (const queued of this.backlog) {
       queued.stopAckExtension?.();
-
-      try {
-        queued.msg.nak();
-      } catch {
-        // A closing connection cannot carry the nak; the server redelivers
-        // once ack_wait expires either way.
-      }
+      this.handBack(queued.msg);
     }
 
     this.backlog.length = 0;
+    this.backlogWarned = false;
   }
 
-  private readonly onAsyncDone = (): void => {
-    this.active--;
-    this.drainBacklog();
-  };
+  private handBack(msg: JsMsg): void {
+    try {
+      msg.nak();
+    } catch {
+      // A closing connection cannot carry the nak; the server redelivers
+      // once ack_wait expires either way.
+    }
+  }
 
   /** A throw here must not leak the concurrency slot or kill the subscription. */
   private routeSafely(msg: JsMsg): Promise<void> | undefined {
@@ -113,6 +186,7 @@ export class ConcurrencyGate {
 
       next.stopAckExtension?.();
       this.active++;
+      this.markProgress();
       const result = this.routeSafely(next.msg);
 
       if (result !== undefined) {

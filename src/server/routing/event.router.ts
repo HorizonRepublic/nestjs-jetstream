@@ -24,13 +24,20 @@ import {
   type ServerEndpoint,
 } from '../../otel';
 import type { ScheduleStore } from '../../schedule/schedule-store';
-import { resolveAckExtension, resolveRetryDelays, startAckExtensionTimer } from '../../utils';
+import {
+  handlerRunLimit,
+  resolveAckExtension,
+  resolveParkExtension,
+  resolveRetryDelays,
+  startAckExtensionTimer,
+} from '../../utils';
 import { MessageProvider } from '../infrastructure';
 import { NameResolver } from '../infrastructure/name-resolver';
 import { ConcurrencyGate } from './concurrency-gate';
 import { DeadLetterAdvisoryListener } from './dead-letter-advisory';
 import { DeadLetterCapture } from './dead-letter-capture';
 import { createOrderedPipeline, createWorkqueuePipeline } from './event-pipeline';
+import { FinalDeliveries } from './final-deliveries';
 import { InFlightTracker } from './in-flight-tracker';
 import { PatternRegistry } from './pattern-registry';
 import { OrphanOutcome } from './routing.types';
@@ -55,6 +62,7 @@ const ORPHAN_FALLBACK_DELIVERIES = 3;
 /** Kinds whose exhausted deliveries are captured from server advisories. */
 const ADVISORY_WATCHED_KINDS: ReadonlySet<StreamKind> = new Set([
   StreamKind.Event,
+  StreamKind.Command,
   StreamKind.Schedule,
   StreamKind.Broadcast,
 ]);
@@ -83,6 +91,8 @@ export class EventRouter {
   private readonly serverEndpoint: ServerEndpoint | null;
   private readonly capture: DeadLetterCapture | null;
   private readonly advisories: DeadLetterAdvisoryListener | null;
+  /** Final deliveries handled in this process; the advisory capture leaves them to their handler. */
+  public readonly finalDeliveries: FinalDeliveries | null;
   private maxDeliverByStream = new Map<string, number>();
   private readonly startedAt = Date.now();
 
@@ -127,9 +137,14 @@ export class EventRouter {
         )
       : null;
 
+    const capture = this.capture;
+
+    this.finalDeliveries = capture
+      ? new FinalDeliveries((msg) => capture.isFinalDelivery(msg))
+      : null;
     this.advisories =
-      this.capture && connection
-        ? new DeadLetterAdvisoryListener(connection, this.capture, codec)
+      capture && connection
+        ? new DeadLetterAdvisoryListener(connection, capture, codec, this.finalDeliveries)
         : null;
   }
 
@@ -187,9 +202,12 @@ export class EventRouter {
   /**
    * Stop routing and unsubscribe from all streams. Handlers already running
    * keep their settlement path; parked messages are handed back to the server.
+   * Captures waiting on a running handler proceed now, before the connection
+   * drains: their advisory is not sent again.
    */
   public destroy(): void {
     this.advisories?.stop();
+    this.finalDeliveries?.abandonWaits();
     for (const sub of this.subscriptions) {
       sub.unsubscribe();
     }
@@ -221,21 +239,36 @@ export class EventRouter {
     };
 
     const pipeline = isOrdered ? createOrderedPipeline(rctx) : createWorkqueuePipeline(rctx);
+    const runLimit = handlerRunLimit(ackExtension);
     const route: RouteFn = (msg) => {
       const pending = pipeline(msg);
 
-      if (pending !== undefined) this.inFlight.track(pending);
+      if (pending !== undefined) {
+        this.inFlight.track(pending);
+        this.finalDeliveries?.track(msg, pending, runLimit);
+      }
 
       return pending;
     };
 
     const maxActive = isOrdered ? 1 : (this.getConcurrency(kind) ?? Number.POSITIVE_INFINITY);
+    // Ordered consumers acknowledge nothing, so a parked message has no deadline.
+    const parkExtension = isOrdered
+      ? null
+      : resolveParkExtension(ackExtension, this.ackWaitMap?.get(kind));
     const parkTimer: ParkTimerFn | null =
-      ackExtension === null
+      parkExtension === null
         ? null
-        : (msg): (() => void) | null => startAckExtensionTimer(msg, ackExtension);
+        : (msg): (() => void) | null => startAckExtensionTimer(msg, parkExtension);
 
-    const gate = new ConcurrencyGate(maxActive, route, parkTimer, this.logger, kind);
+    const gate = new ConcurrencyGate(
+      maxActive,
+      route,
+      parkTimer,
+      this.logger,
+      kind,
+      isOrdered ? Number.POSITIVE_INFINITY : runLimit,
+    );
 
     const subscription = stream$.subscribe({
       next: (msg: JsMsg): void => {

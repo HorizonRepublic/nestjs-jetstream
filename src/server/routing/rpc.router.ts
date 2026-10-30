@@ -16,9 +16,16 @@ import {
   type ResolvedOtelOptions,
   type ServerEndpoint,
 } from '../../otel';
-import { resolveAckExtension, startAckExtensionTimer, type AckExtension } from '../../utils';
+import {
+  handlerRunLimit,
+  resolveCommandExtension,
+  resolveParkExtension,
+  startAckExtensionTimer,
+  type AckExtension,
+} from '../../utils';
 import { MessageProvider } from '../infrastructure';
 import { ConcurrencyGate } from './concurrency-gate';
+import type { FinalDeliveries } from './final-deliveries';
 import { InFlightTracker } from './in-flight-tracker';
 import { PatternRegistry } from './pattern-registry';
 import type { ParkTimerFn, RouteFn } from './routing.types';
@@ -40,7 +47,7 @@ export class RpcRouter {
   private readonly logger = new Logger('Jetstream:RpcRouter');
   private readonly timeout: number;
   private readonly concurrency: number | undefined;
-  private resolvedAckExtension: AckExtension | null | undefined;
+  private resolvedAckExtension: AckExtension | undefined;
   private subscription: Subscription | null = null;
   private cachedNc: NatsConnection | null = null;
   private readonly inFlight = new InFlightTracker();
@@ -58,6 +65,7 @@ export class RpcRouter {
     private readonly rpcOptions?: RpcRouterOptions | undefined,
     private readonly ackWaitMap?: Map<StreamKind, number> | undefined,
     options?: JetstreamModuleOptions,
+    private readonly finalDeliveries?: FinalDeliveries | null | undefined,
   ) {
     this.timeout = rpcOptions?.timeout ?? DEFAULT_JETSTREAM_RPC_TIMEOUT;
     this.concurrency = rpcOptions?.concurrency;
@@ -78,11 +86,12 @@ export class RpcRouter {
   }
 
   /** Lazily resolve the ack extension (needs ackWaitMap populated at runtime). */
-  private get ackExtension(): AckExtension | null {
+  private get ackExtension(): AckExtension {
     if (this.resolvedAckExtension !== undefined) return this.resolvedAckExtension;
-    this.resolvedAckExtension = resolveAckExtension(
+    this.resolvedAckExtension = resolveCommandExtension(
       this.rpcOptions?.ackExtension,
       this.ackWaitMap?.get(StreamKind.Command),
+      this.timeout,
     );
     return this.resolvedAckExtension;
   }
@@ -109,19 +118,24 @@ export class RpcRouter {
       ackExtension,
       timeout: this.timeout,
     });
+    const runLimit = handlerRunLimit(ackExtension);
     const handleSafe: RouteFn = (msg) => {
       const pending = pipeline(msg);
 
-      if (pending !== undefined) this.inFlight.track(pending);
+      if (pending !== undefined) {
+        this.inFlight.track(pending);
+        this.finalDeliveries?.track(msg, pending, runLimit);
+      }
 
       return pending;
     };
 
-    const parkTimer: ParkTimerFn | null =
-      ackExtension === null
-        ? null
-        : (msg): (() => void) | null => startAckExtensionTimer(msg, ackExtension);
-    const gate = new ConcurrencyGate(maxActive, handleSafe, parkTimer, logger, 'RPC');
+    const parkExtension = resolveParkExtension(
+      ackExtension,
+      this.ackWaitMap?.get(StreamKind.Command),
+    );
+    const parkTimer: ParkTimerFn = (msg) => startAckExtensionTimer(msg, parkExtension);
+    const gate = new ConcurrencyGate(maxActive, handleSafe, parkTimer, logger, 'RPC', runLimit);
 
     this.subscription = this.messageProvider.commands$.subscribe({
       next: (msg: JsMsg): void => {

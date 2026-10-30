@@ -37,8 +37,9 @@ export const ERROR_CONTEXT_PREFIXES: readonly (readonly [string, ErrorContext])[
   ['core-rpc-handler', 'handler'],
   ['rpc-handler', 'handler'],
   // EventRouter formats contexts as `${StreamKind.*}-handler:...`; the enum
-  // uses short forms (`ev`, `ordered`, `broadcast`) so both surface in the wild.
+  // uses short forms (`ev`, `sched`, `ordered`, `broadcast`) so both surface in the wild.
   ['ev-handler', 'handler'],
+  ['sched-handler', 'handler'],
   ['event-handler', 'handler'],
   ['broadcast-handler', 'handler'],
   ['ordered-handler', 'handler'],

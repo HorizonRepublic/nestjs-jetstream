@@ -58,7 +58,8 @@ export interface AckExtensionOptions {
    *
    * Past it the transport stops extending and logs a warning; the handler keeps
    * running and the server redelivers the message once `ack_wait` runs out.
-   * `Infinity` removes the limit.
+   * On the last delivery, a handler past this limit counts as hung and its
+   * message is dead-lettered while it runs. `Infinity` removes the limit.
    */
   maxDuration?: number;
 }
@@ -148,9 +149,10 @@ export interface StreamConsumerOverrides {
    * Default: `undefined` (unlimited, naturally bounded by `max_ack_pending`).
    * Set this to protect downstream systems from overload.
    *
-   * If `concurrency < max_ack_pending`, messages buffer in RxJS
-   * while their NATS ack timer ticks. Increase `ack_wait` proportionally to
-   * prevent unnecessary redeliveries.
+   * A queued message is kept alive with `msg.working()` until a slot frees,
+   * whatever `ackExtension` says, so the wait never triggers a redelivery.
+   * When no handler starts or finishes for `ackExtension.maxDuration`
+   * (5 minutes by default), the queue is handed back to the server.
    */
   concurrency?: number;
 
@@ -158,6 +160,7 @@ export interface StreamConsumerOverrides {
    * Auto-extend the NATS ack deadline via `msg.working()` during handler execution.
    *
    * - `false` (default): disabled; NATS redelivers after `ack_wait` if not acked.
+   *   On `rpc`, commands are still kept alive up to the RPC timeout.
    * - `true`: auto-extend at `ack_wait / 2` interval (calculated from consumer config).
    * - `number`: explicit extension interval in milliseconds.
    * - `{ interval?, maxDuration? }`: the same, plus how long one message may be extended.
