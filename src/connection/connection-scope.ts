@@ -145,8 +145,11 @@ export const createConnectionScope = (
   } = deriveOtelAttrs(options);
 
   // Recreates the consumer when self-healing hits "consumer not found".
-  const consumerRecoveryFn: ConsumerRecoveryFn = async (kind: StreamKind): Promise<ConsumerInfo> =>
-    withSelfHealingSpan(
+  const consumerRecoveryFn: ConsumerRecoveryFn = async (
+    kind: StreamKind,
+    lastKnown?: ConsumerInfo | undefined,
+  ): Promise<ConsumerInfo> => {
+    const info = await withSelfHealingSpan(
       otel,
       {
         serviceName: otelServiceName,
@@ -158,9 +161,16 @@ export const createConnectionScope = (
       async () => {
         const jsm = await connection.getJetStreamManager();
 
-        return consumers.recoverConsumer(jsm, kind);
+        return consumers.recoverConsumer(jsm, kind, lastKnown);
       },
     );
+
+    // Another replica may have recreated it with a different config.
+    if (info.config.ack_wait) ackWaitMap.set(kind, info.config.ack_wait);
+    eventRouter.refreshMaxDeliver(info);
+
+    return info;
+  };
 
   const messages = new MessageProvider(
     connection,

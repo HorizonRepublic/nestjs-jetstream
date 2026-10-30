@@ -72,7 +72,7 @@ To enable [message scheduling](/docs/guides/scheduling), add `allow_msg_schedule
 
 ## Consumer Defaults
 
-Every durable consumer uses `ack_policy: Explicit`, `deliver_policy: All` and `replay_policy: Instant`. What differs:
+Every durable consumer uses `ack_policy: Explicit`, `deliver_policy: All` and `replay_policy: Instant`. A broadcast consumer that self-healing recreates is the exception: it resumes after its last known ack floor, see [Broadcast Events](/docs/patterns/broadcast#a-recreated-consumer-resumes-where-it-stopped). What differs:
 
 | Property          | Event        | Command     | Broadcast    | Schedule     |
 | ----------------- | ------------ | ----------- | ------------ | ------------ |

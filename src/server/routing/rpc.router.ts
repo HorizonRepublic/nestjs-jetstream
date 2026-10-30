@@ -48,6 +48,7 @@ export class RpcRouter {
   private readonly timeout: number;
   private readonly concurrency: number | undefined;
   private resolvedAckExtension: AckExtension | undefined;
+  private resolvedForAckWait: number | undefined;
   private subscription: Subscription | null = null;
   private cachedNc: NatsConnection | null = null;
   private readonly inFlight = new InFlightTracker();
@@ -85,14 +86,24 @@ export class RpcRouter {
     }
   }
 
-  /** Lazily resolve the ack extension (needs ackWaitMap populated at runtime). */
+  /**
+   * Resolved lazily, since ackWaitMap is populated at runtime, and again once
+   * a recreated consumer comes back with another ack_wait.
+   */
   private get ackExtension(): AckExtension {
-    if (this.resolvedAckExtension !== undefined) return this.resolvedAckExtension;
+    const ackWait = this.ackWaitMap?.get(StreamKind.Command);
+
+    if (this.resolvedAckExtension !== undefined && this.resolvedForAckWait === ackWait) {
+      return this.resolvedAckExtension;
+    }
+
     this.resolvedAckExtension = resolveCommandExtension(
       this.rpcOptions?.ackExtension,
-      this.ackWaitMap?.get(StreamKind.Command),
+      ackWait,
       this.timeout,
     );
+    this.resolvedForAckWait = ackWait;
+
     return this.resolvedAckExtension;
   }
 
@@ -104,6 +115,7 @@ export class RpcRouter {
 
     const logger = this.logger;
     const ackExtension = this.ackExtension;
+    const currentAckExtension = (): AckExtension => this.ackExtension;
     const maxActive = this.concurrency ?? Number.POSITIVE_INFINITY;
 
     const pipeline = createRpcPipeline({
@@ -115,7 +127,9 @@ export class RpcRouter {
       otel: this.otel,
       serviceName: this.serviceName,
       serverEndpoint: this.serverEndpoint,
-      ackExtension,
+      get ackExtension(): AckExtension {
+        return currentAckExtension();
+      },
       timeout: this.timeout,
     });
     const runLimit = handlerRunLimit(ackExtension);
@@ -130,11 +144,11 @@ export class RpcRouter {
       return pending;
     };
 
-    const parkExtension = resolveParkExtension(
-      ackExtension,
-      this.ackWaitMap?.get(StreamKind.Command),
-    );
-    const parkTimer: ParkTimerFn = (msg) => startAckExtensionTimer(msg, parkExtension);
+    const parkTimer: ParkTimerFn = (msg) =>
+      startAckExtensionTimer(
+        msg,
+        resolveParkExtension(this.ackExtension, this.ackWaitMap?.get(StreamKind.Command)),
+      );
     const gate = new ConcurrencyGate(maxActive, handleSafe, parkTimer, logger, 'RPC', runLimit);
 
     this.subscription = this.messageProvider.commands$.subscribe({

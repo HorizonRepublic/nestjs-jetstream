@@ -853,6 +853,41 @@ describe(RpcRouter, () => {
       expect(callCount).toBeGreaterThanOrEqual(2);
     });
 
+    it('should resolve the interval again once a recreated consumer changes ack_wait', async () => {
+      // Given: started against a 1s ack_wait, then the consumer comes back with 4s
+      const ackWaitMap = new Map<StreamKind, number>([[StreamKind.Command, 1_000 * 1_000_000]]);
+
+      sut = new RpcRouter(
+        messageProvider,
+        patternRegistry,
+        connection,
+        codec,
+        eventBus,
+        { ackExtension: true },
+        ackWaitMap,
+      );
+      await sut.start();
+      ackWaitMap.set(StreamKind.Command, 4_000 * 1_000_000);
+
+      let resolveHandler!: () => void;
+      const handlerPromise = new Promise<void>((r) => {
+        resolveHandler = r;
+      });
+
+      patternRegistry.getHandler.mockReturnValue(vi.fn().mockReturnValue(handlerPromise));
+
+      const msg = createRpcMsg('slow.cmd', {}, faker.string.uuid(), faker.string.uuid());
+
+      // When: the handler runs past the old interval but not the new one (2s)
+      commands$.next(msg);
+      await new Promise((r) => setTimeout(r, 700));
+      resolveHandler();
+      await new Promise((r) => setTimeout(r, 10));
+
+      // Then
+      expect(msg.working).not.toHaveBeenCalled();
+    });
+
     it('should clear working() interval after handler completes', async () => {
       // Given: sut with ackExtension = 30ms
       sut = new RpcRouter(messageProvider, patternRegistry, connection, codec, eventBus, {

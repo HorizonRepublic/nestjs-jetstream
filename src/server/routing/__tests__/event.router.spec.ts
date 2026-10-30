@@ -273,6 +273,47 @@ describe(EventRouter, () => {
         expect(msg.nak).not.toHaveBeenCalled();
       });
 
+      it('should count deliveries against the max_deliver of a recreated consumer', async () => {
+        // Given: the consumer came back allowing a single delivery
+        store.writtenAt.mockResolvedValue(new Date('2020-01-01T00:00:00Z'));
+        sut.refreshMaxDeliver(
+          createMock<ConsumerInfo>({
+            stream_name: 'svc__microservice_sched-stream',
+            config: { max_deliver: 1 },
+          }),
+        );
+
+        const msg = tick(1, 'svc__microservice._cron.decl.gone');
+
+        // When
+        schedules$.next(msg);
+        await vi.waitFor(() => {
+          expect(msg.term).toHaveBeenCalled();
+        });
+
+        // Then
+        expect(msg.nak).not.toHaveBeenCalled();
+      });
+
+      it('should fall back to the default bound when a recreated consumer sets no limit', async () => {
+        // Given
+        sut.refreshMaxDeliver(
+          createMock<ConsumerInfo>({
+            stream_name: 'svc__microservice_sched-stream',
+            config: { max_deliver: -1 },
+          }),
+        );
+
+        const msg = tick(2, 'svc__microservice._cron.decl.gone');
+
+        // When
+        schedules$.next(msg);
+        await new Promise(process.nextTick);
+
+        // Then
+        expect(msg.nak).toHaveBeenCalledWith(5_000);
+      });
+
       it('should leave a schedule newer than this replica to the replicas that handle it', async () => {
         // Given a schedule written after this replica started, as during a rollout
         store.writtenAt.mockResolvedValue(new Date(Date.now() + 1_000));
@@ -2407,6 +2448,44 @@ describe(EventRouter, () => {
 
       expect(callCount).toBeGreaterThanOrEqual(2);
       expect(callCount).toBeLessThanOrEqual(3);
+    });
+
+    it('should resolve the interval again once a recreated consumer changes ack_wait', async () => {
+      // Given: started against a 1s ack_wait, then the consumer comes back with 4s
+      const ackWaitMap = new Map<StreamKind, number>([[StreamKind.Event, 1_000 * 1_000_000]]);
+
+      sut = new EventRouter(
+        messageProvider,
+        patternRegistry,
+        codec,
+        eventBus,
+        undefined,
+        { events: { ackExtension: true } },
+        ackWaitMap,
+      );
+      sut.start();
+      ackWaitMap.set(StreamKind.Event, 4_000 * 1_000_000);
+
+      let resolveHandler!: () => void;
+      const handlerPromise = new Promise<void>((r) => {
+        resolveHandler = r;
+      });
+
+      patternRegistry.getHandler.mockReturnValue(vi.fn().mockReturnValue(handlerPromise));
+
+      const msg = createMock<JsMsg>({
+        subject: faker.lorem.word(),
+        data: new TextEncoder().encode(JSON.stringify({ test: true })),
+      });
+
+      // When: the handler runs past the old interval but not the new one (2s)
+      events$.next(msg);
+      await new Promise((r) => setTimeout(r, 700));
+      resolveHandler();
+      await new Promise((r) => setTimeout(r, 10));
+
+      // Then
+      expect(msg.working).not.toHaveBeenCalled();
     });
 
     it('should use 5s fallback when ackExtension is true but no ackWaitMap entry', async () => {

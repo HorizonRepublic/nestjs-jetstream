@@ -6,7 +6,7 @@ export { MessageProvider } from './message.provider';
 
 export { MetadataProvider } from './metadata.provider';
 
-export type { ConsumerRecoveryFn } from './message.provider';
+export type { ConsumerRecoveryFn } from './message.provider.types';
 
 export { NatsErrorCode } from './nats-error-codes';
 

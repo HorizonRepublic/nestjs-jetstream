@@ -1,5 +1,5 @@
 import type { ConsumerInfo, StreamInfo } from '@nats-io/jetstream';
-import { JetStreamApiError } from '@nats-io/jetstream';
+import { DeliverPolicy, JetStreamApiError } from '@nats-io/jetstream';
 
 import { faker } from '@faker-js/faker';
 import { createMock } from '@golevelup/ts-vitest';
@@ -262,6 +262,135 @@ describe(ConsumerProvider, () => {
         // And: consumer was NOT created
         expect(mockJsm.consumers.add).not.toHaveBeenCalled();
       });
+    });
+  });
+
+  describe('recoverConsumer start position', () => {
+    const consumerNotFound = (): JetStreamApiError =>
+      new JetStreamApiError({ err_code: 10014, code: 404, description: 'consumer not found' });
+
+    const lastKnownAt = (ackFloor: number): ConsumerInfo =>
+      createMock<ConsumerInfo>({
+        ack_floor: { stream_seq: ackFloor, consumer_seq: faker.number.int() },
+      });
+
+    beforeEach(() => {
+      patternRegistry.getBroadcastPatterns.mockReturnValue(['broadcast.config.updated']);
+      mockJsm.consumers.info.mockRejectedValue(consumerNotFound());
+      mockJsm.consumers.add.mockResolvedValue(createMock<ConsumerInfo>());
+    });
+
+    it('should resume a broadcast durable after its last known ack floor', async () => {
+      // Given
+      const ackFloor = faker.number.int({ min: 1, max: 100_000 });
+      const jsm = await connection.getJetStreamManager();
+
+      // When
+      await sut.recoverConsumer(jsm, StreamKind.Broadcast, lastKnownAt(ackFloor));
+
+      // Then
+      expect(mockJsm.consumers.add).toHaveBeenCalledWith(
+        'test-stream',
+        expect.objectContaining({
+          deliver_policy: DeliverPolicy.StartSequence,
+          opt_start_seq: ackFloor + 1,
+        }),
+      );
+    });
+
+    it('should start a broadcast durable from new messages when no position is known', async () => {
+      // Given
+      const jsm = await connection.getJetStreamManager();
+
+      // When
+      await sut.recoverConsumer(jsm, StreamKind.Broadcast);
+
+      // Then
+      expect(mockJsm.consumers.add).toHaveBeenCalledWith(
+        'test-stream',
+        expect.objectContaining({ deliver_policy: DeliverPolicy.New }),
+      );
+    });
+
+    it('should keep the configured start of a broadcast durable the user set', async () => {
+      // Given
+      options = { ...options, broadcast: { consumer: { deliver_policy: DeliverPolicy.Last } } };
+      sut = makeSut();
+
+      const jsm = await connection.getJetStreamManager();
+
+      // When
+      await sut.recoverConsumer(jsm, StreamKind.Broadcast, lastKnownAt(faker.number.int()));
+
+      // Then
+      expect(mockJsm.consumers.add).toHaveBeenCalledWith(
+        'test-stream',
+        expect.objectContaining({ deliver_policy: DeliverPolicy.Last }),
+      );
+    });
+
+    it('should recreate a work-queue durable from the start', async () => {
+      // Given
+      const jsm = await connection.getJetStreamManager();
+
+      // When
+      await sut.recoverConsumer(jsm, StreamKind.Event, lastKnownAt(faker.number.int()));
+
+      // Then
+      expect(mockJsm.consumers.add).toHaveBeenCalledWith(
+        'test-stream',
+        expect.objectContaining({ deliver_policy: DeliverPolicy.All }),
+      );
+      expect(mockJsm.consumers.add.mock.calls[0]?.[1]).not.toHaveProperty('opt_start_seq');
+    });
+  });
+
+  describe('ensureConsumer start position', () => {
+    const existingFrom = (startSeq: number): ConsumerInfo =>
+      createMock<ConsumerInfo>({
+        config: { deliver_policy: DeliverPolicy.StartSequence, opt_start_seq: startSeq },
+      });
+
+    beforeEach(() => {
+      patternRegistry.getBroadcastPatterns.mockReturnValue(['broadcast.config.updated']);
+      mockJsm.consumers.update.mockResolvedValue(createMock<ConsumerInfo>());
+    });
+
+    it('should keep the sequence a recreated durable resumed from', async () => {
+      // Given
+      const startSeq = faker.number.int({ min: 2, max: 100_000 });
+
+      mockJsm.consumers.info.mockResolvedValue(existingFrom(startSeq));
+
+      // When
+      await sut.ensureConsumers([StreamKind.Broadcast]);
+
+      // Then
+      expect(mockJsm.consumers.update).toHaveBeenCalledWith(
+        'test-stream',
+        expect.any(String),
+        expect.objectContaining({
+          deliver_policy: DeliverPolicy.StartSequence,
+          opt_start_seq: startSeq,
+        }),
+      );
+    });
+
+    it('should send the configured start when the user set one', async () => {
+      // Given
+      options = { ...options, broadcast: { consumer: { deliver_policy: DeliverPolicy.New } } };
+      sut = makeSut();
+      mockJsm.consumers.info.mockResolvedValue(existingFrom(faker.number.int({ min: 2 })));
+
+      // When
+      await sut.ensureConsumers([StreamKind.Broadcast]);
+
+      // Then
+      expect(mockJsm.consumers.update).toHaveBeenCalledWith(
+        'test-stream',
+        expect.any(String),
+        expect.objectContaining({ deliver_policy: DeliverPolicy.New }),
+      );
     });
   });
 
