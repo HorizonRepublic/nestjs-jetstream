@@ -522,4 +522,245 @@ describe(ConnectionProvider, () => {
       expect(js1).not.toBe(js2);
     });
   });
+
+  describe('re-establishing after a terminal close', () => {
+    interface ClosableConnection {
+      nc: Mocked<NatsConnection>;
+      close(): void;
+    }
+
+    /** Status feed that, like nats.js, hands every `status()` caller its own iterator. */
+    interface StatusFeed {
+      open(): AsyncIterable<Status>;
+      emit(status: Status): void;
+      end(): void;
+    }
+
+    type Wake = () => void;
+
+    interface StatusListener {
+      queue: Status[];
+      wake: Wake | null;
+      ended: boolean;
+    }
+
+    const statusFeed = (): StatusFeed => {
+      const listeners: StatusListener[] = [];
+
+      return {
+        open: (): AsyncIterable<Status> => {
+          const listener: StatusListener = { queue: [], wake: null, ended: false };
+
+          listeners.push(listener);
+
+          return (async function* (): AsyncGenerator<Status> {
+            while (!listener.ended || listener.queue.length > 0) {
+              const next = listener.queue.shift();
+
+              if (next) {
+                yield next;
+                continue;
+              }
+
+              await new Promise<void>((resolve) => {
+                listener.wake = resolve;
+              });
+            }
+          })();
+        },
+        emit: (status): void => {
+          for (const listener of listeners) {
+            listener.queue.push(status);
+            listener.wake?.();
+          }
+        },
+        end: (): void => {
+          for (const listener of listeners) {
+            listener.ended = true;
+            listener.wake?.();
+          }
+        },
+      };
+    };
+
+    const closableConnection = (feed?: StatusFeed): ClosableConnection => {
+      let closed = false;
+      const nc = createNc({
+        isClosed: vi.fn(() => closed),
+        status: vi.fn(() => feed?.open() ?? emptyStatusStream()),
+      });
+
+      return {
+        nc,
+        close: (): void => {
+          closed = true;
+        },
+      };
+    };
+
+    it('should bind the JetStream client to the new connection', async () => {
+      // Given a client cached on a connection that then closed for good
+      const first = closableConnection();
+      const second = closableConnection();
+
+      mockConnect.mockResolvedValueOnce(first.nc).mockResolvedValueOnce(second.nc);
+      mockJetstream.mockImplementation(() => createMock<JetStreamClient>());
+      await sut.getConnection();
+      const stale = sut.getJetStreamClient();
+
+      first.close();
+
+      // When the connection is re-established
+      await sut.getConnection();
+      const fresh = sut.getJetStreamClient();
+
+      // Then the client is rebuilt on the new connection
+      expect(fresh).not.toBe(stale);
+      expect(mockJetstream).toHaveBeenLastCalledWith(second.nc);
+    });
+
+    it('should bind the JetStream manager to the new connection', async () => {
+      // Given a manager cached on a connection that then closed for good
+      const first = closableConnection();
+      const second = closableConnection();
+
+      mockConnect.mockResolvedValueOnce(first.nc).mockResolvedValueOnce(second.nc);
+      mockJetstreamManager.mockImplementation(async () => createMock<JetStreamManager>());
+      const stale = await sut.getJetStreamManager();
+
+      first.close();
+
+      // When the connection is re-established
+      await sut.getConnection();
+      const fresh = await sut.getJetStreamManager();
+
+      // Then the manager is rebuilt on the new connection
+      expect(fresh).not.toBe(stale);
+      expect(mockJetstreamManager).toHaveBeenLastCalledWith(second.nc);
+    });
+
+    it('should probe the capabilities of the new connection', async () => {
+      // Given capabilities probed on a connection that then closed for good
+      const first = closableConnection();
+      const second = closableConnection();
+
+      mockConnect.mockResolvedValueOnce(first.nc).mockResolvedValueOnce(second.nc);
+      mockJetstreamManager
+        .mockResolvedValueOnce(
+          createMock<JetStreamManager>({
+            getAccountInfo: vi.fn().mockResolvedValue({ api: { level: 3 } }),
+          }),
+        )
+        .mockResolvedValueOnce(
+          createMock<JetStreamManager>({
+            getAccountInfo: vi.fn().mockResolvedValue({ api: { level: 5 } }),
+          }),
+        );
+      expect((await sut.getCapabilities()).apiLevel).toBe(3);
+
+      first.close();
+
+      // When the connection is re-established
+      await sut.getConnection();
+
+      // Then the new server is probed
+      expect((await sut.getCapabilities()).apiLevel).toBe(5);
+    });
+
+    it('should remember that a connection serving handlers closed for good', async () => {
+      // Given a server bound to a connection
+      const feed = statusFeed();
+      const first = closableConnection(feed);
+      const second = closableConnection();
+
+      mockConnect.mockResolvedValueOnce(first.nc).mockResolvedValueOnce(second.nc);
+      await sut.getConnection();
+      sut.bindServer();
+
+      // When that connection closes for good and a client call dials a new one
+      first.close();
+      feed.end();
+      await vi.waitFor(() => {
+        expect(sut.hasLostServerConnection()).toBe(true);
+      });
+      await sut.getConnection();
+
+      // Then the loss sticks: the server side is still bound to the closed connection
+      expect(sut.hasLostServerConnection()).toBe(true);
+    });
+
+    it('should not flag a terminal close when no server is bound', async () => {
+      // Given a client-only connection
+      const feed = statusFeed();
+      const first = closableConnection(feed);
+
+      mockConnect.mockResolvedValueOnce(first.nc);
+      await sut.getConnection();
+
+      // When it closes for good
+      first.close();
+      feed.end();
+      await new Promise(process.nextTick);
+
+      // Then re-dialling is enough to recover
+      expect(sut.hasLostServerConnection()).toBe(false);
+    });
+
+    it('should not flag a deliberate shutdown', async () => {
+      // Given a server bound to a connection that ends its status feed when drained
+      const feed = statusFeed();
+      const nc = createNc({
+        status: vi.fn(() => feed.open()),
+        drain: vi.fn(async () => {
+          feed.end();
+        }),
+      });
+
+      mockConnect.mockResolvedValueOnce(nc);
+      await sut.getConnection();
+      sut.bindServer();
+
+      // When the application shuts down
+      await sut.shutdown();
+      await new Promise(process.nextTick);
+
+      // Then the close is not treated as a loss
+      expect(sut.hasLostServerConnection()).toBe(false);
+    });
+
+    it('should keep status$ subscribers on the new connection', async () => {
+      // Given a status$ subscriber on a connection that then closes for good
+      const firstStatus = statusFeed();
+      const secondStatus = statusFeed();
+      const first = closableConnection(firstStatus);
+      const second = closableConnection(secondStatus);
+      const seen: Status[] = [];
+
+      mockConnect.mockResolvedValueOnce(first.nc).mockResolvedValueOnce(second.nc);
+      const subscription = sut.status$.subscribe((status) => seen.push(status));
+
+      await vi.waitFor(() => {
+        expect(first.nc.status).toHaveBeenCalledTimes(2);
+      });
+      firstStatus.emit({ type: 'close' } as Status);
+      firstStatus.end();
+      first.close();
+      await vi.waitFor(() => {
+        expect(seen).toHaveLength(1);
+      });
+
+      // When the connection is re-established and its status changes
+      await sut.getConnection();
+      await vi.waitFor(() => {
+        expect(second.nc.status).toHaveBeenCalledTimes(2);
+      });
+      secondStatus.emit({ type: 'disconnect', server: '' } as Status);
+
+      // Then the existing subscriber sees the new connection's events
+      await vi.waitFor(() => {
+        expect(seen.map((s) => s.type)).toEqual(['close', 'disconnect']);
+      });
+      subscription.unsubscribe();
+    });
+  });
 });

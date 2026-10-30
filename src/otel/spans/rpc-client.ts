@@ -39,10 +39,15 @@ export enum RpcOutcomeKind {
   Timeout = 'timeout',
   /** Any other failure during the round-trip (publish reject, connection drop, decode, ...). Span status ERROR + recordException. */
   Error = 'error',
+  /** The caller unsubscribed before the round-trip settled. Span status stays UNSET, `rpc.cancelled` event. */
+  Cancelled = 'cancelled',
 }
 
 /** Message used on the span event, status, and the raised `Error` for a timed-out RPC. */
 export const RPC_TIMEOUT_MESSAGE = 'rpc.timeout';
+
+/** Span event recorded when the caller abandons an RPC before it settles. */
+export const RPC_CANCELLED_EVENT = 'rpc.cancelled';
 
 /**
  * Outcome of an RPC round-trip from the caller's point of view. Translated
@@ -52,7 +57,8 @@ export type RpcOutcome =
   | { readonly kind: RpcOutcomeKind.Ok; readonly reply: unknown }
   | { readonly kind: RpcOutcomeKind.ReplyError; readonly replyPayload: unknown }
   | { readonly kind: RpcOutcomeKind.Timeout }
-  | { readonly kind: RpcOutcomeKind.Error; readonly error: Error };
+  | { readonly kind: RpcOutcomeKind.Error; readonly error: Error }
+  | { readonly kind: RpcOutcomeKind.Cancelled };
 
 /**
  * Handle returned by {@link beginRpcClientSpan}. The caller invokes
@@ -156,6 +162,9 @@ export const beginRpcClientSpan = (
         error = outcome.error;
         span.recordException(outcome.error);
         span.setStatus({ code: SpanStatusCode.ERROR, message: outcome.error.message });
+        break;
+      case RpcOutcomeKind.Cancelled:
+        span.addEvent(RPC_CANCELLED_EVENT);
         break;
       default: {
         // Unreachable given the `RpcOutcome` union; log instead of throwing

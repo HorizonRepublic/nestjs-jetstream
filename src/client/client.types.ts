@@ -12,6 +12,9 @@ import type { RpcReplyInbox } from './rpc-reply-inbox';
 /** Settles one pending RPC round-trip with its reply or error packet. */
 export type RpcReplyCallback = (packet: WritePacket) => void;
 
+/** Settles one pending RPC round-trip the caller stopped waiting for. */
+export type RpcCancelCallback = () => void;
+
 /** The slice of a JetStream publish ack the client inspects for dedup warnings. */
 export interface PublishAckLike {
   readonly duplicate: boolean;

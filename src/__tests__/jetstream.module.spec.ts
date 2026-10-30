@@ -1,11 +1,20 @@
 import { Logger, type Provider } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 
+import type { NatsConnection, Status, Subscription } from '@nats-io/transport-node';
+
+import { faker } from '@faker-js/faker';
 import { createMock } from '@golevelup/ts-vitest';
+import { Subject } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { JetstreamClient } from '../client';
+import { JsonCodec } from '../codec';
+import type { ConnectionProvider, ConnectionRegistry } from '../connection';
+import type { ConnectionScope } from '../connection/connection.types';
+import type { EventBus } from '../hooks';
 import { ManagementMode } from '../interfaces';
-import type { JetstreamModuleOptions } from '../interfaces';
+import type { JetstreamModuleOptions, ResolvedConnectionOptions } from '../interfaces';
 import {
   JETSTREAM_CONNECTIONS,
   JETSTREAM_EVENT_BUS,
@@ -16,6 +25,7 @@ import {
   JetstreamModule,
   warnIfManualWithDestructive,
 } from '../jetstream.module';
+import { NameResolver } from '../server/infrastructure/name-resolver';
 
 type ModuleFactoryProvider = Extract<Provider, { provide: unknown; useFactory: unknown }>;
 
@@ -101,5 +111,56 @@ describe('connection scope wiring', () => {
 
     // Then: the factory ran and issued the warn through a real Logger instance
     expect(warnSpy).toHaveBeenCalledWith(DESTRUCTIVE_MIGRATION_MANUAL_WARNING);
+  });
+});
+
+describe('forFeature client wiring', () => {
+  afterEach(vi.resetAllMocks);
+
+  const featureFactory = (connectionName: string): ModuleFactoryProvider['useFactory'] => {
+    const { providers = [] } = JetstreamModule.forFeature({
+      name: faker.word.noun(),
+      connection: connectionName,
+    });
+    const [provider] = providers as ModuleFactoryProvider[];
+
+    return provider!.useFactory;
+  };
+
+  it('should build the client from the per-connection rpc mode, not the root one', async () => {
+    // Given a named connection that switches to JetStream RPC over the Core-mode default
+    const connectionName = faker.word.noun();
+    const resolved: ResolvedConnectionOptions = {
+      name: faker.word.noun(),
+      servers: ['nats://localhost:4222'],
+      connectionName,
+      critical: true,
+      rpc: { mode: 'jetstream' },
+    };
+    const nc = createMock<NatsConnection>({
+      subscribe: vi.fn().mockReturnValue(createMock<Subscription>()),
+    });
+    const connection = createMock<ConnectionProvider>({
+      getConnection: vi.fn().mockResolvedValue(nc),
+      status$: new Subject<Status>().asObservable(),
+    });
+    const scope = createMock<ConnectionScope>({
+      options: resolved,
+      connection,
+      codec: new JsonCodec(),
+      names: new NameResolver(resolved),
+    });
+    const registry = createMock<ConnectionRegistry>({ get: vi.fn().mockReturnValue(scope) });
+
+    // When the feature client is created and connected
+    const sut = featureFactory(connectionName)(registry, createMock<EventBus>()) as JetstreamClient;
+
+    await sut.connect();
+
+    // Then it opens the JetStream RPC reply inbox, which Core mode never does
+    expect(sut).toBeInstanceOf(JetstreamClient);
+    expect(nc.subscribe).toHaveBeenCalledTimes(1);
+
+    await sut.close();
   });
 });

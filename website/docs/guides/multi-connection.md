@@ -8,7 +8,7 @@ schema:
   headline: "Multiple NATS connections in one NestJS service"
   description: "Named NATS connections in NestJS JetStream: configuration, handler binding, criticality, health, and shutdown."
   datePublished: "2026-08-03"
-  dateModified: "2026-10-23"
+  dateModified: "2026-10-30"
 ---
 
 # Multiple NATS connections in one service
@@ -137,6 +137,8 @@ constructor(
 ```
 
 `getClientToken(name)` returns exactly what it always did, so existing injections are untouched.
+
+A client uses the options of its connection, not the root ones. On a connection that sets `rpc: { mode: 'jetstream' }`, `send()` goes through the command stream even when the root stays in Core mode, and the connection's `rpc.timeout` is the default deadline.
 
 ## Bootstrap
 

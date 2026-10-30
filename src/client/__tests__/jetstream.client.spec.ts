@@ -1383,30 +1383,93 @@ describe(JetstreamClient, () => {
     });
   });
 
-  describe('disconnect handling (JetStream RPC mode)', () => {
+  describe('connection status handling (JetStream RPC mode)', () => {
+    let inboxCallback: (err: Error | null, msg: Msg) => void;
+
+    const replyTo = (callIndex: number, payload: unknown): void => {
+      const publishedHeaders: MsgHdrs = mockJs.publish.mock.calls[callIndex]![2]!.headers!;
+      const replyHeaders = natsHeaders();
+
+      replyHeaders.set(
+        JetstreamHeader.CorrelationId,
+        publishedHeaders.get(JetstreamHeader.CorrelationId),
+      );
+      inboxCallback(null, createMock<Msg>({ data: codec.encode(payload), headers: replyHeaders }));
+    };
+
     beforeEach(async () => {
       vi.useFakeTimers();
 
       options.rpc = { mode: 'jetstream' };
       sut = new JetstreamClient(options, targetName, connection, codec, eventBus);
       await sut.connect();
+
+      inboxCallback = mockNc.subscribe.mock.calls[0]![1]!.callback! as (
+        err: Error | null,
+        msg: Msg,
+      ) => void;
     });
 
     afterEach(() => {
       vi.useRealTimers();
     });
 
-    it('should reject all pending callbacks with Error on disconnect', async () => {
-      // Given: two pending RPCs
+    it('should deliver the reply to a call that was pending across a disconnect', async () => {
+      // Given a pending call
+      const reply = { id: faker.string.uuid() };
+      const result = firstValueFrom(sut.send('rpc.one', {}));
+
+      await vi.advanceTimersByTimeAsync(0);
+
+      // When the connection drops and the persisted command is answered after the reconnect
+      statusSubject.next({ type: 'disconnect', server: '' });
+      statusSubject.next({ type: 'reconnect', server: '' });
+      replyTo(0, reply);
+
+      // Then the caller gets the reply instead of a ConnectionLost it might retry
+      await expect(result).resolves.toEqual(reply);
+    });
+
+    it('should keep the inbox subscription across a disconnect', async () => {
+      // Given the inbox subscription
+      const inbox = mockNc.subscribe.mock.results[0]!.value as Mocked<Subscription>;
+
+      // When the connection drops and the client is used again
+      statusSubject.next({ type: 'disconnect', server: '' });
+      await sut.connect();
+
+      // Then nats.js keeps resubscribing the same inbox
+      expect(inbox.unsubscribe).not.toHaveBeenCalled();
+      expect(mockNc.subscribe).toHaveBeenCalledTimes(1);
+    });
+
+    it('should bound a call pending across a disconnect by its deadline', async () => {
+      // Given a pending call
+      const result = firstValueFrom(sut.send('rpc.one', {}));
+
+      await vi.advanceTimersByTimeAsync(0);
+
+      // When the connection drops and no reply arrives
+      statusSubject.next({ type: 'disconnect', server: '' });
+      vi.advanceTimersByTime(DEFAULT_JETSTREAM_RPC_TIMEOUT);
+
+      // Then the call times out
+      await expect(result).rejects.toThrow(
+        expect.objectContaining({ name: 'JetstreamRpcError', reason: RpcErrorReason.Timeout }),
+      );
+    });
+
+    it('should reject every pending call with ConnectionLost when the connection closes', async () => {
+      // Given two pending calls
       const result1 = firstValueFrom(sut.send('rpc.one', {}));
       const result2 = firstValueFrom(sut.send('rpc.two', {}));
 
       await vi.advanceTimersByTimeAsync(0);
 
-      // When: disconnect event fires
-      statusSubject.next({ type: 'disconnect', server: '' });
+      // When the connection closes for good
+      statusSubject.next({ type: 'close' } as Status);
 
-      // Then: both reject with Error('Connection lost')
+      // Then both fail fast
       const connectionLost = expect.objectContaining({
         name: 'JetstreamRpcError',
         reason: RpcErrorReason.ConnectionLost,
@@ -1415,6 +1478,34 @@ describe(JetstreamClient, () => {
 
       await expect(result1).rejects.toThrow(connectionLost);
       await expect(result2).rejects.toThrow(connectionLost);
+    });
+
+    it('should clear the deadlines of the calls it rejects on close', async () => {
+      // Given a pending call
+      firstValueFrom(sut.send('rpc.one', {})).catch(() => {});
+      await vi.advanceTimersByTimeAsync(0);
+
+      // When the connection closes
+      statusSubject.next({ type: 'close' } as Status);
+
+      // Then its deadline never fires
+      vi.advanceTimersByTime(DEFAULT_JETSTREAM_RPC_TIMEOUT);
+      expect(eventBus.emit).not.toHaveBeenCalledWith(
+        TransportEvent.RpcTimeout,
+        expect.anything(),
+        expect.anything(),
+      );
+    });
+
+    it('should open a new inbox on the next connect after the connection closes', async () => {
+      // Given the inbox of the closed connection
+      statusSubject.next({ type: 'close' } as Status);
+
+      // When the client connects again
+      await sut.connect();
+
+      // Then a fresh inbox subscription is created
+      expect(mockNc.subscribe).toHaveBeenCalledTimes(2);
     });
 
     it('should reject pending callbacks when the client closes', async () => {
@@ -1436,63 +1527,102 @@ describe(JetstreamClient, () => {
       );
     });
 
-    it('should clear pending maps on disconnect', async () => {
-      // Given: pending RPC
-      firstValueFrom(sut.send('rpc.one', {})).catch(() => {});
-      await vi.advanceTimersByTimeAsync(0);
-
-      // When: disconnect
-      statusSubject.next({ type: 'disconnect', server: '' });
-
-      // Then: advancing past timeout should NOT trigger RpcTimeout (already cleaned up)
-      vi.advanceTimersByTime(DEFAULT_JETSTREAM_RPC_TIMEOUT);
-      expect(eventBus.emit).not.toHaveBeenCalledWith(
-        TransportEvent.RpcTimeout,
-        expect.anything(),
-        expect.anything(),
-      );
-    });
-
-    it('should reset inbox subscription on disconnect', async () => {
-      // Given: inbox was set up
-      expect(mockNc.subscribe).toHaveBeenCalledTimes(1);
-
-      // When: disconnect
-      statusSubject.next({ type: 'disconnect', server: '' });
-
-      // Then: next connect() should set up inbox again
-      await sut.connect();
-      expect(mockNc.subscribe).toHaveBeenCalledTimes(2);
-    });
-
-    it('should clearTimeout for pending RPCs on disconnect', async () => {
-      // Given: a pending RPC with an active timeout
-      const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
-
-      firstValueFrom(sut.send('rpc.one', {})).catch(() => {});
-      await vi.advanceTimersByTimeAsync(0);
-
-      // When: disconnect event fires
-      statusSubject.next({ type: 'disconnect', server: '' });
-
-      // Then: clearTimeout was called for the pending RPC timeout
-      expect(clearTimeoutSpy).toHaveBeenCalled();
-      clearTimeoutSpy.mockRestore();
-    });
-
-    it('should not affect core RPC mode on disconnect', async () => {
+    it('should not affect core RPC mode on disconnect or close', async () => {
       // Given: core mode client
       options.rpc = undefined;
       const coreClient = new JetstreamClient(options, targetName, connection, codec, eventBus);
 
       await coreClient.connect();
 
-      // When/Then: disconnect fires, no crash
+      // When/Then: status changes fire, no crash
       expect(() => {
         statusSubject.next({ type: 'disconnect', server: '' });
+        statusSubject.next({ type: 'close' } as Status);
       }).not.toThrow();
 
       await coreClient.close();
+    });
+  });
+
+  describe('cancellation (JetStream RPC mode)', () => {
+    beforeEach(async () => {
+      vi.useFakeTimers();
+      eventBus.hasHook.mockReturnValue(true);
+
+      options.rpc = { mode: 'jetstream' };
+      sut = new JetstreamClient(options, targetName, connection, codec, eventBus);
+      await sut.connect();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('should report a call the caller unsubscribed from as cancelled', async () => {
+      // Given a pending call
+      const subscription = sut.send('rpc.one', {}).subscribe({ error: () => {} });
+
+      await vi.advanceTimersByTimeAsync(0);
+
+      // When the caller gives up on it
+      subscription.unsubscribe();
+
+      // Then the round-trip settles once, as cancelled
+      const completed = eventBus.emit.mock.calls.filter(
+        (c) => c[0] === TransportEvent.RpcCompleted,
+      );
+
+      expect(completed).toEqual([
+        [TransportEvent.RpcCompleted, 'rpc.one', expect.any(Number), 'cancelled'],
+      ]);
+    });
+
+    it('should not report a call answered by its handler as cancelled', async () => {
+      // Given a pending call
+      const inboxCallback = mockNc.subscribe.mock.calls[0]![1]!.callback! as (
+        err: Error | null,
+        msg: Msg,
+      ) => void;
+      const result = firstValueFrom(sut.send('rpc.one', {}));
+
+      await vi.advanceTimersByTimeAsync(0);
+
+      const publishedHeaders: MsgHdrs = mockJs.publish.mock.calls[0]![2]!.headers!;
+      const replyHeaders = natsHeaders();
+
+      replyHeaders.set(
+        JetstreamHeader.CorrelationId,
+        publishedHeaders.get(JetstreamHeader.CorrelationId),
+      );
+
+      // When the reply completes the observable, which runs its teardown
+      inboxCallback(null, createMock<Msg>({ data: codec.encode({}), headers: replyHeaders }));
+      await result;
+
+      // Then only the success is reported
+      const statuses = eventBus.emit.mock.calls
+        .filter((c) => c[0] === TransportEvent.RpcCompleted)
+        .map((c) => c[3]);
+
+      expect(statuses).toEqual(['success']);
+    });
+
+    it('should not report a call that already settled as cancelled', async () => {
+      // Given a call that timed out
+      const subscription = sut.send('rpc.one', {}).subscribe({ error: () => {} });
+
+      await vi.advanceTimersByTimeAsync(0);
+      vi.advanceTimersByTime(DEFAULT_JETSTREAM_RPC_TIMEOUT);
+
+      // When the caller unsubscribes afterwards
+      subscription.unsubscribe();
+
+      // Then only the timeout is reported
+      const statuses = eventBus.emit.mock.calls
+        .filter((c) => c[0] === TransportEvent.RpcCompleted)
+        .map((c) => c[3]);
+
+      expect(statuses).toEqual(['timeout']);
     });
   });
 

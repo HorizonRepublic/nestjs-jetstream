@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import type { WritePacket } from '@nestjs/microservices';
 
 import {
   createInbox,
@@ -10,7 +11,12 @@ import {
 import { JetstreamRpcError, RpcErrorReason } from '../errors';
 import type { Codec } from '../interfaces';
 import { JetstreamHeader } from '../jetstream.constants';
-import type { RpcReplyCallback } from './client.types';
+import type { RpcCancelCallback, RpcReplyCallback } from './client.types';
+
+interface PendingReply {
+  readonly settle: RpcReplyCallback;
+  readonly cancel: RpcCancelCallback | undefined;
+}
 
 /**
  * Shared reply inbox for JetStream-mode RPC: one NATS subscription routes
@@ -22,7 +28,7 @@ export class RpcReplyInbox {
 
   private inbox: string | null = null;
   private subscription: Subscription | null = null;
-  private readonly pending = new Map<string, RpcReplyCallback>();
+  private readonly pending = new Map<string, PendingReply>();
   private readonly timeouts = new Map<string, ReturnType<typeof setTimeout>>();
 
   public constructor(
@@ -59,9 +65,16 @@ export class RpcReplyInbox {
     this.logger.debug(`Inbox subscription: ${this.inbox}`);
   }
 
-  /** Register the callback that settles the round-trip for `correlationId`. */
-  public register(correlationId: string, callback: RpcReplyCallback): void {
-    this.pending.set(correlationId, callback);
+  /**
+   * Register the callbacks that settle the round-trip for `correlationId`:
+   * `callback` on a reply or failure, `onCancel` when the caller gives up.
+   */
+  public register(
+    correlationId: string,
+    callback: RpcReplyCallback,
+    onCancel?: RpcCancelCallback | undefined,
+  ): void {
+    this.pending.set(correlationId, { settle: callback, cancel: onCancel });
   }
 
   /**
@@ -104,21 +117,34 @@ export class RpcReplyInbox {
     return this.pending.delete(correlationId);
   }
 
+  /** Drop a request the caller stopped waiting for and run its cancel callback, if still pending. */
+  public cancel(correlationId: string): void {
+    const entry = this.pending.get(correlationId);
+
+    if (!entry) return;
+
+    this.discard(correlationId);
+    entry.cancel?.();
+  }
+
   /** Fail every pending request with `error` and tear the inbox down. */
   public rejectAll(error: Error): void {
-    for (const callback of this.pending.values()) {
-      callback({ err: error, response: null, isDisposed: true });
-    }
+    const entries = [...this.pending.values()];
 
     for (const timeoutId of this.timeouts.values()) {
       clearTimeout(timeoutId);
     }
 
+    // Cleared first: a callback may unsubscribe its caller, which cancels the same id.
     this.pending.clear();
     this.timeouts.clear();
     this.subscription?.unsubscribe();
     this.subscription = null;
     this.inbox = null;
+
+    for (const entry of entries) {
+      entry.settle({ err: error, response: null, isDisposed: true });
+    }
   }
 
   /** Route an inbox reply to the matching pending callback. */
@@ -131,40 +157,35 @@ export class RpcReplyInbox {
       return;
     }
 
-    const callback = this.pending.get(correlationId);
+    const entry = this.pending.get(correlationId);
 
-    if (!callback) {
+    if (!entry) {
       this.logger.warn(`No pending handler for correlation-id: ${correlationId}`);
 
       return;
     }
 
-    const timeoutId = this.timeouts.get(correlationId);
+    this.discard(correlationId);
 
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-      this.timeouts.delete(correlationId);
-    }
+    let packet: WritePacket;
 
     try {
       const decoded = this.codec.decode(msg.data);
 
-      if (msg.headers?.get(JetstreamHeader.Error)) {
-        callback({ err: decoded, response: null, isDisposed: true });
-      } else {
-        callback({ err: null, response: decoded, isDisposed: true });
-      }
+      packet = msg.headers?.get(JetstreamHeader.Error)
+        ? { err: decoded, response: null, isDisposed: true }
+        : { err: null, response: decoded, isDisposed: true };
     } catch (err) {
-      callback({
+      packet = {
         err:
           err instanceof Error
             ? err
             : new JetstreamRpcError(RpcErrorReason.DecodeFailed, 'Decode error', { cause: err }),
         response: null,
         isDisposed: true,
-      });
-    } finally {
-      this.pending.delete(correlationId);
+      };
     }
+
+    entry.settle(packet);
   }
 }

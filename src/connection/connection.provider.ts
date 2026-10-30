@@ -13,7 +13,7 @@ import {
   type Status,
 } from '@nats-io/transport-node';
 
-import { defer, from, Observable, share, shareReplay, switchMap } from 'rxjs';
+import { defer, from, Observable, ReplaySubject, share, switchMap } from 'rxjs';
 
 import { ConnectionErrorReason, JetstreamConnectionError } from '../errors';
 import { EventBus } from '../hooks';
@@ -42,21 +42,25 @@ const DEFAULT_OPTIONS: Partial<ConnectionOptions> = {
  *
  * Provides both Promise-based and Observable-based access to the connection:
  * - `connect()` / `getConnection()`: async/await for one-time setup
- * - `nc$`: cached observable (shareReplay) for reactive consumers
- * - `status$`: live connection status event stream
+ * - `nc$`: replays the current connection and every one established after it
+ * - `status$`: live status events of whichever connection is current
  *
  * One instance per application, created by `JetstreamModule.forRoot()`.
  */
 export class ConnectionProvider {
-  /** Cached observable that replays the established connection to new subscribers. */
+  /**
+   * Connects on first subscription, then emits the current connection and each
+   * one established after a terminal close.
+   */
   public readonly nc$: Observable<NatsConnection>;
 
-  /** Live stream of connection status events (no replay). */
+  /** Live status events (no replay), following the connection across re-establishment. */
   public readonly status$: Observable<Status>;
 
   private readonly logger = new Logger('Jetstream:Connection');
 
   private connection: NatsConnection | null = null;
+  private readonly established = new ReplaySubject<NatsConnection>(1);
   private connectionPromise: Promise<NatsConnection> | null = null;
   private jsClient: JetStreamClient | null = null;
   private jsmInstance: JetStreamManager | null = null;
@@ -67,6 +71,9 @@ export class ConnectionProvider {
   private readonly otelServiceName: string;
   private readonly otelEndpoint: ServerEndpoint | null;
   private lifecycleSpan: ConnectionLifecycleSpanHandle | null = null;
+  private serverBound = false;
+  private serverConnectionLost = false;
+  private shuttingDown = false;
 
   public constructor(
     private readonly options: JetstreamModuleOptions,
@@ -77,10 +84,7 @@ export class ConnectionProvider {
     this.otel = derived.otel;
     this.otelServiceName = derived.serviceName;
     this.otelEndpoint = derived.serverEndpoint;
-    // Lazy observable: connects on first subscription, caches for all future subscribers
-    this.nc$ = defer(() => this.getConnection()).pipe(
-      shareReplay({ bufferSize: 1, refCount: false }),
-    );
+    this.nc$ = defer(async () => this.getConnection()).pipe(switchMap(() => this.established));
 
     this.status$ = this.nc$.pipe(
       switchMap((nc) => from(nc.status())),
@@ -102,9 +106,9 @@ export class ConnectionProvider {
       return this.connectionPromise;
     }
 
-    this.connectionPromise = this.establish().catch((err) => {
+    // Cleared once settled: after a terminal close the next call must dial again.
+    this.connectionPromise = this.establish().finally(() => {
       this.connectionPromise = null;
-      throw err;
     });
 
     return this.connectionPromise;
@@ -155,6 +159,23 @@ export class ConnectionProvider {
     return this.jsClient;
   }
 
+  /**
+   * Record that a server (consumers, RPC subscriptions, advisories) runs on
+   * this connection. Those are not rebuilt on a re-dialled connection.
+   */
+  public bindServer(): void {
+    this.serverBound = true;
+  }
+
+  /**
+   * True once a connection that a server was bound to closed for good outside
+   * of {@link shutdown}. Sticky: re-dialling recovers clients only, so health
+   * keeps reporting the connection down until the process restarts.
+   */
+  public hasLostServerConnection(): boolean {
+    return this.serverConnectionLost;
+  }
+
   /** Direct access to the raw NATS connection, or `null` if not yet connected. */
   public get unwrap(): NatsConnection | null {
     return this.connection;
@@ -166,6 +187,8 @@ export class ConnectionProvider {
    * Sequence: drain -> wait for close. Falls back to force-close on error.
    */
   public async shutdown(): Promise<void> {
+    this.shuttingDown = true;
+
     // Wait for in-flight connection to settle so it doesn't escape shutdown
     if (this.connectionPromise) {
       try {
@@ -199,11 +222,16 @@ export class ConnectionProvider {
       this.lifecycleSpan = null;
       this.connection = null;
       this.connectionPromise = null;
-      this.jsClient = null;
-      this.jsmInstance = null;
-      this.jsmPromise = null;
-      this.capabilitiesPromise = null;
+      this.resetConnectionCaches();
     }
+  }
+
+  /** Drop everything bound to a particular connection or server. */
+  private resetConnectionCaches(): void {
+    this.jsClient = null;
+    this.jsmInstance = null;
+    this.jsmPromise = null;
+    this.capabilitiesPromise = null;
   }
 
   private async probeCapabilities(): Promise<ServerCapabilities> {
@@ -221,11 +249,12 @@ export class ConnectionProvider {
   private async initJetStreamManager(): Promise<JetStreamManager> {
     try {
       const nc = await this.getConnection();
+      const jsm = await jetstreamManager(nc);
 
-      this.jsmInstance = await jetstreamManager(nc);
+      if (this.connection === nc) this.jsmInstance = jsm;
       this.logger.log('JetStream manager initialized');
 
-      return this.jsmInstance;
+      return jsm;
     } finally {
       this.jsmPromise = null;
     }
@@ -244,7 +273,12 @@ export class ConnectionProvider {
         servers: this.options.servers,
       } as ConnectionOptions);
 
+      const previous = this.connection;
+
       this.connection = nc;
+      this.shuttingDown = false;
+      // Replacing a closed connection; a first dial keeps lookups already waiting on it.
+      if (previous) this.resetConnectionCaches();
       this.logger.log(`NATS connection established: ${nc.getServer()}`);
       this.eventBus.emit(TransportEvent.Connect, nc.getServer());
 
@@ -258,6 +292,7 @@ export class ConnectionProvider {
       });
 
       this.monitorStatus(nc);
+      this.established.next(nc);
 
       return nc;
     } catch (err) {
@@ -283,10 +318,7 @@ export class ConnectionProvider {
         this.lifecycleSpan?.recordEvent(EVENT_CONNECTION_DISCONNECTED);
         break;
       case 'reconnect':
-        this.jsClient = null;
-        this.jsmInstance = null;
-        this.jsmPromise = null;
-        this.capabilitiesPromise = null;
+        this.resetConnectionCaches();
         this.eventBus.emit(TransportEvent.Reconnect, nc.getServer());
         this.lifecycleSpan?.recordEvent(EVENT_CONNECTION_RECONNECTED, {
           [ATTR_NATS_CONNECTION_SERVER]: nc.getServer(),
@@ -333,9 +365,19 @@ export class ConnectionProvider {
         // server-initiated close, reconnect budget exhausted). Finalize the
         // lifecycle span here so it does not linger as an open parent for the
         // remaining process uptime. `shutdown()` races with this but both
-        // finishes are idempotent.
-        this.lifecycleSpan?.finish();
-        this.lifecycleSpan = null;
+        // finishes are idempotent. A successor connection owns its own span.
+        if (this.connection === nc) {
+          this.lifecycleSpan?.finish();
+          this.lifecycleSpan = null;
+        }
+
+        if (this.serverBound && !this.shuttingDown && !this.serverConnectionLost) {
+          this.serverConnectionLost = true;
+          this.logger.error(
+            'NATS connection closed for good while serving handlers; ' +
+              'health reports it down until the process restarts',
+          );
+        }
       }
     })().catch((err) => {
       this.logger.error('Status monitor error', err);

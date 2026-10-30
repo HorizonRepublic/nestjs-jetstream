@@ -78,7 +78,8 @@ export class JetstreamHealthIndicator {
   private async probe(scope: ConnectionScope): Promise<JetstreamConnectionHealth> {
     const nc = scope.connection.unwrap;
 
-    if (!nc || nc.isClosed()) {
+    // A re-dialled connection serves clients, but the server side stayed on the closed one.
+    if (!nc || nc.isClosed() || scope.connection.hasLostServerConnection()) {
       return { connected: false, critical: scope.critical, server: null, latency: null };
     }
 

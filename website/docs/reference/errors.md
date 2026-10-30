@@ -8,7 +8,7 @@ schema:
   headline: "Errors: Typed Errors Thrown by the Transport"
   description: "Typed error classes, their reason values, and how to catch them."
   datePublished: "2026-10-27"
-  dateModified: "2026-10-29"
+  dateModified: "2026-10-30"
 ---
 
 # Errors
@@ -67,7 +67,7 @@ All classes except `JetstreamPublishError` extend the abstract `JetstreamBaseErr
 | Reason                | When                                                                                 |
 | --------------------- | ------------------------------------------------------------------------------------ |
 | `timeout`             | No reply arrived within the RPC timeout (JetStream RPC mode)                         |
-| `connection-lost`     | The connection dropped while the call was pending (JetStream RPC mode)               |
+| `connection-lost`     | The connection closed for good while the call was pending (JetStream RPC mode)       |
 | `client-closed`       | The client closed while the call was pending (JetStream RPC mode)                    |
 | `duplicate-publish`   | The command's message ID was already used inside the stream's dedup window           |
 | `decode-failed`       | The reply could not be decoded and the codec threw a non-`Error` value               |

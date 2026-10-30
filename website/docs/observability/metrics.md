@@ -8,7 +8,7 @@ schema:
   headline: "Prometheus Metrics: NestJS JetStream Transport"
   description: "Built-in Prometheus metrics for NATS JetStream transport: throughput, handler latency, consumer lag, dead letters, and publish errors."
   datePublished: "2026-05-27"
-  dateModified: "2026-10-23"
+  dateModified: "2026-10-30"
 ---
 
 # Prometheus Metrics
@@ -106,11 +106,11 @@ All metric names are prefixed with `jetstream_` (configurable). `defaultLabels` 
 
 ### Histograms
 
-| Name                                 | Labels                                | Source                                                                      |
-| ------------------------------------ | ------------------------------------- | --------------------------------------------------------------------------- |
-| `jetstream_handler_duration_seconds` | `stream`, `subject`, `kind`, `status` | Wall-clock duration from handler entry to settlement.                       |
-| `jetstream_publish_duration_seconds` | `subject`, `kind`, `status`           | Wall-clock duration of client publish operations.                           |
-| `jetstream_rpc_duration_seconds`     | `subject`, `status`                   | Full RPC round-trip from caller's perspective. `status` includes `timeout`. |
+| Name                                 | Labels                                | Source                                                                                      |
+| ------------------------------------ | ------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `jetstream_handler_duration_seconds` | `stream`, `subject`, `kind`, `status` | Wall-clock duration from handler entry to settlement.                                       |
+| `jetstream_publish_duration_seconds` | `subject`, `kind`, `status`           | Wall-clock duration of client publish operations.                                           |
+| `jetstream_rpc_duration_seconds`     | `subject`, `status`                   | Full RPC round-trip from caller's perspective. `status` includes `timeout` and `cancelled`. |
 
 Handler and RPC buckets run `[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]` seconds, covering sub-millisecond calls up to ten-second batch handlers. Publish stops at `5`, since a publish still running after five seconds is a connection problem to investigate elsewhere. Override any of the three via `metrics.buckets`.
 
@@ -136,7 +136,7 @@ Every label value is bounded, so cardinality grows with your handler count and n
 
 - **`subject`** is the **declared** pattern from `@EventPattern` / `@MessagePattern`, never the wire subject. A message with no handler counts under the single sentinel `<unmatched>`, so publishing to random subjects cannot inflate cardinality.
 - **`kind`**: `event`, `command`, `broadcast`, `ordered`, `schedule`.
-- **`status`** on handler metrics: `success`, `error`, `retried`, `terminated`. On publish metrics: `success`, `error`. On RPC round-trip metrics: `success`, `error`, `timeout`.
+- **`status`** on handler metrics: `success`, `error`, `retried`, `terminated`. On publish metrics: `success`, `error`. On RPC round-trip metrics: `success`, `error`, `timeout`, `cancelled`.
 - **`context`** on `jetstream_errors_total`: `connection`, `codec`, `publish`, `consume`, `handler`, `shutdown`, `other`.
 - **`stream`** and **`consumer`** follow from the service name and kind; **`server`** is bounded by the cluster size.
 

@@ -224,7 +224,7 @@ export class JetstreamClient extends ClientProxy {
    * Establish connection. Called automatically by NestJS on first use.
    *
    * Sets up the JetStream RPC inbox (if in JetStream mode) and subscribes
-   * to connection status events for fail-fast disconnect handling.
+   * to connection status events to fail pending calls once the connection closes.
    *
    * @returns The underlying NATS connection.
    */
@@ -235,9 +235,12 @@ export class JetstreamClient extends ClientProxy {
       this.rpcInbox.setup(nc);
     }
 
+    // A disconnect is left alone: JetStream-mode commands are already persisted
+    // and nats.js resubscribes the inbox on reconnect, so their replies still
+    // arrive, and every call stays bounded by its deadline.
     this.statusSubscription ??= this.connection.status$.subscribe((status) => {
-      if (status.type === 'disconnect') {
-        this.handleDisconnect();
+      if (status.type === 'close') {
+        this.handleClose();
       }
     });
 
@@ -450,7 +453,7 @@ export class JetstreamClient extends ClientProxy {
     return () => {
       // Core mode cleanup is handled by NATS internally; only JetStream pending state needs it.
       if (jetStreamCorrelationId) {
-        this.rpcInbox.discard(jetStreamCorrelationId);
+        this.rpcInbox.cancel(jetStreamCorrelationId);
       }
     };
   }
@@ -461,13 +464,13 @@ export class JetstreamClient extends ClientProxy {
     }
   }
 
-  /** Fail-fast all pending JetStream RPC callbacks on connection loss. */
-  private handleDisconnect(): void {
+  /** Fail every pending JetStream RPC once the connection is closed for good. */
+  private handleClose(): void {
     // The inbox is recreated on the next connect().
     this.rpcInbox.rejectAll(
       new JetstreamRpcError(RpcErrorReason.ConnectionLost, 'Connection lost'),
     );
-    // Force the next publish to re-run the full connect setup.
+    // Force the next publish through connect(), which dials a new connection.
     this.readyForPublish = false;
   }
 

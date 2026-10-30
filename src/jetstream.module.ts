@@ -250,19 +250,16 @@ export class JetstreamModule implements OnApplicationBootstrap, OnApplicationShu
 
     const clientProvider: Provider = {
       provide: clientToken,
-      inject: [JETSTREAM_OPTIONS, JETSTREAM_CONNECTIONS, JETSTREAM_EVENT_BUS],
-      useFactory: (
-        rootOptions: JetstreamModuleOptions,
-        registry: ConnectionRegistry,
-        eventBus: EventBus,
-      ): JetstreamClient => {
+      inject: [JETSTREAM_CONNECTIONS, JETSTREAM_EVENT_BUS],
+      useFactory: (registry: ConnectionRegistry, eventBus: EventBus): JetstreamClient => {
         const scope =
           options.connection === undefined
             ? registry.getDefault()
             : registry.get(options.connection);
 
+        // The connection's merged options, so its own `rpc` block and servers apply.
         return new JetstreamClient(
-          rootOptions,
+          scope.options,
           options.name,
           scope.connection,
           options.codec ?? scope.codec,

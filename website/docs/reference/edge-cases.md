@@ -8,7 +8,7 @@ schema:
   headline: "Edge Cases & FAQ: NestJS JetStream Transport"
   description: "NestJS JetStream transport FAQ: publisher-only mode, consumer self-healing, NATS header limits, fire-and-forget messaging, and DeliverPolicy edge cases."
   datePublished: "2026-03-21"
-  dateModified: "2026-10-23"
+  dateModified: "2026-10-30"
 ---
 
 # Edge Cases & FAQ
@@ -55,6 +55,8 @@ JetstreamModule.forRoot({
 A critical connection (the default) **throws on startup**, so the application fails to bootstrap and Kubernetes or Docker Compose restarts it. A connection with `critical: false` starts in the background and retries with exponential backoff capped at 30 s (see [Multiple connections](/docs/guides/multi-connection#criticality)).
 
 After the first successful connection the NATS client reconnects on its own, and the transport emits the `Disconnect` and `Reconnect` [lifecycle hooks](/docs/guides/lifecycle-hooks).
+
+With a capped `maxReconnectAttempts`, the NATS client eventually gives up and closes the connection. Only clients recover from that: the next `emit()` or `send()` dials a new connection and the transport rebuilds its JetStream client and manager on it. Handlers do not move over. Consumers, Core RPC subscriptions, reply publishing and dead-letter advisories stay on the closed connection, so a connection that serves handlers reports `connected: false` in the [health check](/docs/guides/health-checks) from then on, even after a client dialled a new one. Let your orchestrator restart the process. A publish-only connection keeps reporting healthy once it has re-dialled.
 
 ## Observable Return Values in Handlers
 

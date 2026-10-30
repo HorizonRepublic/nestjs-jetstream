@@ -8,7 +8,7 @@ schema:
   headline: "Distributed Tracing: NestJS JetStream Transport"
   description: "Built-in W3C Trace Context propagation and OpenTelemetry spans for every publish, consume, and RPC round-trip."
   datePublished: "2026-04-24"
-  dateModified: "2026-10-23"
+  dateModified: "2026-10-30"
 ---
 
 # Distributed Tracing
@@ -61,7 +61,7 @@ Without a registered SDK, every `trace.getTracer()` call resolves to a no-op tra
 | --------------------- | ---------- | ------- | ----------------------------------------------------------------------------------------------------- |
 | `Publish`             | `PRODUCER` | on      | Every `client.emit()`, and the publish leg of `client.send()`                                         |
 | `Consume`             | `CONSUMER` | on      | Every handler invocation. Retries get their own span with `messaging.nats.message.delivery_count > 1` |
-| `RpcClientSend`       | `CLIENT`   | on      | The full RPC round-trip on the caller, from publish to reply or timeout                               |
+| `RpcClientSend`       | `CLIENT`   | on      | The full RPC round-trip on the caller, from publish to reply, timeout or cancellation                 |
 | `DeadLetter`          | `INTERNAL` | on      | A message exhausts `max_deliver`; covers the `onDeadLetter` callback                                  |
 | `ConnectionLifecycle` | `INTERNAL` | off     | One span per NATS connection session, with connect, reconnect and disconnect events                   |
 | `SelfHealing`         | `INTERNAL` | off     | Each consumer recovery attempt                                                                        |

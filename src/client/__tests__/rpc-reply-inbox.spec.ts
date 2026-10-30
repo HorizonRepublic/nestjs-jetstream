@@ -90,6 +90,46 @@ describe(RpcReplyInbox, () => {
     });
   });
 
+  describe('cancel()', () => {
+    it('should drop a pending request and run its cancel callback once', () => {
+      // Given
+      const id = faker.string.uuid();
+      const callback = vi.fn();
+      const onCancel = vi.fn();
+      const onExpired = vi.fn();
+
+      sut.register(id, callback, onCancel);
+      sut.armTimeout(id, 1_000, onExpired);
+
+      // When
+      sut.cancel(id);
+      sut.cancel(id);
+      vi.advanceTimersByTime(1_500);
+
+      // Then
+      expect(onCancel).toHaveBeenCalledOnce();
+      expect(callback).not.toHaveBeenCalled();
+      expect(onExpired).not.toHaveBeenCalled();
+      expect(sut.has(id)).toBe(false);
+    });
+
+    it('should not run the cancel callback of a request that already settled', () => {
+      // Given a request whose deadline already fired
+      const id = faker.string.uuid();
+      const onCancel = vi.fn();
+
+      sut.register(id, vi.fn(), onCancel);
+      sut.armTimeout(id, 1_000, vi.fn());
+      vi.advanceTimersByTime(1_500);
+
+      // When
+      sut.cancel(id);
+
+      // Then
+      expect(onCancel).not.toHaveBeenCalled();
+    });
+  });
+
   describe('rejectAll()', () => {
     it('should fail every pending request and clear deadlines', () => {
       // Given
@@ -112,6 +152,26 @@ describe(RpcReplyInbox, () => {
       expect(sut.has('a')).toBe(false);
 
       expect(sut.address).toBeNull();
+    });
+
+    it('should not cancel a request whose rejection makes its caller unsubscribe', () => {
+      // Given a callback that cancels its own request, as an rxjs teardown does
+      const id = faker.string.uuid();
+      const onCancel = vi.fn();
+
+      sut.register(
+        id,
+        () => {
+          sut.cancel(id);
+        },
+        onCancel,
+      );
+
+      // When
+      sut.rejectAll(new Error('Connection lost'));
+
+      // Then
+      expect(onCancel).not.toHaveBeenCalled();
     });
   });
 });

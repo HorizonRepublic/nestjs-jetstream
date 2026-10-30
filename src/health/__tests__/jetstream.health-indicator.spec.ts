@@ -31,12 +31,18 @@ describe(JetstreamHealthIndicator, () => {
       getServer: vi.fn().mockReturnValue(mockServer),
     });
 
-    connectionProvider = createMock<ConnectionProvider>({ unwrap: nc });
+    connectionProvider = createMock<ConnectionProvider>({
+      unwrap: nc,
+      hasLostServerConnection: vi.fn().mockReturnValue(false),
+    });
     sut = new JetstreamHealthIndicator(registryOf(connectionProvider));
   };
 
   const setupDisconnected = (nc: NatsConnection | null = null): void => {
-    connectionProvider = createMock<ConnectionProvider>({ unwrap: nc });
+    connectionProvider = createMock<ConnectionProvider>({
+      unwrap: nc,
+      hasLostServerConnection: vi.fn().mockReturnValue(false),
+    });
     sut = new JetstreamHealthIndicator(registryOf(connectionProvider));
   };
 
@@ -71,6 +77,30 @@ describe(JetstreamHealthIndicator, () => {
 
           // Then: disconnected
           expect(status).toEqual({ connected: false, server: null, latency: null });
+        });
+      });
+
+      describe('when the connection serving handlers was closed for good', () => {
+        it('should report it down even though a new connection answers', async () => {
+          // Given a live re-dialled connection whose server side stayed on the closed one
+          const nc = createMock<NatsConnection>({
+            isClosed: vi.fn().mockReturnValue(false),
+            rtt: vi.fn().mockResolvedValue(1),
+            getServer: vi.fn().mockReturnValue(mockServer),
+          });
+
+          connectionProvider = createMock<ConnectionProvider>({
+            unwrap: nc,
+            hasLostServerConnection: vi.fn().mockReturnValue(true),
+          });
+          sut = new JetstreamHealthIndicator(registryOf(connectionProvider));
+
+          // When: checked
+          const status = await sut.check();
+
+          // Then: unhealthy, so the orchestrator restarts the pod
+          expect(status).toEqual({ connected: false, server: null, latency: null });
+          expect(nc.rtt).not.toHaveBeenCalled();
         });
       });
 
@@ -219,6 +249,7 @@ describe(JetstreamHealthIndicator, () => {
                 getServer: () => `nats://${name}:4222`,
               })
             : null,
+          hasLostServerConnection: vi.fn().mockReturnValue(false),
         }),
       });
 

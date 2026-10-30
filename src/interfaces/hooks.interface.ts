@@ -22,9 +22,10 @@ export type PublishStatus = 'success' | 'error';
 /**
  * Outcome of a full RPC round-trip from the caller's perspective. Adds the
  * `timeout` dimension on top of {@link PublishStatus} so percentile analysis
- * can distinguish slow successes from deadline-exceeded calls.
+ * can distinguish slow successes from deadline-exceeded calls, and
+ * `cancelled` for calls the caller unsubscribed from before they settled.
  */
-export type RpcOutcomeStatus = 'success' | 'error' | 'timeout';
+export type RpcOutcomeStatus = 'success' | 'error' | 'timeout' | 'cancelled';
 
 /** Lifecycle and operational events the transport emits to registered hooks. */
 export enum TransportEvent {
@@ -151,7 +152,8 @@ export interface TransportHooks {
    * @param subject  Declared command pattern (e.g. `orders.get`).
    * @param durationMs Wall-clock time from request initiation to settlement.
    * @param status   `success` for a successful reply, `error` for transport/
-   *                 handler errors, `timeout` when the deadline expired.
+   *                 handler errors, `timeout` when the deadline expired,
+   *                 `cancelled` when the caller unsubscribed first.
    */
   [TransportEvent.RpcCompleted](
     subject: string,
