@@ -87,6 +87,8 @@ export enum MigrationErrorReason {
   InsufficientCapacity = 'insufficient-capacity',
   /** The migrating instance lost its lock to another one and stopped before a destructive step. */
   LockLost = 'lock-lost',
+  /** The stream allows message schedules, which NATS refuses to source messages back into. */
+  MessageSchedules = 'message-schedules',
 }
 
 /** Why a delivered message could not be handled and went to the dead-letter path. */

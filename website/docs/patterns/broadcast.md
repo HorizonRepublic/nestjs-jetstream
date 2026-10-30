@@ -8,7 +8,7 @@ schema:
   headline: "Broadcast Events: NestJS JetStream Fan-Out Delivery"
   description: "Fan-out NATS JetStream events to every NestJS service instance via per-service durable consumers on a shared broadcast stream."
   datePublished: "2026-03-21"
-  dateModified: "2026-10-29"
+  dateModified: "2026-10-30"
 ---
 
 # Broadcast Events
@@ -114,6 +114,16 @@ A broadcast stays in the shared stream for 1 hour by default, or until the strea
 That suits signals where only the latest state matters and a missed one does no harm: cache invalidation, feature flags, config reload. An event that every receiving service must process, such as an order that billing and shipping both act on, belongs in a [workqueue event](/docs/patterns/events) sent to each of those services. It stays in the receiver's own stream until a consumer handles it, and once that stream is full the publish fails instead of evicting an unprocessed message.
 
 To widen the window, raise `broadcast.stream.max_age` on every service, as the next section explains.
+
+### A recreated consumer resumes where it stopped
+
+If this service's broadcast consumer disappears while the service runs, self-healing recreates it from the stream sequence after its last known ack floor, which each pod rereads every 10 seconds. The recreated consumer does not replay the history the stream still holds, and it loses nothing published while it was gone.
+
+It may deliver some broadcasts twice. The ack floor is the last sequence below which every message is acknowledged, so a single slow message holds it back: everything acknowledged after that message, possibly minutes of broadcasts, arrives again, along with whatever was acknowledged since the last read.
+
+When the stream itself was recreated since the consumer was last read, its sequences started over, so the consumer starts from the beginning of the new stream instead.
+
+On the next boot the consumer keeps the sequence it resumed from, since NATS cannot change the start position of an existing consumer. A start sequence past the end of the stream is the exception: the boot recreates that consumer from the start of the stream. Setting `broadcast.consumer.deliver_policy` turns all of this off: the consumer is then recreated with the policy you set.
 
 ## Configuration: shared stream, per-service consumers
 

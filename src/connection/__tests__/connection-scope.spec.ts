@@ -1,11 +1,18 @@
 import { Logger } from '@nestjs/common';
 
+import type { ConsumerInfo, JetStreamManager } from '@nats-io/jetstream';
+
+import { faker } from '@faker-js/faker';
+import { createMock } from '@golevelup/ts-vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { JsonCodec } from '../../codec';
 import { EventBus } from '../../hooks';
+import { StreamKind } from '../../interfaces';
 import type { ResolvedConnectionOptions } from '../../interfaces';
+import { ConsumerProvider, type ConsumerRecoveryFn } from '../../server/infrastructure';
 import { createConnectionScope } from '../connection-scope';
+import { ConnectionProvider } from '../connection.provider';
 import type { ConnectionSharedContext } from '../connection.types';
 
 const shared = (): ConnectionSharedContext => ({
@@ -24,7 +31,42 @@ const options = (
 });
 
 describe('createConnectionScope', () => {
-  afterEach(vi.resetAllMocks);
+  afterEach(() => {
+    vi.resetAllMocks();
+    vi.restoreAllMocks();
+  });
+
+  it('should refresh ack_wait and max_deliver from a recovered consumer', async () => {
+    // Given: a recovered consumer that came back with another config
+    const recovered = createMock<ConsumerInfo>({
+      stream_name: faker.lorem.word(),
+      config: {
+        ack_wait: faker.number.int({ min: 1_000_000 }),
+        max_deliver: faker.number.int({ min: 1, max: 20 }),
+      },
+    });
+    const lastKnown = createMock<ConsumerInfo>();
+
+    vi.spyOn(ConnectionProvider.prototype, 'getJetStreamManager').mockResolvedValue(
+      createMock<JetStreamManager>(),
+    );
+
+    const recover = vi
+      .spyOn(ConsumerProvider.prototype, 'recoverConsumer')
+      .mockResolvedValue(recovered);
+    const sut = createConnectionScope(options(), shared());
+    const refreshMaxDeliver = vi.spyOn(sut.eventRouter!, 'refreshMaxDeliver');
+    const recoveryFn = Reflect.get(sut.messages!, 'consumerRecoveryFn') as ConsumerRecoveryFn;
+
+    // When
+    const result = await recoveryFn(StreamKind.Event, lastKnown);
+
+    // Then
+    expect(result).toBe(recovered);
+    expect(recover).toHaveBeenCalledWith(expect.anything(), StreamKind.Event, lastKnown);
+    expect(sut.ackWaitMap.get(StreamKind.Event)).toBe(recovered.config.ack_wait);
+    expect(refreshMaxDeliver).toHaveBeenCalledWith(recovered);
+  });
 
   it('should build a fully populated scope for a consumer connection', () => {
     // Given a consumer-enabled connection

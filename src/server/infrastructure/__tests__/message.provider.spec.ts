@@ -787,7 +787,7 @@ describe(MessageProvider, () => {
         await new Promise(process.nextTick);
 
         // Then: consumerRecoveryFn was called with the correct StreamKind
-        expect(consumerRecoveryFn).toHaveBeenCalledWith(StreamKind.Event);
+        expect(consumerRecoveryFn).toHaveBeenCalledWith(StreamKind.Event, originalConsumerInfo);
 
         // And: consumers.get was retried with the recovered consumer info
         expect(js.consumers.get).toHaveBeenCalledWith(
@@ -842,9 +842,94 @@ describe(MessageProvider, () => {
         await new Promise(process.nextTick);
 
         // Then: consumerRecoveryFn was invoked with correct kind
-        expect(consumerRecoveryFn).toHaveBeenCalledWith(StreamKind.Event);
+        expect(consumerRecoveryFn).toHaveBeenCalledWith(StreamKind.Event, consumerInfo);
 
         sutWithRecovery.destroy();
+      });
+    });
+
+    describe('when a broadcast consumer vanishes after its position was refreshed', () => {
+      it('should hand the freshest consumer info to consumerRecoveryFn', async () => {
+        vi.useFakeTimers();
+
+        // Given: a broadcast flow whose consumer reports a newer ack floor later on
+        const stream = faker.lorem.word();
+        const name = faker.lorem.word();
+        const initial = createMock<ConsumerInfo>({ name, stream_name: stream });
+        const refreshed = createMock<ConsumerInfo>({ name, stream_name: stream });
+        const firstMessages = createMockMessages();
+        const consumer = createMock<Consumer>({
+          consume: vi.fn(async () => firstMessages),
+          info: vi.fn().mockResolvedValue(refreshed),
+        });
+        const consumerRecoveryFn = vi.fn().mockResolvedValue(refreshed);
+        const sutWithRecovery = new MessageProvider(
+          connection,
+          eventBus,
+          new Map(),
+          consumerRecoveryFn,
+        );
+        const get = vi
+          .fn()
+          .mockResolvedValueOnce(consumer)
+          .mockRejectedValueOnce(new Error('consumer not found'))
+          .mockResolvedValue(makeConsumer(createMockMessages()));
+
+        connection.getJetStreamClient.mockReturnValue({ consumers: { get } } as never);
+        sutWithRecovery.start(new Map([[StreamKind.Broadcast, initial]]));
+        await vi.advanceTimersByTimeAsync(10_000);
+
+        // When: the consumer goes away
+        firstMessages.stop();
+        await vi.advanceTimersByTimeAsync(1_000);
+
+        // Then
+        expect(consumer.info).toHaveBeenCalled();
+        expect(consumerRecoveryFn).toHaveBeenCalledWith(StreamKind.Broadcast, refreshed);
+
+        sutWithRecovery.destroy();
+        vi.useRealTimers();
+      });
+
+      it('should keep the last known info when a refresh fails', async () => {
+        vi.useFakeTimers();
+
+        // Given
+        const initial = createMock<ConsumerInfo>({
+          name: faker.lorem.word(),
+          stream_name: faker.lorem.word(),
+        });
+        const firstMessages = createMockMessages();
+        const consumer = createMock<Consumer>({
+          consume: vi.fn(async () => firstMessages),
+          info: vi.fn().mockRejectedValue(new Error('timeout')),
+        });
+        const consumerRecoveryFn = vi.fn().mockResolvedValue(initial);
+        const sutWithRecovery = new MessageProvider(
+          connection,
+          eventBus,
+          new Map(),
+          consumerRecoveryFn,
+        );
+        const get = vi
+          .fn()
+          .mockResolvedValueOnce(consumer)
+          .mockRejectedValueOnce(new Error('consumer not found'))
+          .mockResolvedValue(makeConsumer(createMockMessages()));
+
+        connection.getJetStreamClient.mockReturnValue({ consumers: { get } } as never);
+        sutWithRecovery.start(new Map([[StreamKind.Broadcast, initial]]));
+        await vi.advanceTimersByTimeAsync(10_000);
+
+        // When
+        firstMessages.stop();
+        await vi.advanceTimersByTimeAsync(1_000);
+
+        // Then
+        expect(consumerRecoveryFn).toHaveBeenCalledWith(StreamKind.Broadcast, initial);
+
+        sutWithRecovery.destroy();
+        vi.useRealTimers();
       });
     });
 

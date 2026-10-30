@@ -6,7 +6,7 @@ export { MessageProvider } from './message.provider';
 
 export { MetadataProvider } from './metadata.provider';
 
-export type { ConsumerRecoveryFn } from './message.provider';
+export type { ConsumerRecoveryFn } from './message.provider.types';
 
 export { NatsErrorCode } from './nats-error-codes';
 
@@ -19,6 +19,7 @@ export {
 export {
   MIGRATION_BACKUP_SUFFIX,
   MIGRATION_HEARTBEAT_KEY,
+  MIGRATION_PAUSED_CONSUMERS_KEY,
   MIGRATION_PHASE_KEY,
   StreamMigration,
 } from './stream-migration';

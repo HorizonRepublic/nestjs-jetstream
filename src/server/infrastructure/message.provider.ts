@@ -31,10 +31,19 @@ import type { OrderedEventOverrides } from '../../interfaces';
 import { StreamKind, TransportEvent } from '../../interfaces';
 import { errorMessage, toError } from '../../utils';
 import type { ConsumerFlowState } from './consumer-flow.types';
+import type { ConsumerRecoveryFn } from './message.provider.types';
 import { NatsErrorCode } from './nats-error-codes';
 
-/** Callback to recreate a consumer when it disappears. */
-export type ConsumerRecoveryFn = (kind: StreamKind) => Promise<ConsumerInfo>;
+/**
+ * How often a broadcast consumer's position is re-read, so a recreated durable
+ * resumes close to where the vanished one stopped instead of replaying history.
+ */
+const POSITION_REFRESH_MS = 10_000;
+
+/** The consumer a flow consumes from, as last read from the server. */
+interface FlowPosition {
+  info: ConsumerInfo;
+}
 
 /**
  * Manages pull-based message consumption from JetStream consumers.
@@ -196,9 +205,10 @@ export class MessageProvider {
   /** Create a self-healing consumer flow for a specific kind. */
   private createFlow(kind: StreamKind, info: ConsumerInfo): Observable<void> {
     const target$ = this.getTargetSubject(kind);
+    const position: FlowPosition = { info };
 
     return this.createSelfHealingFlow(
-      (onConnected) => this.consumeOnce(kind, info, target$, onConnected),
+      (onConnected) => this.consumeOnce(kind, position, target$, onConnected),
       info.name,
       this.trackFlow(kind, info.name),
     );
@@ -207,11 +217,12 @@ export class MessageProvider {
   /** Single iteration: get consumer -> pull messages -> emit to subject. */
   private async consumeOnce(
     kind: StreamKind,
-    info: ConsumerInfo,
+    position: FlowPosition,
     target$: Subject<JsMsg>,
     onConnected: () => void,
   ): Promise<void> {
     const js = this.connection.getJetStreamClient();
+    const { info } = position;
 
     let consumer: Consumer;
     let consumerName = info.name;
@@ -221,8 +232,9 @@ export class MessageProvider {
     } catch (err) {
       if (this.isConsumerNotFound(err) && this.consumerRecoveryFn) {
         this.logger.warn(`Consumer ${info.name} not found, recreating...`);
-        const recovered = await this.consumerRecoveryFn(kind);
+        const recovered = await this.consumerRecoveryFn(kind, info);
 
+        position.info = recovered;
         consumerName = recovered.name;
         this.logger.log(`Consumer ${consumerName} recreated, resuming consumption`);
         consumer = await js.consumers.get(recovered.stream_name, consumerName);
@@ -253,11 +265,35 @@ export class MessageProvider {
     // when the stream ends, which is the wrong moment.
     onConnected();
 
+    const refresh = kind === StreamKind.Broadcast ? this.trackPosition(consumer, position) : null;
+
     try {
       await messages.closed();
     } finally {
+      if (refresh !== null) clearInterval(refresh);
       this.activeIterators.delete(messages);
     }
+  }
+
+  /** Keep the consumer's ack floor fresh while it consumes; a failed read keeps the last one. */
+  private trackPosition(
+    consumer: Consumer,
+    position: FlowPosition,
+  ): ReturnType<typeof setInterval> {
+    const refresh = setInterval(() => {
+      consumer.info().then(
+        (info) => {
+          position.info = info;
+        },
+        (err: unknown) => {
+          this.logger.debug(`Consumer ${position.info.name}: position refresh failed`, err);
+        },
+      );
+    }, POSITION_REFRESH_MS);
+
+    refresh.unref();
+
+    return refresh;
   }
 
   /**

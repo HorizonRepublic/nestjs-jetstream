@@ -51,10 +51,13 @@ The transport recreates the stream blue-green via [NATS stream sourcing](https:/
 ```text
 Lock       Create the backup stream; only one pod can, the others wait
 
+Pause      Work-queue streams only: pause the stream's durable consumers
+           and let the messages they already took settle
+
 Phase 1/4  Quiesce: remove the original's subjects
            (new publishes are rejected loudly instead of being acked
             into a stream that is about to be deleted; aborts here if
-            the new max_msgs or max_bytes cannot hold what it has)
+            the new limits cannot hold what it has)
 
 Phase 2/4  Backup ← sourcing ← original
            (server-side copy; completion is tracked via source lag)
@@ -70,6 +73,14 @@ The stream keeps its name. Each pod's startup or self-healing recreates the cons
 Sourcing out of a work-queue stream, such as the event or command stream, acknowledges what it copies. Messages a consumer's filter covers stay in the original as well; any others, for example on a subject whose handler was removed, move into the backup. From Phase 2 on, the backup is therefore the copy that counts, and every failure path below gives it back rather than throwing it away.
 
 A producer either gets an ack (the message survives the migration) or a rejection it can retry, never an ack for a message that later disappears.
+
+### Consumers are paused during the copy
+
+Pods that still run the old release keep consuming a work-queue stream while it is copied. A message they take out after the copy began would leave the backup short, and one they process after it was copied would be delivered again after the restore. So before Phase 1 the migrating pod pauses every durable consumer of the stream (NATS 2.11+ consumer pause), then waits up to 30 seconds for the messages those consumers already took to be acknowledged. Messages still unacknowledged after that are migrated anyway, with a warning that they may be processed twice.
+
+Each pause runs out 30 seconds after its last renewal, and the migrating pod renews it with its heartbeat, so a pod that dies never leaves a consumer paused for long. A rollback resumes the consumers at once, and so does a pod that takes over a migration that died before deleting the original. A consumer someone else paused is left alone. Deleting the stream in Phase 3 removes the paused consumers anyway.
+
+On NATS 2.10, which cannot pause consumers, the migration logs a warning and copies while they consume. It still completes, since it waits for what the original holds now rather than what it held when the copy began, but messages processed during the copy may be processed again.
 
 ### Backup stream as a distributed lock
 
@@ -111,7 +122,7 @@ Sourcing runs on the server, so no message crosses the network to the applicatio
 
 - **Failure before the original is deleted.** Whatever sourcing moved into the backup goes back into the original, the quiesce is rolled back (subjects restored), the backup is removed, and an error is thrown: the original stream has every message and serves traffic. If even that fails, the stream stays quiesced with its backup, and the next pod to take the lock over finishes the job.
 - **Failure after the original is deleted.** The backup is the only copy of the data and is always preserved. Restoration resumes automatically on the next application startup.
-- **New limits too small.** If the new `max_msgs` or `max_bytes` cannot hold the messages already in the stream, the migration stops before deleting anything and throws a `JetstreamMigrationError` with reason `insufficient-capacity`. Raise the limits, or let consumers drain the stream, and restart. `max_msgs_per_subject` is not checked.
+- **New limits too small.** If the new `max_msgs` or `max_bytes` cannot hold the messages already in the stream, or a lowered `max_msgs_per_subject` cannot hold the messages on some subject, the migration stops before deleting anything and throws a `JetstreamMigrationError` with reason `insufficient-capacity` that names the fullest subjects. Raise the limits, or let consumers drain the stream, and restart. Without the check, a restore over a per-subject limit drops the oldest messages of the subject under `discard: Old`, and stalls for good under a per-subject `discard: New`.
 - **Sourcing stalls.** The copy may take as long as it needs; it fails with reason `sourcing-timeout` only after 30 seconds without progress. Before the delete, that rolls back as above; after it, the backup is preserved.
 - **Process killed mid-migration.** Its heartbeat stops, and the next pod to start, or one already waiting, takes the migration over 30 seconds later. If the original was never deleted, the backup is given back to it without duplicating what both hold; otherwise it is restored into the stream (recreating it first if the crash happened between delete and create), then cleaned up. The DLQ stream is recovered the same way.
 - **Instances migrating concurrently (rolling deploy).** Only the pod that created the backup migrates; see [the lock](#backup-stream-as-a-distributed-lock).
@@ -127,6 +138,7 @@ Streams in `ManagementMode.Manual` are never created, updated or migrated, whate
 - **`provisioning.allowDestructiveMigration` is one flag for every Auto-managed stream of the service.** Any of them with an immutable conflict is migrated.
 - **The shared broadcast stream is never migrated.** Recreating `broadcast-stream` would delete every other service's durable consumers and replay retained history to them, so an immutable conflict on it throws instead. Coordinate that change by hand.
 - **The schedule stream is never migrated.** NATS refuses to source into a stream with `allow_msg_schedules`, so an immutable conflict on `{service}__microservice_sched-stream` throws. Revert the change, or recreate the stream by hand: the next boot reconciles the schedules declared in decorators, and dynamic schedules have to be created again.
+- **Other streams with `allow_msg_schedules` migrate only when empty.** For the same reason, an event or broadcast stream that allows schedules and holds messages is not migrated: the boot throws a `JetstreamMigrationError` with reason `message-schedules` before the stream is quiesced. Let consumers drain the stream, or revert the change. A restore that an older release left stuck on such a stream is finished on the next boot by publishing the backup's messages into it instead of sourcing them. Each republished message gets a new message id, and a `Nats-TTL` starts counting again from the republish.
 - **Manual streams are never migrated.** See the section above.
 
 ## See also

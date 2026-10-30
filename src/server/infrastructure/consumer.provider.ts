@@ -1,6 +1,11 @@
 import { Logger } from '@nestjs/common';
 
-import { JetStreamApiError, type ConsumerConfig, type ConsumerInfo } from '@nats-io/jetstream';
+import {
+  DeliverPolicy,
+  JetStreamApiError,
+  type ConsumerConfig,
+  type ConsumerInfo,
+} from '@nats-io/jetstream';
 
 import { ConnectionProvider } from '../../connection';
 import {
@@ -128,10 +133,23 @@ export class ConsumerProvider {
       const ctx: ProvisioningErrorContext = { entity: 'consumer', name, kind };
 
       return this.lookupOrCreate(jsm, kind, target, async () => {
-        await jsm.consumers.info(stream, name);
+        const existing = await jsm.consumers.info(stream, name);
+
+        if (await this.startsPastStream(jsm, kind, existing)) {
+          this.logger.warn(
+            `Consumer ${name} starts at stream sequence ${existing.config.opt_start_seq}, past ` +
+              `the end of ${stream}, which was recreated; recreating it from the start`,
+          );
+          await jsm.consumers.delete(stream, name);
+
+          return await this.createConsumer(jsm, stream, name, kind, config);
+        }
+
         this.logger.debug(`Consumer exists, updating: ${name}`);
 
-        return await runProvisioningOp(ctx, () => jsm.consumers.update(stream, name, config));
+        const update = this.keepStartPosition(kind, existing.config, config);
+
+        return await runProvisioningOp(ctx, () => jsm.consumers.update(stream, name, update));
       });
     });
   }
@@ -143,10 +161,14 @@ export class ConsumerProvider {
    * cannot overwrite a newer pod's config during rolling updates. If a migration
    * backup stream exists, throws so the retry loop backs off until migration completes;
    * creating a consumer mid-migration would eat workqueue messages being restored.
+   *
+   * @param lastKnown - The consumer as last read before it vanished; a recreated
+   *   broadcast durable resumes after its ack floor instead of replaying history.
    */
   public async recoverConsumer(
     jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
     kind: StreamKind,
+    lastKnown?: ConsumerInfo | undefined,
   ): Promise<ConsumerInfo> {
     const target = this.resolveTarget(kind);
     const { stream, name } = target;
@@ -180,9 +202,92 @@ export class ConsumerProvider {
       // The migration backup stream acts as a lock held by the migrating pod
       await this.assertNoMigrationInProgress(jsm, stream);
 
+      const resumed = {
+        ...target,
+        config: await this.resumeConfig(jsm, kind, target, lastKnown),
+      };
+
       // Another pod may have recreated the consumer; use it as-is
-      return this.lookupOrCreate(jsm, kind, target, () => jsm.consumers.info(stream, name));
+      return this.lookupOrCreate(jsm, kind, resumed, () => jsm.consumers.info(stream, name));
     });
+  }
+
+  /**
+   * A broadcast stream keeps its history, so a durable recreated with
+   * `DeliverPolicy.All` would replay all of it. Resume after the last known
+   * ack floor instead, unless the stream was recreated since and its
+   * sequences started over.
+   */
+  private async resumeConfig(
+    jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
+    kind: StreamKind,
+    target: ConsumerTarget,
+    lastKnown: ConsumerInfo | undefined,
+  ): Promise<DurableConsumerConfig> {
+    const { config, stream } = target;
+
+    if (kind !== StreamKind.Broadcast || this.hasStartOverride(kind) || lastKnown === undefined) {
+      return config;
+    }
+
+    const startSeq = lastKnown.ack_floor.stream_seq + 1;
+    const { created, state } = await jsm.streams.info(stream);
+
+    if (startSeq > state.last_seq + 1 || Date.parse(created) > Date.parse(lastKnown.created)) {
+      this.logger.warn(
+        `Consumer ${config.durable_name}: ${stream} was recreated since the consumer was last ` +
+          'read; recreating it from the start of the stream',
+      );
+
+      return config;
+    }
+
+    this.logger.warn(
+      `Consumer ${config.durable_name}: resuming from stream sequence ${startSeq}, after its ` +
+        'last known ack floor; broadcasts acknowledged after that may be delivered again.',
+    );
+
+    return { ...config, deliver_policy: DeliverPolicy.StartSequence, opt_start_seq: startSeq };
+  }
+
+  /** A start sequence past the end of the stream would deliver nothing until the stream got there. */
+  private async startsPastStream(
+    jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
+    kind: StreamKind,
+    existing: ConsumerInfo,
+  ): Promise<boolean> {
+    const { deliver_policy: policy, opt_start_seq: startSeq } = existing.config;
+
+    if (this.hasStartOverride(kind) || policy !== DeliverPolicy.StartSequence) return false;
+
+    const { state } = await jsm.streams.info(existing.stream_name);
+
+    return (startSeq ?? 0) > state.last_seq + 1;
+  }
+
+  /**
+   * The start position cannot change on update. Keep the one a recreated
+   * consumer resumed from unless the user configured a start of their own.
+   */
+  private keepStartPosition(
+    kind: StreamKind,
+    existing: ConsumerConfig,
+    config: DurableConsumerConfig,
+  ): DurableConsumerConfig {
+    if (this.hasStartOverride(kind) || existing.deliver_policy === config.deliver_policy) {
+      return config;
+    }
+
+    return {
+      ...config,
+      deliver_policy: existing.deliver_policy,
+      opt_start_seq: existing.opt_start_seq,
+      opt_start_time: existing.opt_start_time,
+    };
+  }
+
+  private hasStartOverride(kind: StreamKind): boolean {
+    return this.getOverrides(kind).deliver_policy !== undefined;
   }
 
   private resolveTarget(kind: StreamKind): ConsumerTarget {

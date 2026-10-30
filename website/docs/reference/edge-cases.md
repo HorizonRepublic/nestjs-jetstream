@@ -89,6 +89,8 @@ A deleted durable consumer is recreated, with three exceptions:
 - **Another pod recreated it first.** Recovery uses the existing consumer as-is instead of issuing its own create or update.
 - **The consumer is Manual.** It is never recreated: recovery waits for it to be [restored externally](/docs/guides/external-infrastructure#self-healing-for-manual-consumers).
 
+A recreated broadcast consumer resumes after its last known ack floor instead of replaying the stream's history; see [Broadcast Events](/docs/patterns/broadcast#a-recreated-consumer-resumes-where-it-stopped). Workqueue consumers are recreated from the start, since acknowledged messages are already gone. Either way, the `ack_wait` and `max_deliver` of the recreated consumer replace the old ones for ack extension and dead-letter detection.
+
 Ordered consumers are ephemeral: the nats.js client recreates them itself, outside this recovery path.
 
 ## NATS Header Size Limits

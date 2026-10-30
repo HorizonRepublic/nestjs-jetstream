@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 
 import type {
+  ConsumerInfo,
   JetStreamManager,
   PurgeResponse,
   StreamConfig,
@@ -445,6 +446,52 @@ describe(StreamMigration, () => {
       // Then: the original and the rival's backup are left alone
       expect(jsm.streams.delete).not.toHaveBeenCalled();
       expect(streams.get(backupName)?.messages).toBe(6);
+    });
+
+    it('should leave the consumers it paused to the instance that took the lock over', async () => {
+      // Given: a paused durable, and another instance claiming the backup mid-copy
+      const streams = new Map([[streamName, original(6)]]);
+      const jsm = createFakeJsm(streams);
+      const fakeUpdate = vi.mocked(jsm.streams.update).getMockImplementation()!;
+      const durable = createMock<ConsumerInfo>({
+        name: 'worker',
+        config: { durable_name: 'worker' },
+        paused: false,
+      });
+
+      vi.mocked(jsm.getAccountInfo).mockResolvedValue(
+        createMock<Awaited<ReturnType<JetStreamManager['getAccountInfo']>>>({ api: { level: 2 } }),
+      );
+      vi.mocked(jsm.consumers.list).mockReturnValue(
+        (async function* (): AsyncGenerator<ConsumerInfo> {
+          yield durable;
+        })() as never,
+      );
+      vi.mocked(jsm.consumers.info).mockResolvedValue(
+        createMock<ConsumerInfo>({ num_ack_pending: 0 }),
+      );
+      vi.mocked(jsm.streams.update).mockImplementation(async (name, config) => {
+        const result = await fakeUpdate(name, config);
+        const lock = streams.get(backupName);
+
+        if (name === backupName && config.sources?.length && lock) {
+          lock.config.metadata = {
+            ...lock.config.metadata,
+            'nestjs-jetstream-migration-owner': 'rival',
+          };
+        }
+
+        return result;
+      });
+
+      // When
+      await expect(
+        new StreamMigration(FAST).migrate(jsm, streamName, desired),
+      ).rejects.toMatchObject({ reason: MigrationErrorReason.LockLost });
+
+      // Then
+      expect(jsm.consumers.pause).toHaveBeenCalled();
+      expect(jsm.consumers.resume).not.toHaveBeenCalled();
     });
 
     it('should neither reclaim nor act on a lock another instance took over while it stalled', async () => {

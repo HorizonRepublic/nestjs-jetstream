@@ -9,8 +9,10 @@ import {
   type StreamState,
 } from '@nats-io/jetstream';
 import { nuid } from '@nats-io/nuid';
+import { headers as natsHeaders, type MsgHdrs } from '@nats-io/transport-node';
 
 import { JetstreamMigrationError, MigrationErrorReason } from '../../errors';
+import { MigrationConsumerPause } from './migration-consumer-pause';
 import { isNatsError, NatsErrorCode } from './nats-error-codes';
 import { compareStreamConfig } from './stream-config-diff';
 import { MigrationPhase, type MigrationTiming } from './stream-migration.types';
@@ -21,6 +23,9 @@ export const MIGRATION_HEARTBEAT_KEY = 'nestjs-jetstream-migration-heartbeat';
 
 export const MIGRATION_PHASE_KEY = 'nestjs-jetstream-migration-phase';
 
+/** Durable consumers of the original the migration paused, as a JSON array of names. */
+export const MIGRATION_PAUSED_CONSUMERS_KEY = 'nestjs-jetstream-migration-paused-consumers';
+
 const MIGRATION_OWNER_KEY = 'nestjs-jetstream-migration-owner';
 const MIGRATION_STARTED_AT_KEY = 'nestjs-jetstream-migration-started-at';
 
@@ -30,6 +35,13 @@ const DEFAULT_TIMING: MigrationTiming = {
   stallTimeoutMs: 30_000,
 };
 const SOURCING_POLL_INTERVAL_MS = 100;
+/** Subjects named in a per-subject capacity error. */
+const OVERFULL_SUBJECTS_SHOWN = 3;
+/**
+ * Headers a republished message must not carry: the server refuses or
+ * re-checks them, and a reused message id would drop a distinct message.
+ */
+const REPUBLISH_DROPPED_HEADER = /^Nats-(Expected-|Stream-Source$|Msg-Id$)/i;
 /** Backups written before the heartbeat existed: younger ones belong to a live migration. */
 const LEGACY_ACTIVE_GRACE_MS = 90_000;
 
@@ -60,6 +72,12 @@ const sleep = (ms: number): Promise<void> =>
 
 const backupNameOf = (streamName: string): string => `${streamName}${MIGRATION_BACKUP_SUFFIX}`;
 
+/** Why a stream that allows message schedules and holds messages is not migrated. */
+export const schedulesRefusal = (streamName: string, messages: number): string =>
+  `Stream ${streamName} allows message schedules and holds ${messages} messages: NATS refuses ` +
+  'sourcing into such a stream, so a migration could not restore them. Revert the immutable ' +
+  'change, or let consumers drain the stream before migrating.';
+
 /**
  * Sourcing out of a stream that is not `Limits` acknowledges what it copies, so
  * every message no consumer filter covers moves into the backup instead.
@@ -69,6 +87,37 @@ const sourcingMoves = (config: Partial<StreamConfig>): boolean =>
 
 const withoutSource = (sources: StreamSource[] | undefined, name: string): StreamSource[] =>
   (sources ?? []).filter((s) => s.name !== name);
+
+/** NATS refuses to source into a stream that allows message schedules. */
+const allowsSchedules = (config: Partial<StreamConfig>): boolean =>
+  config.allow_msg_schedules === true;
+
+const pausedConsumersOf = (metadata: StreamMetadata | undefined): string[] => {
+  const raw = metadata?.[MIGRATION_PAUSED_CONSUMERS_KEY];
+
+  if (raw === undefined) return [];
+
+  try {
+    const names: unknown = JSON.parse(raw);
+
+    return Array.isArray(names) ? names.filter((n): n is string => typeof n === 'string') : [];
+  } catch {
+    return [];
+  }
+};
+
+/** Copy a stored message's headers, minus those a publish may not carry. */
+const republishHeaders = (stored: MsgHdrs | undefined): MsgHdrs => {
+  const hdrs = natsHeaders();
+
+  for (const key of stored?.keys() ?? []) {
+    if (REPUBLISH_DROPPED_HEADER.test(key)) continue;
+
+    for (const value of stored?.values(key) ?? []) hdrs.append(key, value);
+  }
+
+  return hdrs;
+};
 
 /**
  * The migration lock: whoever holds the backup stream owns the migration. A
@@ -142,6 +191,7 @@ class MigrationLease {
         ...patch,
         metadata: {
           ...config.metadata,
+          ...patch.metadata,
           ...(phase === undefined ? {} : { [MIGRATION_PHASE_KEY]: phase }),
           [MIGRATION_OWNER_KEY]: this.owner,
           [MIGRATION_HEARTBEAT_KEY]: String(this.beats),
@@ -375,10 +425,17 @@ export class StreamMigration {
       sources: withoutSource(currentInfo.config.sources, backupName),
     };
     let originalDeleted = false;
+    // Consumers acking out of a work queue would race the copy, and a message
+    // copied before it was processed would be delivered again after the restore.
+    const pause = sourcingMoves(currentInfo.config)
+      ? new MigrationConsumerPause(jsm, streamName, this.timing, this.logger)
+      : null;
 
     this.logger.log(`Stream ${streamName}: destructive migration started`);
 
     try {
+      if (pause !== null) await this.pauseConsumers(pause, lease);
+
       // Phase 1: Quiesce; an acked publish after this point cannot be lost.
       this.logger.log(`  Phase 1/4: Quiescing ${streamName} (publishes rejected during migration)`);
       await jsm.streams.update(streamName, { ...openConfig, subjects: [] });
@@ -386,13 +443,14 @@ export class StreamMigration {
       const quiesced = await jsm.streams.info(streamName);
       const drainedCount = quiesced.state.messages;
 
-      this.assertFits(streamName, newConfig, quiesced.state);
+      this.assertRestorable(streamName, newConfig, drainedCount);
+      await this.assertFits(jsm, streamName, currentInfo.config, newConfig, quiesced.state);
 
       if (drainedCount > 0) {
         // Phase 2: Backup via sourcing
         this.logger.log(`  Phase 2/4: Backing up ${drainedCount} messages -> ${backupName}`);
         await lease.update({ sources: [{ name: streamName }] });
-        await this.waitForSourceDrained(jsm, backupName, streamName, drainedCount, true, lease);
+        await this.waitForBackupDrained(jsm, streamName, lease);
       }
 
       // Phase 3: Delete + recreate. The backup's source names the stream about
@@ -401,6 +459,7 @@ export class StreamMigration {
       await lease.assertHeld();
       await jsm.streams.delete(streamName);
       originalDeleted = true;
+      pause?.stop();
       await lease.update({ sources: [] }, MigrationPhase.Restore);
       await jsm.streams.add(newConfig as StreamConfig);
 
@@ -422,10 +481,31 @@ export class StreamMigration {
         );
       } else {
         await this.rollbackBeforeDelete(jsm, streamName, openConfig, lease);
+        // A lost lock leaves them to the new owner, which may have paused them again.
+        if (lease.lossReason === undefined) await pause?.resume();
       }
 
       throw err;
+    } finally {
+      pause?.stop();
     }
+  }
+
+  /** Record which consumers get paused, pause them, and let their in-flight messages settle. */
+  private async pauseConsumers(
+    pause: MigrationConsumerPause,
+    lease: MigrationLease,
+  ): Promise<void> {
+    const names = await pause.listDurables();
+
+    if (names.length === 0) return;
+
+    // Recorded first, so an instance that takes the migration over resumes them.
+    await lease.update({ metadata: { [MIGRATION_PAUSED_CONSUMERS_KEY]: JSON.stringify(names) } });
+    await pause.pause(names, () => lease.lossReason === undefined);
+    await pause.waitIdle(() => {
+      lease.throwIfLost();
+    });
   }
 
   /** Take the lock by creating the backup; wait for any other holder first. */
@@ -443,11 +523,13 @@ export class StreamMigration {
       try {
         // The owner id keeps two configs from ever matching, so a second
         // create fails instead of succeeding as an idempotent no-op.
+        // NATS refuses to source into a backup that allows message schedules.
         await jsm.streams.add({
           ...config,
           name: backupName,
           subjects: [],
           sources: [],
+          allow_msg_schedules: false,
           metadata: {
             [MIGRATION_STARTED_AT_KEY]: new Date().toISOString(),
             [MIGRATION_OWNER_KEY]: lease.owner,
@@ -519,6 +601,12 @@ export class StreamMigration {
         sources: withoutSource(streamInfo.config.sources, backupName),
       });
       await this.returnBackup(jsm, streamName, streamInfo.config, lease);
+      await MigrationConsumerPause.resumeAll(
+        jsm,
+        streamName,
+        pausedConsumersOf(backupInfo.config.metadata),
+        this.logger,
+      );
 
       return;
     }
@@ -545,14 +633,7 @@ export class StreamMigration {
     if (hasBackupSource) {
       // Died mid-restore: the source keeps its position, let it finish.
       this.logger.warn(`Stream ${streamName}: finishing interrupted restore from ${backupName}`);
-      await this.waitForSourceDrained(
-        jsm,
-        streamName,
-        backupName,
-        backupInfo.state.messages,
-        false,
-        lease,
-      );
+      await this.waitForRestoreDrained(jsm, streamName, backupInfo.state.messages, lease);
       await this.dropBackup(jsm, backupName, lease);
       await jsm.streams.update(streamName, {
         ...streamInfo.config,
@@ -604,7 +685,7 @@ export class StreamMigration {
     }
 
     await lease.update({ sources: [{ name: streamName }] });
-    await this.waitForSourceDrained(jsm, backupName, streamName, 0, true, lease);
+    await this.waitForBackupDrained(jsm, streamName, lease);
     await lease.assertHeld();
     await lease.update({ sources: [] }, MigrationPhase.Restore);
     await jsm.streams.purge(streamName);
@@ -630,22 +711,62 @@ export class StreamMigration {
       await lease.update({ sources: [] }, MigrationPhase.Restore);
     }
 
+    if (allowsSchedules(streamConfig)) {
+      // Left by an older release: sourcing into this stream is refused.
+      await this.republishBackup(jsm, streamName, backupInfo, lease);
+      await this.dropBackup(jsm, backupName, lease);
+
+      return;
+    }
+
     await jsm.streams.update(streamName, {
       ...streamConfig,
       sources: [...otherSources, { name: backupName }],
     });
-    await this.waitForSourceDrained(
-      jsm,
-      streamName,
-      backupName,
-      backupInfo.state.messages,
-      false,
-      lease,
-    );
+    await this.waitForRestoreDrained(jsm, streamName, backupInfo.state.messages, lease);
 
     // Backup deleted before the source detaches: the order recovery relies on.
     await this.dropBackup(jsm, backupName, lease);
     await jsm.streams.update(streamName, { ...streamConfig, sources: otherSources });
+  }
+
+  /**
+   * Publish every message of the backup into the stream, oldest first, and
+   * delete it from the backup once published, so a resumed run continues
+   * where a crashed one stopped. Only the message in flight at the crash can
+   * be published twice, and its id makes the stream drop the second copy.
+   */
+  private async republishBackup(
+    jsm: JetStreamManager,
+    streamName: string,
+    backupInfo: StreamInfo,
+    lease: MigrationLease,
+  ): Promise<void> {
+    const backupName = backupInfo.config.name;
+    const { first_seq: first, last_seq: last, messages } = backupInfo.state;
+    const js = jsm.jetstream();
+
+    if (messages === 0) return;
+
+    this.logger.warn(
+      `Stream ${streamName} allows message schedules, which NATS refuses to source into; ` +
+        `republishing ${messages} messages from ${backupName}`,
+    );
+
+    for (let seq = first; seq <= last; seq++) {
+      lease.throwIfLost();
+
+      const stored = await jsm.streams.getMessage(backupName, { seq });
+
+      if (stored === null) continue;
+
+      await js.publish(stored.subject, stored.data, {
+        headers: republishHeaders(stored.header),
+        msgID: `${backupName}:${seq}`,
+        expect: { streamName },
+      });
+      await jsm.streams.deleteMessage(backupName, seq, false);
+    }
   }
 
   private async dropBackup(
@@ -672,20 +793,113 @@ export class StreamMigration {
     });
   }
 
-  /** Refuse to recreate a stream whose new limits would evict or reject what it holds. */
-  private assertFits(streamName: string, config: MigrationStreamConfig, state: StreamState): void {
+  /**
+   * Refuse to recreate a stream whose new limits would evict or reject what
+   * it holds: an evicted message is lost, a rejected one stalls the restore.
+   */
+  private async assertFits(
+    jsm: JetStreamManager,
+    streamName: string,
+    current: StreamConfig,
+    config: MigrationStreamConfig,
+    state: StreamState,
+  ): Promise<void> {
     const maxMsgs = config.max_msgs ?? -1;
     const maxBytes = config.max_bytes ?? -1;
     const tooMany = maxMsgs > 0 && state.messages > maxMsgs;
     const tooBig = maxBytes > 0 && state.bytes > maxBytes;
 
-    if (!tooMany && !tooBig) return;
+    if (tooMany || tooBig) {
+      throw new JetstreamMigrationError(
+        MigrationErrorReason.InsufficientCapacity,
+        `Stream ${streamName} holds ${state.messages} messages (${state.bytes} bytes), more than the ` +
+          `new config allows (max_msgs ${maxMsgs}, max_bytes ${maxBytes}). Raise the limits, or let ` +
+          'consumers drain the stream, before migrating.',
+      );
+    }
+
+    await this.assertSubjectsFit(jsm, streamName, current, config, state);
+  }
+
+  /** Per-subject counts are listed only when the limit goes down: listing them is costly. */
+  private async assertSubjectsFit(
+    jsm: JetStreamManager,
+    streamName: string,
+    current: StreamConfig,
+    config: MigrationStreamConfig,
+    state: StreamState,
+  ): Promise<void> {
+    const limit = config.max_msgs_per_subject ?? -1;
+    const currentLimit = current.max_msgs_per_subject;
+    const lowered = limit > 0 && (currentLimit <= 0 || limit < currentLimit);
+
+    if (!lowered || state.messages <= limit) return;
+
+    const { state: detailed } = await jsm.streams.info(streamName, { subjects_filter: '>' });
+    const overfull = Object.entries(detailed.subjects ?? {})
+      .filter(([, count]) => count > limit)
+      .toSorted(([, a], [, b]) => b - a);
+
+    if (overfull.length === 0) return;
+
+    const shown = overfull
+      .slice(0, OVERFULL_SUBJECTS_SHOWN)
+      .map(([subject, count]) => `${subject} (${count})`)
+      .join(', ');
 
     throw new JetstreamMigrationError(
       MigrationErrorReason.InsufficientCapacity,
-      `Stream ${streamName} holds ${state.messages} messages (${state.bytes} bytes), more than the ` +
-        `new config allows (max_msgs ${maxMsgs}, max_bytes ${maxBytes}). Raise the limits, or let ` +
-        'consumers drain the stream, before migrating.',
+      `Stream ${streamName} holds more messages on ${overfull.length} subject(s) than the new ` +
+        `max_msgs_per_subject ${limit} allows: ${shown}. Raise the limit, or let consumers drain ` +
+        'those subjects, before migrating.',
+    );
+  }
+
+  /** NATS refuses to source the backup back into a stream that allows message schedules. */
+  private assertRestorable(
+    streamName: string,
+    config: MigrationStreamConfig,
+    messages: number,
+  ): void {
+    if (messages === 0 || !allowsSchedules(config)) return;
+
+    throw new JetstreamMigrationError(
+      MigrationErrorReason.MessageSchedules,
+      schedulesRefusal(streamName, messages),
+    );
+  }
+
+  /**
+   * Into the backup, which must hold at least what the original still has.
+   * A consumer acking out of a work queue shrinks that count instead of
+   * stalling the drain on a snapshot taken before it did.
+   */
+  private waitForBackupDrained(
+    jsm: JetStreamManager,
+    streamName: string,
+    lease: MigrationLease,
+  ): Promise<void> {
+    const floor = async (): Promise<number> => (await jsm.streams.info(streamName)).state.messages;
+
+    return this.waitForSourceDrained(jsm, backupNameOf(streamName), streamName, floor, true, lease);
+  }
+
+  /** Into the recreated stream: nothing consumes it yet, so it ends up with all the backup held. */
+  private waitForRestoreDrained(
+    jsm: JetStreamManager,
+    streamName: string,
+    backupMessages: number,
+    lease: MigrationLease,
+  ): Promise<void> {
+    const floor = async (): Promise<number> => backupMessages;
+
+    return this.waitForSourceDrained(
+      jsm,
+      streamName,
+      backupNameOf(streamName),
+      floor,
+      false,
+      lease,
     );
   }
 
@@ -700,7 +914,7 @@ export class StreamMigration {
     jsm: JetStreamManager,
     streamName: string,
     sourceName: string,
-    minimumMessages: number,
+    minimumMessages: () => Promise<number>,
     countsMessages: boolean,
     lease: MigrationLease,
   ): Promise<void> {
@@ -718,7 +932,7 @@ export class StreamMigration {
         source !== undefined &&
         source.active >= 0 &&
         source.lag === 0 &&
-        info.state.messages >= minimumMessages
+        info.state.messages >= (await minimumMessages())
       ) {
         return;
       }

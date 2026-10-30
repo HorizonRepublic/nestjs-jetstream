@@ -150,7 +150,7 @@ const createCommandResolver = (
  * a timer just to clear it microseconds later is wasted work.
  */
 export const createRpcPipeline = (rctx: RpcPipelineContext): RouteFn => {
-  const { eventBus, logger, timeout, ackExtension, otel, serviceName, serverEndpoint } = rctx;
+  const { eventBus, logger, timeout, otel, serviceName, serverEndpoint } = rctx;
   const { publishReply, publishErrorReply } = createRepliers(rctx);
   const resolveCommand = createCommandResolver(rctx);
   const reportHandlerCompleted = createHandlerReporter(
@@ -171,7 +171,7 @@ export const createRpcPipeline = (rctx: RpcPipelineContext): RouteFn => {
     const { handler, data, replyTo, correlationId } = resolved;
     const subject = msg.subject;
     const ctx = new RpcContext([msg]);
-    const stopAckExtension = startAckExtensionTimer(msg, ackExtension);
+    const stopAckExtension = startAckExtensionTimer(msg, rctx.ackExtension);
     const startedAt = performance.now();
 
     const reportHandlerError = (err: unknown): void => {

@@ -17,10 +17,18 @@ import { faker } from '@faker-js/faker';
 import type { StartedTestContainer } from 'testcontainers';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
-import { dlqStreamName, JetstreamMigrationError, MigrationErrorReason } from '../../src';
+import {
+  consumerName,
+  dlqStreamName,
+  JetstreamMigrationError,
+  MigrationErrorReason,
+  StreamKind,
+  streamName,
+} from '../../src';
 import {
   MIGRATION_BACKUP_SUFFIX,
   MIGRATION_HEARTBEAT_KEY,
+  MIGRATION_PAUSED_CONSUMERS_KEY,
   MIGRATION_PHASE_KEY,
   MigrationPhase,
   StreamMigration,
@@ -120,9 +128,12 @@ describe('Stream migration lock', () => {
   const backupOf = (name: string): string => `${name}${MIGRATION_BACKUP_SUFFIX}`;
 
   /** A backup as a migrating instance leaves it, holding `count` messages of its own. */
-  const createBackup = async (count: number, metadata: Record<string, string>): Promise<void> => {
+  const createBackup = async (
+    count: number,
+    metadata: Record<string, string>,
+    staging = `${backupOf(stream)}.staging`,
+  ): Promise<void> => {
     const backup = backupOf(stream);
-    const staging = `${backup}.staging`;
 
     await jsm.streams.add({
       name: backup,
@@ -346,6 +357,303 @@ describe('Stream migration lock', () => {
     expect(info.config.storage).toBe(StorageType.File);
     expect(info.config.subjects).toEqual([`${stream}.>`]);
     expect(info.state.messages).toBe(20);
+    await expect(jsm.streams.info(backupOf(stream))).rejects.toThrow(/not found/);
+  });
+
+  it('should refuse a migration whose per-subject limit cannot hold a subject, before deleting anything', async () => {
+    // Given: every message on one subject
+    const desired = await seedStream(20);
+
+    // When
+    const failure = await new StreamMigration(FAST)
+      .migrate(jsm, stream, { ...desired, max_msgs_per_subject: 10 })
+      .catch((err: unknown) => err);
+
+    // Then
+    expect(failure).toBeInstanceOf(JetstreamMigrationError);
+    expect(failure).toMatchObject({ reason: MigrationErrorReason.InsufficientCapacity });
+    expect((failure as Error).message).toContain(`${stream}.order`);
+
+    const info = await jsm.streams.info(stream);
+
+    expect(info.config.storage).toBe(StorageType.File);
+    expect(info.config.subjects).toEqual([`${stream}.>`]);
+    expect(info.state.messages).toBe(20);
+    await expect(jsm.streams.info(backupOf(stream))).rejects.toThrow(/not found/);
+  });
+
+  it('should migrate when every subject fits a lowered per-subject limit', async () => {
+    // Given
+    const desired = await seedStream(10);
+
+    // When
+    await new StreamMigration(FAST).migrate(jsm, stream, { ...desired, max_msgs_per_subject: 10 });
+
+    // Then
+    const info = await jsm.streams.info(stream);
+
+    expect(info.config.storage).toBe(StorageType.Memory);
+    expect(info.state.messages).toBe(10);
+  });
+
+  it('should migrate a work-queue stream that another replica keeps consuming, without duplicates', async () => {
+    // Given: an old replica consumes the stream while the migration runs
+    const total = 60;
+    const desired = await seedStream(total);
+    const durable = 'old-replica';
+
+    await jsm.consumers.add(stream, {
+      durable_name: durable,
+      ack_policy: AckPolicy.Explicit,
+      filter_subject: `${stream}.>`,
+    });
+
+    const processed: string[] = [];
+    const stop = new AbortController();
+    const oldReplica = (async (): Promise<void> => {
+      const consumer = await js.consumers.get(stream, durable);
+
+      while (!stop.signal.aborted) {
+        const msg = await consumer.next({ expires: 1_000 }).catch(() => null);
+
+        if (msg === null) continue;
+
+        await new Promise((r) => setTimeout(r, 30));
+        processed.push(msg.string());
+        await msg.ackAck().catch(() => undefined);
+      }
+    })();
+
+    await waitForCondition(() => processed.length >= 3, 5_000);
+
+    // When
+    const outcome = await new StreamMigration(FAST)
+      .migrate(jsm, stream, desired)
+      .then(() => null)
+      .catch((err: unknown) => err);
+
+    stop.abort();
+    await oldReplica;
+
+    // Then: every message is either processed or restored, never both
+    expect(outcome).toBeNull();
+
+    const info = await jsm.streams.info(stream);
+    const restored: string[] = [];
+
+    for (let seq = info.state.first_seq; seq <= info.state.last_seq; seq++) {
+      const stored = await jsm.streams.getMessage(stream, { seq });
+
+      if (stored !== null) restored.push(stored.string());
+    }
+
+    expect(info.config.storage).toBe(StorageType.Memory);
+    expect(restored.filter((m) => processed.includes(m))).toEqual([]);
+    expect(new Set([...processed, ...restored]).size).toBe(total);
+  }, 30_000);
+
+  it('should resume the consumers it paused when the migration is refused', async () => {
+    // Given
+    const desired = await seedStream(20);
+
+    await jsm.consumers.add(stream, {
+      durable_name: 'worker',
+      ack_policy: AckPolicy.Explicit,
+      filter_subject: `${stream}.>`,
+    });
+
+    // When
+    await new StreamMigration(FAST)
+      .migrate(jsm, stream, { ...desired, max_msgs: 10 })
+      .catch(() => undefined);
+
+    // Then
+    expect((await jsm.consumers.info(stream, 'worker')).paused).toBeFalsy();
+  });
+
+  it('should resume consumers an abandoned migration paused', async () => {
+    // Given: the migrating instance paused a consumer and died before deleting the original
+    await seedStream(5);
+    await jsm.consumers.add(stream, {
+      durable_name: 'worker',
+      ack_policy: AckPolicy.Explicit,
+      filter_subject: `${stream}.>`,
+    });
+    await jsm.consumers.pause(stream, 'worker', new Date(Date.now() + 3_600_000));
+    await createBackup(0, {
+      ...live(MigrationPhase.Backup),
+      [MIGRATION_PAUSED_CONSUMERS_KEY]: JSON.stringify(['worker']),
+    });
+
+    // When
+    await new StreamMigration(FAST).settle(jsm, stream, {
+      name: stream,
+      subjects: [`${stream}.>`],
+    });
+
+    // Then
+    expect((await jsm.consumers.info(stream, 'worker')).paused).toBeFalsy();
+    expect((await jsm.streams.info(stream)).state.messages).toBe(5);
+  });
+
+  it('should refuse to migrate a stream that allows message schedules and holds messages', async () => {
+    // Given: an event stream with schedules on, holding a message nobody consumed yet
+    const serviceName = uniqueServiceName();
+
+    stream = streamName(serviceName, StreamKind.Event);
+
+    const first = await createTestApp(
+      { name: serviceName, port, events: { stream: { allow_msg_schedules: true } } },
+      [OrdersController],
+    );
+
+    await first.app.close();
+    await jsm.consumers.delete(stream, consumerName(serviceName, StreamKind.Event));
+
+    const { config } = await jsm.streams.info(stream);
+
+    await js.publish(config.subjects[0]!.replace('>', 'order.created'), '{}');
+
+    // When: the next deploy changes an immutable property
+    const failure = await createTestApp(
+      {
+        name: serviceName,
+        port,
+        provisioning: { allowDestructiveMigration: true },
+        events: { stream: { allow_msg_schedules: true, storage: StorageType.Memory } },
+      },
+      [OrdersController],
+    ).catch((err: unknown) => err);
+
+    // Then
+    try {
+      expect(failure).toBeInstanceOf(JetstreamMigrationError);
+      expect(failure).toMatchObject({ reason: MigrationErrorReason.MessageSchedules });
+
+      const info = await jsm.streams.info(stream);
+
+      expect(info.config.storage).toBe(StorageType.File);
+      expect(info.config.subjects).toEqual(config.subjects);
+      expect(info.state.messages).toBe(1);
+      await expect(jsm.streams.info(backupOf(stream))).rejects.toThrow(/not found/);
+    } finally {
+      await cleanupStreams(nc, serviceName);
+    }
+  });
+
+  it('should refuse a migration into a stream that allows message schedules, before deleting anything', async () => {
+    // Given
+    const desired = await seedStream(5);
+
+    // When
+    const failure = await new StreamMigration(FAST)
+      .migrate(jsm, stream, { ...desired, allow_msg_schedules: true })
+      .catch((err: unknown) => err);
+
+    // Then: the original is reopened with every message
+    expect(failure).toMatchObject({ reason: MigrationErrorReason.MessageSchedules });
+
+    const info = await jsm.streams.info(stream);
+
+    expect(info.config.subjects).toEqual([`${stream}.>`]);
+    expect(info.state.messages).toBe(5);
+    await expect(jsm.streams.info(backupOf(stream))).rejects.toThrow(/not found/);
+  });
+
+  it('should finish a restore stuck on a stream that allows message schedules', async () => {
+    // Given: an older release deleted the original and recreated it with
+    // schedules on, so the backup cannot be sourced back
+    stream = `mig-${faker.string.alphanumeric(8).toLowerCase()}`;
+
+    const desired: DesiredStream = {
+      name: stream,
+      subjects: [`${stream}.>`],
+      retention: RetentionPolicy.Workqueue,
+      allow_msg_schedules: true,
+    };
+
+    await createBackup(25, live(MigrationPhase.Restore), `${stream}.order`);
+    await jsm.streams.add(desired);
+    await js.publish(`${stream}.order`, 'published-after-recreate');
+
+    // When
+    const recovered = await new StreamMigration(FAST).settle(jsm, stream, desired);
+
+    // Then
+    expect(recovered).toBe(true);
+
+    const info = await jsm.streams.info(stream);
+
+    expect(info.config.allow_msg_schedules).toBe(true);
+    expect(info.config.sources ?? []).toEqual([]);
+    expect(info.state.messages).toBe(26);
+    await expect(jsm.streams.info(backupOf(stream))).rejects.toThrow(/not found/);
+  });
+
+  it('should republish distinct messages that share a message id', async () => {
+    // Given: two backed-up messages published with the same id outside the dedup window
+    stream = `mig-${faker.string.alphanumeric(8).toLowerCase()}`;
+
+    const desired: DesiredStream = {
+      name: stream,
+      subjects: [`${stream}.>`],
+      retention: RetentionPolicy.Workqueue,
+      allow_msg_schedules: true,
+    };
+
+    await jsm.streams.add({
+      name: backupOf(stream),
+      subjects: [`${stream}.order`],
+      retention: RetentionPolicy.Workqueue,
+      duplicate_window: 100_000_000,
+      metadata: live(MigrationPhase.Restore),
+    });
+    await js.publish(`${stream}.order`, 'first', { msgID: 'order-1' });
+    await new Promise((r) => setTimeout(r, 300));
+    await js.publish(`${stream}.order`, 'second', { msgID: 'order-1' });
+
+    const { config } = await jsm.streams.info(backupOf(stream));
+
+    await jsm.streams.update(backupOf(stream), { ...config, subjects: [] });
+    await jsm.streams.add(desired);
+
+    // When
+    await new StreamMigration(FAST).settle(jsm, stream, desired);
+
+    // Then
+    expect((await jsm.streams.info(stream)).state.messages).toBe(2);
+  });
+
+  it('should not republish what it already did when a stuck restore is resumed after a crash', async () => {
+    // Given: a stuck restore into a stream whose dedup window is long gone
+    stream = `mig-${faker.string.alphanumeric(8).toLowerCase()}`;
+
+    const desired: DesiredStream = {
+      name: stream,
+      subjects: [`${stream}.>`],
+      retention: RetentionPolicy.Workqueue,
+      allow_msg_schedules: true,
+      duplicate_window: 100_000_000,
+    };
+
+    await createBackup(10, live(MigrationPhase.Restore), `${stream}.order`);
+    await jsm.streams.add(desired);
+
+    let reads = 0;
+    const crashing = intercepted(jsm, async (method, _args, call) => {
+      if (method === 'getMessage' && ++reads > 4) throw new Error('process killed');
+
+      return call();
+    });
+
+    await new StreamMigration(FAST).settle(crashing, stream, desired).catch(() => undefined);
+    await new Promise((r) => setTimeout(r, 300));
+
+    // When
+    await new StreamMigration(FAST).settle(jsm, stream, desired);
+
+    // Then
+    expect((await jsm.streams.info(stream)).state.messages).toBe(10);
     await expect(jsm.streams.info(backupOf(stream))).rejects.toThrow(/not found/);
   });
 

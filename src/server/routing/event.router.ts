@@ -30,6 +30,7 @@ import {
   resolveParkExtension,
   resolveRetryDelays,
   startAckExtensionTimer,
+  type AckExtension,
 } from '../../utils';
 import { MessageProvider } from '../infrastructure';
 import { NameResolver } from '../infrastructure/name-resolver';
@@ -58,6 +59,12 @@ const CLOCK_SKEW_ALLOWANCE_MS = 10_000;
 
 /** Deliveries before an orphan is cancelled when the consumer sets no limit. */
 const ORPHAN_FALLBACK_DELIVERIES = 3;
+
+/** An ack extension resolved for the ack_wait it was resolved from. */
+interface ResolvedAckExtension {
+  readonly ackWait: number | undefined;
+  readonly extension: AckExtension | null;
+}
 
 /** Kinds whose exhausted deliveries are captured from server advisories. */
 const ADVISORY_WATCHED_KINDS: ReadonlySet<StreamKind> = new Set([
@@ -94,6 +101,7 @@ export class EventRouter {
   /** Final deliveries handled in this process; the advisory capture leaves them to their handler. */
   public readonly finalDeliveries: FinalDeliveries | null;
   private maxDeliverByStream = new Map<string, number>();
+  private readonly ackExtensions = new Map<StreamKind, ResolvedAckExtension>();
   private readonly startedAt = Date.now();
 
   public constructor(
@@ -158,6 +166,22 @@ export class EventRouter {
     this.deadLetterConfig.maxDeliverByStream = consumerMaxDelivers;
   }
 
+  /** Take the max_deliver of a consumer that was recreated, possibly with another config. */
+  public refreshMaxDeliver(info: ConsumerInfo): void {
+    const maxDeliver = info.config.max_deliver;
+    const thresholds = [this.maxDeliverByStream, this.deadLetterConfig?.maxDeliverByStream];
+
+    for (const map of new Set(thresholds)) {
+      if (map === undefined) continue;
+
+      if (maxDeliver !== undefined && maxDeliver > 0) {
+        map.set(info.stream_name, maxDeliver);
+      } else {
+        map.delete(info.stream_name);
+      }
+    }
+  }
+
   /** Start routing event, broadcast, and ordered messages to handlers. */
   public start(): void {
     // A second start replaces the pipeline instead of routing every message twice.
@@ -218,9 +242,9 @@ export class EventRouter {
   /** Assemble the pipeline and concurrency gate for one stream and subscribe. */
   private subscribeToStream(stream$: Observable<JsMsg>, kind: StreamKind): void {
     const isOrdered = kind === StreamKind.Ordered;
-    const ackExtension = isOrdered
-      ? null
-      : resolveAckExtension(this.getAckExtensionConfig(kind), this.ackWaitMap?.get(kind));
+    const ackExtensionFor = (): AckExtension | null =>
+      isOrdered ? null : this.ackExtensionFor(kind);
+    const ackExtension = ackExtensionFor();
 
     const rctx: RoutePipelineContext = {
       kind,
@@ -232,7 +256,10 @@ export class EventRouter {
       otel: this.otel,
       serviceName: this.serviceName,
       serverEndpoint: this.serverEndpoint,
-      ackExtension,
+      // Read per message: a recreated consumer may come back with another ack_wait.
+      get ackExtension(): AckExtension | null {
+        return ackExtensionFor();
+      },
       retryDelays: resolveRetryDelays(this.getRetryConfig(kind)),
       capture: this.capture,
       orphans: kind === StreamKind.Schedule ? this.orphanPolicy() : null,
@@ -253,13 +280,13 @@ export class EventRouter {
 
     const maxActive = isOrdered ? 1 : (this.getConcurrency(kind) ?? Number.POSITIVE_INFINITY);
     // Ordered consumers acknowledge nothing, so a parked message has no deadline.
-    const parkExtension = isOrdered
+    const parkTimer: ParkTimerFn | null = isOrdered
       ? null
-      : resolveParkExtension(ackExtension, this.ackWaitMap?.get(kind));
-    const parkTimer: ParkTimerFn | null =
-      parkExtension === null
-        ? null
-        : (msg): (() => void) | null => startAckExtensionTimer(msg, parkExtension);
+      : (msg): (() => void) | null =>
+          startAckExtensionTimer(
+            msg,
+            resolveParkExtension(ackExtensionFor(), this.ackWaitMap?.get(kind)),
+          );
 
     const gate = new ConcurrencyGate(
       maxActive,
@@ -328,6 +355,20 @@ export class EventRouter {
 
   private getConcurrency(kind: StreamKind): number | undefined {
     return this.kindConfig(kind)?.concurrency;
+  }
+
+  /** Resolved again only when the consumer's ack_wait changed since the last call. */
+  private ackExtensionFor(kind: StreamKind): AckExtension | null {
+    const ackWait = this.ackWaitMap?.get(kind);
+    const cached = this.ackExtensions.get(kind);
+
+    if (cached !== undefined && cached.ackWait === ackWait) return cached.extension;
+
+    const extension = resolveAckExtension(this.getAckExtensionConfig(kind), ackWait);
+
+    this.ackExtensions.set(kind, { ackWait, extension });
+
+    return extension;
   }
 
   private getAckExtensionConfig(kind: StreamKind): AckExtensionConfig | undefined {

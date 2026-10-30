@@ -139,7 +139,6 @@ export const createWorkqueuePipeline = (
   rctx: RoutePipelineContext,
 ): ((msg: JsMsg) => Promise<void> | undefined) => {
   const { kind, spanKind, logger, eventBus, otel, serviceName, serverEndpoint } = rctx;
-  const { ackExtension } = rctx;
 
   const reportHandlerCompleted = createHandlerReporter(
     rctx.eventBus,
@@ -157,7 +156,7 @@ export const createWorkqueuePipeline = (
 
     const { handler, data } = resolved;
     const ctx = new RpcContext([msg]);
-    const stopAckExtension = startAckExtensionTimer(msg, ackExtension);
+    const stopAckExtension = startAckExtensionTimer(msg, rctx.ackExtension);
     const startedAt = performance.now();
 
     let pending: unknown;
