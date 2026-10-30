@@ -13,7 +13,7 @@ import {
   type Status,
 } from '@nats-io/transport-node';
 
-import { defer, from, Observable, ReplaySubject, share, switchMap } from 'rxjs';
+import { defer, from, Observable, ReplaySubject, share, Subject, switchMap } from 'rxjs';
 
 import { ConnectionErrorReason, JetstreamConnectionError } from '../errors';
 import { EventBus } from '../hooks';
@@ -61,6 +61,7 @@ export class ConnectionProvider {
 
   private connection: NatsConnection | null = null;
   private readonly established = new ReplaySubject<NatsConnection>(1);
+  private readonly reconnected = new Subject<void>();
   private connectionPromise: Promise<NatsConnection> | null = null;
   private jsClient: JetStreamClient | null = null;
   private jsmInstance: JetStreamManager | null = null;
@@ -96,8 +97,17 @@ export class ConnectionProvider {
    * Establish NATS connection. Idempotent: returns cached connection on subsequent calls.
    *
    * @throws Error if connection is refused (fail fast).
+   * @throws JetstreamConnectionError with reason `shutting-down` once {@link shutdown} has begun.
    */
   public async getConnection(): Promise<NatsConnection> {
+    // A late emit or send must not open a connection that nothing will close.
+    if (this.shuttingDown) {
+      throw new JetstreamConnectionError(
+        ConnectionErrorReason.ShuttingDown,
+        'The transport is shutting down; no new connection is opened',
+      );
+    }
+
     if (this.connection && !this.connection.isClosed()) {
       return this.connection;
     }
@@ -174,6 +184,11 @@ export class ConnectionProvider {
    */
   public hasLostServerConnection(): boolean {
     return this.serverConnectionLost;
+  }
+
+  /** Emits each time the connection comes back after a disconnect. */
+  public get reconnects$(): Observable<void> {
+    return this.reconnected.asObservable();
   }
 
   /** Direct access to the raw NATS connection, or `null` if not yet connected. */
@@ -292,7 +307,6 @@ export class ConnectionProvider {
       const previous = this.connection;
 
       this.connection = nc;
-      this.shuttingDown = false;
       // Replacing a closed connection; a first dial keeps lookups already waiting on it.
       if (previous) this.resetConnectionCaches();
       this.logger.log(`NATS connection established: ${nc.getServer()}`);
@@ -336,6 +350,7 @@ export class ConnectionProvider {
       case 'reconnect':
         this.resetConnectionCaches();
         this.eventBus.emit(TransportEvent.Reconnect, nc.getServer());
+        this.reconnected.next();
         this.lifecycleSpan?.recordEvent(EVENT_CONNECTION_RECONNECTED, {
           [ATTR_NATS_CONNECTION_SERVER]: nc.getServer(),
         });

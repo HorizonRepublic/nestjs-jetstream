@@ -136,3 +136,12 @@ export interface ResolvedSubjectLabels {
 
 /** Label accepted by ConsumerRecovered: typically StreamKind, may be any string. */
 export type RecoveredKindLabel = StreamKind | string;
+
+/** Last server a named connection reported, and whether it is currently up. */
+export interface ConnectionServerState {
+  server: string;
+  up: boolean;
+}
+
+/** Which end of an RPC gave up: the caller waiting for a reply, or the handler past its deadline. */
+export type RpcTimeoutSide = 'client' | 'server';

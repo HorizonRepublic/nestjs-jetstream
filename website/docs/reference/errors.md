@@ -93,14 +93,14 @@ An error your handler throws reaches `onDeadLetter` as is.
 
 ## `JetstreamRecordError`
 
-| Reason                             | When                                                              |
-| ---------------------------------- | ----------------------------------------------------------------- |
-| `invalid-schedule-date`            | `scheduleAt()` got an invalid `Date`                              |
-| `schedule-in-past`                 | `scheduleAt()` got a date that is not in the future               |
-| `invalid-ttl`                      | `ttl()` got a value that is not a positive finite number          |
-| `reserved-nats-header`             | `setHeader()` targeted a `Nats-*` header the server interprets    |
-| `reserved-transport-header`        | `setHeader()` targeted a header the transport owns                |
-| `schedule-unsupported-for-ordered` | A record with `scheduleAt()` was emitted to an `ordered:` pattern |
+| Reason                             | When                                                                                                                 |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `invalid-schedule-date`            | `scheduleAt()` got an invalid `Date`                                                                                 |
+| `schedule-in-past`                 | `scheduleAt()` got a date that is not in the future                                                                  |
+| `invalid-ttl`                      | `ttl()` got a value that is not a positive finite number                                                             |
+| `reserved-nats-header`             | `setHeader()` targeted a `Nats-*` header other than `Nats-Expected-*`, or a record passed one to `emit()` / `send()` |
+| `reserved-transport-header`        | `setHeader()` targeted a header the transport owns, or a record passed one to `emit()` / `send()`                    |
+| `schedule-unsupported-for-ordered` | A record with `scheduleAt()` was emitted to an `ordered:` pattern                                                    |
 
 ## `JetstreamConfigError`
 
@@ -135,11 +135,12 @@ Thrown during startup, so it stops the application before it serves traffic.
 
 ## `JetstreamConnectionError`
 
-| Reason                    | When                                                             |
-| ------------------------- | ---------------------------------------------------------------- |
-| `not-connected`           | `unwrap()` or a JetStream client was requested before connecting |
-| `refused`                 | The servers refused the connection; the NATS error is `cause`    |
-| `closed-while-connecting` | The transport closed while its connection was still starting     |
+| Reason                    | When                                                                                          |
+| ------------------------- | --------------------------------------------------------------------------------------------- |
+| `not-connected`           | `unwrap()` or a JetStream client was requested before connecting                              |
+| `refused`                 | The servers refused the connection; the NATS error is `cause`                                 |
+| `closed-while-connecting` | The transport closed while its connection was still starting                                  |
+| `shutting-down`           | A publish, RPC call or JetStream lookup ran after shutdown began; no new connection is opened |
 
 ## `JetstreamProvisioningError`
 

@@ -127,7 +127,7 @@ export default function Root({ children }) {
     '/docs/guides/health-checks/': {
   "@type": "Article",
   "headline": "How to expose health checks for NATS JetStream",
-  "description": "Expose NATS connection status and RTT latency as a Kubernetes readiness/liveness probe using JetstreamHealthIndicator.",
+  "description": "Expose NATS connection status, RTT latency and consumer health as a Kubernetes readiness probe using JetstreamHealthIndicator.",
   "datePublished": "2026-03-21",
   "dateModified": "2026-10-30"
 },
@@ -177,7 +177,7 @@ export default function Root({ children }) {
   "headline": "JetstreamRecordBuilder: Headers, Message IDs & Deduplication",
   "description": "Build NestJS NATS messages with custom headers, deterministic message IDs for publish-side deduplication, and per-request RPC timeouts.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-10-29"
+  "dateModified": "2026-10-30"
 },
       
     '/docs/guides/recurring-schedules/': {
@@ -329,7 +329,7 @@ export default function Root({ children }) {
   "headline": "Header Contract: NATS Message Headers Used by the Transport",
   "description": "Stable contract for NATS message headers the transport reads and writes.",
   "datePublished": "2026-04-24",
-  "dateModified": "2026-10-29"
+  "dateModified": "2026-10-30"
 },
       
     '/docs/reference/module-configuration/': {

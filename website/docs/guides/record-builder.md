@@ -8,7 +8,7 @@ schema:
   headline: "JetstreamRecordBuilder: Headers, Message IDs & Deduplication"
   description: "Build NestJS NATS messages with custom headers, deterministic message IDs for publish-side deduplication, and per-request RPC timeouts."
   datePublished: "2026-03-21"
-  dateModified: "2026-10-29"
+  dateModified: "2026-10-30"
 ---
 
 # Record Builder & Deduplication
@@ -125,12 +125,17 @@ class JetstreamRecordBuilder<T = unknown> {
 }
 ```
 
-The exported `RESERVED_HEADERS` set lets custom tooling check a key before calling `setHeader()`. It does not cover the `nats-` prefix, so a sanitizer needs that check alongside it:
+The exported `RESERVED_HEADERS` set lets custom tooling check a key before calling `setHeader()`. It does not cover the `nats-` prefix, so a sanitizer needs that check alongside it, leaving `nats-expected-` through:
 
 ```typescript
 import { RESERVED_HEADERS } from '@horizon-republic/nestjs-jetstream';
 
-if (RESERVED_HEADERS.has(key.toLowerCase()) || key.toLowerCase().startsWith('nats-')) {
+const lower = key.toLowerCase();
+
+if (
+  RESERVED_HEADERS.has(lower) ||
+  (lower.startsWith('nats-') && !lower.startsWith('nats-expected-'))
+) {
   throw new Error(`${key} is reserved by the transport`);
 }
 ```

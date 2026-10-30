@@ -4,13 +4,27 @@ import type { ConnectionRegistry } from '../connection/connection-registry';
 import type { ConnectionScope } from '../connection/connection.types';
 import type {
   JetstreamConnectionHealth,
+  JetstreamConsumerHealth,
+  JetstreamConsumerState,
+  JetstreamHealthCheckOptions,
   JetstreamHealthIndicatorResult,
   JetstreamHealthStatus,
 } from '../interfaces';
+import { STREAM_KIND_LABEL } from '../metrics/metrics.constants';
+import type { ConsumerFlowState } from '../server/infrastructure/consumer-flow.types';
 import { errorMessage } from '../utils';
 
 /** Upper bound on a single connection's round-trip probe. */
 const PROBE_TIMEOUT_MS = 5_000;
+
+/**
+ * How long a consume flow may stay down before it counts as unhealthy. Long
+ * enough to ride out a NATS restart or a consumer recreated by self-healing,
+ * whose retries back off up to 30 seconds, so readiness does not flap.
+ */
+const CONSUMER_STALL_THRESHOLD_MS = 30_000;
+
+type ConsumptionHealth = Required<Pick<JetstreamConnectionHealth, 'consuming' | 'consumers'>>;
 
 /**
  * Health indicator result compatible with @nestjs/terminus.
@@ -59,23 +73,90 @@ export class JetstreamHealthIndicator {
       entries.find(([name]) => name === this.registry.defaultName)?.[1] ?? fallback;
 
     if (entries.length === 1) {
-      return {
+      const single: JetstreamHealthStatus = {
         connected: defaultHealth.connected,
         server: defaultHealth.server,
         latency: defaultHealth.latency,
       };
+
+      if (defaultHealth.consuming !== undefined) {
+        single.consuming = defaultHealth.consuming;
+        single.consumers = defaultHealth.consumers;
+        single.degraded = !defaultHealth.consuming;
+      }
+
+      return single;
     }
 
-    return {
+    const consumingEntries = entries.filter(([, health]) => health.consuming !== undefined);
+    const status: JetstreamHealthStatus = {
       connected: entries.every(([, health]) => !health.critical || health.connected),
       server: defaultHealth.server,
       latency: defaultHealth.latency,
-      degraded: entries.some(([, health]) => !health.critical && !health.connected),
+      degraded: entries.some(
+        ([, health]) => (!health.critical && !health.connected) || health.consuming === false,
+      ),
       connections: Object.fromEntries(entries),
     };
+
+    if (consumingEntries.length > 0) {
+      status.consuming = consumingEntries.every(
+        ([, health]) => !health.critical || health.consuming === true,
+      );
+    }
+
+    if (defaultHealth.consumers !== undefined) status.consumers = defaultHealth.consumers;
+
+    return status;
   }
 
   private async probe(scope: ConnectionScope): Promise<JetstreamConnectionHealth> {
+    const health = await this.probeConnection(scope);
+    const consumption = this.consumption(scope);
+
+    return consumption === null ? health : { ...health, ...consumption };
+  }
+
+  /** Consume-flow health, or `null` when this connection does not consume. */
+  private consumption(scope: ConnectionScope): ConsumptionHealth | null {
+    if (!scope.strategy?.isAttached || !scope.messages) return null;
+
+    const now = Date.now();
+    const consumers: Record<string, JetstreamConsumerHealth> = {};
+
+    for (const flow of scope.messages.getFlowStates()) {
+      consumers[STREAM_KIND_LABEL[flow.kind]] = this.describeFlow(flow, now);
+    }
+
+    return {
+      // Before the boot chain finishes nothing consumes: it is still
+      // provisioning, waiting on a migration, or retrying in the background.
+      consuming:
+        scope.strategy.isListening && Object.values(consumers).every((flow) => flow.healthy),
+      consumers,
+    };
+  }
+
+  private describeFlow(flow: ConsumerFlowState, now: number): JetstreamConsumerHealth {
+    const downForMs = flow.downSince === null ? null : now - flow.downSince;
+
+    return {
+      healthy: downForMs === null || downForMs < CONSUMER_STALL_THRESHOLD_MS,
+      state: this.flowState(flow),
+      consumer: flow.consumer,
+      failures: flow.failures,
+      downForMs,
+      lastError: flow.lastError,
+    };
+  }
+
+  private flowState(flow: ConsumerFlowState): JetstreamConsumerState {
+    if (flow.active) return 'active';
+
+    return flow.connectedOnce ? 'recovering' : 'starting';
+  }
+
+  private async probeConnection(scope: ConnectionScope): Promise<JetstreamConnectionHealth> {
     const nc = scope.connection.unwrap;
 
     // A re-dialled connection serves clients, but the server side stayed on the closed one.
@@ -125,23 +206,37 @@ export class JetstreamHealthIndicator {
    * health failures from unexpected exceptions. Works with both Terminus v10
    * (`instanceof HealthCheckError`) and v11+ (`error?.isHealthCheckError`).
    *
+   * Stalled consumers only mark the result `degraded` unless
+   * `options.requireConsumers` is set: their usual causes (a missing stream or
+   * consumer, another pod's migration) hit every replica at once, so failing
+   * on them by default would take the whole fleet out of rotation.
+   *
    * @param key - Health indicator key (default: `'jetstream'`).
+   * @param options - Set `requireConsumers` to also fail while a critical
+   *   connection is not consuming. Use it for readiness only, never liveness.
    * @returns Object with status, server, and latency under the given key.
    * @throws Error with `isHealthCheckError`, `causes`, and `{ [key]: { status: 'down' } }`.
    */
-  public async isHealthy(key = 'jetstream'): Promise<JetstreamHealthIndicatorResult> {
+  public async isHealthy(
+    key = 'jetstream',
+    options: JetstreamHealthCheckOptions = {},
+  ): Promise<JetstreamHealthIndicatorResult> {
     const status = await this.check();
 
+    const healthy =
+      status.connected && (options.requireConsumers !== true || status.consuming !== false);
     const details: Record<string, unknown> = {
-      status: status.connected ? 'up' : 'down',
+      status: healthy ? 'up' : 'down',
       server: status.server,
       latency: status.latency,
     };
 
+    if (status.consuming !== undefined) details.consuming = status.consuming;
+    if (status.consumers !== undefined) details.consumers = status.consumers;
     if (status.degraded !== undefined) details.degraded = status.degraded;
     if (status.connections !== undefined) details.connections = status.connections;
 
-    if (!status.connected) {
+    if (!healthy) {
       const causes = { [key]: details };
 
       throw Object.assign(new Error('Jetstream health check failed'), {

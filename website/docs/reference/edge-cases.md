@@ -95,7 +95,7 @@ Ordered consumers are ephemeral: the nats.js client recreates them itself, outsi
 
 **Q: Are there limits on custom headers?**
 
-Headers count toward the message size. The transport reserves some names (`setHeader()` throws on them) and rejects every `Nats-*` header, which you reach through the builder methods instead. The full list is in the [Header Contract](/docs/reference/header-contract#reserved-you-cant-set-these).
+Headers count toward the message size. The transport reserves some names (`setHeader()` throws on them) and rejects every `Nats-*` header except the `Nats-Expected-*` optimistic concurrency headers; the others are reached through the builder methods. The full list is in the [Header Contract](/docs/reference/header-contract#reserved-you-cant-set-these).
 
 ## DeliverPolicy.All Workaround
 

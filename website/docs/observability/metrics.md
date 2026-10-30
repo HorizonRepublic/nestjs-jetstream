@@ -92,17 +92,17 @@ All metric names are prefixed with `jetstream_` (configurable). `defaultLabels` 
 
 ### Counters
 
-| Name                                   | Labels                                | Description                                                                                                      |
-| -------------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `jetstream_messages_received_total`    | `stream`, `subject`, `kind`           | Messages routed to a handler.                                                                                    |
-| `jetstream_messages_processed_total`   | `stream`, `subject`, `kind`, `status` | Handler invocations that completed. `status` ∈ `success`, `error`, `retried`, `terminated`.                      |
-| `jetstream_messages_unhandled_total`   | `subject` (literal `<unmatched>`)     | Messages with no matching handler.                                                                               |
-| `jetstream_messages_dead_letter_total` | `stream`, `subject`                   | Messages that exhausted all delivery attempts.                                                                   |
-| `jetstream_publish_total`              | `subject`, `kind`, `status`           | Client-side publish operations. `status` ∈ `success`, `error`.                                                   |
-| `jetstream_rpc_timeout_total`          | `subject`                             | RPC calls that exceeded the timeout deadline.                                                                    |
-| `jetstream_consumer_recovered_total`   | `kind`                                | Self-healing recoveries after consume-loop failures.                                                             |
-| `jetstream_errors_total`               | `context`                             | Transport-level errors. `context` ∈ `connection`, `codec`, `publish`, `consume`, `handler`, `shutdown`, `other`. |
-| `jetstream_metrics_poll_errors_total`  | `target`                              | Errors hit while polling for gauge data. `target` ∈ `consumer.info`, `stream.info`, `jsm.connect`.               |
+| Name                                   | Labels                                | Description                                                                                                                          |
+| -------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `jetstream_messages_received_total`    | `stream`, `subject`, `kind`           | Messages routed to a handler.                                                                                                        |
+| `jetstream_messages_processed_total`   | `stream`, `subject`, `kind`, `status` | Handler invocations that completed. `status` ∈ `success`, `error`, `retried`, `terminated`.                                          |
+| `jetstream_messages_unhandled_total`   | `subject` (literal `<unmatched>`)     | Messages with no matching handler.                                                                                                   |
+| `jetstream_messages_dead_letter_total` | `stream`, `subject`                   | Messages that exhausted all delivery attempts.                                                                                       |
+| `jetstream_publish_total`              | `subject`, `kind`, `status`           | Client-side publish operations. `status` ∈ `success`, `error`.                                                                       |
+| `jetstream_rpc_timeout_total`          | `subject`, `side`                     | RPC calls that exceeded the timeout deadline. `side` ∈ `client` (caller gave up waiting), `server` (handler ran past `rpc.timeout`). |
+| `jetstream_consumer_recovered_total`   | `kind`                                | Self-healing recoveries after consume-loop failures.                                                                                 |
+| `jetstream_errors_total`               | `context`                             | Transport-level errors. `context` ∈ `connection`, `codec`, `publish`, `consume`, `handler`, `shutdown`, `other`.                     |
+| `jetstream_metrics_poll_errors_total`  | `target`                              | Errors hit while polling for gauge data. `target` ∈ `consumer.info`, `stream.info`, `jsm.connect`.                                   |
 
 ### Histograms
 
@@ -118,15 +118,15 @@ Handler and RPC buckets run `[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1
 
 All but `jetstream_connection_up` are refreshed every `pollInterval` ms from `consumers.info()` and `streams.info()` for every durable consumer this service owns. `jetstream_connection_up` follows connection events.
 
-| Name                                 | Labels                       | Source field                               |
-| ------------------------------------ | ---------------------------- | ------------------------------------------ |
-| `jetstream_consumer_num_pending`     | `stream`, `consumer`, `kind` | `ConsumerInfo.num_pending`                 |
-| `jetstream_consumer_num_ack_pending` | `stream`, `consumer`, `kind` | `ConsumerInfo.num_ack_pending`             |
-| `jetstream_consumer_num_redelivered` | `stream`, `consumer`, `kind` | `ConsumerInfo.num_redelivered`             |
-| `jetstream_consumer_num_waiting`     | `stream`, `consumer`, `kind` | `ConsumerInfo.num_waiting`                 |
-| `jetstream_stream_messages`          | `stream`                     | `StreamInfo.state.messages`                |
-| `jetstream_stream_bytes`             | `stream`                     | `StreamInfo.state.bytes`                   |
-| `jetstream_connection_up`            | `server`                     | `1` while connected, `0` after disconnect. |
+| Name                                 | Labels                       | Source field                                                                                   |
+| ------------------------------------ | ---------------------------- | ---------------------------------------------------------------------------------------------- |
+| `jetstream_consumer_num_pending`     | `stream`, `consumer`, `kind` | `ConsumerInfo.num_pending`                                                                     |
+| `jetstream_consumer_num_ack_pending` | `stream`, `consumer`, `kind` | `ConsumerInfo.num_ack_pending`                                                                 |
+| `jetstream_consumer_num_redelivered` | `stream`, `consumer`, `kind` | `ConsumerInfo.num_redelivered`                                                                 |
+| `jetstream_consumer_num_waiting`     | `stream`, `consumer`, `kind` | `ConsumerInfo.num_waiting`                                                                     |
+| `jetstream_stream_messages`          | `stream`                     | `StreamInfo.state.messages`                                                                    |
+| `jetstream_stream_bytes`             | `stream`                     | `StreamInfo.state.bytes`                                                                       |
+| `jetstream_connection_up`            | `server`                     | `1` while a connection on that server is up, `0` once every connection on it has disconnected. |
 
 `pollInterval: 0` turns polling off. Counters and histograms keep updating from transport events.
 
@@ -137,6 +137,7 @@ Every label value is bounded, so cardinality grows with your handler count and n
 - **`subject`** is the **declared** pattern from `@EventPattern` / `@MessagePattern`, never the wire subject. A message with no handler counts under the single sentinel `<unmatched>`, so publishing to random subjects cannot inflate cardinality.
 - **`kind`**: `event`, `command`, `broadcast`, `ordered`, `schedule`.
 - **`status`** on handler metrics: `success`, `error`, `retried`, `terminated`. On publish metrics: `success`, `error`. On RPC round-trip metrics: `success`, `error`, `timeout`, `cancelled`.
+- **`side`** on `jetstream_rpc_timeout_total`: `client` when the caller's deadline expired before a reply, `server` when a JetStream-mode handler ran past `rpc.timeout` and its command was terminated. Both carry the declared pattern, so a service that calls another one counts its timeouts under the pattern it called. Sum over `side` for the total the metric reported before.
 - **`context`** on `jetstream_errors_total`: `connection`, `codec`, `publish`, `consume`, `handler`, `shutdown`, `other`.
 - **`stream`** and **`consumer`** follow from the service name and kind; **`server`** is bounded by the cluster size.
 

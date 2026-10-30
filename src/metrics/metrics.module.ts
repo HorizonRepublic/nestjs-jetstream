@@ -1,10 +1,12 @@
 import { DynamicModule, Module, Provider } from '@nestjs/common';
 
 import { ConnectionProvider } from '../connection';
+import type { ConnectionRegistry } from '../connection/connection-registry';
 import { EventBus } from '../hooks';
 import type { JetstreamModuleOptions } from '../interfaces';
 import {
   JETSTREAM_CONNECTION,
+  JETSTREAM_CONNECTIONS,
   JETSTREAM_EVENT_BUS,
   JETSTREAM_OPTIONS,
 } from '../jetstream.constants';
@@ -81,6 +83,7 @@ export class JetstreamMetricsModule {
         { token: PatternRegistry, optional: true },
         { token: JETSTREAM_CONNECTION, optional: true },
         { token: NameResolver, optional: true },
+        { token: JETSTREAM_CONNECTIONS, optional: true },
       ],
       useFactory: (
         eventBus: EventBus,
@@ -90,6 +93,7 @@ export class JetstreamMetricsModule {
         patternRegistry: PatternRegistry | null,
         connection: ConnectionProvider | null,
         names: NameResolver | null,
+        registry: ConnectionRegistry | null,
       ) =>
         new JetstreamMetricsService(
           eventBus,
@@ -99,6 +103,7 @@ export class JetstreamMetricsModule {
           patternRegistry,
           connection,
           names,
+          registry,
         ),
     };
 

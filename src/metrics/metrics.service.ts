@@ -10,6 +10,7 @@ import {
 import type { JetStreamManager } from '@nats-io/jetstream';
 
 import { ConnectionProvider } from '../connection';
+import { ConnectionRegistry } from '../connection/connection-registry';
 import { ConfigErrorReason, JetstreamConfigError } from '../errors';
 import { EventBus } from '../hooks';
 import type {
@@ -25,6 +26,7 @@ import {
   consumerName,
   isJetStreamRpcMode,
   JETSTREAM_CONNECTION,
+  JETSTREAM_CONNECTIONS,
   JETSTREAM_OPTIONS,
   streamName,
 } from '../jetstream.constants';
@@ -42,13 +44,18 @@ import {
 } from './metrics.constants';
 import { createMetrics } from './metrics.factory';
 import type {
+  ConnectionServerState,
   ConsumerPollTarget,
   JetstreamMetrics,
   LoadedPrometheusClient,
   RecoveredKindLabel,
   ResolvedSubjectLabels,
+  RpcTimeoutSide,
 } from './metrics.types';
 import { PollRunner } from './poll-runner';
+
+/** Key for the connection of a single-connection application, whose events carry no name. */
+const UNNAMED_CONNECTION = '';
 
 /**
  * Built-in Prometheus metrics service. On bootstrap, instantiates the metric
@@ -62,7 +69,7 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
 
   private metrics: JetstreamMetrics | null = null;
   private pollRunner: PollRunner | null = null;
-  private readonly activeServers = new Set<string>();
+  private readonly connectionServers = new Map<string, ConnectionServerState>();
 
   public constructor(
     private readonly eventBus: EventBus,
@@ -74,6 +81,9 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
     @Inject(JETSTREAM_CONNECTION)
     private readonly connection: ConnectionProvider | null = null,
     @Optional() private readonly names: NameResolver | null = null,
+    @Optional()
+    @Inject(JETSTREAM_CONNECTIONS)
+    private readonly registry: ConnectionRegistry | null = null,
   ) {}
 
   public async onApplicationBootstrap(): Promise<void> {
@@ -124,14 +134,22 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
    * come online; later disconnects/reconnects update it normally.
    */
   private syncInitialConnectionState(): void {
+    const scopes = this.registry?.all() ?? [];
+
+    // Named connections tag their events, so seed each under its own name.
+    if (scopes.length > 1) {
+      for (const scope of scopes) {
+        const nc = scope.connection.unwrap;
+
+        if (nc && !nc.isClosed()) this.markUp(nc.getServer(), scope.name);
+      }
+
+      return;
+    }
+
     const nc = this.connection?.unwrap;
 
-    if (!nc) return;
-
-    const server = nc.getServer();
-
-    this.activeServers.add(server);
-    this.metrics?.connectionUp.labels({ server }).set(1);
+    if (nc) this.markUp(nc.getServer(), undefined);
   }
 
   /** Skips polling for publisher-only deployments and when no kinds are active. */
@@ -212,7 +230,6 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
     this.eventBus.subscribe(TransportEvent.Disconnect, this.onDisconnect);
     this.eventBus.subscribe(TransportEvent.Reconnect, this.onReconnect);
     this.eventBus.subscribe(TransportEvent.Error, this.onError);
-    this.eventBus.subscribe(TransportEvent.RpcTimeout, this.onRpcTimeout);
     this.eventBus.subscribe(TransportEvent.MessageRouted, this.onMessageRouted);
     this.eventBus.subscribe(TransportEvent.DeadLetter, this.onDeadLetter);
     this.eventBus.subscribe(TransportEvent.ConsumerRecovered, this.onConsumerRecovered);
@@ -221,34 +238,55 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
     this.eventBus.subscribe(TransportEvent.RpcCompleted, this.onRpcCompleted);
   }
 
-  private readonly onConnect = (server: string): void => {
-    this.activeServers.add(server);
-    this.metrics?.connectionUp.labels({ server }).set(1);
+  private readonly onConnect = (server: string, connection?: string): void => {
+    this.markUp(server, connection);
   };
 
-  private readonly onReconnect = (server: string): void => {
-    this.activeServers.add(server);
-    this.metrics?.connectionUp.labels({ server }).set(1);
+  private readonly onReconnect = (server: string, connection?: string): void => {
+    this.markUp(server, connection);
   };
 
-  private readonly onDisconnect = (): void => {
-    // Disconnect carries no server name: flip every observed server to 0;
-    // the next Connect/Reconnect re-flips the live one back to 1.
-    for (const server of this.activeServers) {
-      this.metrics?.connectionUp.labels({ server }).set(0);
+  // Disconnect carries no server name; the connection name locates it.
+  private readonly onDisconnect = (connection?: string): void => {
+    const state = this.connectionServers.get(connection ?? UNNAMED_CONNECTION);
+
+    if (!state) return;
+
+    state.up = false;
+    this.publishServer(state.server);
+  };
+
+  private markUp(server: string, connection: string | undefined): void {
+    const key = connection ?? UNNAMED_CONNECTION;
+    const previous = this.connectionServers.get(key);
+
+    this.connectionServers.set(key, { server, up: true });
+
+    if (previous && previous.server !== server) this.publishServer(previous.server);
+    this.publishServer(server);
+  }
+
+  /** A server is up while any connection last seen on it is up. */
+  private publishServer(server: string): void {
+    let up = false;
+
+    for (const state of this.connectionServers.values()) {
+      if (state.server === server && state.up) up = true;
     }
-  };
+
+    this.metrics?.connectionUp.labels({ server }).set(up ? 1 : 0);
+  }
 
   private readonly onError = (_err: Error, context?: string): void => {
     this.metrics?.errorsTotal.labels({ context: mapErrorContext(context) }).inc();
   };
 
-  private readonly onRpcTimeout = (subject: string, _correlationId: string): void => {
-    const declared = this.resolveDeclared(subject);
-    const subjectLabel = declared?.pattern ?? UNMATCHED_SUBJECT_LABEL;
-
-    this.metrics?.rpcTimeoutTotal.labels({ subject: subjectLabel }).inc();
-  };
+  // The RpcTimeout hook is not used: the caller emits the target service's
+  // wire subject, which the local registry cannot resolve, and both sides
+  // share it. The completion events carry the declared pattern instead.
+  private countRpcTimeout(pattern: string, side: RpcTimeoutSide): void {
+    this.metrics?.rpcTimeoutTotal.labels({ subject: pattern, side }).inc();
+  }
 
   // `_kind` collapses broadcast/ordered into MessageKind.Event; we use
   // declared.kind from PatternRegistry for the precise label instead.
@@ -301,6 +339,11 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
 
     this.metrics.messagesProcessedTotal.labels(labels).inc();
     this.metrics.handlerDurationSeconds.labels(labels).observe(durationMs / 1000);
+
+    // A command is terminated only when its handler ran past rpc.timeout.
+    if (kind === StreamKind.Command && status === 'terminated') {
+      this.countRpcTimeout(pattern, 'server');
+    }
   };
 
   private readonly onPublished = (
@@ -325,6 +368,8 @@ export class JetstreamMetricsService implements OnApplicationBootstrap, OnModule
     this.metrics?.rpcDurationSeconds
       .labels({ subject: pattern, status })
       .observe(durationMs / 1000);
+
+    if (status === 'timeout') this.countRpcTimeout(pattern, 'client');
   };
 
   private resolveDeclared(subject: string): ResolvedSubjectLabels | null {

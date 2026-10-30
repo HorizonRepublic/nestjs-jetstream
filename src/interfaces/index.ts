@@ -18,7 +18,13 @@ export type {
   TransportHooks,
 } from './hooks.interface';
 
-export type { JetstreamHealthIndicatorResult, JetstreamHealthStatus } from './health.interface';
+export type {
+  JetstreamConsumerHealth,
+  JetstreamConsumerState,
+  JetstreamHealthCheckOptions,
+  JetstreamHealthIndicatorResult,
+  JetstreamHealthStatus,
+} from './health.interface';
 
 export { ManagementMode } from './options.interface';
 

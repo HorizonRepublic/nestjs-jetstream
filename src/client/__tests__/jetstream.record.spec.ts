@@ -398,7 +398,7 @@ describe(JetstreamRecordBuilder, () => {
         },
       );
 
-      it.each(['Nats-Rollup', 'Nats-TTL', 'Nats-Msg-Id', 'Nats-Schedule', 'nats-expected-stream'])(
+      it.each(['Nats-Rollup', 'Nats-TTL', 'Nats-Msg-Id', 'Nats-Schedule', 'Nats-Batch-Id'])(
         'should reject the NATS server control header %s',
         (header) => {
           // Nats-* headers drive server behavior: Nats-Rollup purges every
@@ -414,6 +414,24 @@ describe(JetstreamRecordBuilder, () => {
           );
         },
       );
+    });
+
+    describe('when setting optimistic concurrency headers', () => {
+      it.each([
+        'Nats-Expected-Stream',
+        'Nats-Expected-Last-Sequence',
+        'nats-expected-last-subject-sequence',
+        'Nats-Expected-Last-Msg-Id',
+      ])('should accept %s', (header) => {
+        // Given
+        const value = faker.string.numeric(3);
+
+        // When
+        const record = sut.setHeader(header, value).build();
+
+        // Then
+        expect(record.headers.get(header)).toBe(value);
+      });
     });
 
     describe('when setting reserved headers via setHeaders()', () => {

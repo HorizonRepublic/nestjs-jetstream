@@ -8,7 +8,7 @@ schema:
   headline: "Header Contract: NATS Message Headers Used by the Transport"
   description: "Stable contract for NATS message headers the transport reads and writes."
   datePublished: "2026-04-24"
-  dateModified: "2026-10-29"
+  dateModified: "2026-10-30"
 ---
 
 # Header Contract
@@ -48,7 +48,7 @@ A schedule holder is the message on the `_cron.` subject that defines a [recurri
 
 ## Reserved (you can't set these)
 
-`JetstreamRecordBuilder.setHeader()` throws on these, because the library populates them:
+`JetstreamRecordBuilder.setHeader()` throws on these, because the library populates them. A record created with `new JetstreamRecord(data, headers)` is checked when it is published: `emit()` and `send()` fail with the same `JetstreamRecordError` and nothing is sent.
 
 - `x-correlation-id` · `x-reply-to` · `x-error` · `x-schedule-hash` · `x-schedule-pattern` · `x-redrive-count`
 
@@ -58,7 +58,7 @@ Give your own headers distinct names (`x-tenant-id`, `x-request-id`).
 
 ## NATS server-interpreted (`Nats-*` prefix)
 
-`setHeader()` rejects **every** header starting with `nats-`, whatever the casing. These drive server-side behaviour: a stray `Nats-Rollup` purges every pending message on the subject. Reach them through the builder methods instead:
+`setHeader()` rejects every header starting with `nats-`, whatever the casing, except the [optimistic concurrency](#optimistic-concurrency) headers. Publishing a record that carries one fails the same way. These headers drive server-side behaviour: a stray `Nats-Rollup` purges every pending message on the subject, `Nats-Batch-*` turns the publish into part of an atomic batch, and `Nats-Msg-Id`, `Nats-TTL` and `Nats-Schedule-*` would fight the fields the transport sets itself. Reach those through the builder methods instead:
 
 | Header          | Builder method     | Guide                                           |
 | --------------- | ------------------ | ----------------------------------------------- |
@@ -67,6 +67,27 @@ Give your own headers distinct names (`x-tenant-id`, `x-request-id`).
 | `Nats-Schedule` | `scheduleAt(date)` | [Scheduling](/docs/guides/scheduling)           |
 
 External publishers in other languages set these directly on the headers map, as the NATS docs describe. Do not set `Nats-Msg-Id` both ways on the same publish.
+
+### Optimistic concurrency (`Nats-Expected-*`) {#optimistic-concurrency}
+
+`Nats-Expected-*` headers only state a precondition: the server stores the message when it holds and refuses the publish when it does not, so `emit()` rejects. `setHeader()` and `new JetstreamRecord(data, headers)` both accept them:
+
+| Header                                | The server stores the message only when            |
+| ------------------------------------- | -------------------------------------------------- |
+| `Nats-Expected-Stream`                | the subject belongs to this stream                 |
+| `Nats-Expected-Last-Sequence`         | the stream's last sequence equals the value        |
+| `Nats-Expected-Last-Subject-Sequence` | the last sequence on this subject equals the value |
+| `Nats-Expected-Last-Msg-Id`           | the stream's last message ID equals the value      |
+
+```typescript
+const record = new JetstreamRecordBuilder(event)
+  .setHeader('Nats-Expected-Last-Subject-Sequence', String(lastSeenSequence))
+  .build();
+
+await lastValueFrom(client.emit('account.updated', record)); // rejects on a concurrent write
+```
+
+The header applies to the message the transport publishes. With `scheduleAt()` that is the schedule holder on its own `_sch` subject, not the event delivered later, and a dead letter redriven from the DLQ loses its `Nats-*` headers.
 
 ## Cross-language examples
 

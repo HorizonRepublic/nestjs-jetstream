@@ -67,7 +67,19 @@ nats stream edit <stream> --no-discard-per-subject
 
 **Health stays down after a connection that serves handlers closes for good.** A client may dial a fresh connection, but handlers do not move to it, so the health indicator keeps reporting that connection as down until the process restarts.
 
+**Health reports stalled consumers.** A consumer stuck in self-healing, for example after a deleted stream or a missing externally managed consumer, was invisible to the indicator. `check()` and `isHealthy()` now add `consuming`, a `consumers` breakdown and, when the connection consumes, `degraded`, so assertions on the exact result shape need updating. By default a stalled consumer only sets `degraded: true` and readiness stays `up`, because such causes hit every replica at once. `isHealthy(key, { requireConsumers: true })` also reports `down` once a consumer has not been live for 30 seconds or the connection has not finished starting. Keep the indicator on readiness only, never liveness, with or without the option. See [Consumption](/docs/guides/health-checks#consumption).
+
+**Consumers resume as soon as NATS reconnects.** After a long outage a consumer waited out up to 30 seconds of retry backoff before consuming again. A reconnect now retries every consumer at once.
+
 **An RPC handler timeout frees its concurrency slot.** A handler still running past `rpc.timeout` no longer blocks new commands, so stuck handlers can exceed `concurrency`.
+
+**`connection_up` follows each named connection.** With several connections, one disconnecting no longer drops every server to `0` until the others reconnect.
+
+**`rpc_timeout_total` names the pattern and the side.** Caller timeouts used to land under `subject="<unmatched>"` and were mixed with handler deadlines. The counter now carries the declared pattern on both sides and a new `side` label, `client` or `server`. Queries that sum or rate the metric keep working; one that selected `subject="<unmatched>"` to find caller timeouts should select `side="client"` instead.
+
+**Calls made after shutdown fail instead of reconnecting.** An `emit()` or `send()` from a handler still running at the end of shutdown, or from any code after it, used to dial a fresh connection that nothing closed, which could keep the process alive. It now fails with `JetstreamConnectionError` and reason `shutting-down`.
+
+**Records built without the builder follow the header rules.** `new JetstreamRecord(data, headers)` skipped the check `setHeader()` makes, so a transport header could redirect an RPC reply and a stray `Nats-Rollup` purged the subject. `emit()` and `send()` now fail with `JetstreamRecordError` and send nothing when such a record carries `x-correlation-id`, `x-reply-to`, `x-error`, `x-schedule-hash`, `x-schedule-pattern`, `x-redrive-count`, or any `Nats-*` header other than `Nats-Expected-*`. Move message IDs, TTLs and schedules to the record's own fields or the builder methods. Optimistic concurrency keeps working: `Nats-Expected-*` headers still pass, and `setHeader()` now accepts them too. See [Optimistic concurrency](/docs/reference/header-contract#optimistic-concurrency).
 
 **DLQ filters reject invalid bounds.** A `fromSeq` or `toSeq` that is not a non-negative integer, or an invalid date, now throws `JetstreamConfigError` with reason `dlq-filter-invalid` instead of matching every dead letter.
 

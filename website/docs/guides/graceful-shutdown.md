@@ -53,7 +53,7 @@ flowchart LR
 ```
 
 :::warning Handlers that outlast the budget
-A handler still running when its share of the budget runs out is not awaited any further, and anything it publishes after the connection closes is lost. Its message never gets an ack, and JetStream redelivers it once the consumer's `ack_wait` expires, so the handler runs again on another instance. If that was the message's final delivery, it goes to the [dead letter queue](/docs/guides/dead-letter-queue#deliveries-no-handler-settled) instead. A JetStream RPC command is delivered only once, so its caller gets no reply and times out.
+A handler still running when its share of the budget runs out is not awaited any further, and anything it publishes after the connection closes is lost. Its `emit()` and `send()` calls fail; none of them opens a new connection, and one that would have to dial rejects with `JetstreamConnectionError` and reason `shutting-down`. Its message never gets an ack, and JetStream redelivers it once the consumer's `ack_wait` expires, so the handler runs again on another instance. If that was the message's final delivery, it goes to the [dead letter queue](/docs/guides/dead-letter-queue#deliveries-no-handler-settled) instead. A JetStream RPC command is delivered only once, so its caller gets no reply and times out.
 
 A JetStream RPC handler that is already past its own `rpc.timeout` is not waited for: the command was terminated at the deadline.
 

@@ -52,7 +52,7 @@ import { NameResolver } from '../server/infrastructure/name-resolver';
 import { SubjectResolver } from '../server/infrastructure/subject-resolver';
 import { ClientReporter } from './client-reporter';
 import type { PublishAckLike } from './client.types';
-import { JetstreamRecord } from './jetstream.record';
+import { assertHeaderAllowed, JetstreamRecord } from './jetstream.record';
 import { RpcDispatcher } from './rpc-dispatcher';
 import { RpcReplyInbox } from './rpc-reply-inbox';
 
@@ -518,7 +518,7 @@ export class JetstreamClient extends ClientProxy {
       hdrs.set(JetstreamHeader.ReplyTo, transport.replyTo);
     }
 
-    // Reserved headers were already validated by JetstreamRecordBuilder.
+    // Reserved headers were already validated by extractRecordData.
     if (customHeaders) {
       for (const [key, value] of customHeaders) {
         hdrs.set(key, value);
@@ -531,6 +531,11 @@ export class JetstreamClient extends ClientProxy {
   /** Extract data, headers, timeout, and schedule from raw packet data or JetstreamRecord. */
   private extractRecordData(rawData: unknown): ExtractedRecordData {
     if (rawData instanceof JetstreamRecord) {
+      // Checked here rather than in the constructor: a record built directly,
+      // by another copy of the package, or whose map was changed afterwards
+      // must not override routing headers or reach NATS with control headers.
+      for (const key of rawData.headers.keys()) assertHeaderAllowed(key);
+
       // JetstreamRecord.headers is a ReadonlyMap on an immutable record; the
       // reference is handed through as-is because buildHeaders only reads it.
       return {

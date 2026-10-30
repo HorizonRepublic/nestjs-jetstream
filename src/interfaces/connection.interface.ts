@@ -1,6 +1,7 @@
 import type { ConnectionOptions } from '@nats-io/transport-node';
 
 import type { Codec } from './codec.interface';
+import type { JetstreamConsumerHealth } from './health.interface';
 import type {
   DlqOptions,
   JetstreamModuleOptions,
@@ -118,4 +119,10 @@ export interface JetstreamConnectionHealth {
 
   /** Round-trip latency in ms, or `null` if disconnected. */
   latency: number | null;
+
+  /** Whether consumption started and every consume flow is healthy; absent when the connection does not consume. */
+  consuming?: boolean;
+
+  /** Consume flows keyed by kind; absent when the connection does not consume. */
+  consumers?: Record<string, JetstreamConsumerHealth>;
 }
