@@ -117,9 +117,13 @@ To widen the window, raise `broadcast.stream.max_age` on every service, as the n
 
 ### A recreated consumer resumes where it stopped
 
-If this service's broadcast consumer disappears while the service runs, self-healing recreates it from the stream sequence after its last known ack floor, which each pod rereads every 10 seconds. The recreated consumer does not replay the history the stream still holds, though a few broadcasts acknowledged in the last 10 seconds may arrive again. When no position is known, it starts from new messages and logs a warning that broadcasts published while it was absent are lost.
+If this service's broadcast consumer disappears while the service runs, self-healing recreates it from the stream sequence after its last known ack floor, which each pod rereads every 10 seconds. The recreated consumer does not replay the history the stream still holds, and it loses nothing published while it was gone.
 
-On the next boot the consumer keeps the sequence it resumed from, since NATS cannot change the start position of an existing consumer. Setting `broadcast.consumer.deliver_policy` turns this off: the consumer is then recreated with the policy you set.
+It may deliver some broadcasts twice. The ack floor is the last sequence below which every message is acknowledged, so a single slow message holds it back: everything acknowledged after that message, possibly minutes of broadcasts, arrives again, along with whatever was acknowledged since the last read.
+
+When the stream itself was recreated since the consumer was last read, its sequences started over, so the consumer starts from the beginning of the new stream instead.
+
+On the next boot the consumer keeps the sequence it resumed from, since NATS cannot change the start position of an existing consumer. A start sequence past the end of the stream is the exception: the boot recreates that consumer from the start of the stream. Setting `broadcast.consumer.deliver_policy` turns all of this off: the consumer is then recreated with the policy you set.
 
 ## Configuration: shared stream, per-service consumers
 

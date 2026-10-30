@@ -29,6 +29,7 @@ describe(ConsumerProvider, () => {
       info: ReturnType<typeof vi.fn>;
       add: ReturnType<typeof vi.fn>;
       update: ReturnType<typeof vi.fn>;
+      delete: ReturnType<typeof vi.fn>;
     };
     streams: {
       info: ReturnType<typeof vi.fn>;
@@ -59,6 +60,7 @@ describe(ConsumerProvider, () => {
         info: vi.fn(),
         add: vi.fn(),
         update: vi.fn(),
+        delete: vi.fn(),
       },
       streams: {
         // Default: no migration backup exists
@@ -269,15 +271,33 @@ describe(ConsumerProvider, () => {
     const consumerNotFound = (): JetStreamApiError =>
       new JetStreamApiError({ err_code: 10014, code: 404, description: 'consumer not found' });
 
-    const lastKnownAt = (ackFloor: number): ConsumerInfo =>
+    const streamCreated = new Date('2026-01-01T00:00:00Z');
+
+    const lastKnownAt = (ackFloor: number, created = '2026-02-01T00:00:00Z'): ConsumerInfo =>
       createMock<ConsumerInfo>({
+        created,
         ack_floor: { stream_seq: ackFloor, consumer_seq: faker.number.int() },
       });
+
+    /** The stream holds `lastSeq` messages; the backup lookup still finds nothing. */
+    const streamAt = (lastSeq: number, created = streamCreated): void => {
+      mockJsm.streams.info.mockImplementation(async (name: string) => {
+        if (name.endsWith('__migration_backup')) {
+          throw new JetStreamApiError({ err_code: 10059, code: 404, description: 'not found' });
+        }
+
+        return createMock<StreamInfo>({
+          created: created.toISOString(),
+          state: { last_seq: lastSeq },
+        });
+      });
+    };
 
     beforeEach(() => {
       patternRegistry.getBroadcastPatterns.mockReturnValue(['broadcast.config.updated']);
       mockJsm.consumers.info.mockRejectedValue(consumerNotFound());
       mockJsm.consumers.add.mockResolvedValue(createMock<ConsumerInfo>());
+      streamAt(1_000_000);
     });
 
     it('should resume a broadcast durable after its last known ack floor', async () => {
@@ -298,7 +318,7 @@ describe(ConsumerProvider, () => {
       );
     });
 
-    it('should start a broadcast durable from new messages when no position is known', async () => {
+    it('should start a broadcast durable from the beginning when no position is known', async () => {
       // Given
       const jsm = await connection.getJetStreamManager();
 
@@ -308,7 +328,39 @@ describe(ConsumerProvider, () => {
       // Then
       expect(mockJsm.consumers.add).toHaveBeenCalledWith(
         'test-stream',
-        expect.objectContaining({ deliver_policy: DeliverPolicy.New }),
+        expect.objectContaining({ deliver_policy: DeliverPolicy.All }),
+      );
+    });
+
+    it('should start from the beginning when the stream was recreated after the consumer', async () => {
+      // Given
+      streamAt(1_000_000, new Date('2026-03-01T00:00:00Z'));
+
+      const jsm = await connection.getJetStreamManager();
+
+      // When
+      await sut.recoverConsumer(jsm, StreamKind.Broadcast, lastKnownAt(500));
+
+      // Then
+      expect(mockJsm.consumers.add).toHaveBeenCalledWith(
+        'test-stream',
+        expect.objectContaining({ deliver_policy: DeliverPolicy.All }),
+      );
+    });
+
+    it('should start from the beginning when the ack floor lies past the end of the stream', async () => {
+      // Given: the stream started its sequences over
+      streamAt(2);
+
+      const jsm = await connection.getJetStreamManager();
+
+      // When
+      await sut.recoverConsumer(jsm, StreamKind.Broadcast, lastKnownAt(500));
+
+      // Then
+      expect(mockJsm.consumers.add).toHaveBeenCalledWith(
+        'test-stream',
+        expect.objectContaining({ deliver_policy: DeliverPolicy.All }),
       );
     });
 
@@ -348,17 +400,44 @@ describe(ConsumerProvider, () => {
   describe('ensureConsumer start position', () => {
     const existingFrom = (startSeq: number): ConsumerInfo =>
       createMock<ConsumerInfo>({
+        stream_name: 'test-stream',
         config: { deliver_policy: DeliverPolicy.StartSequence, opt_start_seq: startSeq },
       });
 
     beforeEach(() => {
       patternRegistry.getBroadcastPatterns.mockReturnValue(['broadcast.config.updated']);
       mockJsm.consumers.update.mockResolvedValue(createMock<ConsumerInfo>());
+      mockJsm.streams.info.mockResolvedValue(
+        createMock<StreamInfo>({ state: { last_seq: 100_000 } }),
+      );
+    });
+
+    it('should recreate a durable whose start sequence lies past the end of the stream', async () => {
+      // Given
+      const created = createMock<ConsumerInfo>();
+
+      mockJsm.consumers.info.mockResolvedValue(existingFrom(200_000));
+      mockJsm.consumers.add.mockResolvedValue(created);
+
+      // When
+      const result = await sut.ensureConsumer(
+        await connection.getJetStreamManager(),
+        StreamKind.Broadcast,
+      );
+
+      // Then
+      expect(result).toBe(created);
+      expect(mockJsm.consumers.delete).toHaveBeenCalledWith('test-stream', expect.any(String));
+      expect(mockJsm.consumers.add).toHaveBeenCalledWith(
+        'test-stream',
+        expect.objectContaining({ deliver_policy: DeliverPolicy.All }),
+      );
+      expect(mockJsm.consumers.update).not.toHaveBeenCalled();
     });
 
     it('should keep the sequence a recreated durable resumed from', async () => {
       // Given
-      const startSeq = faker.number.int({ min: 2, max: 100_000 });
+      const startSeq = faker.number.int({ min: 2, max: 100_001 });
 
       mockJsm.consumers.info.mockResolvedValue(existingFrom(startSeq));
 

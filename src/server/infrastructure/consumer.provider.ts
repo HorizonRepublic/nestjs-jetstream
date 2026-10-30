@@ -135,6 +135,16 @@ export class ConsumerProvider {
       return this.lookupOrCreate(jsm, kind, target, async () => {
         const existing = await jsm.consumers.info(stream, name);
 
+        if (await this.startsPastStream(jsm, kind, existing)) {
+          this.logger.warn(
+            `Consumer ${name} starts at stream sequence ${existing.config.opt_start_seq}, past ` +
+              `the end of ${stream}, which was recreated; recreating it from the start`,
+          );
+          await jsm.consumers.delete(stream, name);
+
+          return await this.createConsumer(jsm, stream, name, kind, config);
+        }
+
         this.logger.debug(`Consumer exists, updating: ${name}`);
 
         const update = this.keepStartPosition(kind, existing.config, config);
@@ -192,7 +202,10 @@ export class ConsumerProvider {
       // The migration backup stream acts as a lock held by the migrating pod
       await this.assertNoMigrationInProgress(jsm, stream);
 
-      const resumed = { ...target, config: this.resumeConfig(kind, target.config, lastKnown) };
+      const resumed = {
+        ...target,
+        config: await this.resumeConfig(jsm, kind, target, lastKnown),
+      };
 
       // Another pod may have recreated the consumer; use it as-is
       return this.lookupOrCreate(jsm, kind, resumed, () => jsm.consumers.info(stream, name));
@@ -201,33 +214,55 @@ export class ConsumerProvider {
 
   /**
    * A broadcast stream keeps its history, so a durable recreated with
-   * `DeliverPolicy.All` would replay all of it. Resume after the last ack
-   * floor read instead; with nothing known, start from new messages.
+   * `DeliverPolicy.All` would replay all of it. Resume after the last known
+   * ack floor instead, unless the stream was recreated since and its
+   * sequences started over.
    */
-  private resumeConfig(
+  private async resumeConfig(
+    jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
     kind: StreamKind,
-    config: DurableConsumerConfig,
+    target: ConsumerTarget,
     lastKnown: ConsumerInfo | undefined,
-  ): DurableConsumerConfig {
-    if (kind !== StreamKind.Broadcast || this.hasStartOverride(kind)) return config;
+  ): Promise<DurableConsumerConfig> {
+    const { config, stream } = target;
 
-    if (lastKnown === undefined) {
-      this.logger.warn(
-        `Consumer ${config.durable_name}: no known position to resume from; recreating it ` +
-          'from new messages. Broadcasts published while it was absent are not delivered.',
-      );
-
-      return { ...config, deliver_policy: DeliverPolicy.New };
+    if (kind !== StreamKind.Broadcast || this.hasStartOverride(kind) || lastKnown === undefined) {
+      return config;
     }
 
     const startSeq = lastKnown.ack_floor.stream_seq + 1;
+    const { created, state } = await jsm.streams.info(stream);
+
+    if (startSeq > state.last_seq + 1 || Date.parse(created) > Date.parse(lastKnown.created)) {
+      this.logger.warn(
+        `Consumer ${config.durable_name}: ${stream} was recreated since the consumer was last ` +
+          'read; recreating it from the start of the stream',
+      );
+
+      return config;
+    }
 
     this.logger.warn(
       `Consumer ${config.durable_name}: resuming from stream sequence ${startSeq}, after its ` +
-        'last known ack floor; broadcasts acknowledged since that read may be delivered again.',
+        'last known ack floor; broadcasts acknowledged after that may be delivered again.',
     );
 
     return { ...config, deliver_policy: DeliverPolicy.StartSequence, opt_start_seq: startSeq };
+  }
+
+  /** A start sequence past the end of the stream would deliver nothing until the stream got there. */
+  private async startsPastStream(
+    jsm: Awaited<ReturnType<ConnectionProvider['getJetStreamManager']>>,
+    kind: StreamKind,
+    existing: ConsumerInfo,
+  ): Promise<boolean> {
+    const { deliver_policy: policy, opt_start_seq: startSeq } = existing.config;
+
+    if (this.hasStartOverride(kind) || policy !== DeliverPolicy.StartSequence) return false;
+
+    const { state } = await jsm.streams.info(existing.stream_name);
+
+    return (startSeq ?? 0) > state.last_seq + 1;
   }
 
   /**
