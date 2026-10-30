@@ -18,7 +18,7 @@ import { isDlqEnabled } from '../server/infrastructure/dlq-options';
 import { isNatsError, NatsErrorCode } from '../server/infrastructure/nats-error-codes';
 import { coversOrEquals } from '../server/infrastructure/subject-utils';
 import { errorMessage } from '../utils';
-import { matchesDeadLetter } from './dead-letter-filter';
+import { matchesDeadLetter, setsAnyCriterion } from './dead-letter-filter';
 import {
   DeadLetterOrigin,
   DlqRedriveSkipReason,
@@ -179,7 +179,7 @@ export class JetstreamDlq {
     filter: DeadLetterFilter,
     options: DlqPurgeOptions = {},
   ): Promise<DlqPurgeReport> {
-    if (Object.keys(filter).length === 0) {
+    if (!setsAnyCriterion(filter)) {
       throw new JetstreamConfigError(
         ConfigErrorReason.DlqFilterRequired,
         'purge() needs a filter with at least one criterion. To empty the whole DLQ, call purgeAll().',
@@ -345,7 +345,7 @@ export class JetstreamDlq {
   ): Promise<number | null> {
     const { fromSeq, toSeq, ...criteria } = filter;
 
-    if (toSeq === undefined || Object.keys(criteria).length > 0) return null;
+    if (toSeq === undefined || setsAnyCriterion(criteria)) return null;
 
     const { state } = await this.dlqInfo(scope, dlqStream);
 

@@ -8,7 +8,7 @@ schema:
   headline: "How to configure a Dead Letter Queue"
   description: "Capture NestJS NATS JetStream messages that exhaust all delivery attempts via a DLQ stream or onDeadLetter callback."
   datePublished: "2026-03-21"
-  dateModified: "2026-10-29"
+  dateModified: "2026-10-30"
 ---
 
 # How to configure a Dead Letter Queue
@@ -253,7 +253,7 @@ The report lists the DLQ sequences that went back (`redriven`), those skipped an
 
 ### Purging
 
-`purge()` refuses an empty filter with a `JetstreamConfigError` (reason `dlq-filter-required`), so a forgotten argument cannot wipe the DLQ. Emptying all of it takes a call that says so, `purgeAll()`, which the server does in one step. A filter with only `toSeq` is also purged by the server in one call; any other filter is matched on headers, so its matches are read and deleted in batches. Every purge returns how many dead letters went, and `dryRun` counts them instead.
+`purge()` refuses an empty filter with a `JetstreamConfigError` (reason `dlq-filter-required`), so a forgotten argument cannot wipe the DLQ. A criterion set to `undefined` counts as absent, so `purge({ subject: undefined })`, say from a missing query parameter, is refused as well. Emptying all of it takes a call that says so, `purgeAll()`, which the server does in one step. A filter with only `toSeq` is also purged by the server in one call; any other filter is matched on headers, so its matches are read and deleted in batches. Every purge returns how many dead letters went, and `dryRun` counts them instead.
 
 ```typescript
 await dlq.purgeAll(); // the whole DLQ

@@ -442,6 +442,22 @@ describe(JetstreamDlq, () => {
       expect(jsm.streams.deleteMessage).not.toHaveBeenCalled();
     });
 
+    it.each([
+      ['subject', { subject: undefined }],
+      ['toSeq', { toSeq: undefined }],
+      ['every given criterion', { pattern: undefined, reason: undefined, failedAfter: undefined }],
+    ])('should refuse to purge when %s is undefined', async (_, filter) => {
+      // Given: a filter built from absent query parameters
+      stored = [1, 2].map((seq) => deadLetter({ seq }));
+
+      // When/Then
+      await expect(sut.purge(filter)).rejects.toMatchObject({
+        reason: ConfigErrorReason.DlqFilterRequired,
+      });
+      expect(jsm.streams.purge).not.toHaveBeenCalled();
+      expect(jsm.streams.deleteMessage).not.toHaveBeenCalled();
+    });
+
     it('should empty the whole DLQ in one call only when asked to by name', async () => {
       // Given
       stored = [1, 2, 3].map((seq) => deadLetter({ seq }));
@@ -467,6 +483,20 @@ describe(JetstreamDlq, () => {
       // Then
       expect(report.purged).toBe(2);
       expect(jsm.streams.purge).toHaveBeenCalledWith(names.dlqStreamName(), { seq: 3 });
+    });
+
+    it('should still purge by the upper bound on the server when other criteria are undefined', async () => {
+      // Given
+      stored = [1, 2, 3].map((seq) => deadLetter({ seq }));
+      vi.mocked(jsm.streams.purge).mockResolvedValue(createMock<PurgeResponse>({ purged: 2 }));
+
+      // When
+      const report = await sut.purge({ toSeq: 2, subject: undefined, reason: undefined });
+
+      // Then
+      expect(report.purged).toBe(2);
+      expect(jsm.streams.purge).toHaveBeenCalledWith(names.dlqStreamName(), { seq: 3 });
+      expect(jsm.streams.deleteMessage).not.toHaveBeenCalled();
     });
 
     it('should delete one by one when a lower bound would spare older entries', async () => {

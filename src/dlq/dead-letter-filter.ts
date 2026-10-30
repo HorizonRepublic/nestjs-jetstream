@@ -18,6 +18,13 @@ const withinWindow = (failedAt: Date | undefined, filter: DeadLetterFilter): boo
   return filter.failedBefore === undefined || failedAt <= filter.failedBefore;
 };
 
+/** Whether any criterion is set; a key holding `undefined` sets nothing. */
+export const setsAnyCriterion = (criteria: Partial<DeadLetterFilter>): boolean => {
+  const values: unknown[] = Object.values(criteria);
+
+  return values.some((value) => value !== undefined);
+};
+
 /** Whether a dead letter meets every criterion the filter sets. */
 export const matchesDeadLetter = (record: DeadLetterRecord, filter: DeadLetterFilter): boolean => {
   if (filter.subject !== undefined && !coversOrEquals(filter.subject, record.subject)) return false;
