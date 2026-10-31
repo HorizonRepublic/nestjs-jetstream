@@ -83,6 +83,18 @@ export class PatternRegistry {
    * @param handlers Map of pattern -> MessageHandler from `Server.getHandlers()`.
    */
   public registerHandlers(handlers: Map<string, MessageHandler>): void {
+    // Startup retries reuse this instance after provisioning failures.
+    this.registry.clear();
+    this.wildcardRegistry.clear();
+    this.cachedPatterns = null;
+    this._hasEvents = false;
+    this._hasCommands = false;
+    this._hasBroadcasts = false;
+    this._hasOrdered = false;
+    this._hasSchedules = false;
+    this._hasMetadata = false;
+
+
     for (const [pattern, handler] of handlers) {
       const extras = handler.extras as Record<string, unknown> | undefined;
       const isEvent = handler.isEventHandler ?? false;

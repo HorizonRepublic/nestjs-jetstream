@@ -62,6 +62,48 @@ describe(ConsumerProvider, () => {
     );
   });
 
+  it.each([
+    {
+      patterns: ['orders.*', 'orders.created'],
+      expected: { filter_subject: 'company.rpc.orders.*' },
+      absent: 'filter_subjects',
+    },
+    {
+      patterns: ['orders.*', 'users.*'],
+      expected: { filter_subjects: ['company.rpc.orders.*', 'company.rpc.users.*'] },
+      absent: 'filter_subject',
+    },
+  ])(
+    'ignores user filter overrides when deriving $expected',
+    async ({ patterns, expected, absent }) => {
+      options = {
+        ...options,
+        rpc: {
+          mode: 'jetstream',
+          subjectPrefix: 'company.rpc.',
+          consumer: {
+            filter_subject: 'unrelated.one',
+            filter_subjects: ['unrelated.two'],
+            max_ack_pending: 17,
+          },
+        },
+      };
+      sut = makeSut();
+      patternRegistry.getCommandPatterns.mockReturnValue(patterns);
+      mockJsm.consumers.info.mockResolvedValue(createMock<ConsumerInfo>());
+      mockJsm.consumers.update.mockResolvedValue(createMock<ConsumerInfo>());
+
+      await sut.ensureConsumers([StreamKind.Command]);
+
+      expect(mockJsm.consumers.update).toHaveBeenCalledWith(
+        'test-stream',
+        expect.any(String),
+        expect.objectContaining({ ...expected, max_ack_pending: 17 }),
+      );
+      expect(mockJsm.consumers.update.mock.calls[0]?.[2]).not.toHaveProperty(absent);
+    },
+  );
+
   beforeEach(() => {
     options = { name: faker.lorem.word(), servers: ['nats://localhost:4222'] };
 

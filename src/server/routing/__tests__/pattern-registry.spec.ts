@@ -53,6 +53,54 @@ describe(PatternRegistry, () => {
 
   afterEach(vi.resetAllMocks);
 
+  describe('registration retries', () => {
+    it('can register the same wildcard handlers again after provisioning fails', () => {
+      const handler = createHandler();
+      const handlers = new Map([['orders.*', handler]]);
+
+      sut.registerHandlers(handlers);
+      sut.registerHandlers(handlers);
+
+      expect(sut.getHandler(`${serviceName}__microservice.cmd.orders.created`)).toBe(handler);
+      expect(sut.getCommandPatterns()).toEqual(['orders.*']);
+    });
+
+    it('replaces exact and wildcard handlers and refreshes cached state', () => {
+      sut.registerHandlers(
+        new Map([
+          ['orders.*', createHandler({ meta: { description: 'old' } })],
+          ['users.created', createHandler({ isEvent: true })],
+        ]),
+      );
+      sut.registerHandlers(new Map());
+
+      expect(sut.getHandler(`${serviceName}__microservice.cmd.orders.created`)).toBeNull();
+      expect(sut.getHandler(`${serviceName}__microservice.ev.users.created`)).toBeNull();
+      expect(sut.getCommandPatterns()).toEqual([]);
+      expect(sut.getEventPatterns()).toEqual([]);
+      expect(sut.hasRpcHandlers()).toBe(false);
+      expect(sut.hasEventHandlers()).toBe(false);
+      expect(sut.hasMetadata()).toBe(false);
+    });
+
+    it('can retry after a partially completed registration', () => {
+      const handler = createHandler();
+
+      expect(() => {
+        sut.registerHandlers(
+          new Map([
+            ['orders.*', handler],
+            ['orders.>', createHandler()],
+          ]),
+        );
+      }).toThrow(/Overlapping wildcard handlers/);
+
+      sut.registerHandlers(new Map([['orders.*', handler]]));
+
+      expect(sut.getHandler(`${serviceName}__microservice.cmd.orders.created`)).toBe(handler);
+    });
+  });
+
   describe('NATS wildcard routing', () => {
     it.each([
       ['orders.*', 'orders.created', true],

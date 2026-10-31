@@ -389,7 +389,11 @@ export class ConsumerProvider {
     const durableName = this.getConsumerName(kind);
 
     const defaults = this.getDefaults(kind);
-    const overrides = this.getOverrides(kind);
+    const {
+      filter_subject: _filterSubject,
+      filter_subjects: _filterSubjects,
+      ...overrides
+    } = this.getOverrides(kind);
 
     return {
       ...defaults,
