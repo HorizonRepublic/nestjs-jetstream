@@ -1,8 +1,8 @@
-import { Logger } from '@nestjs/common';
-import { MessageHandler } from '@nestjs/microservices';
+import { Logger } from "@nestjs/common";
+import { MessageHandler } from "@nestjs/microservices";
 
-import { ConfigErrorReason, JetstreamConfigError } from '../../errors';
-import { MessageKind, StreamKind } from '../../interfaces';
+import { ConfigErrorReason, JetstreamConfigError } from "../../errors";
+import { MessageKind, StreamKind } from "../../interfaces";
 import type {
   DeclaredSchedule,
   JetstreamModuleOptions,
@@ -10,16 +10,20 @@ import type {
   RegisteredHandler,
   RecurringScheduleSpec,
   ScheduleSpec,
-} from '../../interfaces';
-import { metadataKey } from '../../jetstream.constants';
+} from "../../interfaces";
+import { metadataKey } from "../../jetstream.constants";
 import {
   assertLiteralSubject,
   isAtSchedule,
   JetstreamScheduleError,
   ScheduleErrorReason,
   validateScheduleSpec,
-} from '../../schedule';
-import { NameResolver } from '../infrastructure/name-resolver';
+} from "../../schedule";
+import { NameResolver } from "../infrastructure/name-resolver";
+import {
+  coversOrEquals,
+  subjectsOverlap,
+} from "../infrastructure/subject-utils";
 
 /** Maps StreamKind to a human-readable label for logging. */
 const HANDLER_LABELS: Record<StreamKind, string> = {
@@ -27,7 +31,7 @@ const HANDLER_LABELS: Record<StreamKind, string> = {
   [StreamKind.Ordered]: StreamKind.Ordered,
   [StreamKind.Event]: MessageKind.Event,
   [StreamKind.Command]: MessageKind.Rpc,
-  [StreamKind.Schedule]: 'schedule',
+  [StreamKind.Schedule]: "schedule",
 };
 
 /** The stream a handler consumes from, given its delivery flags. */
@@ -54,8 +58,10 @@ const resolveHandlerKind = (
  * - Provides lists of patterns by category for stream/consumer setup
  */
 export class PatternRegistry {
-  private readonly logger = new Logger('Jetstream:PatternRegistry');
+  private readonly logger = new Logger("Jetstream:PatternRegistry");
   private readonly registry = new Map<string, RegisteredHandler>();
+
+  private readonly wildcardRegistry = new Map<string, RegisteredHandler>();
 
   // Cached after registerHandlers(); the registry is immutable from that point
   private cachedPatterns: PatternsByKind | null = null;
@@ -95,14 +101,25 @@ export class PatternRegistry {
       }
 
       const declared = isScheduled
-        ? this.declaredSchedule(pattern, rawSchedule, isEvent, isBroadcast || isOrdered)
+        ? this.declaredSchedule(
+            pattern,
+            rawSchedule,
+            isEvent,
+            isBroadcast || isOrdered,
+          )
         : undefined;
 
-      const kind = resolveHandlerKind(isScheduled, isBroadcast, isOrdered, isEvent);
+      const kind = resolveHandlerKind(
+        isScheduled,
+        isBroadcast,
+        isOrdered,
+        isEvent,
+      );
 
       const fullSubject = this.names.subject(kind, pattern);
+      const wildcard = this.validatePattern(pattern, fullSubject);
 
-      this.registry.set(fullSubject, {
+      const entry: RegisteredHandler = {
         handler,
         pattern,
         isEvent: isEvent && !isOrdered,
@@ -111,9 +128,14 @@ export class PatternRegistry {
         isScheduled,
         ...(declared ? { schedule: declared } : {}),
         meta,
-      });
+      };
 
-      this.logger.debug(`Registered ${HANDLER_LABELS[kind]}: ${pattern} -> ${fullSubject}`);
+      this.registry.set(fullSubject, entry);
+      if (wildcard) this.wildcardRegistry.set(fullSubject, entry);
+
+      this.logger.debug(
+        `Registered ${HANDLER_LABELS[kind]}: ${pattern} -> ${fullSubject}`,
+      );
     }
 
     this.cachedPatterns = this.buildPatternsByKind();
@@ -122,13 +144,15 @@ export class PatternRegistry {
     this._hasBroadcasts = this.cachedPatterns.broadcasts.length > 0;
     this._hasOrdered = this.cachedPatterns.ordered.length > 0;
     this._hasSchedules = this.cachedPatterns.schedules.length > 0;
-    this._hasMetadata = [...this.registry.values()].some((entry) => entry.meta !== undefined);
+    this._hasMetadata = [...this.registry.values()].some(
+      (entry) => entry.meta !== undefined,
+    );
     this.logSummary();
   }
 
   /** Find handler for a full NATS subject. */
   public getHandler(subject: string): MessageHandler | null {
-    return this.registry.get(subject)?.handler ?? null;
+    return this.resolveEntry(subject)?.handler ?? null;
   }
 
   /**
@@ -138,12 +162,61 @@ export class PatternRegistry {
    * the value the user passed to `@EventPattern`/`@MessagePattern`: stable and
    * bounded, suitable for use as a Prometheus label without cardinality risk.
    */
-  public resolveDeclared(subject: string): { pattern: string; kind: StreamKind } | null {
-    const entry = this.registry.get(subject);
+  public resolveDeclared(
+    subject: string,
+  ): { pattern: string; kind: StreamKind } | null {
+    const entry = this.resolveEntry(subject);
 
     if (!entry) return null;
 
     return { pattern: entry.pattern, kind: this.resolveStreamKind(entry) };
+  }
+
+  private validatePattern(pattern: string, fullSubject: string): boolean {
+    const tokens = pattern.split(".");
+
+    const invalidPatternError = tokens.some(
+      (token, index) =>
+        !token ||
+        /[\s\0]/u.test(token) ||
+        (token.includes("*") && token !== "*") ||
+        (token.includes(">") && (token !== ">" || index !== tokens.length - 1)),
+    );
+
+    if (invalidPatternError) {
+      throw new JetstreamConfigError(
+        ConfigErrorReason.InvalidHandlerPattern,
+        `Invalid NATS handler pattern "${pattern}": use whole-token * or a trailing >.`,
+      );
+    }
+
+    const wildcard = tokens.includes("*") || tokens.includes(">");
+
+    if (wildcard) {
+      const overlapError = [...this.wildcardRegistry.keys()].find((existing) =>
+        subjectsOverlap(existing, fullSubject),
+      );
+
+      if (overlapError) {
+        throw new JetstreamConfigError(
+          ConfigErrorReason.AmbiguousHandlerPattern,
+          `Overlapping wildcard handlers "${overlapError}" and "${fullSubject}".`,
+        );
+      }
+    }
+
+    return wildcard;
+  }
+
+  private resolveEntry(subject: string): RegisteredHandler | undefined {
+    const exact = this.registry.get(subject);
+
+    if (exact) return exact;
+    for (const [pattern, entry] of this.wildcardRegistry) {
+      if (coversOrEquals(pattern, subject)) return entry;
+    }
+
+    return undefined;
   }
 
   /** Get all registered broadcast patterns (for consumer filter_subject setup). */
@@ -199,7 +272,9 @@ export class PatternRegistry {
 
   /** Get fully-qualified NATS subjects for ordered handlers. */
   public getOrderedSubjects(): string[] {
-    return this.getPatternsByKind().ordered.map((p) => this.names.subject(StreamKind.Ordered, p));
+    return this.getPatternsByKind().ordered.map((p) =>
+      this.names.subject(StreamKind.Ordered, p),
+    );
   }
 
   /** Check if any registered handler has metadata. */
@@ -292,7 +367,7 @@ export class PatternRegistry {
     assertLiteralSubject(pattern, ScheduleErrorReason.InvalidPattern);
     if (schedule === true) return undefined;
 
-    if (typeof schedule !== 'object' || schedule === null) {
+    if (typeof schedule !== "object" || schedule === null) {
       throw new JetstreamScheduleError(
         ScheduleErrorReason.InvalidSpec,
         `Handler "${pattern}" has schedule ${JSON.stringify(schedule)}; expected a schedule spec or true.`,
@@ -315,7 +390,8 @@ export class PatternRegistry {
   }
 
   private logSummary(): void {
-    const { events, commands, broadcasts, ordered, schedules } = this.getPatternsByKind();
+    const { events, commands, broadcasts, ordered, schedules } =
+      this.getPatternsByKind();
 
     const parts = [
       `${commands.length} RPC`,
@@ -331,6 +407,6 @@ export class PatternRegistry {
       parts.push(`${schedules.length} scheduled`);
     }
 
-    this.logger.log(`Registered handlers: ${parts.join(', ')}`);
+    this.logger.log(`Registered handlers: ${parts.join(", ")}`);
   }
 }

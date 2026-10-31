@@ -46,6 +46,22 @@ describe(ConsumerProvider, () => {
       mockBinder,
     );
 
+  it('collapses wildcard-covered command filters under a custom prefix', async () => {
+    options = { ...options, rpc: { mode: 'jetstream', subjectPrefix: 'company.rpc.' } };
+    sut = makeSut();
+    patternRegistry.getCommandPatterns.mockReturnValue(['orders.*', 'orders.created']);
+    mockJsm.consumers.info.mockResolvedValue(createMock<ConsumerInfo>());
+    mockJsm.consumers.update.mockResolvedValue(createMock<ConsumerInfo>());
+
+    await sut.ensureConsumers([StreamKind.Command]);
+
+    expect(mockJsm.consumers.update).toHaveBeenCalledWith(
+      'test-stream',
+      expect.any(String),
+      expect.objectContaining({ filter_subject: 'company.rpc.orders.*' }),
+    );
+  });
+
   beforeEach(() => {
     options = { name: faker.lorem.word(), servers: ['nats://localhost:4222'] };
 

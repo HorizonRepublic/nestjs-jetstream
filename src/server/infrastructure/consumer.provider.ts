@@ -52,6 +52,7 @@ interface ConsumerTarget {
   readonly config: DurableConsumerConfig;
   readonly spanAttrs: ProvisioningSpanTarget;
 }
+import { minimalSubjectFilters } from './subject-utils';
 
 /** One subject goes in `filter_subject`; any other count in `filter_subjects`. */
 const consumerFilter = (subjects: string[]): Partial<ConsumerConfig> =>
@@ -395,7 +396,7 @@ export class ConsumerProvider {
       ...overrides,
       name: durableName,
       durable_name: durableName,
-      ...consumerFilter(this.filterSubjects(kind)),
+      ...consumerFilter(minimalSubjectFilters(this.filterSubjects(kind))),
     };
   }
 
