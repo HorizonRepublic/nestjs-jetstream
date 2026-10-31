@@ -100,7 +100,10 @@ describe(ConsumerProvider, () => {
         expect.any(String),
         expect.objectContaining({ ...expected, max_ack_pending: 17 }),
       );
-      expect(mockJsm.consumers.update.mock.calls[0]?.[2]).not.toHaveProperty(absent);
+      expect(mockJsm.consumers.update.mock.calls[0]?.[2]).toHaveProperty(
+        absent,
+        absent === 'filter_subject' ? '' : [],
+      );
     },
   );
 

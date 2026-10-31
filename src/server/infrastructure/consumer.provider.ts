@@ -148,7 +148,13 @@ export class ConsumerProvider {
 
         this.logger.debug(`Consumer exists, updating: ${name}`);
 
-        const update = this.keepStartPosition(kind, existing.config, config);
+        // nats.js merges updates into the stored config. Clear either old filter
+        // before applying the desired one, including plural/singular transitions.
+        const update = {
+          filter_subject: '',
+          filter_subjects: [],
+          ...this.keepStartPosition(kind, existing.config, config),
+        };
 
         return await runProvisioningOp(ctx, () => jsm.consumers.update(stream, name, update));
       });
