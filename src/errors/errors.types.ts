@@ -21,6 +21,8 @@ export enum ConfigErrorReason {
   InvalidConnectionName = 'invalid-connection-name',
   NoServers = 'no-servers',
   RemovedOptions = 'removed-options',
+  InvalidHandlerPattern = 'invalid-handler-pattern',
+  AmbiguousHandlerPattern = 'ambiguous-handler-pattern',
   InvalidSubjectPrefix = 'invalid-subject-prefix',
   ConflictingHandlerKinds = 'conflicting-handler-kinds',
   ScheduleOnMessagePattern = 'schedule-on-message-pattern',

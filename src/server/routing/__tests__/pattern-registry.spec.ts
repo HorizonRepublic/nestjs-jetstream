@@ -53,6 +53,157 @@ describe(PatternRegistry, () => {
 
   afterEach(vi.resetAllMocks);
 
+  describe('registration retries', () => {
+    it('can register the same wildcard handlers again after provisioning fails', () => {
+      const handler = createHandler();
+      const handlers = new Map([['orders.*', handler]]);
+
+      sut.registerHandlers(handlers);
+      sut.registerHandlers(handlers);
+
+      expect(sut.getHandler(`${serviceName}__microservice.cmd.orders.created`)).toBe(handler);
+      expect(sut.getCommandPatterns()).toEqual(['orders.*']);
+    });
+
+    it('replaces exact and wildcard handlers and refreshes cached state', () => {
+      sut.registerHandlers(
+        new Map([
+          ['orders.*', createHandler({ meta: { description: 'old' } })],
+          ['users.created', createHandler({ isEvent: true })],
+        ]),
+      );
+      sut.registerHandlers(new Map());
+
+      expect(sut.getHandler(`${serviceName}__microservice.cmd.orders.created`)).toBeNull();
+      expect(sut.getHandler(`${serviceName}__microservice.ev.users.created`)).toBeNull();
+      expect(sut.getCommandPatterns()).toEqual([]);
+      expect(sut.getEventPatterns()).toEqual([]);
+      expect(sut.hasRpcHandlers()).toBe(false);
+      expect(sut.hasEventHandlers()).toBe(false);
+      expect(sut.hasMetadata()).toBe(false);
+    });
+
+    it('can retry after a partially completed registration', () => {
+      const handler = createHandler();
+
+      expect(() => {
+        sut.registerHandlers(
+          new Map([
+            ['orders.*', handler],
+            ['orders.>', createHandler()],
+          ]),
+        );
+      }).toThrow(/Overlapping wildcard handlers/);
+
+      sut.registerHandlers(new Map([['orders.*', handler]]));
+
+      expect(sut.getHandler(`${serviceName}__microservice.cmd.orders.created`)).toBe(handler);
+    });
+  });
+
+  describe('NATS wildcard routing', () => {
+    it.each([
+      ['orders.*', 'orders.created', true],
+      ['orders.*', 'orders.eu.created', false],
+      ['orders.*', 'orders', false],
+      ['*.*', 'users.created', true],
+      ['orders.>', 'orders.eu.created', true],
+      ['orders.>', 'orders', false],
+      ['*.created', 'users.created', true],
+      ['>', 'orders', true],
+      ['orders.*.>', 'orders.eu.created', true],
+      ['orders.*.>', 'orders.eu', false],
+    ])('matches %s against %s: %s', (pattern, subject, matches) => {
+      const handler = createHandler();
+
+      sut.registerHandlers(new Map([[pattern, handler]]));
+      const full = `${serviceName}__microservice.cmd.${subject}`;
+
+      expect(sut.getHandler(full)).toBe(matches ? handler : null);
+      expect(sut.resolveDeclared(full)).toEqual(
+        matches ? { pattern, kind: StreamKind.Command } : null,
+      );
+      expect(sut.getHandler(`other__microservice.cmd.${subject}`)).toBeNull();
+    });
+
+    it.each([true, false])(
+      'prefers exact handlers regardless of registration order (%s)',
+      (reverse) => {
+        const wildcard = createHandler();
+        const exact = createHandler();
+        const entries: [string, MessageHandler][] = [
+          ['orders.*', wildcard],
+          ['orders.created', exact],
+        ];
+
+        sut.registerHandlers(new Map(reverse ? entries.reverse() : entries));
+        const full = `${serviceName}__microservice.cmd.orders.created`;
+
+        expect(sut.getHandler(full)).toBe(exact);
+        expect(sut.resolveDeclared(full)?.pattern).toBe('orders.created');
+      },
+    );
+
+    it.each([
+      '',
+      'orders..created',
+      'order*',
+      '**',
+      'orders.>.created',
+      'orders.>x',
+      'orders. created',
+    ])('rejects invalid pattern %j', (pattern) => {
+      expect(() => {
+        sut.registerHandlers(new Map([[pattern, createHandler()]]));
+      }).toThrow(/Invalid NATS handler pattern/);
+    });
+
+    it.each([
+      ['orders.*', '*.created'],
+      ['orders.>', 'orders.*'],
+      ['>', '*.created'],
+    ])('rejects overlapping %s and %s', (a, b) => {
+      expect(() => {
+        sut.registerHandlers(
+          new Map([
+            [a, createHandler()],
+            [b, createHandler()],
+          ]),
+        );
+      }).toThrow(/Overlapping wildcard handlers/);
+    });
+
+    it('routes custom prefixes and event patterns independently', () => {
+      const options: JetstreamModuleOptions = {
+        name: serviceName,
+        servers: [],
+        rpc: { mode: 'jetstream', subjectPrefix: 'custom.rpc.' },
+      };
+      const registry = new PatternRegistry(options, new NameResolver(options));
+      const rpc = createHandler();
+      const event = createHandler({ isEvent: true });
+
+      registry.registerHandlers(
+        new Map([
+          ['orders.*', rpc],
+          ['orders.>', event],
+        ]),
+      );
+      expect(registry.getHandler('custom.rpc.orders.created')).toBe(rpc);
+      expect(registry.getHandler(`${serviceName}__microservice.ev.orders.eu.created`)).toBe(event);
+    });
+
+    it('encodes wildcard metadata keys without literal-key collisions', () => {
+      const meta = { description: 'orders' };
+
+      sut.registerHandlers(new Map([['orders.*', createHandler({ meta })]]));
+      expect([...sut.getMetadataEntries().keys()]).toEqual([`${serviceName}.cmd.orders.=2a`]);
+      expect(metadataKey(serviceName, StreamKind.Command, 'orders.=2a')).not.toBe(
+        metadataKey(serviceName, StreamKind.Command, 'orders.*'),
+      );
+    });
+  });
+
   describe('registerHandlers()', () => {
     describe('happy path', () => {
       describe('when registering an RPC handler', () => {

@@ -35,3 +35,4 @@ npx tsx --tsconfig examples/tsconfig.json examples/03-ordered-events/main.ts
 | 10  | [distributed-tracing](./10-distributed-tracing) | 3009 | Built-in OpenTelemetry spans, ConsoleSpanExporter, full trace through publish + RPC + event flow | `GET /`                                |
 | 11  | [multi-connection](./11-multi-connection)       | 3010 | Two NATS clusters, @JetstreamConnection, critical vs degraded, hybrid bootstrap                  | `GET /place-order`, `/track`           |
 | 12  | [recurring-schedules](./12-recurring-schedules) | 3011 | Cron and interval jobs, declared and created at runtime (NATS >= 2.14)                           | `GET /remind`, `/cancel`, `/schedules` |
+| 13  | [wildcard-patterns](./13-wildcard-patterns)     | 3012 | NATS `*` and `>` patterns, exact-match precedence, actual subject access                         | `GET /rpc`, `/exact`, `/event`         |
