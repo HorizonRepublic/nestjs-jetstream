@@ -42,7 +42,7 @@ class WildcardController {
 describe('Consumer filter updates', () => {
   let container: StartedTestContainer | undefined;
   let port: number;
-  let nc: NatsConnection;
+  let nc: NatsConnection | undefined;
 
   beforeAll(async () => {
     ({ container, port } = await startNatsContainer());
@@ -51,13 +51,15 @@ describe('Consumer filter updates', () => {
 
   afterAll(async () => {
     try {
-      await nc.drain();
+      await nc?.drain();
     } finally {
       await container?.stop();
     }
   });
 
   it('switches a persisted consumer between multiple filters and one wildcard', async () => {
+    if (!nc) throw new Error('NATS connection was not initialized during setup');
+
     const name = uniqueServiceName();
     const prefix = `company.${name}.rpc.`;
     const rpc = { mode: 'jetstream' as const, subjectPrefix: prefix };
