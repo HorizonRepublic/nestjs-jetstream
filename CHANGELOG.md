@@ -1,5 +1,18 @@
 # Changelog
 
+## [3.2.0](https://github.com/HorizonRepublic/nestjs-jetstream/compare/nestjs-jetstream-v3.1.0...nestjs-jetstream-v3.2.0) (2026-11-02)
+
+
+### Features
+
+* **wildcard-pattern:** add subject pattern match ([#285](https://github.com/HorizonRepublic/nestjs-jetstream/issues/285)) ([e49b293](https://github.com/HorizonRepublic/nestjs-jetstream/commit/e49b29343f47bc15fe0d5c39b0907e4304cc1281))
+
+
+### Bug Fixes
+
+* **otel:** report the declared handler pattern on consume and dead-letter spans ([4b2e5be](https://github.com/HorizonRepublic/nestjs-jetstream/commit/4b2e5be94bd22c4a16243b0c1f679134da745787))
+* **routing:** warn when * or &gt; sits inside a handler pattern token ([4b2e5be](https://github.com/HorizonRepublic/nestjs-jetstream/commit/4b2e5be94bd22c4a16243b0c1f679134da745787))
+
 ## [3.1.0](https://github.com/HorizonRepublic/nestjs-jetstream/compare/nestjs-jetstream-v3.0.0...nestjs-jetstream-v3.1.0) (2026-10-30)
 
 
