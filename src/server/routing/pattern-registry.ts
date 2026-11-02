@@ -20,6 +20,7 @@ import {
   validateScheduleSpec,
 } from '../../schedule';
 import { NameResolver } from '../infrastructure/name-resolver';
+import { coversOrEquals, subjectsOverlap } from '../infrastructure/subject-utils';
 
 /** Maps StreamKind to a human-readable label for logging. */
 const HANDLER_LABELS: Record<StreamKind, string> = {
@@ -57,6 +58,8 @@ export class PatternRegistry {
   private readonly logger = new Logger('Jetstream:PatternRegistry');
   private readonly registry = new Map<string, RegisteredHandler>();
 
+  private readonly wildcardRegistry = new Map<string, RegisteredHandler>();
+
   // Cached after registerHandlers(); the registry is immutable from that point
   private cachedPatterns: PatternsByKind | null = null;
   private _hasEvents = false;
@@ -77,6 +80,17 @@ export class PatternRegistry {
    * @param handlers Map of pattern -> MessageHandler from `Server.getHandlers()`.
    */
   public registerHandlers(handlers: Map<string, MessageHandler>): void {
+    // Startup retries reuse this instance after provisioning failures.
+    this.registry.clear();
+    this.wildcardRegistry.clear();
+    this.cachedPatterns = null;
+    this._hasEvents = false;
+    this._hasCommands = false;
+    this._hasBroadcasts = false;
+    this._hasOrdered = false;
+    this._hasSchedules = false;
+    this._hasMetadata = false;
+
     for (const [pattern, handler] of handlers) {
       const extras = handler.extras as Record<string, unknown> | undefined;
       const isEvent = handler.isEventHandler ?? false;
@@ -101,8 +115,9 @@ export class PatternRegistry {
       const kind = resolveHandlerKind(isScheduled, isBroadcast, isOrdered, isEvent);
 
       const fullSubject = this.names.subject(kind, pattern);
+      const wildcard = this.validatePattern(pattern, fullSubject, kind);
 
-      this.registry.set(fullSubject, {
+      const entry: RegisteredHandler = {
         handler,
         pattern,
         isEvent: isEvent && !isOrdered,
@@ -111,7 +126,10 @@ export class PatternRegistry {
         isScheduled,
         ...(declared ? { schedule: declared } : {}),
         meta,
-      });
+      };
+
+      this.registry.set(fullSubject, entry);
+      if (wildcard) this.wildcardRegistry.set(fullSubject, entry);
 
       this.logger.debug(`Registered ${HANDLER_LABELS[kind]}: ${pattern} -> ${fullSubject}`);
     }
@@ -128,7 +146,7 @@ export class PatternRegistry {
 
   /** Find handler for a full NATS subject. */
   public getHandler(subject: string): MessageHandler | null {
-    return this.registry.get(subject)?.handler ?? null;
+    return this.resolveEntry(subject)?.handler ?? null;
   }
 
   /**
@@ -139,11 +157,66 @@ export class PatternRegistry {
    * bounded, suitable for use as a Prometheus label without cardinality risk.
    */
   public resolveDeclared(subject: string): { pattern: string; kind: StreamKind } | null {
-    const entry = this.registry.get(subject);
+    const entry = this.resolveEntry(subject);
 
     if (!entry) return null;
 
     return { pattern: entry.pattern, kind: this.resolveStreamKind(entry) };
+  }
+
+  private validatePattern(pattern: string, fullSubject: string, kind: StreamKind): boolean {
+    const tokens = pattern.split('.');
+
+    const isInvalid = tokens.some(
+      (token, index) =>
+        !token || /[\s\0]/u.test(token) || (token === '>' && index !== tokens.length - 1),
+    );
+
+    if (isInvalid) {
+      throw new JetstreamConfigError(
+        ConfigErrorReason.InvalidHandlerPattern,
+        `Invalid NATS handler pattern "${pattern}": tokens must be non-empty without whitespace, and > may only be the last token.`,
+      );
+    }
+
+    const wildcard = tokens.includes('*') || tokens.includes('>');
+
+    if (wildcard) {
+      const overlapping = [...this.wildcardRegistry.keys()].find((existing) =>
+        subjectsOverlap(existing, fullSubject),
+      );
+
+      if (overlapping) {
+        throw new JetstreamConfigError(
+          ConfigErrorReason.AmbiguousHandlerPattern,
+          `Overlapping wildcard handlers "${overlapping}" and "${fullSubject}".`,
+        );
+      }
+
+      // Holders are `<schedulePrefix><subject>.<nuid>`; a filter over them would deliver,
+      // and on a workqueue ack away, pending schedules.
+      const holders = `${this.names.schedulePrefix(kind)}*.>`;
+
+      if (kind !== StreamKind.Command && subjectsOverlap(fullSubject, holders)) {
+        throw new JetstreamConfigError(
+          ConfigErrorReason.InvalidHandlerPattern,
+          `Wildcard handler "${fullSubject}" overlaps the schedule holder subjects "${holders}".`,
+        );
+      }
+    }
+
+    return wildcard;
+  }
+
+  private resolveEntry(subject: string): RegisteredHandler | undefined {
+    const exact = this.registry.get(subject);
+
+    if (exact) return exact;
+    for (const [pattern, entry] of this.wildcardRegistry) {
+      if (coversOrEquals(pattern, subject)) return entry;
+    }
+
+    return undefined;
   }
 
   /** Get all registered broadcast patterns (for consumer filter_subject setup). */

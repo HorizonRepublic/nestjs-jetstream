@@ -41,6 +41,7 @@ import {
 } from './provisioning-error';
 import { MIGRATION_BACKUP_SUFFIX } from './stream-migration';
 import { StreamProvider } from './stream.provider';
+import { minimalSubjectFilters } from './subject-utils';
 
 type ProvisioningSpanTarget = Omit<ProvisioningSpanContext, 'action'>;
 
@@ -147,7 +148,13 @@ export class ConsumerProvider {
 
         this.logger.debug(`Consumer exists, updating: ${name}`);
 
-        const update = this.keepStartPosition(kind, existing.config, config);
+        // nats.js merges updates into the stored config. Clear either old filter
+        // before applying the desired one, including plural/singular transitions.
+        const update = {
+          filter_subject: '',
+          filter_subjects: [],
+          ...this.keepStartPosition(kind, existing.config, config),
+        };
 
         return await runProvisioningOp(ctx, () => jsm.consumers.update(stream, name, update));
       });
@@ -388,14 +395,18 @@ export class ConsumerProvider {
     const durableName = this.getConsumerName(kind);
 
     const defaults = this.getDefaults(kind);
-    const overrides = this.getOverrides(kind);
+    const {
+      filter_subject: _filterSubject,
+      filter_subjects: _filterSubjects,
+      ...overrides
+    } = this.getOverrides(kind);
 
     return {
       ...defaults,
       ...overrides,
       name: durableName,
       durable_name: durableName,
-      ...consumerFilter(this.filterSubjects(kind)),
+      ...consumerFilter(minimalSubjectFilters(this.filterSubjects(kind))),
     };
   }
 

@@ -33,6 +33,7 @@ import { errorMessage, toError } from '../../utils';
 import type { ConsumerFlowState } from './consumer-flow.types';
 import type { ConsumerRecoveryFn } from './message.provider.types';
 import { NatsErrorCode } from './nats-error-codes';
+import { minimalSubjectFilters } from './subject-utils';
 
 /**
  * How often a broadcast consumer's position is re-read, so a recreated durable
@@ -139,7 +140,7 @@ export class MessageProvider {
 
     const consumerOpts: Partial<OrderedConsumerOptions> = {
       ...rest,
-      filter_subjects: filterSubjects,
+      filter_subjects: minimalSubjectFilters(filterSubjects),
     };
 
     // Workaround: in nats.js (v2.29.x), explicitly passing DeliverPolicy.All to an

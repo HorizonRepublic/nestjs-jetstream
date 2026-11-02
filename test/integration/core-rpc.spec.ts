@@ -14,6 +14,21 @@ import { startNatsContainer } from './nats-container';
 
 @Controller()
 class RpcController {
+  @MessagePattern('wildcard.*')
+  wildcard(@Ctx() ctx: RpcContext): string {
+    return ctx.getSubject();
+  }
+
+  @MessagePattern('wildcard.exact')
+  exact(): string {
+    return 'exact';
+  }
+
+  @MessagePattern('nested.>')
+  nested(@Ctx() ctx: RpcContext): string {
+    return ctx.getSubject();
+  }
+
   @MessagePattern('user.get')
   getUser(@Payload() data: { id: number }): { id: number; name: string } {
     return { id: data.id, name: 'Test User' };
@@ -75,6 +90,16 @@ describe('Core RPC Round-Trip', () => {
   afterEach(async () => {
     await app.close();
     await cleanupStreams(nc, serviceName);
+  });
+
+  it('routes wildcard requests and gives exact handlers precedence', async () => {
+    await expect(firstValueFrom(client.send('wildcard.created', {}))).resolves.toBe(
+      `${serviceName}__microservice.cmd.wildcard.created`,
+    );
+    await expect(firstValueFrom(client.send('wildcard.exact', {}))).resolves.toBe('exact');
+    await expect(firstValueFrom(client.send('nested.eu.created', {}))).resolves.toBe(
+      `${serviceName}__microservice.cmd.nested.eu.created`,
+    );
   });
 
   it('should send RPC request and receive response', async () => {

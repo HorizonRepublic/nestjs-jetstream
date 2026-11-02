@@ -288,10 +288,11 @@ export const MIN_METADATA_TTL = 5_000;
  * @param serviceName - Service name from `forRoot({ name })`.
  * @param kind - Handler's stream kind ({@link StreamKind}).
  * @param pattern - The message pattern (e.g. `'order.created'`).
+ * Escapes `=`, `*`, and `>` as `=3d`, `=2a`, and `=3e` for literal KV writes.
  * @returns KV key (e.g. `orders.ev.order.created`).
  */
 export const metadataKey = (serviceName: string, kind: StreamKind, pattern: string): string =>
-  `${serviceName}.${kind}.${pattern}`;
+  `${serviceName}.${kind}.${pattern.replace(/[=*>]/g, (char) => `=${char.charCodeAt(0).toString(16)}`)}`;
 
 /**
  * NATS headers managed by the transport.
