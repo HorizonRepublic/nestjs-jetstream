@@ -8,7 +8,7 @@ schema:
   headline: "Handler Metadata Registry: NATS KV Service Discovery for NestJS"
   description: "Publish NestJS handler metadata to a NATS KV bucket for dynamic service discovery, API gateway routing, and automatic catalog generation."
   datePublished: "2026-04-02"
-  dateModified: "2026-10-23"
+  dateModified: "2026-11-02"
 ---
 
 # Handler Metadata Registry
@@ -111,6 +111,9 @@ Keys follow the pattern `{service_name}.{kind}.{pattern}`:
 | `@EventPattern('config.updated', { broadcast: true, meta })`  | `orders.broadcast.config.updated` |
 | `@EventPattern('audit.trail', { ordered: true, meta })`       | `orders.ordered.audit.trail`      |
 | `@EventPattern('report.daily', { schedule: { cron }, meta })` | `orders.sched.report.daily`       |
+| `@MessagePattern('order.*', { meta })`                        | `orders.cmd.order.=2a`            |
+
+KV keys cannot hold `*` or `>`, so a [wildcard pattern](/docs/guides/wildcard-patterns) is escaped: `*` becomes `=2a`, `>` becomes `=3e`, and `=` itself becomes `=3d`, which keeps every key unique.
 
 The `metadataKey()` helper is exported for programmatic key construction:
 

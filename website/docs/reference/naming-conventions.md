@@ -7,7 +7,7 @@ schema:
   headline: Naming Conventions
   description: "Stream, consumer, and subject naming patterns derived from the service name."
   datePublished: "2026-03-21"
-  dateModified: "2026-10-23"
+  dateModified: "2026-11-02"
 ---
 
 # Naming Conventions
@@ -134,7 +134,12 @@ import { metadataKey, StreamKind } from '@horizon-republic/nestjs-jetstream';
 
 metadataKey('orders', StreamKind.Event, 'order.created');
 // 'orders.ev.order.created'
+
+metadataKey('orders', StreamKind.Command, 'order.*');
+// 'orders.cmd.order.=2a'
 ```
+
+The pattern is escaped for KV: `=` becomes `=3d`, `*` becomes `=2a` and `>` becomes `=3e`. Build keys with this helper rather than by string concatenation.
 
 ## Stream Subject Wildcards
 

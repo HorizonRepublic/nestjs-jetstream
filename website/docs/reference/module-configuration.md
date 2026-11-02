@@ -8,7 +8,7 @@ schema:
   headline: "Module Configuration Reference"
   description: "Reference for forRoot(), forRootAsync(), and forFeature() registration methods with stream, consumer, and connection options."
   datePublished: "2026-03-21"
-  dateModified: "2026-10-30"
+  dateModified: "2026-11-02"
 ---
 
 # Module Configuration
@@ -394,7 +394,7 @@ events: {
 }
 ```
 
-A custom prefix turns subjects into `{prefix}{pattern}`, and consumers then use exact `filter_subjects` entries instead of a single wildcard filter. See [Bring Your Own Infrastructure](/docs/guides/external-infrastructure#custom-names-and-subject-prefixes) for how prefixes interact with scheduling subjects.
+A custom prefix turns subjects into `{prefix}{pattern}`, and consumers then filter on each handler's subject instead of a single `{prefix}>` filter. A [wildcard handler](/docs/guides/wildcard-patterns) contributes its wildcard, and exact subjects it already covers are dropped. See [Bring Your Own Infrastructure](/docs/guides/external-infrastructure#custom-names-and-subject-prefixes) for how prefixes interact with scheduling subjects.
 
 :::tip The toNanos() helper
 NATS JetStream uses nanoseconds for every time-based setting. `toNanos(value, unit)` converts a readable duration, taking `'ms'`, `'seconds'`, `'minutes'`, `'hours'` or `'days'`.

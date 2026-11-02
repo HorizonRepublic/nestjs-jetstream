@@ -8,7 +8,7 @@ schema:
   headline: "Release Notes: NestJS JetStream Transport"
   description: "Version-by-version changelog covering new features, behavior changes, and breaking changes."
   datePublished: "2026-03-26"
-  dateModified: "2026-10-30"
+  dateModified: "2026-11-02"
 ---
 
 # Release Notes
@@ -17,6 +17,14 @@ schema:
 > **You get:** what changed in each release, with the breaking parts called out.
 
 Notable changes per version. What you have to change when upgrading is in [Upgrading](/docs/reference/upgrading), and the full commit-level record is in [CHANGELOG.md](https://github.com/HorizonRepublic/nestjs-jetstream/blob/main/CHANGELOG.md).
+
+## v3.2
+
+Handlers take NATS wildcards. [`@EventPattern('orders.*')` or `@MessagePattern('reports.>')`](/docs/guides/wildcard-patterns) serves a whole family of subjects across workqueue events, broadcast, ordered events and both RPC modes, and `ctx.getSubject()` tells which subject arrived. An exact handler always wins over a wildcard, and two wildcards that can match the same subject stop the service at startup instead of routing by declaration order.
+
+Patterns are validated when the service starts. Empty tokens, whitespace and a `>` that is not last fail fast, a wildcard that would swallow schedule holders under a custom prefix is refused, and `*` or `>` inside a token is kept literal, as in NATS, with a warning. Consumers built per handler collapse exact subjects a wildcard covers, and a durable consumer now switches cleanly between one filter and several. Consume and dead-letter spans carry the declared pattern as `messaging.destination.template`, and `handlerMetadata.pattern` in `consumeHook` is the declared pattern instead of the full subject.
+
+Handler metadata keys escape `=`, `*` and `>`; see [Upgrading](/docs/reference/upgrading#v31--v32).
 
 ## v3.1
 

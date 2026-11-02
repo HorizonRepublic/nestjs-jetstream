@@ -31,6 +31,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'guides/record-builder',
         'guides/handler-context',
+        'guides/wildcard-patterns',
         'guides/custom-codec',
         'patterns/handler-metadata',
       ],

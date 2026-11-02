@@ -170,6 +170,8 @@ export const createRpcPipeline = (rctx: RpcPipelineContext): RouteFn => {
 
     const { handler, data, replyTo, correlationId } = resolved;
     const subject = msg.subject;
+    // Spans and their hooks are the only readers; skip the lookup when tracing is off.
+    const pattern = otel.enabled ? rctx.patternRegistry.declaredPattern(subject) : subject;
     const ctx = new RpcContext([msg]);
     const stopAckExtension = startAckExtensionTimer(msg, rctx.ackExtension);
     const startedAt = performance.now();
@@ -196,7 +198,8 @@ export const createRpcPipeline = (rctx: RpcPipelineContext): RouteFn => {
           info: msg.info,
           kind: ConsumeKind.Rpc,
           payloadBytes: msg.data.length,
-          handlerMetadata: { pattern: subject },
+          pattern,
+          handlerMetadata: { pattern },
           serviceName,
           endpoint: serverEndpoint,
         },

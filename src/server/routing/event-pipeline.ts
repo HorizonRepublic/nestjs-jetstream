@@ -155,6 +155,8 @@ export const createWorkqueuePipeline = (
     if (isPromiseLike(resolved)) return resolved as Promise<void>;
 
     const { handler, data } = resolved;
+    // Spans and their hooks are the only readers; skip the lookup when tracing is off.
+    const pattern = otel.enabled ? rctx.patternRegistry.declaredPattern(msg.subject) : msg.subject;
     const ctx = new RpcContext([msg]);
     const stopAckExtension = startAckExtensionTimer(msg, rctx.ackExtension);
     const startedAt = performance.now();
@@ -169,7 +171,8 @@ export const createWorkqueuePipeline = (
           info: msg.info,
           kind: spanKind,
           payloadBytes: msg.data.length,
-          handlerMetadata: { pattern: msg.subject },
+          pattern,
+          handlerMetadata: { pattern },
           serviceName,
           endpoint: serverEndpoint,
         },
@@ -277,6 +280,8 @@ export const createOrderedPipeline = (
     }
 
     const ctx = new RpcContext([msg]);
+    // Spans and their hooks are the only readers; skip the lookup when tracing is off.
+    const pattern = otel.enabled ? patternRegistry.declaredPattern(subject) : subject;
 
     const warnIfSettlementAttempted = (): void => {
       if (ctx.shouldRetry || ctx.shouldTerminate) {
@@ -297,7 +302,8 @@ export const createOrderedPipeline = (
           info: msg.info,
           kind: spanKind,
           payloadBytes: msg.data.length,
-          handlerMetadata: { pattern: msg.subject },
+          pattern,
+          handlerMetadata: { pattern },
           serviceName,
           endpoint: serverEndpoint,
         },

@@ -164,6 +164,11 @@ export class PatternRegistry {
     return { pattern: entry.pattern, kind: this.resolveStreamKind(entry) };
   }
 
+  /** The declared pattern for a full NATS subject, or the subject itself when no handler matches. */
+  public declaredPattern(subject: string): string {
+    return this.resolveEntry(subject)?.pattern ?? subject;
+  }
+
   private validatePattern(pattern: string, fullSubject: string, kind: StreamKind): boolean {
     const tokens = pattern.split('.');
 
@@ -176,6 +181,13 @@ export class PatternRegistry {
       throw new JetstreamConfigError(
         ConfigErrorReason.InvalidHandlerPattern,
         `Invalid NATS handler pattern "${pattern}": tokens must be non-empty without whitespace, and > may only be the last token.`,
+      );
+    }
+
+    if (tokens.some((token) => token.length > 1 && /[*>]/u.test(token))) {
+      this.logger.warn(
+        `Handler pattern "${pattern}" has * or > inside a token, which NATS matches literally. ` +
+          'Only a whole token is a wildcard, e.g. "orders.*".',
       );
     }
 

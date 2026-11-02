@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import type { MessageHandler } from '@nestjs/microservices';
 
 import { faker } from '@faker-js/faker';
@@ -168,6 +169,30 @@ describe(PatternRegistry, () => {
       },
     );
 
+    it.each(['order*', '**', 'orders.>x'])('warns that %j is matched literally', (pattern) => {
+      // Given
+      const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+
+      // When
+      sut.registerHandlers(new Map([[pattern, createHandler()]]));
+
+      // Then
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining(`"${pattern}" has * or > inside a token`),
+      );
+    });
+
+    it.each(['orders.*', 'orders.>', 'orders.created'])('does not warn for %j', (pattern) => {
+      // Given
+      const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+
+      // When
+      sut.registerHandlers(new Map([[pattern, createHandler()]]));
+
+      // Then
+      expect(warn).not.toHaveBeenCalled();
+    });
+
     it.each([
       ['orders.*', '*.created'],
       ['orders.>', 'orders.*'],
@@ -212,6 +237,22 @@ describe(PatternRegistry, () => {
       expect(() => {
         registry.registerHandlers(new Map([[pattern, createHandler(handler)]]));
       }).not.toThrow();
+    });
+
+    it('reports the declared pattern, or the subject when nothing matches', () => {
+      // Given
+      sut.registerHandlers(
+        new Map([
+          ['orders.*', createHandler()],
+          ['orders.special', createHandler()],
+        ]),
+      );
+      const prefix = `${serviceName}__microservice.cmd.`;
+
+      // When/Then
+      expect(sut.declaredPattern(`${prefix}orders.created`)).toBe('orders.*');
+      expect(sut.declaredPattern(`${prefix}orders.special`)).toBe('orders.special');
+      expect(sut.declaredPattern(`${prefix}users.created`)).toBe(`${prefix}users.created`);
     });
 
     it('routes custom prefixes and event patterns independently', () => {

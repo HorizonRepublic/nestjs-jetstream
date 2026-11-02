@@ -7,7 +7,7 @@ schema:
   headline: "Upgrading NestJS JetStream between major versions"
   description: "Renamed options, changed defaults and how to keep the previous behaviour, release by release."
   datePublished: "2026-10-23"
-  dateModified: "2026-10-30"
+  dateModified: "2026-11-02"
 ---
 
 # Upgrading
@@ -16,6 +16,18 @@ schema:
 > **You get:** what changes for you, release by release, and how to restore the previous behaviour.
 
 Newest first. What each release adds is in the [release notes](/docs/reference/release-notes); this page lists only what you may have to act on.
+
+## v3.1 → v3.2
+
+No source changes for services that start on v3.1. Four details can show up.
+
+**Handler metadata keys escape `=`.** `metadataKey()` and the keys written to the [handler metadata](/docs/patterns/handler-metadata#kv-key-format) bucket now escape `=` as `=3d`, so that `*` and `>` in [wildcard patterns](/docs/guides/wildcard-patterns) can be escaped as `=2a` and `=3e` without collisions. Only a pattern containing `=` gets a new key. The old key expires with the bucket TTL, and a reader that builds keys by string concatenation instead of `metadataKey()` has to switch to the helper.
+
+**Patterns are checked at startup.** A pattern with an empty token (`orders..created`), whitespace, or `>` before the last token now fails with `JetstreamConfigError` reason `invalid-handler-pattern`. None of these was a valid NATS subject, so such a handler never received a message. A whole-token `*` or `>`, which used to register but never match, is now a wildcard.
+
+**`handlerMetadata.pattern` is the declared pattern.** In `otel.consumeHook`, `ctx.handlerMetadata.pattern` used to hold the full subject, `orders__microservice.ev.order.created`; it now holds the pattern the handler declared, `order.created`, or `order.*` for a wildcard handler. Consume spans also gain `messaging.destination.template` with the same value. A hook that parsed the subject out of `pattern` should read `ctx.subject` instead.
+
+**Consumer filters in overrides are ignored.** `filter_subject` and `filter_subjects` under `events.consumer`, `rpc.consumer` or `broadcast.consumer` are dropped; the transport derives filters from the registered handlers. Before, the transport overwrote them or the server rejected the pair, so no working setup relied on them.
 
 ## v3.0 → v3.1
 

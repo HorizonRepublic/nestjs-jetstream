@@ -119,6 +119,11 @@ export class CoreRpcServer {
 
     this.eventBus.emitMessageRouted(msg.subject, MessageKind.Rpc);
 
+    // Spans and their hooks are the only readers; skip the lookup when tracing is off.
+    const pattern = this.otel.enabled
+      ? this.patternRegistry.declaredPattern(msg.subject)
+      : msg.subject;
+
     let data: unknown;
 
     try {
@@ -139,7 +144,8 @@ export class CoreRpcServer {
           msg,
           kind: ConsumeKind.Rpc,
           payloadBytes: msg.data.length,
-          handlerMetadata: { pattern: msg.subject },
+          pattern,
+          handlerMetadata: { pattern },
           serviceName: this.serviceName,
           endpoint: this.serverEndpoint,
         },

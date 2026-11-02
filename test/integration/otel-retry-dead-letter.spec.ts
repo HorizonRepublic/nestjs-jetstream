@@ -224,6 +224,7 @@ describe('OTel retry + dead letter integration', () => {
 
       expect(deadLetter).toBeDefined();
       expect(deadLetter!.kind).toBe(SpanKind.INTERNAL);
+      expect(deadLetter!.attributes['messaging.destination.template']).toBe('orders.always-fail');
       // sibling: shares the publish parent, not a child of any consume span
       expect(deadLetter!.parentSpanContext?.spanId).toBe(publish.spanContext().spanId);
     }, 20_000);
