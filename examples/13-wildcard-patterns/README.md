@@ -41,8 +41,9 @@ Exact handlers take precedence over wildcard handlers. Overlapping wildcard
 handlers (for example `orders.*` and `*.created`) are rejected at startup.
 Matching uses the configured subject prefix and applies to Core RPC, JetStream
 RPC, and regular, broadcast, and ordered events. Scheduled handlers still require
-literal patterns. Invalid patterns such as `order*`, `**`, or `orders.>.created`
-are rejected at startup.
+literal patterns. Only a whole token is a wildcard: `order*` is a literal
+subject, as in NATS. Invalid patterns such as `orders..created` or
+`orders.>.created` are rejected at startup.
 
 Handler metadata KV keys escape `=`, `*`, and `>` as `=3d`, `=2a`, and `=3e`.
 Use the exported `metadataKey()` helper to construct discovery keys.

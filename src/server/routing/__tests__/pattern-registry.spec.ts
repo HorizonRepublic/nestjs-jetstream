@@ -144,19 +144,29 @@ describe(PatternRegistry, () => {
       },
     );
 
-    it.each([
-      '',
-      'orders..created',
-      'order*',
-      '**',
-      'orders.>.created',
-      'orders.>x',
-      'orders. created',
-    ])('rejects invalid pattern %j', (pattern) => {
-      expect(() => {
-        sut.registerHandlers(new Map([[pattern, createHandler()]]));
-      }).toThrow(/Invalid NATS handler pattern/);
-    });
+    it.each(['', 'orders..created', 'orders.', 'orders.>.created', 'orders. created'])(
+      'rejects invalid pattern %j',
+      (pattern) => {
+        expect(() => {
+          sut.registerHandlers(new Map([[pattern, createHandler()]]));
+        }).toThrow(/Invalid NATS handler pattern/);
+      },
+    );
+
+    it.each(['order*', '**', 'orders.>x', '{"cmd":">"}'])(
+      'routes %j as a literal subject, like NATS does',
+      (pattern) => {
+        // Given
+        const handler = createHandler();
+
+        sut.registerHandlers(new Map([[pattern, handler]]));
+        const full = `${serviceName}__microservice.cmd.${pattern}`;
+
+        // When/Then
+        expect(sut.getHandler(full)).toBe(handler);
+        expect(sut.getHandler(`${serviceName}__microservice.cmd.orders`)).toBeNull();
+      },
+    );
 
     it.each([
       ['orders.*', '*.created'],
@@ -171,6 +181,37 @@ describe(PatternRegistry, () => {
           ]),
         );
       }).toThrow(/Overlapping wildcard handlers/);
+    });
+
+    it.each([
+      { pattern: '>', handler: { isEvent: true }, events: { subjectPrefix: 'company.orders.' } },
+      { pattern: '*.*.>', handler: { isEvent: true }, events: { subjectPrefix: 'company.' } },
+      { pattern: '>', handler: { isEvent: true, broadcast: true }, events: undefined },
+    ])('rejects $pattern when it overlaps schedule holders', ({ pattern, handler, events }) => {
+      // Given: a wildcard whose subject space includes the "_sch." holder namespace
+      const options: JetstreamModuleOptions = { name: serviceName, servers: [], events };
+      const registry = new PatternRegistry(options, new NameResolver(options));
+
+      // When/Then
+      expect(() => {
+        registry.registerHandlers(new Map([[pattern, createHandler(handler)]]));
+      }).toThrow(/overlaps the schedule holder subjects/);
+    });
+
+    it.each([
+      { pattern: '>', handler: { isEvent: true }, events: undefined },
+      { pattern: '*.created', handler: { isEvent: true }, events: { subjectPrefix: 'company.' } },
+      { pattern: 'orders.>', handler: { isEvent: true, broadcast: true }, events: undefined },
+      { pattern: '>', handler: {}, events: undefined },
+    ])('accepts $pattern outside the holder namespace', ({ pattern, handler, events }) => {
+      // Given
+      const options: JetstreamModuleOptions = { name: serviceName, servers: [], events };
+      const registry = new PatternRegistry(options, new NameResolver(options));
+
+      // When/Then
+      expect(() => {
+        registry.registerHandlers(new Map([[pattern, createHandler(handler)]]));
+      }).not.toThrow();
     });
 
     it('routes custom prefixes and event patterns independently', () => {

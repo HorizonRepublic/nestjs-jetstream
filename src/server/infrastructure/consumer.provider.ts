@@ -41,6 +41,7 @@ import {
 } from './provisioning-error';
 import { MIGRATION_BACKUP_SUFFIX } from './stream-migration';
 import { StreamProvider } from './stream.provider';
+import { minimalSubjectFilters } from './subject-utils';
 
 type ProvisioningSpanTarget = Omit<ProvisioningSpanContext, 'action'>;
 
@@ -52,7 +53,6 @@ interface ConsumerTarget {
   readonly config: DurableConsumerConfig;
   readonly spanAttrs: ProvisioningSpanTarget;
 }
-import { minimalSubjectFilters } from './subject-utils';
 
 /** One subject goes in `filter_subject`; any other count in `filter_subjects`. */
 const consumerFilter = (subjects: string[]): Partial<ConsumerConfig> =>
