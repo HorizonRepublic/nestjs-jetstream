@@ -105,7 +105,7 @@ export default function Root({ children }) {
   "headline": "Bring Your Own Infrastructure (bind-only mode)",
   "description": "Bind NestJS JetStream to externally managed NATS streams and consumers provisioned by Terraform, ArgoCD, or a platform team.",
   "datePublished": "2026-06-12",
-  "dateModified": "2026-10-23"
+  "dateModified": "2026-11-02"
 },
       
     '/docs/guides/graceful-shutdown/': {
@@ -228,6 +228,14 @@ export default function Root({ children }) {
   "dateModified": "2026-10-29"
 },
       
+    '/docs/guides/wildcard-patterns/': {
+  "@type": "Article",
+  "headline": "Wildcard Patterns: NATS * and > Subjects in NestJS Handlers",
+  "description": "Handle many NATS subjects with one NestJS handler using * and > wildcards, with exact-match precedence and startup validation.",
+  "datePublished": "2026-11-02",
+  "dateModified": "2026-11-02"
+},
+      
     '/docs/': {
   "@type": "Article",
   "headline": "NestJS NATS Transport with JetStream: Introduction",
@@ -257,7 +265,7 @@ export default function Root({ children }) {
   "headline": "Distributed Tracing: NestJS JetStream Transport",
   "description": "Built-in W3C Trace Context propagation and OpenTelemetry spans for every publish, consume, and RPC round-trip.",
   "datePublished": "2026-04-24",
-  "dateModified": "2026-10-30"
+  "dateModified": "2026-11-02"
 },
       
     '/docs/patterns/broadcast/': {
@@ -273,7 +281,7 @@ export default function Root({ children }) {
   "headline": "Workqueue Events: NestJS JetStream At-Least-Once Delivery",
   "description": "NestJS NATS JetStream workqueue events with at-least-once delivery, automatic retry, publish-side deduplication, and dead letter handling.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-10-29"
+  "dateModified": "2026-11-02"
 },
       
     '/docs/patterns/handler-metadata/': {
@@ -281,7 +289,7 @@ export default function Root({ children }) {
   "headline": "Handler Metadata Registry: NATS KV Service Discovery for NestJS",
   "description": "Publish NestJS handler metadata to a NATS KV bucket for dynamic service discovery, API gateway routing, and automatic catalog generation.",
   "datePublished": "2026-04-02",
-  "dateModified": "2026-10-23"
+  "dateModified": "2026-11-02"
 },
       
     '/docs/patterns/ordered-events/': {
@@ -297,7 +305,7 @@ export default function Root({ children }) {
   "headline": "NestJS NATS RPC: Core vs JetStream Request/Reply",
   "description": "Synchronous NestJS NATS request-reply in Core NATS or JetStream mode, with timeout handling, error serialization, and per-request overrides.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-10-30"
+  "dateModified": "2026-11-02"
 },
       
     '/docs/reference/default-configs/': {
@@ -321,7 +329,7 @@ export default function Root({ children }) {
   "headline": "Errors: Typed Errors Thrown by the Transport",
   "description": "Typed error classes, their reason values, and how to catch them.",
   "datePublished": "2026-10-27",
-  "dateModified": "2026-10-30"
+  "dateModified": "2026-11-02"
 },
       
     '/docs/reference/header-contract/': {
@@ -337,7 +345,7 @@ export default function Root({ children }) {
   "headline": "Module Configuration Reference",
   "description": "Reference for forRoot(), forRootAsync(), and forFeature() registration methods with stream, consumer, and connection options.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-10-30"
+  "dateModified": "2026-11-02"
 },
       
     '/docs/reference/naming-conventions/': {
@@ -345,7 +353,7 @@ export default function Root({ children }) {
   "headline": "Naming Conventions",
   "description": "Stream, consumer, and subject naming patterns derived from the service name.",
   "datePublished": "2026-03-21",
-  "dateModified": "2026-10-23"
+  "dateModified": "2026-11-02"
 },
       
     '/docs/reference/release-notes/': {
@@ -353,7 +361,7 @@ export default function Root({ children }) {
   "headline": "Release Notes: NestJS JetStream Transport",
   "description": "Version-by-version changelog covering new features, behavior changes, and breaking changes.",
   "datePublished": "2026-03-26",
-  "dateModified": "2026-10-30"
+  "dateModified": "2026-11-02"
 },
       
     '/docs/reference/upgrading/': {
@@ -361,7 +369,7 @@ export default function Root({ children }) {
   "headline": "Upgrading NestJS JetStream between major versions",
   "description": "Renamed options, changed defaults and how to keep the previous behaviour, release by release.",
   "datePublished": "2026-10-23",
-  "dateModified": "2026-10-30"
+  "dateModified": "2026-11-02"
 },
       
 

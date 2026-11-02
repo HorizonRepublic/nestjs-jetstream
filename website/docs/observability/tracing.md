@@ -8,7 +8,7 @@ schema:
   headline: "Distributed Tracing: NestJS JetStream Transport"
   description: "Built-in W3C Trace Context propagation and OpenTelemetry spans for every publish, consume, and RPC round-trip."
   datePublished: "2026-04-24"
-  dateModified: "2026-10-30"
+  dateModified: "2026-11-02"
 ---
 
 # Distributed Tracing
@@ -196,6 +196,8 @@ otel: {
   },
 }
 ```
+
+`ctx.handlerMetadata.pattern` is the declared pattern, such as `orders.*` or `order.created`, so it stays a low-cardinality attribute for [wildcard handlers](/docs/guides/wildcard-patterns) too.
 
 `publishHook` runs before the publish, `consumeHook` before the handler, and `responseHook` once the outcome is known, just before the span ends (publish, consume and RPC client spans). Hooks are synchronous; an error thrown in one is caught and logged at `debug` level.
 

@@ -148,9 +148,8 @@ export class DeadLetterCapture {
     await withDeadLetterSpan(
       {
         msg,
-        // Surface the registered pattern so APM can filter dead letters by
-        // handler; falls back to the raw subject when no handler matches.
-        pattern: this.patternRegistry.getHandler(msg.subject) ? msg.subject : undefined,
+        // The declared pattern lets APM group dead letters by handler, wildcards included.
+        pattern: this.patternRegistry.resolveDeclared(msg.subject)?.pattern,
         finalDeliveryCount: msg.deliveryCount,
         reason: errorMessage(error),
         serviceName: this.serviceName,

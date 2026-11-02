@@ -8,7 +8,7 @@ schema:
   headline: "Workqueue Events: NestJS JetStream At-Least-Once Delivery"
   description: "NestJS NATS JetStream workqueue events with at-least-once delivery, automatic retry, publish-side deduplication, and dead letter handling."
   datePublished: "2026-03-21"
-  dateModified: "2026-10-29"
+  dateModified: "2026-11-02"
 ---
 
 # Events (Workqueue)
@@ -68,6 +68,8 @@ export class NotificationsController {
   }
 }
 ```
+
+One handler can serve a family of subjects with a NATS wildcard, `@EventPattern('order.*')` or `@EventPattern('audit.>')`; see [Wildcard Patterns](/docs/guides/wildcard-patterns).
 
 ## One consumer per service
 

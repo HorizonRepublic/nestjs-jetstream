@@ -8,7 +8,7 @@ schema:
   headline: "Bring Your Own Infrastructure (bind-only mode)"
   description: "Bind NestJS JetStream to externally managed NATS streams and consumers provisioned by Terraform, ArgoCD, or a platform team."
   datePublished: "2026-06-12"
-  dateModified: "2026-10-23"
+  dateModified: "2026-11-02"
 ---
 
 # Bring Your Own Infrastructure (bind-only mode)
@@ -158,7 +158,7 @@ events: {
 When a custom `subjectPrefix` is set:
 
 - Published subjects are `{prefix}{pattern}`, for example `company.orders.order.created`.
-- The consumer gets one exact `filter_subjects` entry per registered handler instead of a wildcard.
+- The consumer gets one filter per registered handler subject instead of `{prefix}>`. A [wildcard handler](/docs/guides/wildcard-patterns) such as `orders.*` contributes `{prefix}orders.*`, and exact subjects it covers are left out.
 - One-shot schedule holders move to `{prefix}_sch.`, and the schedule stream's recurring holders to `{prefix}_cron.` (see [Scheduling with a custom prefix](#scheduling-with-a-custom-prefix)).
 - Other services reach this one only when their `forFeature()` declares the same prefixes. See [targets with a custom subject prefix](/docs/reference/module-configuration#targets-with-a-custom-subject-prefix).
 

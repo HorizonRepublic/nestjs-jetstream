@@ -23,7 +23,8 @@ export enum ConsumeKind {
 }
 
 /**
- * Handler metadata for the dispatched message. `pattern` is always set;
+ * Handler metadata for the dispatched message. `pattern` is always set to the
+ * declared pattern (`orders.*`, `order.created`), not the arrived subject;
  * `className` / `methodName` come from NestJS reflection when available.
  */
 export interface HandlerMetadata {

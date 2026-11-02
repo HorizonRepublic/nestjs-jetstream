@@ -8,7 +8,7 @@ schema:
   headline: "NestJS NATS RPC: Core vs JetStream Request/Reply"
   description: "Synchronous NestJS NATS request-reply in Core NATS or JetStream mode, with timeout handling, error serialization, and per-request overrides."
   datePublished: "2026-03-21"
-  dateModified: "2026-10-30"
+  dateModified: "2026-11-02"
 ---
 
 # RPC (Request/Reply)
@@ -49,6 +49,8 @@ export class OrdersController {
 ```
 
 A handler can return a plain value, a `Promise`, or an `Observable`. For an `Observable` the first emitted value becomes the reply (see [Observable return values](/docs/reference/edge-cases#observable-return-values-in-handlers)).
+
+`@MessagePattern('order.*')` or `@MessagePattern('reports.>')` answers a whole family of subjects, with exact handlers taking precedence; see [Wildcard Patterns](/docs/guides/wildcard-patterns).
 
 ## Core mode (default)
 
