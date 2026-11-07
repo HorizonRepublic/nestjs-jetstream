@@ -13,7 +13,7 @@ allowBuilds:
 # Security floors for transitive deps (Dependabot advisories). Drop an entry
 # once the parent chain resolves a patched version on its own.
 overrides:
-  vite: ^8.3.5
+  vite: ^8.3.6
   'tinypool@<2.1.2': ^2.2.0
   'minimatch@>=9.0.0 <9.0.7': ^9.0.9
   'katex@<0.18.2': ^0.19.1
