@@ -117,7 +117,7 @@
     "@opentelemetry/sdk-node": "^0.300.0",
     "@opentelemetry/sdk-trace": "^3.0.0",
     "@prometheus-io/client": "^0.16.1",
-    "@stylistic/eslint-plugin": "^5.10.0",
+    "@stylistic/eslint-plugin": "^6.0.1",
     "@types/node": "^26.6.6",
     "@vitest/coverage-v8": "^5.1.0",
     "eslint-plugin-prefer-arrow": "^1.2.3",
