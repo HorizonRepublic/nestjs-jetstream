@@ -21,7 +21,7 @@
     "@docusaurus/theme-mermaid": "^3.10.2",
     "@mdx-js/react": "^3.1.1",
     "clsx": "^2.1.1",
-    "docusaurus-plugin-llms": "^0.6.1",
+    "docusaurus-plugin-llms": "^0.6.2",
     "prism-react-renderer": "^2.4.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
@@ -33,7 +33,7 @@
     "@docusaurus/types": "^3.10.2",
     "@mermaid-js/layout-elk": "^1.0.2",
     "@resvg/resvg-js": "2.6.2",
-    "@types/react": "^19.3.0",
+    "@types/react": "^19.3.3",
     "@types/react-dom": "^19.3.0"
   },
   "engines": {
